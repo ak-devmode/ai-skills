@@ -268,8 +268,8 @@ Create `{plans_dir}/scope-{slug}/scope.md` using this exact format:
 ...
 
 ## Architecture
-{Include if the task involves non-trivial system design. Mermaid or ASCII diagrams
-encouraged. Omit for simple bug fixes or single-file changes.}
+{Include if the task involves non-trivial system design. Use plain ASCII art diagrams
+in fenced code blocks (never Mermaid). Omit for simple bug fixes or single-file changes.}
 
 ## What Already Exists
 {List relevant existing code, infrastructure, and patterns that this task builds on.

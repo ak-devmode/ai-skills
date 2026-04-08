@@ -59,7 +59,7 @@ For PRDs, migration plans, integration specs, operational playbooks — **what, 
 
 2.2.4 **Acceptance criteria** follow each objective's task list: 1–3 concrete, testable conditions.
 
-2.2.5 **Required diagram:** every Mode B document must include at least one mermaid diagram in the first three sections showing the overall system, workflow, or dependency map. Implementation docs without a visual overview are consistently harder to onboard into.
+2.2.5 **Required diagram:** every Mode B document must include at least one ASCII diagram (in a fenced code block) in the first three sections showing the overall system, workflow, or dependency map. Implementation docs without a visual overview are consistently harder to onboard into. Never use Mermaid — it doesn't render in terminals, TextMate, or most plain-text contexts.
 
 ---
 
@@ -138,13 +138,30 @@ Use hierarchical decimal numbering throughout. Every section, subsection, and it
 
 ### 4.1 Diagrams
 
-4.1.1 Default to mermaid for any section describing relationships between 3 or more elements. Diagram type by use case:
+4.1.1 Default to ASCII art diagrams (inside fenced code blocks) for any section describing relationships between 3 or more elements. Never use Mermaid. Diagram conventions by use case:
 
 ```
-flowchart TD  — process flows, decision trees, sequences
-graph LR      — system architecture, integrations, data flow
-gantt         — timelines with dependencies and phases
-classDiagram  — entity relationships, org structures
+Process flows / decision trees:
+    [Start] --> [Validate] --> [Process]
+                    |
+                    v (fail)
+                [Error Handler] --> [Notify]
+
+System architecture / data flow:
+    [Client] --> [API Gateway] --> [Auth Service]
+                      |                 |
+                      v                 v
+                 [App Server] --> [Database]
+
+Timelines / phases:
+    Phase 1          Phase 2          Phase 3
+    |--- Setup ------|--- Build ------|--- Ship ---|
+    Jan              Mar              Jun
+
+Entity relationships:
+    [User] 1--* [Order] *--1 [Product]
+                  |
+                  1--* [LineItem]
 ```
 
 ### 4.2 Tables

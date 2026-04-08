@@ -59,7 +59,7 @@ For PRDs, migration plans, integration specs, operational playbooks — **what, 
 
 2.2.4 **Acceptance criteria** follow each objective's task list: 1–3 concrete, testable conditions.
 
-2.2.5 **Required diagram:** every Mode B document must include at least one ASCII diagram (in a fenced code block) in the first three sections showing the overall system, workflow, or dependency map. Implementation docs without a visual overview are consistently harder to onboard into. Never use Mermaid — it doesn't render in terminals, TextMate, or most plain-text contexts.
+2.2.5 **Required diagram:** every Mode B document must include at least one ASCII diagram (in a fenced code block) in the first three sections showing the overall system, workflow, or dependency map. Implementation docs without a visual overview are consistently harder to onboard into. Never use Mermaid — it doesn't render in terminals, TextMate, or most plain-text contexts. **When editing an existing document that contains Mermaid blocks, convert them to ASCII as part of the edit.**
 
 ---
 

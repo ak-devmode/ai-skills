@@ -387,28 +387,27 @@ full plan context.
 
 ### 11.3 Archive the plan
 
-11.3.1 Determine the archive directory:
+11.3.0 **Child plans stay in place.** If the plan lives inside a `scope-*/` folder
+(child of a /scope), do NOT move or archive the plan files. The plan and progress
+files stay in the scope folder — the scope manages archival of the entire folder
+when ALL child plans are complete (via /scope Step 7). Individual child plan
+completion is tracked by status updates only: mark Done in PLANS-INDEX, update
+the parent scope's progress.md Plans table, and extract TODOs. Skip §11.3.1
+through §11.3.2 entirely for child plans.
+
+11.3.1 **Standalone plans — determine the archive directory:**
 - Numbered plan (e.g., `39.2-cashier-settlement`):
   `{plans_dir}/archive/39.2-cashier-settlement/`
 - Unnumbered plan (e.g., `ci-hardening`):
   `{plans_dir}/archive/ci-hardening/`
 
-11.3.2 Archive based on where the plan lives:
+11.3.2 **Standalone plans — archive based on where the plan lives:**
 
 **Standalone plan in its own folder** (e.g., `{plans_dir}/ci-hardening/`):
 Move the entire folder to archive — this includes the plan, progress, PRDs,
 concepting docs, and artifacts that were swept in during Section 2.5:
 ```bash
 mv {plans_dir}/{plan-stem}/ {plans_dir}/archive/{plan-stem}/
-```
-
-**Plan inside a `scope-*/` folder** (child of a /scope):
-Move only the plan and progress files — not the entire scope folder. The scope
-manages its own archival via /scope Step 7:
-```bash
-mkdir -p {plans_dir}/archive/{plan-stem}/
-mv {plan-file} {archive-dir}/
-mv {progress-file} {archive-dir}/
 ```
 
 **Legacy raw file in `plans/`** (no folder — shouldn't happen after Section 2.5):
@@ -452,9 +451,20 @@ a deferred action and move on.
 ### 11.7 Report to user
 
 Print a completion summary:
+
+**Standalone plan (archived):**
 ```
 ✅ Plan {plan_number} complete: {plan title}
 📁 Archived to: {archive-dir}/
 📋 TODOs extracted: {N} items → {plans_dir}/TO-DO.md
 📊 Index updated: PLANS-INDEX.md #{plan_number} → Done
+```
+
+**Child plan (stays in scope folder):**
+```
+✅ Plan {plan_number} complete: {plan title}
+📁 Stays in: {scope-folder}/ (archived with scope when all plans complete)
+📋 TODOs extracted: {N} items → {plans_dir}/TO-DO.md
+📊 Index updated: PLANS-INDEX.md #{plan_number} → Done
+🔗 Parent scope updated: {scope-folder}/progress.md
 ```

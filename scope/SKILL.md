@@ -1,6 +1,6 @@
 ---
 name: scope
-version: 2.1.0
+version: 3.0.0
 description: |
   Task scoping, skill router, and progress tracker. Reads current context (git diff,
   branch, CLAUDE.md, open files), eliminates assumptions via two rounds of structured
@@ -164,7 +164,7 @@ Based on all answers, decide the execution model:
 - Multiple distinct deliverables that benefit from separate sessions
 
 When phased, each phase becomes a plan file (~1 context window = ~1 session).
-Scope generates plan stubs that `/plan` (task-runner) can execute. See Step 5.8.
+Scope generates plan stubs that `/plan` (task-runner) can execute. See Step 5.9.
 
 If ambiguous after Round 1+2: ask "How much time do you have for this? [Full session
 today / Just this hour / Multi-session across days]" before proceeding.
@@ -173,7 +173,7 @@ today / Just this hour / Multi-session across days]" before proceeding.
 
 ## Step 4 — Generate the Skill Checklist (N/A logic)
 
-Every scope document includes ALL 14 skills. Mark each as YES, OPTIONAL, or N/A with
+Every scope document includes ALL 18 skills. Mark each as YES, OPTIONAL, or N/A with
 a reason. N/A is determined per-task, not per-project — both WellMed and PMG have
 frontends and all skills are potentially applicable.
 
@@ -181,8 +181,11 @@ frontends and all skills are potentially applicable.
 
 | Condition (task-specific) | Skills marked N/A |
 |---|---|
-| No UI component in this task | `/browse`, `/qa` (browser), `/qa-design-review`, `/design-consultation`, `/design-review`, `/plan-design-review` |
+| No UI component in this task | `/browse`, `/qa` (browser), `/design-consultation`, `/design-review`, `/design-html`, `/design-shotgun`, `/plan-design-review` |
 | No browser session needed | `/setup-browser-cookies` |
+| Not a bug fix or debugging task | `/investigate` → N/A |
+| No developer-facing output (API, CLI, SDK, docs) | `/plan-devex-review`, `/devex-review` → N/A |
+| No design exploration needed (known pattern) | `/design-shotgun` → N/A |
 | Task is not going to prod this sprint | `/ship` → mark OPTIONAL |
 | No user-visible change | `/document-release` → mark OPTIONAL |
 | Small single-session task | `/retro` → mark OPTIONAL |
@@ -191,24 +194,51 @@ frontends and all skills are potentially applicable.
 - `/plan-ceo-review` is **always YES**. It catches "why are we doing it this way at all?"
   reframes that save entire phases of wasted work. Run it first, before eng review.
 
+**Shortcut:** `/autoplan` runs `/plan-ceo-review` + `/plan-design-review` +
+`/plan-eng-review` + `/plan-devex-review` in sequence with auto-decisions. Use it
+instead of skills 1–4 individually when you want a fast full-review pass.
+
 **Skill sequence table (fill in based on task):**
+
+Skills are grouped by workflow phase. Mark each YES, OPTIONAL, or N/A with reason.
+
+### Plan Reviews (run first)
 
 | # | Skill | Apply? | When | Notes |
 |---|-------|--------|------|-------|
 | 1 | /plan-ceo-review | **ALWAYS YES** | 1st | Reframe scope, challenge premises, find the 10-star version |
 | 2 | /plan-eng-review | ? | 2nd | Architecture + data flow |
 | 3 | /plan-design-review | ? | 2nd | Design audit before implementation |
-| 4 | /review | ? | After impl | Catch production bugs in diff |
-| 5 | /ship | ? | Final | PR creation + versioning |
-| 6 | /qa | ? | After ship | Browser-based QA on staging |
-| 7 | /qa-only | ? | After impl | Run test suite (go test, npm test) |
-| 8 | /browse | ? | During QA | Headless browser for UI verification |
-| 9 | /design-consultation | ? | Pre-impl | UI/UX design guidance |
-| 10 | /design-review | ? | After impl | Design audit + fix loop |
-| 11 | /qa-design-review | ? | After impl | QA-focused design review |
-| 12 | /setup-browser-cookies | ? | Pre-QA | Set up browser session for QA |
-| 13 | /document-release | ? | Post-ship | Sync docs with changes |
-| 14 | /retro | ? | End of sprint | Retrospective |
+| 4 | /plan-devex-review | ? | 2nd | DX audit — dev-facing APIs, CLIs, SDKs, docs |
+
+### Implementation Support
+
+| # | Skill | Apply? | When | Notes |
+|---|-------|--------|------|-------|
+| 5 | /investigate | ? | Pre-impl | Root cause debugging for bug fixes |
+| 6 | /design-consultation | ? | Pre-impl | UI/UX design guidance |
+| 7 | /design-html | ? | During impl | Production HTML/CSS from approved designs |
+| 8 | /design-shotgun | ? | Pre-impl | Generate + compare design variants |
+
+### Review & QA
+
+| # | Skill | Apply? | When | Notes |
+|---|-------|--------|------|-------|
+| 9 | /review | ? | After impl | Pre-landing diff review |
+| 10 | /health | ? | After impl | Code quality score (linter, tests, dead code) |
+| 11 | /qa | ? | After ship | Browser-based QA on staging |
+| 12 | /qa-only | ? | After impl | Run test suite (go test, npm test) |
+| 13 | /browse | ? | During QA | Headless browser for UI verification |
+| 14 | /devex-review | ? | After impl | Live DX audit — docs, getting-started, TTHW |
+| 15 | /setup-browser-cookies | ? | Pre-QA | Set up browser session for QA |
+
+### Ship & Post-ship
+
+| # | Skill | Apply? | When | Notes |
+|---|-------|--------|------|-------|
+| 16 | /ship | ? | Final | PR creation + versioning |
+| 17 | /document-release | ? | Post-ship | Sync docs with changes |
+| 18 | /retro | ? | End of sprint | Retrospective |
 
 ---
 
@@ -282,22 +312,43 @@ bounds. Prevents scope creep in execution.}
 
 ## Skill Sequence
 
+### Plan Reviews
+
 | # | Skill | Apply? | When | Notes |
 |---|-------|--------|------|-------|
 | 1 | /plan-ceo-review | [ ] **ALWAYS** | 1st | Reframe scope, challenge premises |
 | 2 | /plan-eng-review | [ ] YES | 2nd | {reason or N/A: reason} |
 | 3 | /plan-design-review | [N/A] | — | {why not applicable} |
-| 4 | /review | [ ] YES | After impl | {tailored note} |
-| 5 | /ship | [ ] YES | Final | {tailored note} |
-| 6 | /qa | [N/A] | — | {why not applicable} |
-| 7 | /qa-only | [ ] YES | After impl | {test command} |
-| 8 | /browse | [N/A] | — | {why not applicable} |
-| 9 | /design-consultation | [N/A] | — | {why not applicable} |
-| 10 | /design-review | [N/A] | — | {why not applicable} |
-| 11 | /qa-design-review | [N/A] | — | {why not applicable} |
-| 12 | /setup-browser-cookies | [N/A] | — | {why not applicable} |
-| 13 | /document-release | [ ] YES | Post-ship | {tailored note} |
-| 14 | /retro | [ ] OPTIONAL | Sprint end | {tailored note} |
+| 4 | /plan-devex-review | [N/A] | — | {why not applicable} |
+
+### Implementation Support
+
+| # | Skill | Apply? | When | Notes |
+|---|-------|--------|------|-------|
+| 5 | /investigate | [N/A] | — | {why not applicable} |
+| 6 | /design-consultation | [N/A] | — | {why not applicable} |
+| 7 | /design-html | [N/A] | — | {why not applicable} |
+| 8 | /design-shotgun | [N/A] | — | {why not applicable} |
+
+### Review & QA
+
+| # | Skill | Apply? | When | Notes |
+|---|-------|--------|------|-------|
+| 9 | /review | [ ] YES | After impl | {tailored note} |
+| 10 | /health | [ ] YES | After impl | {tailored note} |
+| 11 | /qa | [N/A] | — | {why not applicable} |
+| 12 | /qa-only | [ ] YES | After impl | {test command} |
+| 13 | /browse | [N/A] | — | {why not applicable} |
+| 14 | /devex-review | [N/A] | — | {why not applicable} |
+| 15 | /setup-browser-cookies | [N/A] | — | {why not applicable} |
+
+### Ship & Post-ship
+
+| # | Skill | Apply? | When | Notes |
+|---|-------|--------|------|-------|
+| 16 | /ship | [ ] YES | Final | {tailored note} |
+| 17 | /document-release | [ ] YES | Post-ship | {tailored note} |
+| 18 | /retro | [ ] OPTIONAL | Sprint end | {tailored note} |
 
 ## Key Decisions Captured
 {Bullet list of Round 1 + Round 2 answers that shaped this scope}
@@ -351,9 +402,12 @@ Create `{plans_dir}/scope-{slug}/progress.md` using this exact format:
 <!-- For phased scopes: child plan files and their execution status.
      Omit this section for atomic scopes. -->
 
-| Plan File | Phase | Status | Notes |
-|-----------|-------|--------|-------|
-{For each plan stub created, one row. Otherwise omit section entirely.}
+| # | Plan File | Phase | Status | Notes |
+|---|-----------|-------|--------|-------|
+{For each plan stub created, one row with its sub-number. Example:}
+{| 39.1 | 39.1-cashier-settlement-PLAN.md | Phase 1 — Schema | Draft | |}
+{| 39.2 | 39.2-cashier-settlement-PLAN.md | Phase 2 — Logic | Draft | |}
+{Otherwise omit section entirely.}
 
 ---
 
@@ -374,15 +428,33 @@ This directory holds any non-code artifacts produced during execution (dashboard
 email templates, architecture diagrams, exported configs, etc.). Reference them from
 progress.md when created.
 
-### 5.7 Update PLANS-INDEX.md
+### 5.7 Sweep related files into scope folder
 
-Append a line to `{plans_dir}/PLANS-INDEX.md` (create if it doesn't exist):
+Check `{plans_dir}/` for files related to this scope's slug — PRDs, concepting docs,
+or any other working files created before the scope folder:
 
-```markdown
-| {date} | scope | scope-{slug} | {project} | Active | {one-line description} |
+```bash
+ls {plans_dir}/*{slug}* 2>/dev/null | grep -v "scope-{slug}"
 ```
 
-If creating the file for the first time, add the header:
+Move matching files into the scope folder so all task-related documents travel together:
+```bash
+mv {plans_dir}/prd-{slug}*.md {plans_dir}/scope-{slug}/ 2>/dev/null
+mv {plans_dir}/*{slug}*.md {plans_dir}/scope-{slug}/ 2>/dev/null
+```
+
+Exclude `PLANS-INDEX.md`, `TO-DO.md`, and any files already inside subdirectories.
+After this step, only the scope folder remains in `plans/` for this task — no orphaned
+working files at the top level.
+
+### 5.8 Update PLANS-INDEX.md
+
+**Auto-assign the next sequential plan number.** Read `{plans_dir}/PLANS-INDEX.md`,
+find the highest `#` value in both Archived and Active tables (ignore sub-numbers like
+`39.1` — only whole numbers count), and increment by 1. This becomes `{N}` for the
+scope and all its child plans.
+
+If creating the file for the first time, add the header and start numbering at 1:
 
 ```markdown
 # Plans Index
@@ -390,26 +462,44 @@ If creating the file for the first time, add the header:
 All scopes, PRDs, and plans across the project. Types: `prd` (business requirements),
 `scope` (multi-skill orchestration), `plan` (single-session executable task).
 
-| Date | Type | Folder/File | Project | Status | Description |
-|------|------|-------------|---------|--------|-------------|
+| # | Date | Type | Folder/File | Project | Status | Description |
+|---|------|------|-------------|---------|--------|-------------|
 ```
 
-### 5.8 Generate plan stubs (phased scopes only)
+Append the scope entry with its assigned number:
+
+```markdown
+| {N} | {date} | scope | scope-{slug}/ | {project} | Active | {one-line description} |
+```
+
+### 5.9 Generate plan stubs (phased scopes only)
 
 If the scope is **phased** (Step 3), generate a plan stub file for each phase.
 Each plan ≈ 1 context window ≈ 1 session of work.
 
-Plan stubs go inside the scope folder: `{plans_dir}/scope-{slug}/{slug}-phase-N-PLAN.md`
+Plan stubs use **sub-numbers** of the scope's assigned `{N}` from Step 5.7:
+- Phase 1 → `{N}.1`
+- Phase 2 → `{N}.2`
+- etc.
+
+Plan stub filename: `{plans_dir}/scope-{slug}/{N}.{P}-{slug}-PLAN.md`
+where `{P}` is the phase number (1, 2, 3, ...).
+
+Example: scope #39, slug `cashier-settlement`, 3 phases →
+- `scope-cashier-settlement/39.1-cashier-settlement-PLAN.md`
+- `scope-cashier-settlement/39.2-cashier-settlement-PLAN.md`
+- `scope-cashier-settlement/39.3-cashier-settlement-PLAN.md`
 
 Use the `/plan` (task-runner) format:
 
 ```markdown
-# Plan: {Phase name}
+# Plan {N}.{P}: {Phase name}
 
 **Version:** 0.1 (stub — detail filled at session start)
 **Date:** {today's date}
 **Author:** Alex
 **Status:** Draft
+**Plan #:** {N}.{P}
 **Parent scope:** {plans_dir}/scope-{slug}/scope.md
 **Branch:** {branch or TBD}
 
@@ -419,22 +509,22 @@ Use the `/plan` (task-runner) format:
 
 ---
 
-## Phase {N}: {Phase Name}
+## Phase {P}: {Phase Name}
 
-### Task {N}.1: {Task Title}
+### Task {P}.1: {Task Title}
 - **Type**: AI | HUMAN | AI+HUMAN_REVIEW
 - **Input**: {what files/context this task needs}
 - **Action**: {what to do — outline level, detail filled at session start}
 - **Output**: {what files/artifacts this task produces}
 - **Acceptance**: {how to verify success}
 
-### Task {N}.2: {Task Title}
+### Task {P}.2: {Task Title}
 ...
 
 ---
-### 🔲 CHECKPOINT: Phase {N} Complete
+### 🔲 CHECKPOINT: Phase {P} Complete
 **Review**: {what the human should verify}
-**Resume**: "continue the {slug} plan"
+**Resume**: "continue the {N}.{P} {slug} plan"
 ---
 ```
 
@@ -442,9 +532,9 @@ Use the `/plan` (task-runner) format:
 complex logic, multiple integrations), split it into two plans. Better to have more
 small plans than one that won't fit in a context window.
 
-Also add a PLANS-INDEX entry for each plan stub:
+Also add a PLANS-INDEX entry for each plan stub (sub-numbered under the scope):
 ```markdown
-| {date} | plan | scope-{slug}/{slug}-phase-N-PLAN.md | {project} | Draft | {phase description} |
+| {N}.{P} | {date} | plan | scope-{slug}/{N}.{P}-{slug}-PLAN.md | {project} | Draft | Phase {P} — {phase description} |
 ```
 
 ---
@@ -460,6 +550,22 @@ After writing the files, output to the user:
 5. Whether this is single-phase or phased, and what Phase 1 ends with
 
 Do NOT re-print the entire scope.md. Just the handoff summary above.
+
+### 6.1 gstack review skill targeting
+
+When the recommended next step is a gstack review skill (`/plan-ceo-review`,
+`/plan-eng-review`, `/plan-design-review`, `/plan-devex-review`, or `/autoplan`),
+always point it at the **scope folder** (`scope.md`), not at individual plan stubs.
+This lets gstack review, improve, and reorder across ALL phases holistically —
+restructuring phase boundaries, moving tasks between plans, and optimizing the
+overall sequence.
+
+Example handoff:
+- "Run `/autoplan` on `scope-{slug}/scope.md`"
+- NOT "Start with `/plan-ceo-review` on `39.1-{slug}-PLAN.md`"
+
+After gstack completes, copy any artifacts it creates in `~/.gstack/projects/$SLUG/`
+to `{scope-folder}/artifacts/` so the scope folder stays self-contained.
 
 ---
 

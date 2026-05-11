@@ -2,10 +2,10 @@
 
 ## Resume Context
 **Plan:** ~/Projects/ai-skills/plans/closeout-skills/closeout-skills-PLAN.md
-**Last action:** Task 4.1 complete — CROSS-REPO.md template + worked examples written
-**Next action:** Task 4.2 — ARCHITECTURE.md stub template with concrete example
+**Last action:** Task 4.2 complete — ARCHITECTURE.md template + worked example (pmg-integrations) written
+**Next action:** Task 4.3 — build /cross-repo-init skill (SKILL.md + flow)
 **Open blockers:** None
-**Key files changed:** cross-repo-init/templates/CROSS-REPO.md.template, cross-repo-init/templates/CROSS-REPO.md.examples.md
+**Key files changed:** cross-repo-init/templates/ARCHITECTURE.md.template, cross-repo-init/templates/ARCHITECTURE.md.examples.md (prior: CROSS-REPO.md.template, CROSS-REPO.md.examples.md)
 
 ---
 
@@ -34,3 +34,11 @@
 - **Files modified**: cross-repo-init/templates/CROSS-REPO.md.template, cross-repo-init/templates/CROSS-REPO.md.examples.md
 - **Issues**: None
 - **Acceptance verified**: Template has unambiguous placeholder syntax; renders to valid CROSS-REPO.md when filled. Both examples use real repo names and real contract descriptions, not placeholders.
+
+### Task 4.2: Define ARCHITECTURE.md stub template with concrete example
+- **Status**: ✅ DONE
+- **Completed**: 2026-05-11
+- **What was done**: Wrote `ARCHITECTURE.md.template` — 67-line shell (under the 80-line target) with five sections (Components, Data Flow, Key Decisions, External Integrations, Cross-Repo Position), all with HTML comment guidance for /cross-repo-init scaffolding. Wrote `ARCHITECTURE.md.examples.md` with one filled-in worked example (pmg-integrations) drawing on actual project context: SSM secret patterns, idempotency rules, WhatsApp NAMED templates, develop-branch convention, Chatwoot deploy gotchas, Xendit pre-settlement refund handling, Grafana wildcard config. Notes section documents auto-detection heuristics and tier-specific guidance (hub vs trunk vs leaf vs docs-only).
+- **Files modified**: cross-repo-init/templates/ARCHITECTURE.md.template, cross-repo-init/templates/ARCHITECTURE.md.examples.md
+- **Issues**: None
+- **Acceptance verified**: Template is 67 lines (under 80-line target). Uses /markdown-style hierarchical numbering (1, 1.1, etc., implicitly via section headers). Has HTML-comment placeholders for /cross-repo-init to detect and fill. One concrete worked example present with real project-specific Key Decisions and External Integrations drawn from memory.

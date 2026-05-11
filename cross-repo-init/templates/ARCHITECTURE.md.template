@@ -1,0 +1,67 @@
+# ARCHITECTURE — {{REPO_NAME}}
+
+<!--
+Purpose: per-repo architecture snapshot that /plan reads at every session start
+and /closeout fights hardest to keep accurate.
+
+Optimized for agent consumption: short, scannable, refresh-friendly.
+Under 200 lines is the target. If you're past that, split into per-component
+docs under docs/architecture/ and keep this file as the index.
+
+Maintenance: /closeout updates this file on every successful self-heal.
+Re-run /cross-repo-init when components are added, removed, or repositioned.
+-->
+
+**Last refreshed:** {{TIMESTAMP}}
+**Maintained by:** /closeout (auto) + manual edits
+
+---
+
+## 1. Components
+
+<!-- One line per service/module/package. Path is workspace-relative.
+     Keep descriptions to ~12 words — agents skim this. -->
+
+{{COMPONENTS}}
+
+---
+
+## 2. Data Flow
+
+<!-- Plain ASCII only, never Mermaid. Show the happy path for the most common
+     request/event/job. Edge cases belong in code comments, not here. -->
+
+```
+{{DATA_FLOW_DIAGRAM}}
+```
+
+---
+
+## 3. Key Decisions
+
+<!-- Architecturally load-bearing choices. Each entry: what we chose + why.
+     Skip implementation details — those live in code or ADRs. -->
+
+{{KEY_DECISIONS}}
+
+---
+
+## 4. External Integrations
+
+<!-- Third-party services and shared infra this repo talks to.
+     Include: service name, what we use it for, where credentials live. -->
+
+{{EXTERNAL_INTEGRATIONS}}
+
+---
+
+## 5. Cross-Repo Position
+
+<!-- One sentence on where this repo sits in the multi-repo graph.
+     Reference CROSS-REPO.md for the full Pattern Sources + Consumers list. -->
+
+{{CROSS_REPO_POSITION}}
+
+---
+
+<!-- Last scaffolded/audited by /cross-repo-init: {{TIMESTAMP}} -->

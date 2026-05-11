@@ -221,8 +221,30 @@ Before executing any tasks, run Phase 0. If it already appears in PROGRESS.md as
 5.8 **Branch checkout** — Once the branch name is confirmed:
 - If the branch already exists locally: `git checkout <branch>`
 - If it doesn't exist locally: `git checkout -b <branch>`
-- **Never execute tasks on `main` or `master`.** If the current branch is main/master after this step, stop and report an error.
+- **Never execute tasks on `main` or `master`** UNLESS the repo's recent commit history shows main is the active development branch (e.g., solo-dev repos where all features land directly on main). When uncertain, halt and ask. Per the user's `feedback_branch_workflow.md`, working on the user's current branch is preferred over creating new ones.
 - Log the branch name in the progress file under Phase 0.
+
+5.9 **Read agent-load-bearing context files** — at session start, read whichever of these exist in the repo root:
+- `CLAUDE.md` — project-specific Claude instructions (always read if present)
+- `ARCHITECTURE.md` — per-repo architecture snapshot (load-bearing per /markdown-style §11 + the closeout-skills framework)
+- `CROSS-REPO.md` — cross-repo graph (Pattern Sources upward, Consumers outward; load-bearing for Pattern-First Rule in §7)
+
+These files inform pattern decisions throughout the session and should be cached in working memory. Record the list of files actually read in close-out-prep.md §6 (Docs Loaded During Planning).
+
+5.10 **Bootstrap-state check** — determine whether this repo has been onboarded for the closeout-skills framework:
+- If neither `CROSS-REPO.md` nor `ARCHITECTURE.md` exists: repo is unbootstrapped. Proceed without them but log this in close-out-prep.md §11 (Risk Flags) — Pattern-First Rule will degrade to local-repo grep only.
+- If `CROSS-REPO.md` exists but `ARCHITECTURE.md` is missing (or vice versa): partial bootstrap. Halt with: "Repo partially bootstrapped — missing <FILE>. Run /cross-repo-init to refresh, then resume." This catches the case where one file was deleted accidentally.
+- If both exist: fully bootstrapped — proceed to 5.11.
+
+5.11 **Validate Pattern Source paths exist on disk** (Issue 17 — critical-gap mitigation) — if `CROSS-REPO.md` declares Pattern Sources, verify each path resolves:
+- For each Pattern Source `<name>` listed, check whether the repo exists at the expected location (`~/Projects/<group>/<name>` based on convention).
+- If any Pattern Source path is missing, halt with: "CROSS-REPO.md declares Pattern Source `<name>` at `<path>` but the path doesn't exist. Run /cross-repo-init to refresh CROSS-REPO.md, then resume." Without this halt, the Pattern-First Rule would silently produce false "no pattern found" results indistinguishable from genuinely-novel methods.
+- If all Pattern Sources resolve: log paths in close-out-prep.md §6 and proceed.
+
+5.12 **Build in-session Pattern Sources map** — once CROSS-REPO.md is validated, build a working-memory map of Pattern Source repos and their sub-paths. This map is used by §7 Pattern-First Rule throughout the session:
+- Map keys: pattern category (e.g., "adapters", "lib", "handlers")
+- Map values: list of `(repo_path, sub_path_glob)` pairs
+- Cached **in-memory per session only**. No persistence to ledger. Resumed sessions re-build the map cold (cost is small; avoids stale-cache failure modes per Issue 1B).
 
 ## 6. Execution Rules
 
@@ -248,32 +270,162 @@ Before executing any tasks, run Phase 0. If it already appears in PROGRESS.md as
 🔗 Parent scope: [path or "standalone"]
 ```
 
-## 7. Important Behaviors
+## 7. Pattern-First Rule
 
-7.1 **Never modify the plan file.** The plan is the source of truth. If something in the plan is wrong, tell the human and stop.
+Before writing any new method in a known-extensible area, /plan must search for an existing pattern first. This rule is the single highest-leverage moment in the closeout-skills framework — it prevents Claude from reinventing patterns that already exist in shared infrastructure (e.g., wellmed-infrastructure adapters) and from creating parallel implementations that drift from the source of truth.
 
-7.2 **Always append to the progress file.** Never delete or overwrite previous entries. The log is an audit trail.
+### 7.1 When the rule fires
 
-7.3 **Be explicit about file changes.** Every task that creates or modifies files must list them in the progress log. Use workspace-relative paths.
+The rule fires whenever /plan is about to write a **new method** (function, procedure, class method, handler) in a "known-extensible area." Known-extensible areas include:
 
-7.4 **Stay in scope.** Each task has defined inputs, actions, and outputs. Don't do extra work beyond what the task specifies — the plan is sequenced deliberately.
+- Webhook handlers (any HTTP endpoint receiving external events)
+- Event publishers / subscribers (Kafka, SQS, EventBridge, internal pub/sub)
+- FHIR resource builders or parsers
+- SSM parameter readers
+- Notion property writers
+- Zoho Desk / Books / CRM Deluge functions
+- Signature verification / cryptographic operations
+- Retry / backoff / circuit breaker logic
+- Logger wrappers / structured logging
+- Config loaders / env var resolvers
+- Database adapters / ORM wrappers
 
-7.5 **Commit after each task; push after each phase.** If git is initialized, commit after each completed AI task with message format: `plan: [Task X.Y] [brief description]`. When all tasks in a phase are complete (at a CHECKPOINT or phase boundary), run `git push origin <branch>` to back up progress to the remote. PRs are created manually — do not open them.
+If the method is in one of these areas, the rule fires. Inside-a-function refactors and pure-function helpers (no side effects, no integration surface) skip the rule.
 
-7.6 **On resume, summarize what happened.** If the user returns after a break, read the progress file and give a brief summary of where things stand before continuing.
+### 7.2 What gets grepped
 
-7.7 **Update parent scope on completion.** When all tasks in the plan are complete and the plan has a parent scope, update the parent scope's progress.md:
+When the rule fires, /plan runs a two-source grep:
+
+1. **Local repo**: grep this repo's source tree for methods with similar shape (signature, intent, or naming convention) to what's about to be written.
+2. **Declared Pattern Sources**: from the in-session Pattern Sources map built in §5.12, grep each Pattern Source repo's relevant sub-paths.
+
+The grep returns candidate matches with file:line + first-line of method body for ranking.
+
+### 7.3 Caching
+
+Pattern Sources map and grep results are cached **in-memory per session only**. No persistence to ledger or disk. Resumed sessions re-build the map and re-grep cold per Issue 1B (re-grep cost is small; cache persistence introduces stale-cache failure modes).
+
+### 7.4 If a match is found
+
+If grep finds a candidate pattern that matches ≥80% of the intended method's shape:
+- **Default behavior: use the existing pattern**, even if imperfect. Document any deviation as a sub-line of the §3 entry. Inventing a parallel pattern requires explicit user OK via 7.5 halt-and-ask.
+- /plan writes the new method following the matched pattern. The new method gets a §3 entry in close-out-prep.md with `← <pattern-source-file:line>` reference. If /plan deviated from the source pattern (e.g., different algo, additional error handling), append a `deviation:` sub-line explaining why.
+
+The ≥80% rule is a strong preference, not a hard threshold. /plan exercises judgment but must justify novel-pattern decisions via 7.5/7.7.
+
+### 7.5 If no match is found — halt-and-ask
+
+When grep returns no match (or only matches below the usability threshold), /plan must pause and present the user with a structured proposal. **NEVER use AskUserQuestion** — numbered inline options only. Format:
+
+```
+About to write: {method-name}() in {file}:{line}
+
+Pattern search:
+  - local repo: <N> candidates found, closest is {file:line} ({delta description})
+  - Pattern Sources searched: {repos from CROSS-REPO.md}
+  - closest match overall: {file:line} ({delta description})
+
+Delta from closest match:
+  {one-line description of why closest match isn't directly usable}
+
+Options:
+  1. Extend the closest match in its source repo to support this case (best for trunk patterns)
+  2. Write parallel impl here and log to §4 (accept divergence — requires alternatives-considered)
+  3. Point me to a different reference (paste file:line)
+  4. Describe an alternative approach
+
+Answer by number.
+```
+
+User answers by number. Loop until decision is final.
+
+### 7.6 Session-scoped pattern approval
+
+After the user picks option 2 (write parallel impl) or option 4 (describe alternative), /plan offers a follow-up inline question:
+
+```
+Apply this approved pattern to any matching novel methods later in this session?
+  1. Yes — auto-apply to same-shape methods, add §3 note "(applied via session-scoped approval from <method-name>)"
+  2. No — halt-and-ask each time
+```
+
+If user picks 1, /plan stores the approved shape in working memory. Subsequent novel methods in the same session that match the same shape are auto-applied without halting. Each gets a §3 entry referencing the approved pattern's location and noting it was applied via session-scoped approval.
+
+This prevents halt-and-ask fatigue on refactors that touch many same-shape methods (Issue 2A).
+
+Session-scoped approvals are **session-scoped only**. They expire when the session ends — resumed sessions don't carry approvals forward. This is intentional: cross-session pattern decisions should be reflected in code (or in CROSS-REPO.md), not in transient skill state.
+
+### 7.7 §4 entry template
+
+Every halt-and-ask outcome of "write parallel impl" produces a §4 entry in close-out-prep.md. The entry **must** include `alternatives-considered` even when the pattern is genuinely novel. /plan rejects malformed §4 entries (missing alternatives-considered) at write time.
+
+Mandatory format:
+
+```
+- {method-name}  {file:line}
+  alternatives-considered:
+    - {pattern-source-A}: {file:line} — rejected: {one-line reason}
+    - {pattern-source-B}: {file:line} — rejected: {one-line reason}
+    - (none found in: <list of places searched>) — when truly novel
+  recommendation: {extend <source> / accept as new / fold into <doc> / write TODO in <repo>'s TO-DO.md}
+```
+
+The recommendation field drives /closeout-extended's upward traversal — when the recommendation is "extend <source>" or "fold into <doc>", /closeout-extended will surface a structured upward-edit proposal for user confirmation (see /closeout-extended skill for the 3D upward semantics).
+
+### 7.8 Bias toward existing imperfect patterns
+
+A close-but-imperfect existing pattern is almost always preferable to a parallel novel implementation. The default in 7.4 is to use the existing pattern and document the delta. Inventing a parallel requires:
+
+- An explicit user decision via 7.5 (not a silent /plan choice)
+- A populated §4 entry per 7.7 (proving alternatives were considered)
+- A recommendation field per 7.7 (closing the loop — either fold up later or accept as new pattern)
+
+This bias reflects the structural truth that trunk leads, leaves inherit. Parallel implementations invert that direction and require extra justification.
+
+## 8. Important Behaviors
+
+8.1 **Never modify the plan file.** The plan is the source of truth. If something in the plan is wrong, tell the human and stop.
+
+8.2 **Always append to the progress file.** Never delete or overwrite previous entries. The log is an audit trail.
+
+8.3 **Be explicit about file changes.** Every task that creates or modifies files must list them in the progress log. Use workspace-relative paths.
+
+8.4 **Stay in scope.** Each task has defined inputs, actions, and outputs. Don't do extra work beyond what the task specifies — the plan is sequenced deliberately.
+
+8.5 **Commit after each task; push after each phase.** If git is initialized, commit after each completed AI task with message format: `plan: [Task X.Y] [brief description]`. When all tasks in a phase are complete (at a CHECKPOINT or phase boundary), run `git push origin <branch>` to back up progress to the remote. PRs are created manually — do not open them.
+
+8.6 **On resume, summarize what happened.** If the user returns after a break, read the progress file and give a brief summary of where things stand before continuing.
+
+8.7 **Update parent scope on completion.** When all tasks in the plan are complete and the plan has a parent scope, update the parent scope's progress.md:
 - Add a row to the Progress Log: `| {date} | /plan | Done | {plan filename} complete — {summary} |`
 - Update the Plans table status to `Done`
 - Update the Resume Context block with the new state
 
-7.8 **gstack review targeting.** When recommending or triggering a gstack review skill
+8.8 **gstack review targeting.** When recommending or triggering a gstack review skill
 (`/plan-ceo-review`, `/plan-eng-review`, `/plan-design-review`, `/plan-devex-review`,
 `/autoplan`) from a plan context, point it at the **plan file** — not the parent scope.
 This gives gstack focused context on the specific plan being executed. (Contrast with
 `/scope`, which points gstack at `scope.md` for holistic cross-plan review.)
 
-## 8. Ralph Loop Integration
+8.9 **Append to close-out-prep.md throughout execution** — /plan maintains a running ledger at `close-out-prep.md` co-located with the plan/progress files. The ledger is consumed by `/closeout` and `/closeout-extended` at end-of-plan. Append points:
+
+- **§2 Files Changed** — after every task that creates or modifies files. Group by repo, then category (code | test | config | doc | schema | migration).
+- **§3 Patterns Followed** — every newly-written method in a known-extensible area (per §7.1) that follows an existing pattern. Include optional `deviation:` sub-line.
+- **§4 Patterns Created** — every halt-and-ask outcome of "write parallel impl" (per §7.5/§7.7). Mandatory format with alternatives-considered + recommendation. /plan rejects malformed entries at write time.
+- **§5 Cross-Repo Touchpoints** — when a contract, event schema, webhook payload, env var, FHIR resource, or other declared-contract surface is touched. Note which Consumers (from CROSS-REPO.md) may need their docs/code updated.
+- **§6 Docs Loaded During Planning** — populated by §5.9 Phase 0 read step. Always includes CLAUDE.md + ARCHITECTURE.md + CROSS-REPO.md when present.
+- **§7 Docs Likely Affected** — populated incrementally as files change. Ranked by agent-load-bearing weight (CLAUDE.md > README > ARCHITECTURE > docs/*).
+- **§8 Assumptions** — when /plan makes a guess it doesn't verify (e.g., assumed SSM key still valid, didn't curl).
+- **§9 Deferred** — when /plan skips a sub-task with explicit reason and recommended owner.
+- **§11 Risk Flags** — when /plan flags uncertainty in its own decisions or notices pre-existing weak spots adjacent to the work.
+
+Phase boundaries get a timestamped header `## Phase {P}: {name} (started {ISO})` in the ledger so resumed/restarted phases append a second timestamped block rather than overwrite. /closeout dedupes by file:line on read and treats the latest entry as canonical.
+
+The ledger has a `**Schema version:**` field at the top — /closeout checks this and errors clearly on mismatch. Bump the version when changing field shapes.
+
+**Location:** `close-out-prep.md` lives at `{scope-folder}/close-out-prep.md` (child of /scope) or `{plan-folder}/close-out-prep.md` (standalone plans). /plan creates it on first ledger write if it doesn't exist, using the template at `~/.claude/skills/plan/templates/close-out-prep.md.template`.
+
+## 9. Ralph Loop Integration
 
 When used with the ralph-loop plugin, this skill drives the loop execution. The ralph loop repeatedly invokes Claude Code with the same prompt. This skill ensures each invocation picks up where the last one left off by reading the progress file.
 
@@ -286,23 +438,23 @@ If all tasks are complete, output <promise>PHASE_COMPLETE</promise>.
 If blocked on a human task, output <promise>WAITING_HUMAN</promise>.
 ```
 
-## 9. First Run Setup
+## 10. First Run Setup
 
 If the progress file doesn't exist when this skill is first invoked:
 
-9.1 Discover the plan file per Section 2.
+10.1 Discover the plan file per Section 2.
 
-9.2 Validate the plan file exists and is parseable — count phases, tasks, and checkpoints.
+10.2 Validate the plan file exists and is parseable — count phases, tasks, and checkpoints.
 
-9.3 Create the progress file with the header and session start timestamp.
+10.3 Create the progress file with the header and session start timestamp.
 
-9.4 Print the full status summary including total scope.
+10.4 Print the full status summary including total scope.
 
-9.5 Run Phase 0 pre-flight (Section 5) before beginning task execution.
+10.5 Run Phase 0 pre-flight (Section 5) before beginning task execution.
 
-9.6 Begin executing from Task 1.1 (or the first AI task if 1.1 is HUMAN).
+10.6 Begin executing from Task 1.1 (or the first AI task if 1.1 is HUMAN).
 
-## 10. Document Formatting
+## 11. Document Formatting
 
 Plan documents and their progress files use these formatting conventions:
 
@@ -311,13 +463,13 @@ Plan documents and their progress files use these formatting conventions:
 - **Workspace-relative paths:** All file references relative to workspace root (e.g., `padma-integrations/lib/xendit.js`, not `lib/xendit.js`)
 - **No prose padding:** Task descriptions are direct and imperative. "Create X" not "We should create X".
 
-## 11. Plan Completion & Archive
+## 12. Plan Completion & Archive
 
 When ALL tasks in the plan are complete (every task logged as ✅ DONE or ⏭️ SKIPPED
 in the progress file), run the completion sequence. Do NOT run this if any task is
 ❌ FAILED or ⏸️ WAITING_HUMAN.
 
-### 11.1 Extract deferred TODOs
+### 12.1 Extract deferred TODOs
 
 Scan the progress file for uncompleted work — items logged as ⏭️ SKIPPED, deferred
 items noted in **Issues** fields, and any `TODO` or `FIXME` mentions in task notes.
@@ -326,7 +478,7 @@ execution (noted in checkpoint reviews or task notes).
 
 Collect these into a list of actionable TODO items.
 
-### 11.2 Append to TO-DO.md
+### 12.2 Append to TO-DO.md
 
 Resolve the plans directory (same logic as Section 2):
 - PMG: `~/Projects/pmg/pmg-docs/plans/TO-DO.md`
@@ -372,23 +524,23 @@ plan. Include brief context (e.g., "Add integration tests for gRPC endpoints —
 because staging DB not available"). The source path lets reviewers trace back to the
 full plan context.
 
-### 11.3 Archive the plan
+### 12.3 Archive the plan
 
-11.3.0 **Child plans stay in place.** If the plan lives inside a `scope-*/` folder
+12.3.0 **Child plans stay in place.** If the plan lives inside a `scope-*/` folder
 (child of a /scope), do NOT move or archive the plan files. The plan and progress
 files stay in the scope folder — the scope manages archival of the entire folder
 when ALL child plans are complete (via /scope Step 7). Individual child plan
 completion is tracked by status updates only: mark Done in PLANS-INDEX, update
-the parent scope's progress.md Plans table, and extract TODOs. Skip §11.3.1
-through §11.3.2 entirely for child plans.
+the parent scope's progress.md Plans table, and extract TODOs. Skip §12.3.1
+through §12.3.2 entirely for child plans.
 
-11.3.1 **Standalone plans — determine the archive directory:**
+12.3.1 **Standalone plans — determine the archive directory:**
 - Numbered plan (e.g., `39.2-cashier-settlement`):
   `{plans_dir}/archive/39.2-cashier-settlement/`
 - Unnumbered plan (e.g., `ci-hardening`):
   `{plans_dir}/archive/ci-hardening/`
 
-11.3.2 **Standalone plans — archive based on where the plan lives:**
+12.3.2 **Standalone plans — archive based on where the plan lives:**
 
 **Standalone plan in its own folder** (e.g., `{plans_dir}/ci-hardening/`):
 Move the entire folder to archive — this includes the plan, progress, PRDs,
@@ -405,7 +557,7 @@ mv {plan-file} {archive-dir}/
 mv {progress-file} {archive-dir}/
 ```
 
-### 11.4 Update PLANS-INDEX.md
+### 12.4 Update PLANS-INDEX.md
 
 Find the plan's row in `{plans_dir}/PLANS-INDEX.md` by matching the `#` column
 (e.g., `39.2`) or the `Folder/File` column. Change its status from `Active` or
@@ -418,14 +570,14 @@ If no row exists (standalone plans created before /scope), append one:
 
 If the plan has no number, assign the next available whole number from the index.
 
-### 11.5 Update parent scope (if applicable)
+### 12.5 Update parent scope (if applicable)
 
 If the plan has a `**Parent scope:**` field, update the parent scope's `progress.md`:
 - Add a row to the Progress Log: `| {date} | /plan | Done | {plan filename} archived — {summary}. TODOs extracted to TO-DO.md |`
 - Update the Plans table status to `Done`
 - Update the Resume Context block with the new state
 
-### 11.6 Prompt for /closeout
+### 12.6 Prompt for /closeout
 
 After archiving, ask the user:
 
@@ -440,7 +592,7 @@ If the user says yes to either, invoke that skill. If no, note it in the progres
 file as a deferred action and move on. If neither /closeout nor /closeout-extended
 is installed yet, fall back to `/review` and note the gap.
 
-### 11.7 Report to user
+### 12.7 Report to user
 
 Print a completion summary:
 
@@ -461,18 +613,18 @@ Print a completion summary:
 🔗 Parent scope updated: {scope-folder}/progress.md
 ```
 
-### 11.8 Sibling plan discovery
+### 12.8 Sibling plan discovery
 
 After reporting completion, check the plan's parent folder (scope folder or plans
 directory) for other plan files that haven't been executed yet:
 
-11.8.1 List `*-PLAN.md` files in the same directory as the completed plan.
+12.8.1 List `*-PLAN.md` files in the same directory as the completed plan.
 
-11.8.2 Cross-reference each with `PLANS-INDEX.md` — exclude any marked `Done`.
+12.8.2 Cross-reference each with `PLANS-INDEX.md` — exclude any marked `Done`.
 Also check the parent scope's `progress.md` Plans table if inside a `scope-*/`
 folder.
 
-11.8.3 If pending sibling plans exist, present them to the user:
+12.8.3 If pending sibling plans exist, present them to the user:
 
 ```
 📋 Sibling plans in {folder}:
@@ -482,14 +634,14 @@ folder.
 Continue to the next plan? (Y to proceed / N to stop here)
 ```
 
-11.8.4 If the user says yes, invoke `/plan` on the next pending sibling (by plan
+12.8.4 If the user says yes, invoke `/plan` on the next pending sibling (by plan
 number order). If the scope has many remaining plans and the context window is
 getting full, suggest clearing context first:
 
 > Context is getting heavy from the previous plan. Recommend running `/clear`
 > then: `/plan {next-plan-number}`
 
-11.8.5 If there are no pending siblings, the scope is fully complete. Announce this
+12.8.5 If there are no pending siblings, the scope is fully complete. Announce this
 and hand off to `/scope` Step 8 (post-flight cleanup):
 
 > All plans in this scope are complete. Run scope post-flight cleanup?

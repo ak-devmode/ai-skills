@@ -1,0 +1,220 @@
+# close-out-prep.md — {{PLAN_OR_SCOPE_SLUG}}
+
+**Schema version:** 1.0
+**Plan:** {{PATH_TO_PLAN}}
+**Started:** {{ISO_TIMESTAMP}}
+**Status:** in-progress
+
+<!--
+Running ledger written by /plan as it executes. Consumed by /closeout and
+/closeout-extended at the end. Append-only — never overwrite prior phase blocks.
+
+Each section is auto-populated by /plan at the relevant trigger:
+- §2 Files Changed — after every task that modifies files
+- §3 Patterns Followed — when /plan follows a pattern (every new method gets an entry)
+- §4 Patterns Created — when halt-and-ask resolves with "accept as new pattern"
+- §5 Cross-repo Touchpoints — when a contract/event/schema is touched
+- §6 Docs Read — when /plan loads CLAUDE.md / ARCH / CROSS-REPO at session start
+- §7 Docs Likely Affected — populated as files change; refined at end of phase
+- §8 Assumptions — when /plan makes a guess it didn't verify
+- §9 Deferred — when /plan skips a sub-task with a reason
+- §10 Coverage Map — derived from PRD/scope nodes; fallback to diff-derived
+- §11 Risk Flags — when /plan flags uncertainty or pre-existing weak spots
+
+Phase boundaries get timestamped headers so resumed/restarted phases append
+cleanly rather than overwrite.
+
+Schema-version field at top is checked by /closeout — mismatched versions
+fail loudly. Bump version when changing field shapes.
+-->
+
+---
+
+## §1 Execution Summary
+
+- **Branch:** {{BRANCH}}
+- **Base:** {{BASE_BRANCH}}
+- **Phases completed:** {{PHASES_DONE}} of {{PHASES_TOTAL}}
+- **Phases skipped:** {{PHASES_SKIPPED}}
+- **Repos touched:** {{REPOS_LIST}}  <!-- primary first, incidental after -->
+- **Last action:** {{LAST_ACTION_DESCRIPTION}}
+
+---
+
+## §2 Files Changed
+
+<!-- Grouped by repo, then by category (code | test | config | doc | schema | migration).
+     One line per file with terse intent. Workspace-relative paths. -->
+
+### {{REPO_NAME}}
+
+**code:**
+- `path/to/file.ext` — {{one-line intent}}
+
+**test:** _(none)_
+
+**config:** _(none)_
+
+**doc:** _(none)_
+
+**schema:** _(none)_
+
+**migration:** _(none)_
+
+---
+
+## §3 Patterns Followed
+
+<!-- Method-level. Every newly-written method that follows an existing pattern gets an entry.
+     Format: `method-name() in <file:line>  ← <pattern-source-file:line>` with optional
+     `deviation:` sub-line if /plan deviated from the source pattern.
+     Inside-a-function refactors do NOT earn an entry — only newly-written methods. -->
+
+### {{REPO_NAME}}
+
+- `handleWebhook()` in `src/handlers/chatwoot.js:42`
+  ← `src/handlers/xendit.js:42` (pattern reference)
+  deviation: skipped idempotency check (Chatwoot signs with timestamp, prevents replay)
+
+- `publishEvent()` in `src/handlers/chatwoot.js:118`
+  ← `kalpa-infrastructure/adapters/event.go:15` (pattern reference)
+
+---
+
+## §4 Patterns Created (no existing reference found)
+
+<!-- Halt-and-ask outputs. Every entry must have alternatives-considered + recommendation.
+     /plan rejects entries missing these fields at write time. -->
+
+### {{REPO_NAME}}
+
+- `validateWebhookSignature()` in `src/handlers/chatwoot.js:104`
+  - alternatives-considered:
+    - `kalpa-infrastructure/adapters/signature.go:15` — rejected: SHA256-only, Chatwoot signs with SHA512
+    - `(none found in: local repo, kalpa-infrastructure, npm:crypto)`
+  - recommendation: extend `kalpa-infrastructure/adapters/signature.go` to accept algo arg; this is a candidate for fold-up in /closeout-extended upward traversal
+
+---
+
+## §5 Cross-Repo Touchpoints
+
+<!-- Contracts changed: API endpoints, event schemas, webhook payloads, env var names,
+     FHIR resources, Notion property names, SSM parameter keys.
+     Per contract: which other repos consume it, was consumer-side validated? -->
+
+- **Contract:** `POST /webhooks/chatwoot/inbound` payload — added `metadata.source_channel`
+  - Consumers (from CROSS-REPO.md): pmg-chatwoot
+  - Consumer-side checked: NO — flagged for /closeout-extended outward traversal
+
+---
+
+## §6 Docs Loaded During Planning
+
+<!-- What /plan read at session start as context.
+     Used by /closeout two ways:
+       (a) gap analysis: did we read the right docs?
+       (b) drift candidates: have these docs drifted from code now? -->
+
+- `CLAUDE.md` (repo root)
+- `ARCHITECTURE.md` (repo root)
+- `CROSS-REPO.md` (repo root)
+- `docs/integrations/chatwoot.md`
+
+---
+
+## §7 Docs Likely Affected
+
+<!-- Best-guess update list. Ranked by agent-load-bearing weight:
+       CLAUDE.md > README > ARCHITECTURE > docs/*
+     Each entry: file + reason it might need updating.
+     /closeout-basic uses this for the doc-suggestion list.
+     /closeout-extended validates the list + spot-checks across repos. -->
+
+- `CLAUDE.md` — new `metadata.source_channel` field in webhook payload; section "Webhook contracts" needs update
+- `ARCHITECTURE.md` — Data Flow diagram still shows pre-metadata flow; needs refresh
+- `docs/integrations/chatwoot.md` — example payload outdated
+
+---
+
+## §8 Assumptions Made (unverified)
+
+<!-- Things /plan assumed but didn't curl/test/grep to verify.
+     /closeout flags these for verification or test gap creation. -->
+
+- Assumed `/pmg/chatwoot/api_token` in SSM is still valid — did not test
+- Assumed Chatwoot's webhook signature algo is SHA512 per current docs — did not verify against running instance
+
+---
+
+## §9 Deferred Items
+
+<!-- TODOs that /plan punted on with explicit reason and recommended owner. -->
+
+- Backfill historical webhook records with `source_channel` — deferred, no urgency, recommend @alex
+- Update integration test fixtures to include new field — deferred to follow-up scope
+
+---
+
+## §10 Test Coverage Map
+
+<!-- Business nodes from PRD/scope/plan. For each: test file ref OR no-test-reason.
+     Per node: happy/unhappy/edge coverage flags.
+     If no PRD/scope/plan-eng-review activity tree exists, fall back to
+     diff-derived nodes and note reduced confidence. -->
+
+### Source: {{PRD_OR_SCOPE_OR_DIFF}}
+
+| Node | Test file | Happy | Unhappy | Edge |
+|------|-----------|-------|---------|------|
+| handleWebhook (Chatwoot) | `test/handlers/chatwoot.test.js` | ✓ | ✓ | — |
+| validateWebhookSignature | _(none — new method)_ | ✗ | ✗ | ✗ |
+| metadata.source_channel propagation | _(none — new contract)_ | ✗ | ✗ | ✗ |
+
+---
+
+## §11 Risk Flags / Uncertainty
+
+<!-- Places /plan made a judgment call or noticed something off.
+     /closeout-extended scrutinizes these first. -->
+
+- /plan was uncertain whether `metadata.source_channel` should be `string` or `enum` — went with string for now. Worth revisiting if more channels added.
+- Pre-existing weak spot: no integration test covers the full inbound webhook → Chatwoot inbox → broadcast outbound flow. Out of scope for this plan but flagged.
+
+---
+
+## Phase blocks (append-only — never overwrite)
+
+<!--
+Each phase appends a timestamped block here. Format:
+
+  ## Phase {P}: {name} (started {ISO})
+
+  ### §3 Patterns Followed (additional)
+  - ...
+
+  ### §4 Patterns Created (additional)
+  - ...
+
+  ### §5 Cross-repo Touchpoints (additional)
+  - ...
+
+  ### §11 Risk Flags (additional)
+  - ...
+
+Resumed/restarted phases append a SECOND block:
+
+  ## Phase {P}: {name} (resumed {ISO} after compaction)
+
+  ### §3 Patterns Followed (additional)
+  - ...
+
+/closeout dedupes by file:line, treats the latest decision as canonical.
+-->
+
+## Phase 1: {{PHASE_NAME}} (started {{ISO_TIMESTAMP}})
+
+<!-- Filled by /plan during execution. -->
+
+---
+
+<!-- Ledger ends here. Status flips to "complete" when all plan phases done. -->

@@ -1,0 +1,137 @@
+# CLAUDE.md — {{REPO_NAME}}
+
+<!--
+Agent context for Claude Code in this repo. Read on session start.
+
+This is the CANONICAL agent doc — single canonical per repo (no
+`.claude/CLAUDE.md` sidecar). If a `.claude/CLAUDE.md` existed before,
+its content was folded into this file when /cross-repo-init bootstrapped
+the trio.
+
+Companion files:
+- ARCHITECTURE.md — component layout, data flow, key decisions
+- CROSS-REPO.md — Pattern Sources, Consumers, archetype declaration
+
+Sections below are sized for "load on every session" — keep agent-load-
+bearing detail here; push verbose history and narrative to README.md or
+archive/.
+-->
+
+{{STUB_BANNER}}
+<!-- If repo is a stub: opens with a clear "STUB REPO — no implementation
+     yet" warning + pointer to where the real work lives.
+     Otherwise this placeholder is empty. -->
+
+---
+
+## 1. What this service is
+
+{{WHAT_THIS_SERVICE_IS}}
+<!-- One paragraph. What this repo OWNS and what it does NOT own. Drop in
+     the archetype declaration here too (Tier 1/2/3 / standalone / leaf
+     / etc.). Cite the relevant ADRs by number. End with port + module
+     path + service-doc pointer. -->
+
+See `ARCHITECTURE.md` for component layout / data flow / key decisions.
+See `CROSS-REPO.md` for graph position and Pattern Sources / Consumers.
+
+---
+
+## 2. Trunk branch and workflow
+
+{{TRUNK_BRANCH_SECTION}}
+<!-- Active trunk = $SURVEY_BRANCH. Branch-off-develop rule when applicable.
+     PR target convention. Note divergence (e.g., main +0 vs develop +N)
+     so the agent doesn't accidentally branch from a stale main. -->
+
+---
+
+## 3. Architecture decisions you must know
+
+{{ARCHITECTURE_DECISIONS}}
+<!-- The 3-7 load-bearing rules that govern how code is written in this
+     repo. Lift from ADRs cited by the repo. Each entry: bold title +
+     1-2 short paragraphs. Examples for a Go service:
+       3.1 Saga participant, not orchestrator (ADR-005)
+       3.2 No direct cross-service calls (ADR-006)
+       3.3 Per-service auth tokens (ADR-007)
+       3.4 Multi-tenant via JWT claims
+       3.5 ULID CHAR(26) for primary keys
+     For a frontend leaf, may be shorter (stack + API target rules only). -->
+
+---
+
+## 4. Key files
+
+{{KEY_FILES}}
+<!-- Tree-style listing of the most agent-relevant paths. NOT exhaustive
+     — just where the load-bearing logic lives. ~15-30 lines.
+     For Go: cmd/, internal/app/, internal/saga/, internal/domain/,
+            internal/grpc/, proto/.
+     For Nuxt: core/, layers/, infra/. -->
+
+---
+
+## 5. Environment variables
+
+{{ENV_VARS_TABLE}}
+<!-- Authoritative source: env.example + internal/config/env.go (or
+     equivalent). NOT a `.claude/CLAUDE.md` from a previous era — those
+     have been wrong on port assignments in the past. Format as a
+     compact table: Variable / Required / Purpose. -->
+
+All sourced from SSM at deploy time; manifest at
+`wellmed-infrastructure/ssm/parameters/<service>.json` (when applicable).
+
+---
+
+## 6. Build / test / lint
+
+{{BUILD_TEST_LINT}}
+<!-- Detected from Makefile, package.json scripts, go.mod, etc.
+     Examples:
+       go test ./...
+       go build ./...
+       golangci-lint run ./...
+       pnpm test, pnpm build, pnpm lint -->
+
+---
+
+## 7. What NOT to do
+
+{{WHAT_NOT_TO_DO}}
+<!-- The agent-error guardrails. Each entry: bold title + one-line
+     consequence. Derived from ADRs cited + any "do not" callouts in
+     pre-existing docs. Examples:
+       - Do not add saga orchestration (ADR-005)
+       - Do not call cross-service gRPC except via SagaCallback (ADR-006)
+       - Do not use UUID primary keys (ULID only)
+       - Do not add HTTP endpoints (gRPC only) -->
+
+---
+
+## 8. Cross-repo position
+
+8.1 {{ARCHETYPE_ONE_LINER}} in the {{PROJECT_GRAPH}} code graph. Pattern
+Sources: {{PATTERN_SOURCES_INLINE}}. See `CROSS-REPO.md` for the full graph.
+
+8.2 PMG ↔ WellMed is a hard wall. See
+`memory/project_pmg_wellmed_trunks.md`.
+
+---
+
+## 9. Plans and memory
+
+9.1 **System-wide plans** at `{{PLANS_DIR}}`. {{PLANS_CONTEXT}}
+
+9.2 **Global agent memory** at
+`~/.claude/projects/-Users-alexknecht-Projects-pmg/memory/`. Key
+pointers for this repo:
+
+{{MEMORY_POINTERS}}
+<!-- Curated list of memory entries that an agent working in this repo
+     should be aware of. Pull from MEMORY.md index by relevance. -->
+
+---
+
+<!-- Last scaffolded/audited by /cross-repo-init: {{TIMESTAMP}} -->

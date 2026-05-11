@@ -17,6 +17,28 @@ Format rules:
 - Sub-paths inside a Pattern Source repo use glob-friendly notation (adapters/*, lib/*)
 - Empty Pattern Sources section = this repo is trunk or standalone
 - Empty Consumers section = this repo is a leaf
+
+Archetype declaration (recommended at top of file, before §1):
+
+  **Archetype:** <one of:>
+    - "application trunk" — main app where service contracts terminate
+      (e.g., wellmed-backbone)
+    - "pattern trunk" / "Pattern Source / shared library" — shared code
+      patterns flow from here (e.g., wellmed-infrastructure)
+    - "Tier-1 internal leaf" / "Tier-2 edge" / "Tier-3 integration" — for
+      tiered service systems
+    - "frontend leaf" — Nuxt/React/etc. consuming HTTP APIs
+    - "docs leaf" — docs-only, no source code
+    - "standalone" — SaaS-plane service parallel to application trunk
+      (e.g., wellmed-hq)
+    - "stub" — placeholder with no implementation yet
+    - "marketing site" / other — anything outside the application graph
+
+Some codebases have BOTH an application trunk AND a pattern trunk.
+WellMed example: wellmed-backbone is the application trunk;
+wellmed-infrastructure is the pattern trunk. /closeout-extended walks
+both edges. When declaring archetype on either, also reference the other
+trunk in §4 Notes so the relationship is explicit.
 -->
 
 ## Pattern Sources

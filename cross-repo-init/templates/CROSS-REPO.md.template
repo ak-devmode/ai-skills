@@ -1,0 +1,46 @@
+# CROSS-REPO.md — {{REPO_NAME}}
+
+<!--
+Purpose: declare this repo's place in the multi-repo graph for /plan and /closeout-extended.
+- /plan reads Pattern Sources on Phase 0 and greps them before writing new methods (pattern-first rule).
+- /closeout-extended walks Pattern Sources (upward) and Consumers (outward) for cross-repo self-healing.
+- /cross-repo-init scaffolds and re-validates this file. Idempotent — re-run after structural changes.
+
+Maintenance: re-run /cross-repo-init when:
+- A new consumer starts depending on this repo's contracts
+- This repo starts following a new Pattern Source
+- A repo is renamed, moved, archived, or deleted
+- A contract changes shape significantly
+
+Format rules:
+- Pattern Sources and Consumers list other repos by directory name (matches ~/Projects/<group>/<name>)
+- Sub-paths inside a Pattern Source repo use glob-friendly notation (adapters/*, lib/*)
+- Empty Pattern Sources section = this repo is trunk or standalone
+- Empty Consumers section = this repo is a leaf
+-->
+
+## Pattern Sources
+
+<!-- Repos this code follows patterns from. Looked up BEFORE writing any new method
+     (per /plan's pattern-first rule). Leave empty if this repo is trunk or standalone. -->
+
+{{PATTERN_SOURCES}}
+
+## Consumers
+
+<!-- Repos that depend on contracts/exports of THIS repo. Drives /closeout-extended
+     outward traversal — when contracts here change, these consumers may need
+     their docs/code updated. Leave empty if this repo is a leaf. -->
+
+{{CONSUMERS}}
+
+## Traversal Config
+
+<!-- Optional overrides. Defaults shown in comments. -->
+
+- max-depth-override: {{MAX_DEPTH}}    <!-- default: 2 -->
+- trunk-branch: {{TRUNK_BRANCH}}        <!-- default: develop, falls back to main -->
+
+---
+
+<!-- Last scaffolded/audited by /cross-repo-init: {{TIMESTAMP}} -->

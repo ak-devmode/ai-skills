@@ -1,5 +1,6 @@
 ---
 name: markdown-style
+version: 1.0.0
 description: "Use for creating, updating, or revising structured .md documents — strategy docs, PRDs, plans, playbooks, integration specs, or any markdown maintained over time and loaded into future context windows. Trigger on: 'create a plan', 'draft a PRD', 'update the doc', 'write this up as a document', or references to versioned documents. Do NOT use for READMEs, quick notes, or throwaway content."
 allowed-tools:
   - Bash
@@ -8,7 +9,6 @@ allowed-tools:
   - Grep
   - Write
   - Edit
-  - AskUserQuestion
 ---
 
 # Markdown Document Style Guide
@@ -237,6 +237,8 @@ Plan documents drive autonomous task execution via the task-runner skill. They i
 
 8.2.2 Status must be set to "Ready to execute" before handing off to the task-runner. A plan with "Draft" status will be rejected by the pre-flight check.
 
+8.2.3 **PLANS-INDEX row status** uses a compact taxonomy distinct from document Status: `Draft | Active | Done ({date})`. The index tracks the row's lifecycle in the project; the document's Status field tracks internal execution state. Both can be true at once (e.g., a plan with internal Status "In Progress" and index status "Active").
+
 ### 8.3 Related Docs Section (Required)
 
 8.3.1 Every plan document must include a `## Related Docs` section immediately after the header block, before Phase 1. This scopes the authoring cross-check (8.3.2) and the task-runner pre-flight validation.
@@ -261,6 +263,63 @@ When all tasks in a plan are marked complete in the progress file:
 8.4.3 Do not leave completed plans or progress logs in repo-local `docs/` directories. The kalpa-docs archive is the single source of completed work history.
 
 8.4.4 If the plan lived in a repo-local `docs/` directory, confirm the archive move with the user before deleting the original location, since git history already tracks the file.
+
+### 8.5 Optional Header Fields
+
+8.5.1 `**Branch:**` — feature branch the plan executes on. If omitted, the task-runner derives `feature/<plan-stem>` from the filename.
+
+8.5.2 `**Parent scope:**` — path to parent `scope.md` when the plan is a child of a /scope. Triggers parent-scope context loading at pre-flight.
+
+8.5.3 `**Plan #:**` — explicit plan number when the filename doesn't encode one. For child plans of a scope, use sub-numbering format `{N}.{P}` (scope number . phase number). The task-runner prefers this field over filename-derived numbers.
+
+### 8.6 Task Structure
+
+8.6.1 Each task uses this block:
+
+```markdown
+### {N}.{T} {Task Title}
+- **Type**: AI | HUMAN | AI+HUMAN_REVIEW
+- **Input**: files/context this task needs (workspace-relative paths)
+- **Action**: what to do
+- **Output**: files/artifacts produced
+- **Acceptance**: how to verify success
+- **Notes**: (optional) additional context
+```
+
+8.6.2 Task types:
+- **AI** — Claude executes autonomously
+- **HUMAN** — Claude stops and waits for human action
+- **AI+HUMAN_REVIEW** — Claude executes, then stops for human review before marking complete
+
+### 8.7 Checkpoint Format
+
+8.7.1 Insert checkpoints between phases or at any natural human-review point:
+
+```markdown
+---
+### 🔲 CHECKPOINT: {Description}
+**Review**: what the human should check before continuing
+**Resume**: what to tell Claude to continue (e.g., "continue the {slug} plan")
+---
+```
+
+8.7.2 The task-runner stops at every CHECKPOINT and does not proceed without explicit human instruction.
+
+### 8.8 Workspace-Relative File References
+
+8.8.1 All file paths in plans and their paired progress files use paths relative to the workspace root (e.g., `padma-integrations/lib/xendit.js`, not `lib/xendit.js`).
+
+8.8.2 This is required when plans live outside the source repo (e.g., in `pmg-docs/plans/`) to avoid ambiguity about which repo a path refers to.
+
+### 8.9 Plan Stubs (Child Plans of Scopes)
+
+8.9.1 When /scope generates plan files for a phased scope, each plan is a child of the scope and uses sub-numbered filenames: `{N}.{P}-{slug}-PLAN.md` where `{N}` is the scope number and `{P}` is the phase number.
+
+8.9.2 Stub-level detail is acceptable at scope-generation time. The plan can ship with Status "Draft" and shallow task descriptions; the executing /plan session deepens detail at start of run.
+
+8.9.3 Child plans must include `**Parent scope:**` in the header (see 8.5.2).
+
+8.9.4 Child plans do not archive individually. They remain in the scope folder until the entire scope is archived. The task-runner enforces this.
 
 ---
 
@@ -324,6 +383,159 @@ Every PRD must include these sections in this order. All follow Mode B formattin
 9.4.1 When the PRD is Approved, the Plan author (in Claude Code) reads the PRD and builds a `[feature]-PLAN.md` per Section 8. The PRD is the primary Related Doc for that Plan.
 
 9.4.2 The Plan should trace each Phase back to a requirement or acceptance criterion in the PRD. If a task in the Plan has no traceable PRD requirement, it either shouldn't be there or the PRD is missing a requirement.
+
+---
+
+## 10. Progress Files
+
+Progress files pair with plans and scopes to track execution state across sessions. They are the resume mechanism — paste the first 20 lines into a new conversation and the next session is oriented.
+
+### 10.1 Naming and Pairing
+
+10.1.1 Plan progress file: `{plan-stem}-PROGRESS.md` next to its plan file (`39.2-cashier-PLAN.md` ↔ `39.2-cashier-PROGRESS.md`). Plain `PROGRESS.md` is acceptable for plans named plain `PLAN.md`.
+
+10.1.2 Scope progress file: `progress.md` inside the scope folder (`scope-{slug}/progress.md`).
+
+10.1.3 Always co-located with the parent document. Never separate.
+
+### 10.2 Append-Only Rule
+
+10.2.1 Never delete or overwrite previous Progress Log entries. The log is an audit trail.
+
+10.2.2 The **Resume Context block is the only section that gets overwritten**. It always reflects current state.
+
+10.2.3 The **Decisions Log** is append-only with date-stamped entries.
+
+### 10.3 Required Sections
+
+Every progress file includes these sections in this order:
+
+```markdown
+# Progress: {Plan or Scope Title}
+
+## Resume Context
+{Block with Last action / Next action / Open blockers / Key files changed}
+
+## Decisions Log
+{Append-only list of non-obvious decisions with date and rationale}
+
+## Progress Log
+{Table: Date | Skill/Action | Status | Notes}
+
+## Human Steps
+{Table: Step | Status | Notes — for tracking required human actions}
+
+## Plans (scope progress only)
+{Table: # | Plan File | Phase | Status | Notes — omit for plan progress}
+
+## Artifacts (scope progress only)
+{List of non-code artifacts produced — dashboards, configs, templates}
+```
+
+### 10.4 Resume Context Block
+
+10.4.1 The block is the single highest-leverage piece of the progress file. It must be re-readable cold.
+
+```markdown
+**Plan/Scope:** {path to parent doc}
+**Last action:** {what just happened, with date}
+**Next action:** {what to do next — name the specific task or skill}
+**Open blockers:** {human steps, external deps, or "None"}
+**Key files changed:** {workspace-relative paths, most recent first, or "None yet"}
+```
+
+10.4.2 Update the Resume Context block every time you append to the Progress Log. Never let it drift from current state.
+
+### 10.5 Decisions Log Dual-Entry Rule
+
+10.5.1 Non-obvious execution decisions go in two places:
+1. The **Decisions Log** section with date and full rationale
+2. The **Progress Log** table with a brief note in the Notes column
+
+10.5.2 Decisions that change the scope itself (reframes, additions, cuts) also propagate to the parent scope.md or plan file under "Key Decisions Captured."
+
+### 10.6 File References
+
+10.6.1 All file paths in progress files use workspace-relative paths (see 8.8).
+
+10.6.2 List Key Files Changed in the Resume Context most-recent-first so the block remains short and scannable.
+
+---
+
+## 11. Scope Documents
+
+Scope documents orchestrate multi-skill, multi-phase work. They are the parent of plan stubs and the source of truth for a task's overall plan, decisions, and progress.
+
+### 11.1 Naming and Folder
+
+11.1.1 Scope folder name: `scope-{slug}/` where slug is lowercase, hyphenated, 3–5 words derived from the task title.
+
+11.1.2 The folder lives in the project's central plans directory, not in the source repo:
+- PMG: `~/Projects/pmg/pmg-docs/plans/scope-{slug}/`
+- WellMed: `~/Projects/wellmed/kalpa-docs/plans/scope-{slug}/`
+- AI-skills: `~/Projects/ai-skills/plans/scope-{slug}/`
+
+11.1.3 Inside the scope folder: `scope.md`, `progress.md`, `artifacts/`, and (for phased scopes) sub-numbered plan stubs `{N}.{P}-{slug}-PLAN.md`.
+
+### 11.2 Required Header
+
+```markdown
+# {Task title}
+**Project:** {detected project}  **Branch:** {branch}  **Date:** {today's date}
+**Scope folder:** {plans_dir}/scope-{slug}/
+**Source repo(s):** {list of repos this task touches, with absolute paths}
+```
+
+### 11.3 Required Sections
+
+Every scope.md includes these sections in this order:
+
+```markdown
+## Context
+{1–3 sentences: what this is, why it's being done, what triggered it}
+
+## Phases
+{For phased scopes only — omit for atomic single-phase tasks.
+ Per phase: ### Phase N — {name}, description of deliverables, what "done" looks like}
+
+## Architecture
+{Include only if the task involves non-trivial system design. ASCII diagrams in fenced
+ code blocks, never Mermaid. Omit for simple bug fixes or single-file changes.}
+
+## What Already Exists
+{Relevant existing code, infrastructure, and patterns this task builds on.
+ Workspace-relative file paths. Helps future sessions understand what NOT to rebuild.}
+
+## NOT in Scope
+{Explicit exclusions — things related but deliberately deferred. Prevents scope creep.}
+
+## Skill Sequence
+{Tables grouping skills by workflow phase. Each marked YES / OPTIONAL / N/A with reason.
+ See /scope §4 for the canonical 18-skill checklist.}
+
+## Key Decisions Captured
+{Bullet list of decisions from scoping rounds that shaped this scope}
+```
+
+### 11.4 Pairing with progress.md
+
+11.4.1 Every scope.md has a `progress.md` sibling in the same folder (see §10 for progress file conventions).
+
+11.4.2 The scope's progress.md is the living document — read first on every resume.
+
+### 11.5 Plan Stub Generation
+
+11.5.1 Phased scopes generate one plan stub per phase using sub-numbered filenames (see §8.9).
+
+11.5.2 Each stub references the scope as parent via `**Parent scope:**` header field.
+
+11.5.3 Stub depth: name, type, brief action sketch per task. Detail is filled at execution time by the running /plan session.
+
+### 11.6 File References
+
+11.6.1 All paths in scope.md use workspace-relative paths (see §8.8).
+
+11.6.2 Source repo paths in the header use absolute paths so the user can navigate to them directly.
 
 ---
 

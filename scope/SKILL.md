@@ -1,13 +1,13 @@
 ---
 name: scope
-version: 3.0.0
+version: 3.1.0
 description: |
   Task scoping, skill router, and progress tracker. Reads current context (git diff,
-  branch, CLAUDE.md, open files), eliminates assumptions via two rounds of structured
-  questions, then outputs a phased scope with a full 14-skill checklist marking N/A
-  skills with reasons. For multi-session work, generates plan stub files (one per phase,
-  each ~1 context window) that /plan (task-runner) can execute. Creates a tracking
-  folder (scope.md + progress.md) in the project's central plans directory.
+  branch, CLAUDE.md, open files), eliminates assumptions via two rounds of open-ended
+  numbered inline questions, then outputs a phased scope with a full 18-skill checklist
+  marking N/A skills with reasons. For multi-session work, generates plan stub files
+  (one per phase, each ~1 context window) that /plan (task-runner) can execute. Creates
+  a tracking folder (scope.md + progress.md) in the project's central plans directory.
   Progress.md is a living document updated throughout execution.
   Use when asked to "scope this", "plan this task", "what skills do I need", "before
   we start", "scope out", or at the beginning of any non-trivial feature or bug fix.
@@ -20,7 +20,6 @@ allowed-tools:
   - Grep
   - Write
   - Edit
-  - AskUserQuestion
 ---
 
 # /scope — Task Scoping, Skill Router & Progress Tracker
@@ -64,14 +63,21 @@ cat CLAUDE.md 2>/dev/null | head -60 || cat .claude/CLAUDE.md 2>/dev/null | head
 ```
 
 ```bash
-# Check for active scopes in the plans directory
-# PMG plans
-ls -la ~/Projects/pmg/pmg-docs/plans/scope-* 2>/dev/null || echo "no active PMG scopes"
-# WellMed plans
-ls -la ~/Projects/wellmed/kalpa-docs/plans/scope-* 2>/dev/null || echo "no active WellMed scopes"
-# Check SCOPE-INDEX if it exists
-cat ~/Projects/pmg/pmg-docs/plans/PLANS-INDEX.md 2>/dev/null || true
-cat ~/Projects/wellmed/kalpa-docs/plans/PLANS-INDEX.md 2>/dev/null || true
+# Detect project from PWD, then read ONLY the matching plans directory
+case "$(pwd)" in
+  *Projects/pmg*)        PLANS_DIR="$HOME/Projects/pmg/pmg-docs/plans" ;;
+  *Projects/wellmed*)    PLANS_DIR="$HOME/Projects/wellmed/kalpa-docs/plans" ;;
+  *Projects/ai-skills*)  PLANS_DIR="$HOME/Projects/ai-skills/plans" ;;
+  *)                     PLANS_DIR="" ;;
+esac
+if [ -n "$PLANS_DIR" ]; then
+  echo "PLANS_DIR=$PLANS_DIR"
+  ls -la "$PLANS_DIR"/scope-* 2>/dev/null || echo "no active scopes"
+  echo "---INDEX---"
+  cat "$PLANS_DIR/PLANS-INDEX.md" 2>/dev/null || echo "no PLANS-INDEX.md yet"
+else
+  echo "Unrecognized project — ask the user where the plans directory should live"
+fi
 ```
 
 After running the above, synthesize what you know:
@@ -86,63 +92,64 @@ After running the above, synthesize what you know:
 
 ## Step 1 — Round 1: Assumption Removal
 
-Generate 5–10 questions that, if answered wrong, would fundamentally change the
-approach. Fire them all in a single `AskUserQuestion` call.
+Ask 5–15 open-ended questions in a **single response** as a numbered list. The user answers by number. **Never use multiple-choice or pre-framed answer options** — open-ended only. The user prefers many specific questions over a few broad ones.
 
 **Rules for Round 1:**
 - Do NOT ask about things already determinable from git diff, branch name, or CLAUDE.md
-- Cover: scope boundary, timeline, prod vs exploratory, UI involvement, compliance,
-  coordination with other services/people, testing strategy
-- For WellMed context: ask about SATU SEHAT compliance if the change touches patient
-  data, API endpoints, or health records
-- For PMG context: ask about worker health data handling, regulatory requirements
-- Frame questions concisely — one line each, no preamble
+- Each question is one line, no preamble, numbered (1, 2, 3...)
+- Cover where ambiguity exists: scope boundary, timeline, prod vs exploratory, UI involvement, compliance, coordination with other services/people, testing strategy, cross-repo touchpoints
+- For WellMed context: include SATU SEHAT compliance angle if the change touches patient data, API endpoints, or health records
+- For PMG context: include worker health data handling, regulatory angle where relevant
+- Skip anything already clear from context — every question must move the design
 
-**Example questions (generate dynamically based on what's ambiguous):**
-- "Is this greenfield or modifying existing code?"
-- "Time available: single session today, or multi-session across days?"
-- "Going to production this sprint, or exploratory/staging only?"
-- "Does this have a UI component, or purely backend/infra?"
-- "Should testing be in-scope here, or tracked separately?"
-- "Does another service or team need to be coordinated?"
-- "Any SATU SEHAT / regulatory compliance angle?" (WellMed only)
-- "Is there a specific user-facing outcome to verify, or internal only?"
+**Example open-ended questions (generate dynamically based on what's ambiguous):**
 
-Ask only the questions where a wrong assumption would change your fundamental approach.
-Skip anything already clear from context.
+1. Is this greenfield or modifying existing code, and which files specifically?
+2. How much time is available — single session today, or multi-session across days?
+3. Is this going to production this sprint, or exploratory/staging only?
+4. Is there a UI component, or is this purely backend/infra?
+5. Should testing be in-scope here, or tracked separately?
+6. Which other services or teammates need coordination?
+7. What's the SATU SEHAT / regulatory angle, if any? (WellMed)
+8. What user-facing outcome should we verify, or is this internal only?
+9. Which existing patterns should this follow — point me to the closest reference if you know one
+10. What's deliberately out of scope so I don't expand into it?
+
+End with: "Answer by number. Skip any that don't apply."
 
 ---
 
 ## Step 2 — Round 2: Design Refinement
 
-After processing Round 1 answers, ask the task-specific design questions that
-determine the best solution architecture, not just the right scope.
+After processing Round 1 answers, ask the task-specific design questions that determine the best solution architecture. Same format: numbered, open-ended, no multiple choice, single response. Target 3–10 questions depending on complexity.
 
 Generate questions based on task type:
 
 **For new API/service work:**
-- "Synchronous call chain or async/saga pattern?"
-- "Which service owns the new data? Where does it live in the DB schema?"
-- "New migration needed, or extending existing tables?"
+1. Synchronous call chain or async/saga pattern, and what drives the choice?
+2. Which service owns the new data, and where does it live in the DB schema?
+3. New migration needed, or extending existing tables?
+4. What's the contract surface (endpoints, events, schema fields) and which other services consume it?
 
 **For UI features:**
-- "Mobile-first or desktop-primary?"
-- "Reuse existing component patterns or new design needed?"
-- "What's the empty/error/loading state?"
+1. Mobile-first or desktop-primary?
+2. Which existing component patterns should this reuse? Point to closest example.
+3. What's the empty / error / loading state behavior?
+4. What does the happy path look like end-to-end?
 
 **For bug fixes:**
-- "Is there a regression test missing, or a genuine edge case not worth testing?"
-- "Reproducible locally? Do you have a test case that triggers it?"
-- "Has this affected production, or caught pre-merge?"
+1. Is there a regression test missing, or is this a genuine edge case not worth testing?
+2. Is it reproducible locally — do you have a test case that triggers it?
+3. Has this affected production, or was it caught pre-merge?
+4. What's the suspected root cause area?
 
 **For infra/devops:**
-- "Terraform-managed or manual?"
-- "Blue/green deployment or in-place?"
-- "Rollback plan needed in scope?"
+1. Terraform-managed or manual?
+2. Blue/green deployment or in-place?
+3. Rollback plan needed in scope?
+4. What downstream systems break if this fails?
 
-Fire Round 2 as a single `AskUserQuestion` batch (3–7 questions, task-specific).
-If Round 1 already resolved the design questions (small task), skip Round 2 and
-proceed directly to output.
+If Round 1 already resolved the design questions (small task), skip Round 2 and proceed directly to output. Otherwise fire as a single numbered response.
 
 ---
 
@@ -253,6 +260,7 @@ Resolve based on the project detected in Step 0:
 |---|---|
 | PMG (any repo under `~/Projects/pmg/`) | `~/Projects/pmg/pmg-docs/plans/` |
 | WellMed (any repo under `~/Projects/wellmed/`) | `~/Projects/wellmed/kalpa-docs/plans/` |
+| ai-skills (`~/Projects/ai-skills/`) | `~/Projects/ai-skills/plans/` |
 | Other | Ask the user: "Where should the scope folder live?" |
 
 If the plans directory doesn't exist, stop and tell the user — don't create it
@@ -277,107 +285,57 @@ For WellMed: paths relative to `~/Projects/wellmed/`
 
 ### 5.4 Create scope.md
 
-Create `{plans_dir}/scope-{slug}/scope.md` using this exact format:
+See `/markdown-style` §11 (Scope Documents) for full conventions. The required structure:
 
 ```markdown
 # {Task title}
 **Project:** {detected project}  **Branch:** {branch}  **Date:** {today's date}
 **Scope folder:** {plans_dir}/scope-{slug}/
-**Source repo(s):** {list of repos this task touches, with absolute paths}
+**Source repo(s):** {absolute paths to repos this task touches}
 
 ## Context
 {1–3 sentences: what this is, why it's being done, what triggered it}
 
 ## Phases
-{Only if phased — omit entirely for single-phase tasks}
-
-### Phase 1 — {name}
-{Description of deliverables and what "done" looks like for this phase}
-
-### Phase 2 — {name}
-...
+{Phased scopes only — per phase: ### Phase N — {name} + description of deliverables}
 
 ## Architecture
-{Include if the task involves non-trivial system design. Use plain ASCII art diagrams
-in fenced code blocks (never Mermaid). Omit for simple bug fixes or single-file changes.}
+{Optional — ASCII diagrams only, omit for simple bug fixes}
 
 ## What Already Exists
-{List relevant existing code, infrastructure, and patterns that this task builds on.
-Include file paths (relative to workspace root). This section helps future Claude
-sessions understand what NOT to rebuild.}
+{Existing code/infra/patterns this builds on. Workspace-relative paths.}
 
 ## NOT in Scope
-{Explicit exclusions — things that are related but deliberately deferred or out of
-bounds. Prevents scope creep in execution.}
+{Explicit exclusions to prevent scope creep}
 
 ## Skill Sequence
-
-### Plan Reviews
-
-| # | Skill | Apply? | When | Notes |
-|---|-------|--------|------|-------|
-| 1 | /plan-ceo-review | [ ] **ALWAYS** | 1st | Reframe scope, challenge premises |
-| 2 | /plan-eng-review | [ ] YES | 2nd | {reason or N/A: reason} |
-| 3 | /plan-design-review | [N/A] | — | {why not applicable} |
-| 4 | /plan-devex-review | [N/A] | — | {why not applicable} |
-
-### Implementation Support
-
-| # | Skill | Apply? | When | Notes |
-|---|-------|--------|------|-------|
-| 5 | /investigate | [N/A] | — | {why not applicable} |
-| 6 | /design-consultation | [N/A] | — | {why not applicable} |
-| 7 | /design-html | [N/A] | — | {why not applicable} |
-| 8 | /design-shotgun | [N/A] | — | {why not applicable} |
-
-### Review & QA
-
-| # | Skill | Apply? | When | Notes |
-|---|-------|--------|------|-------|
-| 9 | /review | [ ] YES | After impl | {tailored note} |
-| 10 | /health | [ ] YES | After impl | {tailored note} |
-| 11 | /qa | [N/A] | — | {why not applicable} |
-| 12 | /qa-only | [ ] YES | After impl | {test command} |
-| 13 | /browse | [N/A] | — | {why not applicable} |
-| 14 | /devex-review | [N/A] | — | {why not applicable} |
-| 15 | /setup-browser-cookies | [N/A] | — | {why not applicable} |
-
-### Ship & Post-ship
-
-| # | Skill | Apply? | When | Notes |
-|---|-------|--------|------|-------|
-| 16 | /ship | [ ] YES | Final | {tailored note} |
-| 17 | /document-release | [ ] YES | Post-ship | {tailored note} |
-| 18 | /retro | [ ] OPTIONAL | Sprint end | {tailored note} |
+{Four tables grouped by phase — Plan Reviews, Implementation Support, Review & QA,
+ Ship & Post-ship. Fill in the 18-skill checklist from Step 4.}
 
 ## Key Decisions Captured
-{Bullet list of Round 1 + Round 2 answers that shaped this scope}
-- ...
+{Bullets from Round 1 + Round 2 answers that shaped this scope}
 ```
+
+The full skill checklist tables (18 rows across four sections) follow the same shape shown in Step 4. Each row gets `[ ] YES` / `[ ] OPTIONAL` / `[N/A]` with a tailored note. Mandatory: `/plan-ceo-review` is always YES.
 
 ### 5.5 Create progress.md
 
-Create `{plans_dir}/scope-{slug}/progress.md` using this exact format:
+See `/markdown-style` §10 (Progress Files) for full conventions: Resume Context block schema, append-only rule, Decisions Log dual-entry. The required structure:
 
 ```markdown
 # Progress: {Task title}
 
 ## Resume Context
-<!-- Updated after every significant action. Paste the first 20 lines of this file
-     into a new conversation to get oriented. -->
 **Scope:** {plans_dir}/scope-{slug}/scope.md
 **Last action:** Scope created ({today's date})
 **Next action:** {first YES skill from checklist}
-**Open blockers:** {any human steps or external dependencies, or "None"}
+**Open blockers:** {human steps or external deps, or "None"}
 **Key files changed:** None yet
 
 ---
 
 ## Decisions Log
-<!-- Running list of non-obvious decisions made during execution and WHY.
-     These are the highest-value lines for future sessions. -->
-
-- ({today's date}) {Any key decisions from scoping rounds that shaped the approach}
+- ({today's date}) {Key decisions from scoping rounds that shaped the approach}
 
 ---
 
@@ -393,30 +351,25 @@ Create `{plans_dir}/scope-{slug}/progress.md` using this exact format:
 
 | Step | Status | Notes |
 |------|--------|-------|
-{If any human steps were identified during scoping, list them here. Otherwise:}
 | (none identified yet) | — | — |
 
 ---
 
 ## Plans
-<!-- For phased scopes: child plan files and their execution status.
-     Omit this section for atomic scopes. -->
+{Omit this section for atomic scopes. For phased scopes:}
 
 | # | Plan File | Phase | Status | Notes |
 |---|-----------|-------|--------|-------|
-{For each plan stub created, one row with its sub-number. Example:}
-{| 39.1 | 39.1-cashier-settlement-PLAN.md | Phase 1 — Schema | Draft | |}
-{| 39.2 | 39.2-cashier-settlement-PLAN.md | Phase 2 — Logic | Draft | |}
-{Otherwise omit section entirely.}
+| {N}.1 | {N}.1-{slug}-PLAN.md | Phase 1 — {name} | Draft | |
+| {N}.2 | {N}.2-{slug}-PLAN.md | Phase 2 — {name} | Draft | |
 
 ---
 
 ## Artifacts
-<!-- Files created during execution that live outside the source repo
-     (dashboards, configs, email templates, etc.) -->
-
 (none yet)
 ```
+
+The Resume Context block is the only section overwritten on update; everything else is append-only.
 
 ### 5.6 Create artifacts/ subdirectory
 
@@ -490,7 +443,7 @@ Example: scope #39, slug `cashier-settlement`, 3 phases →
 - `scope-cashier-settlement/39.2-cashier-settlement-PLAN.md`
 - `scope-cashier-settlement/39.3-cashier-settlement-PLAN.md`
 
-Use the `/plan` (task-runner) format:
+See `/markdown-style` §8 (Plan Documents) and §8.9 (Plan Stubs) for full conventions. The required stub shape:
 
 ```markdown
 # Plan {N}.{P}: {Phase name}
@@ -513,13 +466,10 @@ Use the `/plan` (task-runner) format:
 
 ### Task {P}.1: {Task Title}
 - **Type**: AI | HUMAN | AI+HUMAN_REVIEW
-- **Input**: {what files/context this task needs}
-- **Action**: {what to do — outline level, detail filled at session start}
-- **Output**: {what files/artifacts this task produces}
-- **Acceptance**: {how to verify success}
-
-### Task {P}.2: {Task Title}
-...
+- **Input**: {workspace-relative paths}
+- **Action**: {outline — detail filled at session start}
+- **Output**: {files/artifacts produced}
+- **Acceptance**: {how to verify}
 
 ---
 ### 🔲 CHECKPOINT: Phase {P} Complete
@@ -528,9 +478,7 @@ Use the `/plan` (task-runner) format:
 ---
 ```
 
-**Sizing rule:** If a phase looks like it exceeds ~200k tokens of work (many files,
-complex logic, multiple integrations), split it into two plans. Better to have more
-small plans than one that won't fit in a context window.
+**Sizing rule:** If a phase looks like it exceeds ~200k tokens of work (many files, complex logic, multiple integrations), split it into two plans. More small plans beat one that won't fit in a context window.
 
 Also add a PLANS-INDEX entry for each plan stub (sub-numbered under the scope):
 ```markdown
@@ -580,6 +528,75 @@ When the user indicates the task is complete (all YES skills done, or user says
 for the scope row and all its child plan rows.
 
 7.3 Confirm to the user what was archived and where.
+
+---
+
+## Step 8 — Post-flight Cleanup (runs after archive)
+
+After archiving (Step 7), run the full post-flight checklist. These steps are NOT
+optional — they are part of scope completion. Do not declare the scope done until
+all post-flight items are addressed.
+
+### 8.1 Close background shells
+
+Check for any background shells or processes started during scope execution.
+Wrap them up or inform the user if they cannot be closed programmatically.
+
+### 8.2 Run /closeout-extended (self-heal)
+
+Invoke `/closeout-extended` to run the full self-healing pass: doc drift detection
+and edits (CLAUDE.md, READMEs, ARCHITECTURE.md), pattern audit, cross-repo audit
+walking `CROSS-REPO.md`, test execution, and memory writes for cross-cutting findings.
+
+This replaces the previous ad-hoc post-flight doc updates and learnings capture —
+`/closeout-extended` does it more thoroughly with explicit pattern + drift checks.
+
+Fallback chain if extended skills are not installed:
+- `/closeout` (local-only self-heal) if available
+- Otherwise, do manual doc-update review + memory writes inline:
+  - Update CLAUDE.md if test counts, file descriptions, architecture, or scripts changed
+  - Update READMEs for affected packages
+  - Save non-obvious learnings to memory (gotchas, workflow feedback, system references)
+- Note the gap so /closeout can be installed for next scope
+
+### 8.3 Confirm branch, commit, push
+
+Verify all changes are committed and pushed:
+- Run `git status` to check for uncommitted changes
+- Commit any remaining changes (scope archive, doc updates from /closeout-extended)
+- Push to remote
+
+### 8.4 Context clearing & next scope
+
+This is the final step. After all cleanup is done:
+
+8.4.1 Check `PLANS-INDEX.md` for other active scopes in the same project.
+
+8.4.2 If a logical next scope exists (e.g., a downstream scope that was waiting
+on this one, or the next numbered scope in a series), offer to continue:
+
+```
+Scope #{N} complete and archived. Next active scope:
+  → #{next} {scope-name} — {description from index}
+
+Ready to start? I'll clear context and begin:
+  /plan {next-scope-first-plan-number}
+
+(Y to clear context and continue / N to stop here)
+```
+
+8.4.3 If the user says yes, tell them to run `/clear` then provide the exact
+prompt to paste:
+
+```
+Run /plan {next-plan-number}
+```
+
+8.4.4 If there are no active follow-on scopes, simply report completion:
+
+```
+✅ Scope #{N} fully complete. No active follow-on scopes found.
+```
 
 ---
 

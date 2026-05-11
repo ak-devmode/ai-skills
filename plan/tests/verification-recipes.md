@@ -26,10 +26,10 @@ Each recipe is self-contained: setup → action → expected outcome → pass cr
 1. Invoke /plan on the throwaway plan.
 2. Verify Phase 0 completes; Task 1.1 begins.
 3. After Task 1.1 completes and the ledger receives its first §3 entry, abort the /plan session deliberately (close terminal, or hit Ctrl-C).
-4. Inspect `close-out-prep.md` — it should contain exactly ONE `## Phase 1: ... (started <ts>)` block with one §3 entry.
+4. Inspect `closeout-prep.md` — it should contain exactly ONE `## Phase 1: ... (started <ts>)` block with one §3 entry.
 5. Re-invoke /plan on the same plan.
 6. /plan should resume from Task 1.2 (per §6.1 progress-file lookup).
-7. After Task 1.2 completes, inspect `close-out-prep.md` again.
+7. After Task 1.2 completes, inspect `closeout-prep.md` again.
 
 ### Expected outcome
 
@@ -82,7 +82,7 @@ NO content from the first block was overwritten. Both timestamps are preserved.
 
 ### Expected outcome
 
-Inspect `close-out-prep.md`:
+Inspect `closeout-prep.md`:
 
 ```
 §3 Patterns Followed:
@@ -176,4 +176,4 @@ These recipes are run in Phase 5 §8.5 of closeout-skills-PLAN.md against the re
 
 If a recipe fails during Phase 5 execution, the implementation has a bug. The plan does NOT continue to subsequent phases until the failing recipe passes.
 
-When a recipe passes, log the pass in close-out-prep.md §10 (Test Coverage Map) with a reference to this recipe file.
+When a recipe passes, log the pass in closeout-prep.md §10 (Test Coverage Map) with a reference to this recipe file.

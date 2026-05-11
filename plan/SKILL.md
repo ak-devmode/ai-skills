@@ -229,17 +229,17 @@ Before executing any tasks, run Phase 0. If it already appears in PROGRESS.md as
 - `ARCHITECTURE.md` — per-repo architecture snapshot (load-bearing per /markdown-style §11 + the closeout-skills framework)
 - `CROSS-REPO.md` — cross-repo graph (Pattern Sources upward, Consumers outward; load-bearing for Pattern-First Rule in §7)
 
-These files inform pattern decisions throughout the session and should be cached in working memory. Record the list of files actually read in close-out-prep.md §6 (Docs Loaded During Planning).
+These files inform pattern decisions throughout the session and should be cached in working memory. Record the list of files actually read in closeout-prep.md §6 (Docs Loaded During Planning).
 
 5.10 **Bootstrap-state check** — determine whether this repo has been onboarded for the closeout-skills framework:
-- If neither `CROSS-REPO.md` nor `ARCHITECTURE.md` exists: repo is unbootstrapped. Proceed without them but log this in close-out-prep.md §11 (Risk Flags) — Pattern-First Rule will degrade to local-repo grep only.
+- If neither `CROSS-REPO.md` nor `ARCHITECTURE.md` exists: repo is unbootstrapped. Proceed without them but log this in closeout-prep.md §11 (Risk Flags) — Pattern-First Rule will degrade to local-repo grep only.
 - If `CROSS-REPO.md` exists but `ARCHITECTURE.md` is missing (or vice versa): partial bootstrap. Halt with: "Repo partially bootstrapped — missing <FILE>. Run /cross-repo-init to refresh, then resume." This catches the case where one file was deleted accidentally.
 - If both exist: fully bootstrapped — proceed to 5.11.
 
 5.11 **Validate Pattern Source paths exist on disk** (Issue 17 — critical-gap mitigation) — if `CROSS-REPO.md` declares Pattern Sources, verify each path resolves:
 - For each Pattern Source `<name>` listed, check whether the repo exists at the expected location (`~/Projects/<group>/<name>` based on convention).
 - If any Pattern Source path is missing, halt with: "CROSS-REPO.md declares Pattern Source `<name>` at `<path>` but the path doesn't exist. Run /cross-repo-init to refresh CROSS-REPO.md, then resume." Without this halt, the Pattern-First Rule would silently produce false "no pattern found" results indistinguishable from genuinely-novel methods.
-- If all Pattern Sources resolve: log paths in close-out-prep.md §6 and proceed.
+- If all Pattern Sources resolve: log paths in closeout-prep.md §6 and proceed.
 
 5.12 **Build in-session Pattern Sources map** — once CROSS-REPO.md is validated, build a working-memory map of Pattern Source repos and their sub-paths. This map is used by §7 Pattern-First Rule throughout the session:
 - Map keys: pattern category (e.g., "adapters", "lib", "handlers")
@@ -309,7 +309,7 @@ Pattern Sources map and grep results are cached **in-memory per session only**. 
 
 If grep finds a candidate pattern that matches ≥80% of the intended method's shape:
 - **Default behavior: use the existing pattern**, even if imperfect. Document any deviation as a sub-line of the §3 entry. Inventing a parallel pattern requires explicit user OK via 7.5 halt-and-ask.
-- /plan writes the new method following the matched pattern. The new method gets a §3 entry in close-out-prep.md with `← <pattern-source-file:line>` reference. If /plan deviated from the source pattern (e.g., different algo, additional error handling), append a `deviation:` sub-line explaining why.
+- /plan writes the new method following the matched pattern. The new method gets a §3 entry in closeout-prep.md with `← <pattern-source-file:line>` reference. If /plan deviated from the source pattern (e.g., different algo, additional error handling), append a `deviation:` sub-line explaining why.
 
 The ≥80% rule is a strong preference, not a hard threshold. /plan exercises judgment but must justify novel-pattern decisions via 7.5/7.7.
 
@@ -357,7 +357,7 @@ Session-scoped approvals are **session-scoped only**. They expire when the sessi
 
 ### 7.7 §4 entry template
 
-Every halt-and-ask outcome of "write parallel impl" produces a §4 entry in close-out-prep.md. The entry **must** include `alternatives-considered` even when the pattern is genuinely novel. /plan rejects malformed §4 entries (missing alternatives-considered) at write time.
+Every halt-and-ask outcome of "write parallel impl" produces a §4 entry in closeout-prep.md. The entry **must** include `alternatives-considered` even when the pattern is genuinely novel. /plan rejects malformed §4 entries (missing alternatives-considered) at write time.
 
 Mandatory format:
 
@@ -407,7 +407,7 @@ This bias reflects the structural truth that trunk leads, leaves inherit. Parall
 This gives gstack focused context on the specific plan being executed. (Contrast with
 `/scope`, which points gstack at `scope.md` for holistic cross-plan review.)
 
-8.9 **Append to close-out-prep.md throughout execution** — /plan maintains a running ledger at `close-out-prep.md` co-located with the plan/progress files. The ledger is consumed by `/closeout` and `/closeout-extended` at end-of-plan. Append points:
+8.9 **Append to closeout-prep.md throughout execution** — /plan maintains a running ledger at `closeout-prep.md` co-located with the plan/progress files. The ledger is consumed by `/closeout` and `/closeout-extended` at end-of-plan. Append points:
 
 - **§2 Files Changed** — after every task that creates or modifies files. Group by repo, then category (code | test | config | doc | schema | migration).
 - **§3 Patterns Followed** — every newly-written method in a known-extensible area (per §7.1) that follows an existing pattern. Include optional `deviation:` sub-line.
@@ -423,7 +423,7 @@ Phase boundaries get a timestamped header `## Phase {P}: {name} (started {ISO})`
 
 The ledger has a `**Schema version:**` field at the top — /closeout checks this and errors clearly on mismatch. Bump the version when changing field shapes.
 
-**Location:** `close-out-prep.md` lives at `{scope-folder}/close-out-prep.md` (child of /scope) or `{plan-folder}/close-out-prep.md` (standalone plans). /plan creates it on first ledger write if it doesn't exist, using the template at `~/.claude/skills/plan/templates/close-out-prep.md.template`.
+**Location:** `closeout-prep.md` lives at `{scope-folder}/closeout-prep.md` (child of /scope) or `{plan-folder}/closeout-prep.md` (standalone plans). /plan creates it on first ledger write if it doesn't exist, using the shared template at `~/Projects/ai-skills/templates/closeout-prep.md.template` — intentionally placed at the ai-skills root (not bundled inside `plan/`) because `/closeout` and `/closeout-extended` also depend on the same template/schema.
 
 ## 9. Ralph Loop Integration
 

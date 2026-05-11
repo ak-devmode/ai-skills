@@ -1,6 +1,6 @@
 # Plan 1: Closeout Skills + Cross-Repo Self-Healing
 
-**Version:** 0.2
+**Version:** 0.3
 **Date:** 11 May 2026
 **Author:** Alex
 **ADR:** N/A (design captured in this plan)
@@ -8,13 +8,19 @@
 **Branch:** feature/closeout-skills
 **Plan #:** 1
 
+### Key Changes v0.2 → v0.3
+- Renamed `close-out-prep.md` → `closeout-prep.md` (no hyphen, matches /closeout skill name)
+- Renamed `close-out-extended-progress.md` → `closeout-extended-progress.md` (same rationale)
+- Moved template from `ai-skills/plan/templates/` to `ai-skills/templates/` — shared across /plan, /closeout, /closeout-extended; not bundled with any single skill
+- Decision made mid-execution during Task 6.1; references updated across plan, closeout SKILL.md, plan SKILL.md, and verification-recipes.md
+
 ### Key Changes v0.1 → v0.2
 - Incorporated /plan-eng-review findings: 17 issue decisions + 3 scope reductions
 - Phase 4 rewritten: upward traversal uses per-edit user confirmation with rich context (3D); neighbor visits use ephemeral git worktrees on trunk (4D)
 - Phase 5 rewritten: full Projects bootstrap checklist (14 repos), sequenced pmg-integrations → docs → wellmed-infrastructure → leaves
 - §4.4 (/scope auto-suggest /cross-repo-init) deferred to v1.1
 - §5.6 folded into §5.5
-- Added schema version field to close-out-prep.md
+- Added schema version field to closeout-prep.md
 - Added concrete worked examples in Phase 1 templates
 - Added test tasks: ledger restart, refactor-mode approval, upward traversal
 
@@ -38,7 +44,7 @@
                               │
                               ▼
                 ┌──────────────────────────────────────┐
-                │   close-out-prep.md (ledger)         │
+                │   closeout-prep.md (ledger)         │
                 │   §1 Summary       §2 Files          │
                 │   §3 Patterns Followed (w/ deltas)   │
                 │   §4 Patterns Created (alts + rec)   │
@@ -79,14 +85,14 @@ This plan adds three skills and rules to two existing skills to enable repo-leve
 
 **New skills:**
 - `/cross-repo-init` — bootstrap CROSS-REPO.md + ARCHITECTURE.md for a repo. Idempotent.
-- `/closeout` — local repo self-heal. Reads close-out-prep.md ledger, audits patterns, fixes doc drift, runs tests, archives scope.
+- `/closeout` — local repo self-heal. Reads closeout-prep.md ledger, audits patterns, fixes doc drift, runs tests, archives scope.
 - `/closeout-extended` — recursive self-heal across CROSS-REPO.md neighbors (max depth 2, cycle detection, dirty-tree skip).
 
 **Rule additions to /plan:**
 - Read ARCHITECTURE.md + CROSS-REPO.md + CLAUDE.md at session start; halt if any are missing and suggest /cross-repo-init
 - Pattern-first grep before writing any new method (search local repo + Pattern Sources from CROSS-REPO.md)
 - Halt-and-ask before creating a new pattern (§4 ledger entry); user must approve or point to a reference
-- Append to close-out-prep.md throughout execution (running ledger, timestamped phase blocks)
+- Append to closeout-prep.md throughout execution (running ledger, timestamped phase blocks)
 
 **Prep already done (this conversation, before plan execution):**
 - /markdown-style §8 expanded; §10 (Progress Files) and §11 (Scope Documents) added; version 1.0.0
@@ -147,16 +153,16 @@ Goal: bootstrap the per-repo metadata that /plan and /closeout-extended depend o
 **Resume**: "continue the closeout-skills plan"
 ---
 
-## 5. Phase 2 — close-out-prep.md schema + /plan rule additions
+## 5. Phase 2 — closeout-prep.md schema + /plan rule additions
 
 Goal: turn /plan from a write-then-forget executor into a write-and-record executor. After Phase 2, every /plan run produces a queryable ledger of what it did, why, and where it diverged.
 
-### 5.1 Define close-out-prep.md schema with version field and worked examples
+### 5.1 Define closeout-prep.md schema with version field and worked examples
 
 - **Type**: AI
 - **Input**: design from this plan §1 diagram and §2 design summary
-- **Action**: Write the canonical close-out-prep.md template covering all 11 sections (§1 Execution Summary through §11 Risk Flags). **Include `**Schema version: 1.0**` field in the header so /closeout can detect skew and error clearly on mismatch.** Use timestamped phase block format `## Phase {P}: {name} (started {ISO timestamp})` so resumed plans append without overwriting. Document the sub-field schemas: §3 entries (method-name ← file:line, optional deviation), §4 entries (method-name + location + alternatives-considered + recommendation), §5 entries (contract change → consumer list), §10 entries (business node → test refs).
-- **Output**: `ai-skills/plan/templates/close-out-prep.md.template`
+- **Action**: Write the canonical closeout-prep.md template covering all 11 sections (§1 Execution Summary through §11 Risk Flags). **Include `**Schema version: 1.0**` field in the header so /closeout can detect skew and error clearly on mismatch.** Use timestamped phase block format `## Phase {P}: {name} (started {ISO timestamp})` so resumed plans append without overwriting. Document the sub-field schemas: §3 entries (method-name ← file:line, optional deviation), §4 entries (method-name + location + alternatives-considered + recommendation), §5 entries (contract change → consumer list), §10 entries (business node → test refs).
+- **Output**: `ai-skills/plan/templates/closeout-prep.md.template`
 - **Acceptance**: Template includes 1-2 worked examples per section so /plan has concrete patterns to follow. Schema version field is present and parseable. Total template under 250 lines.
 
 ### 5.2 Add /plan rule: read ARCH+CROSS-REPO+CLAUDE.md at session start
@@ -171,9 +177,9 @@ Goal: turn /plan from a write-then-forget executor into a write-and-record execu
 
 - **Type**: AI
 - **Input**: §5.2 in-session Pattern Sources map
-- **Action**: Add a new section to `plan/SKILL.md` between current §6 (Execution Rules) and §7 (Important Behaviors): "Pattern-First Rule". Before writing any new method in a known-extensible area (webhook handler, event publisher, FHIR resource, SSM lookup, Notion property write, Zoho function), /plan must (a) grep local repo for prior examples, (b) grep declared Pattern Sources from CROSS-REPO.md, (c) record any found references in close-out-prep.md §3, (d) if no match found, trigger the halt-and-ask flow (§5.4). **Cache scope: per-session, in-memory only. No persistence to ledger.** Resumed sessions re-grep cold — the cost is small and avoids stale-cache failure modes.
+- **Action**: Add a new section to `plan/SKILL.md` between current §6 (Execution Rules) and §7 (Important Behaviors): "Pattern-First Rule". Before writing any new method in a known-extensible area (webhook handler, event publisher, FHIR resource, SSM lookup, Notion property write, Zoho function), /plan must (a) grep local repo for prior examples, (b) grep declared Pattern Sources from CROSS-REPO.md, (c) record any found references in closeout-prep.md §3, (d) if no match found, trigger the halt-and-ask flow (§5.4). **Cache scope: per-session, in-memory only. No persistence to ledger.** Resumed sessions re-grep cold — the cost is small and avoids stale-cache failure modes.
 - **Output**: edit to `plan/SKILL.md` adding new section
-- **Acceptance**: A test run of /plan against a small task with a known existing pattern surfaces the reference and records it in §3 of close-out-prep.md. Cache is not written to disk anywhere.
+- **Acceptance**: A test run of /plan against a small task with a known existing pattern surfaces the reference and records it in §3 of closeout-prep.md. Cache is not written to disk anywhere.
 
 ### 5.4 Add /plan rule: halt-and-ask before creating new patterns, with session-scoped approval and structured §4 prompt
 
@@ -194,15 +200,15 @@ Goal: turn /plan from a write-then-forget executor into a write-and-record execu
 - **Output**: edits to `plan/SKILL.md` "Pattern-First Rule" section
 - **Acceptance**: Halt-and-ask prompts include closest match + delta + numbered options. Session-scoped approval works (test in 5.7). §4 entries always have populated alternatives-considered field.
 
-### 5.5 Add /plan rule: append-to-ledger throughout execution + close-out-prep.md location
+### 5.5 Add /plan rule: append-to-ledger throughout execution + closeout-prep.md location
 
 - **Type**: AI
-- **Input**: `ai-skills/plan/SKILL.md`, close-out-prep.md schema from §5.1
-- **Action**: Document append points throughout /plan execution. After each task with new methods → §3/§4 entries. When touching a contract → §5 entry. When loading a doc for context → §6 entry. When making a guess without verifying → §8 entry. When skipping/deferring → §9 entry. When uncertain → §11 entry. Phase boundaries get timestamped headers so resumed phases append cleanly. **Document close-out-prep.md location: lives at `{scope-folder}/close-out-prep.md` (child of /scope) or `{plan-folder}/close-out-prep.md` (standalone). /plan creates it on first ledger write.** (Formerly §5.6, folded in here per R2.)
+- **Input**: `ai-skills/plan/SKILL.md`, closeout-prep.md schema from §5.1
+- **Action**: Document append points throughout /plan execution. After each task with new methods → §3/§4 entries. When touching a contract → §5 entry. When loading a doc for context → §6 entry. When making a guess without verifying → §8 entry. When skipping/deferring → §9 entry. When uncertain → §11 entry. Phase boundaries get timestamped headers so resumed phases append cleanly. **Document closeout-prep.md location: lives at `{scope-folder}/closeout-prep.md` (child of /scope) or `{plan-folder}/closeout-prep.md` (standalone). /plan creates it on first ledger write.** (Formerly §5.6, folded in here per R2.)
 - **Output**: edit to `plan/SKILL.md` integrating append points into existing task execution flow
-- **Acceptance**: A test run produces a close-out-prep.md with at least one entry in each applicable section. Resumed/restarted phases produce a second timestamped block, not an overwrite. File location is unambiguous.
+- **Acceptance**: A test run produces a closeout-prep.md with at least one entry in each applicable section. Resumed/restarted phases produce a second timestamped block, not an overwrite. File location is unambiguous.
 
-### 5.6 [MOVED TO §5.5] — close-out-prep.md location
+### 5.6 [MOVED TO §5.5] — closeout-prep.md location
 
 Folded into §5.5 per R2 / Issue 10A.
 
@@ -211,7 +217,7 @@ Folded into §5.5 per R2 / Issue 10A.
 - **Type**: AI+HUMAN_REVIEW
 - **Input**: §5.2–§5.5 implementation
 - **Action**: Add three explicit tests to /plan's test surface:
-  1. **Ledger restart semantics**: kill /plan mid-phase, resume, verify close-out-prep.md has a second timestamped phase block, not an overwrite (Issue 11).
+  1. **Ledger restart semantics**: kill /plan mid-phase, resume, verify closeout-prep.md has a second timestamped phase block, not an overwrite (Issue 11).
   2. **Session-scoped pattern approval**: simulate 3+ novel methods of the same shape; verify first triggers halt-and-ask, subsequent are auto-applied with §3 session-scoped note (Issue 12).
   3. **CROSS-REPO.md path validation halt**: deliberately break a Pattern Source path; verify /plan Phase 0 halts with re-init suggestion (Issue 17).
 - **Output**: test cases in ai-skills test surface (location TBD per ai-skills test conventions)
@@ -225,20 +231,20 @@ Folded into §5.5 per R2 / Issue 10A.
 
 ## 6. Phase 3 — /closeout skill (local self-heal)
 
-Goal: ship the local-scope self-healing skill that consumes close-out-prep.md and leaves the repo healthier than /plan found it.
+Goal: ship the local-scope self-healing skill that consumes closeout-prep.md and leaves the repo healthier than /plan found it.
 
 ### 6.1 Build /closeout skill — main flow
 
 - **Type**: AI
-- **Input**: close-out-prep.md schema (§5.1), `ai-skills/plan/SKILL.md` §11 (archive sequence) as structural reference
-- **Action**: Create `ai-skills/closeout/SKILL.md`. Implement the 11-step flow: (1) read close-out-prep.md and **verify schema version matches** (or degrade gracefully if absent), (2) verify scope branch, (3) run local test suite (with `--skip-tests` flag), (4) §3 spot-check (do referenced patterns still exist at file:line?), (5) §4 triage (apply recommendations as proposed edits in working tree), (6) §7 doc drift edits, ranked by agent-load-bearing weight (CLAUDE.md > README > ARCHITECTURE > docs/*), (7) ARCHITECTURE.md drift validation + edits, (8) §10 coverage report (no auto-fix), (9) memory writes for cross-cutting findings (auto-write, no prompt — accept de-dup gap per Issue 13B), (10) **invoke /plan §11 archive logic** (do NOT duplicate; reuse the same code path: extract TODOs → archive scope folder → update PLANS-INDEX → update parent scope progress.md), (11) summary with what changed + what's blocked. Skill must not use AskUserQuestion — open-ended numbered inline questions only.
+- **Input**: closeout-prep.md schema (§5.1), `ai-skills/plan/SKILL.md` §11 (archive sequence) as structural reference
+- **Action**: Create `ai-skills/closeout/SKILL.md`. Implement the 11-step flow: (1) read closeout-prep.md and **verify schema version matches** (or degrade gracefully if absent), (2) verify scope branch, (3) run local test suite (with `--skip-tests` flag), (4) §3 spot-check (do referenced patterns still exist at file:line?), (5) §4 triage (apply recommendations as proposed edits in working tree), (6) §7 doc drift edits, ranked by agent-load-bearing weight (CLAUDE.md > README > ARCHITECTURE > docs/*), (7) ARCHITECTURE.md drift validation + edits, (8) §10 coverage report (no auto-fix), (9) memory writes for cross-cutting findings (auto-write, no prompt — accept de-dup gap per Issue 13B), (10) **invoke /plan §11 archive logic** (do NOT duplicate; reuse the same code path: extract TODOs → archive scope folder → update PLANS-INDEX → update parent scope progress.md), (11) summary with what changed + what's blocked. Skill must not use AskUserQuestion — open-ended numbered inline questions only.
 - **Output**: `ai-skills/closeout/SKILL.md`, frontmatter with `name: closeout`, `version: 1.0.0`. No AskUserQuestion in allowed-tools.
-- **Acceptance**: Skill runs end-to-end on a sample scope with a populated close-out-prep.md. Output summary lists every edit by file. Failing tests block "healed" status unless `--skip-tests` was passed. Archive logic is invoked via the same code path as /plan §11, not re-implemented.
+- **Acceptance**: Skill runs end-to-end on a sample scope with a populated closeout-prep.md. Output summary lists every edit by file. Failing tests block "healed" status unless `--skip-tests` was passed. Archive logic is invoked via the same code path as /plan §11, not re-implemented.
 
 ### 6.2 Implement two-pass drift detection (grep all + LLM-review top-tier only)
 
 - **Type**: AI
-- **Input**: list of docs in §7 from close-out-prep.md + ARCHITECTURE.md per Issue 9A
+- **Input**: list of docs in §7 from closeout-prep.md + ARCHITECTURE.md per Issue 9A
 - **Action**: Two-pass drift detection:
   - **Pass 1 (deterministic, all docs)**: grep every doc in §7 for stale symbol references — function names, file paths, env var names, flag names — that no longer exist in code. Surface candidates as drift-flag-list.
   - **Pass 2 (LLM-review, top-tier only)**: re-read CLAUDE.md + ARCHITECTURE.md cold and judge narrative drift (outdated explanations, missing new fields, wrong example output). Other docs only get Pass 1 — narrative-drift review in lower-tier docs is too expensive vs. value.
@@ -265,14 +271,14 @@ Goal: ship the local-scope self-healing skill that consumes close-out-prep.md an
 ### 6.5 Memory write integration
 
 - **Type**: AI
-- **Input**: §3, §4, §11 from close-out-prep.md
+- **Input**: §3, §4, §11 from closeout-prep.md
 - **Action**: /closeout step 9 reviews findings for cross-session relevance. If a §4 entry was accepted as "legitimately new pattern, fold into kalpa-infrastructure," write a memory entry. If a §11 risk flag was confirmed as a recurring failure mode, write a memory entry. Auto-write (per user preference), no prompt.
 - **Output**: memory write logic in `closeout/SKILL.md` step 9
 - **Acceptance**: A sample run with a §4 "fold into pattern source" recommendation produces a memory entry pointing at the source repo and pattern.
 
 ---
 ### 🔲 CHECKPOINT: Phase 3 Complete
-**Review**: Run /closeout on a sample populated close-out-prep.md in a test scope. Verify all 11 steps execute, doc edits appear in working tree, scope is archived, summary is accurate. Inspect a memory entry written during the test.
+**Review**: Run /closeout on a sample populated closeout-prep.md in a test scope. Verify all 11 steps execute, doc edits appear in working tree, scope is archived, summary is accurate. Inspect a memory entry written during the test.
 **Resume**: "continue the closeout-skills plan"
 ---
 
@@ -284,7 +290,7 @@ Goal: extend self-healing across the repo graph defined by CROSS-REPO.md.
 
 - **Type**: AI
 - **Input**: `ai-skills/closeout/SKILL.md` from Phase 3 as the per-repo engine
-- **Action**: Create `ai-skills/closeout-extended/SKILL.md`. Flow: (1) run /closeout's 11 steps locally, (2) read CROSS-REPO.md, **validate it against current state — flag any declared Pattern Source paths that no longer exist on disk, flag any Consumers that no longer reference contracts they claim to consume (Issue 5A)**, (3) build traversal list (Pattern Sources upward, Consumers outward), (4) apply max-depth=2 default with per-repo override support, (5) for each neighbor repo: use worktree-based visit (§7.3) to operate on neighbor's trunk; apply /closeout's 11 steps in that worktree's context; **skip test execution for neighbors that only received doc-only edits (Issue 15B)**, (6) aggregate cross-repo summary listing edits per repo and worktree paths for user review, (7) write resume-friendly `close-out-extended-progress.md` sibling for graceful resume.
+- **Action**: Create `ai-skills/closeout-extended/SKILL.md`. Flow: (1) run /closeout's 11 steps locally, (2) read CROSS-REPO.md, **validate it against current state — flag any declared Pattern Source paths that no longer exist on disk, flag any Consumers that no longer reference contracts they claim to consume (Issue 5A)**, (3) build traversal list (Pattern Sources upward, Consumers outward), (4) apply max-depth=2 default with per-repo override support, (5) for each neighbor repo: use worktree-based visit (§7.3) to operate on neighbor's trunk; apply /closeout's 11 steps in that worktree's context; **skip test execution for neighbors that only received doc-only edits (Issue 15B)**, (6) aggregate cross-repo summary listing edits per repo and worktree paths for user review, (7) write resume-friendly `closeout-extended-progress.md` sibling for graceful resume.
 - **Output**: `ai-skills/closeout-extended/SKILL.md`, frontmatter with `name: closeout-extended`, `version: 1.0.0`. No AskUserQuestion in allowed-tools.
 - **Acceptance**: Skill walks CROSS-REPO.md, applies per-repo healing in worktrees, produces aggregated summary with per-repo worktree paths. CROSS-REPO drift detected and reported. Doc-only neighbors skip tests.
 
@@ -334,11 +340,11 @@ Goal: extend self-healing across the repo graph defined by CROSS-REPO.md.
 - **Output**: worktree + traversal-guard logic in `closeout-extended/SKILL.md`
 - **Acceptance**: (a) Visiting pmg-chatwoot as a neighbor creates `/tmp/closeout-<slug>-pmg-chatwoot/` containing clean develop checkout, edits applied there only. (b) Cycle detection prevents A→B→A loops (tested with deliberately cyclic CROSS-REPO.md). (c) User's primary working tree on neighbor is untouched. (d) Summary lists worktree paths for user review.
 
-### 7.4 Resumable progress via close-out-extended-progress.md
+### 7.4 Resumable progress via closeout-extended-progress.md
 
 - **Type**: AI
 - **Input**: design from §5 (Closeout's own resumability)
-- **Action**: As each repo is processed (or skipped), append an entry to a sibling `close-out-extended-progress.md` in the scope folder. Format: `[x] repo-name (depth N) — N edits in worktree <path>` for completed, `[ ] repo-name (depth N) — cycle | skipped (reason) | pending` for not-yet-done. On re-run, /closeout-extended reads this and picks up at the first unchecked entry.
+- **Action**: As each repo is processed (or skipped), append an entry to a sibling `closeout-extended-progress.md` in the scope folder. Format: `[x] repo-name (depth N) — N edits in worktree <path>` for completed, `[ ] repo-name (depth N) — cycle | skipped (reason) | pending` for not-yet-done. On re-run, /closeout-extended reads this and picks up at the first unchecked entry.
 - **Output**: progress-tracking logic in `closeout-extended/SKILL.md`
 - **Acceptance**: Killing /closeout-extended mid-run and re-invoking it resumes from the right repo, doesn't re-process completed ones, doesn't re-create existing worktrees unnecessarily.
 
@@ -352,7 +358,7 @@ Goal: extend self-healing across the repo graph defined by CROSS-REPO.md.
 
 ---
 ### 🔲 CHECKPOINT: Phase 4 Complete
-**Review**: Run /closeout-extended on a sample scope that touches two repos. Verify both repos get healed, dirty-tree skip works, cycle detection works (test by temporarily creating a cyclic CROSS-REPO.md). Inspect close-out-extended-progress.md after a deliberately-killed run.
+**Review**: Run /closeout-extended on a sample scope that touches two repos. Verify both repos get healed, dirty-tree skip works, cycle detection works (test by temporarily creating a cyclic CROSS-REPO.md). Inspect closeout-extended-progress.md after a deliberately-killed run.
 **Resume**: "continue the closeout-skills plan"
 ---
 
@@ -413,14 +419,14 @@ Goal: prove the system works end-to-end on real repos before declaring complete.
 
 - **Type**: AI+HUMAN_REVIEW
 - **Input**: a deliberately-shaped test plan in pmg-integrations (small scope, exercises ledger appends and one halt-and-ask)
-- **Action**: Execute a /plan run with the new rules active. Verify: (a) Phase 0 reads ARCH+CROSS-REPO+CLAUDE.md, (b) Phase 0 halts cleanly when a Pattern Source path is deliberately broken (Issue 17 test from §5.7), (c) pattern-first grep fires before writing a new method, (d) halt-and-ask triggers on a deliberately-novel method, (e) session-scoped approval auto-applies the same pattern to subsequent novel methods of the same shape (Issue 12 test from §5.7), (f) close-out-prep.md is appended throughout — kill /plan mid-phase, resume, verify timestamped second block (Issue 11 test from §5.7).
-- **Output**: a populated close-out-prep.md in the test scope folder
+- **Action**: Execute a /plan run with the new rules active. Verify: (a) Phase 0 reads ARCH+CROSS-REPO+CLAUDE.md, (b) Phase 0 halts cleanly when a Pattern Source path is deliberately broken (Issue 17 test from §5.7), (c) pattern-first grep fires before writing a new method, (d) halt-and-ask triggers on a deliberately-novel method, (e) session-scoped approval auto-applies the same pattern to subsequent novel methods of the same shape (Issue 12 test from §5.7), (f) closeout-prep.md is appended throughout — kill /plan mid-phase, resume, verify timestamped second block (Issue 11 test from §5.7).
+- **Output**: a populated closeout-prep.md in the test scope folder
 - **Acceptance**: All six behaviors verified. Ledger has entries in §2, §3, §6, §7 at minimum.
 
 ### 8.6 Run /closeout on the dogfood scope
 
 - **Type**: AI+HUMAN_REVIEW
-- **Input**: scope from §8.5 with its close-out-prep.md
+- **Input**: scope from §8.5 with its closeout-prep.md
 - **Action**: Invoke /closeout. Verify 11 steps execute, doc edits propose in working tree (CLAUDE.md / README / ARCH ranked), tests run + gate works (and `--skip-tests` works), scope archives via /plan §11 code path, summary is accurate. User reviews diff and either commits or discards.
 - **Output**: archived scope, healed working tree with reviewed edits
 - **Acceptance**: Working tree has only intentional, reviewable edits. Scope is in archive. Summary matches reality. Archive logic invoked the same code path as /plan §11 (verify by inspection).
@@ -434,7 +440,7 @@ Goal: prove the system works end-to-end on real repos before declaring complete.
   - Upward traversal to wellmed-infrastructure renders the structured proposal with all 4 context fields (callers, tests, conventions, diff), numbered options, default-to-leaf-side workaround on skip
   - Cycle detection works (test with deliberately cyclic CROSS-REPO.md temporarily)
   - Doc-only neighbors skip tests
-  - close-out-extended-progress.md is created and is resumable
+  - closeout-extended-progress.md is created and is resumable
 - **Output**: healed worktrees in both pmg-chatwoot (outward) and wellmed-infrastructure (upward, if user approved option 1) plus aggregated summary
 - **Acceptance**: All five behaviors verified. User can review each worktree's diff and commit/discard independently.
 
@@ -465,7 +471,7 @@ Goal: prove the system works end-to-end on real repos before declaring complete.
 - **Cycle detection mandatory**: never loop on cyclic CROSS-REPO.md.
 - **Test execution gates "healed" status** with `--skip-tests` escape hatch.
 - **No drift score / no auto-fix tests / no cross-repo PRs**: explicit non-goals to prevent Goodharting and unsafe automation.
-- **One close-out-prep.md per scope** (not per phase), with timestamped phase blocks for append-only resume semantics.
+- **One closeout-prep.md per scope** (not per phase), with timestamped phase blocks for append-only resume semantics.
 - **Memory writes auto on cross-cutting findings**: per user preference for auto-write over prompt-for-write.
 - **Skill location**: all three live in `~/Projects/ai-skills/`, symlinked into `~/.claude/skills/` per existing convention.
 
@@ -476,7 +482,7 @@ Goal: prove the system works end-to-end on real repos before declaring complete.
 - **Issue 3 (3D)**: upward traversal uses rich context loading (trunk pattern + tests + callers + conventions) + per-edit user confirmation + default-to-leaf-side workaround on skip. Trunk leads; leaves inherit. Upward edits invert that direction so they require extra justification.
 - **Issue 4 (4D)**: neighbor visits use ephemeral `git worktree add origin/<trunk>` to operate in isolation. User's primary working tree on neighbor is never touched. Worktrees left for user review, opt-in cleanup via flag.
 - **Issue 5 (5A)**: /closeout-extended validates CROSS-REPO.md as part of its run — flags missing Pattern Sources, stale Consumer references. Closes the drift-detection loop.
-- **Issue 6 (6A)**: `**Schema version: 1.0**` field on close-out-prep.md so /closeout can detect skew and error clearly on mismatch.
+- **Issue 6 (6A)**: `**Schema version: 1.0**` field on closeout-prep.md so /closeout can detect skew and error clearly on mismatch.
 - **Issue 7 (7A)**: Phase 1 templates include concrete worked examples (pmg-integrations as hub, wellmed-infrastructure as trunk) — not aspirational placeholders.
 - **Issue 8 (8A)**: §4 entries require alternatives-considered field even when truly novel (must list places searched). Malformed §4 entries are rejected.
 - **Issue 9 (9A)**: two-pass drift detection — Pass 1 (grep) all docs; Pass 2 (LLM-review) only CLAUDE.md + ARCHITECTURE.md (the highest agent-load-bearing).

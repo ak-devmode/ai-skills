@@ -64,4 +64,25 @@ Re-run /cross-repo-init when components are added, removed, or repositioned.
 
 ---
 
+## 6. Current Code State vs Target Architecture
+
+<!-- Honest read on what's actually built vs what this doc describes.
+     Agents and humans loading this file should know up front when a
+     component is designed but not yet built, or when significant work
+     lives on develop/feature branches not yet on the trunk.
+
+     Refresh cadence: /closeout updates this table on every self-heal;
+     also update in the same edit that moves a component from design to
+     code (or vice versa).
+
+     If the repo's target architecture matches its current code 1:1
+     (no drift), state that explicitly:
+       "No known drift between target architecture and current code as of {{TIMESTAMP}}."
+     This is the equivalent of a green health check — not the absence of
+     the section. -->
+
+{{CODE_STATE_DRIFT}}
+
+---
+
 <!-- Last scaffolded/audited by /cross-repo-init: {{TIMESTAMP}} -->

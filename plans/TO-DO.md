@@ -207,3 +207,68 @@ Not blocking v1.0 ship.
       assertions.
 
 Source: `closeout-skills/closeout-skills-PROGRESS.md` §8.4
+
+---
+
+## Closeout Skills (Plan 1) — v1.1 deferred items (added §8.5 PMG-side assessment + ai-skills leaf)
+
+Surfaced during the PMG-side assessment-pass redo + ai-skills bootstrap
+(Phase 5 §8.5, 2026-05-11). Not blocking v1.0 ship.
+
+- [ ] **/closeout: synthesize ledger from PROGRESS.md when closeout-prep.md
+      absent.** Real cold-start gap surfaced when running /closeout on the
+      closeout-skills scope itself: /plan §8.9 was added in Phase 2 of this
+      scope, but Phases 3-5 were driven conversationally rather than through
+      a fresh /plan invocation, so no closeout-prep.md was ever written. The
+      framework's own meta-scope can't close out under strict ledger-required
+      rules. Proposal: /closeout Step 1 should check for closeout-prep.md;
+      if absent but PROGRESS.md exists, offer a "ledger-bypass mode" that
+      derives §1/§2/§7/§10/§11 fields from PROGRESS.md content, with a
+      loud flag in the summary header noting the synthesis. Schema-strict
+      mode stays the default for plans run under newer /plan.
+
+- [ ] **/cross-repo-init: assess-first detection of symlinked CLAUDE.md.**
+      pmg-chatwoot had CLAUDE.md as a symlink to AGENTS.md, with AGENTS.md
+      itself heavily PMG-customized (Sidekiq topology, PMG flag positions,
+      2026-05-05 staging-Redis incident). The earlier bootstrap incorrectly
+      treated both as "pristine upstream — do not modify" and created a
+      sidecar. v1.1 detection: when CLAUDE.md is a symlink, follow it;
+      if the target file contains repo-project-specific content (grep for
+      org-name markers — PMG, WellMed, Kalpa, etc.), surface the symlink
+      arrangement as a question rather than defaulting to sidecar creation.
+
+- [ ] **/cross-repo-init: recognize parallel agent docs (CLAUDE.md +
+      AGENTS.md).** Some repos use CLAUDE.md for Claude Code and AGENTS.md
+      for non-Claude agents (Codex, Cursor). They are independent files,
+      may diverge in detail, and both may be PMG-customized. The skill
+      should detect when both exist (or when one is a symlink to the
+      other) and ask whether they should remain separate, be re-symlinked,
+      or merged. Currently the skill has no concept of AGENTS.md as a
+      sibling doc.
+
+- [ ] **Update memory `feedback_pr_titles.md`: pmg-chatwoot vs
+      pmg-integrations commitlint asymmetry.** Memory currently says
+      "Chatwoot's commitlint enforces `feature:` (spelled out)." That is
+      WRONG for pmg-chatwoot: its `amannn/action-semantic-pull-request`
+      Action uses standard Conventional Commits short forms (`feat`,
+      `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`,
+      `chore`, `revert`). pmg-integrations may still use `feature:`
+      long-form (confirm). Surfaced when PR #115 title `feature(docs):`
+      failed Validate PR title check; fixed to `docs:`.
+
+- [ ] **WellMed/Kalpa branch protection follow-up.** During §8.4 and the
+      prior session's batch, every WellMed/Kalpa repo accepted direct
+      pushes to develop or main without resistance — no branch protection
+      rules were enforced. If the team wants the same PR-gated workflow
+      as pmg-chatwoot (which has husky pre-push + the Validate-PR-title
+      Action), enable Branch Protection Rules on origin/develop in each
+      Kalpa-Health repo (require PR, require CI pass, optionally require
+      review). Operational task, not skill work.
+
+- [ ] **/closeout: surface "ledger-bypass mode" as a flag.** Pair with
+      the first item above: `--ledger-from-progress` flag explicitly opts
+      into PROGRESS.md synthesis. Useful for meta-scopes and for legacy
+      plans that pre-date the ledger feature.
+
+Source: `closeout-skills/closeout-skills-PROGRESS.md` §8.5 (PMG-side
+assessment + ai-skills leaf)

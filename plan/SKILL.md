@@ -246,13 +246,23 @@ These files inform pattern decisions throughout the session and should be cached
 - Map values: list of `(repo_path, sub_path_glob)` pairs
 - Cached **in-memory per session only**. No persistence to ledger. Resumed sessions re-build the map cold (cost is small; avoids stale-cache failure modes per Issue 1B).
 
+5.13 **Bootstrap closeout-prep.md** — before executing Task 1.1, check whether `{scope-folder}/closeout-prep.md` already exists (for child plans, the scope folder is the parent; for standalone plans, it is the plan folder itself).
+- If it does not exist: create it from the template at `~/Projects/ai-skills/templates/closeout-prep.md.template`. Write the phase header `## Phase 0: Bootstrap (started {ISO-timestamp})`. Populate §6 (Docs Loaded During Planning) with the files read in §5.9.
+- If it already exists (resumed session or sibling plan): append a new phase header `## Phase {P}: {name} (started {ISO-timestamp})` — do not overwrite.
+- **This is a hard step, not optional.** The ledger must exist before any task touches files. If the template is missing, halt with: "closeout-prep.md template not found at `~/Projects/ai-skills/templates/closeout-prep.md.template`. Cannot bootstrap ledger — check ai-skills installation."
+- Log "ledger initialized at `{path}`" (or "ledger found at `{path}`, appending phase header") in the session status summary printed in §6.7.
+
 ## 6. Execution Rules
 
 6.1 On each invocation, read the plan file and the progress file. Find the first task that does NOT have a corresponding entry in the progress file (or has a ❌ FAILED entry that should be retried).
 
 6.2 If the next task is type `HUMAN`, do NOT execute it. Tell the user what they need to do and stop. Log status as `⏸️ WAITING_HUMAN`.
 
-6.3 If the next task is type `AI`, execute it fully. Log the result. Then immediately proceed to the next task — keep going until you hit a HUMAN task, a CHECKPOINT, or the end of the current phase.
+6.3 If the next task is type `AI`, execute it fully. Then, before advancing to the next task:
+1. Update `progress.md` with the result.
+2. Append to `closeout-prep.md §2` (Files Changed) for every file created or modified in this task — group by repo, then category (code | test | config | doc | schema | migration).
+3. If the Pattern-First Rule (§7) fired during this task: append to §3 (Patterns Followed) or §4 (Patterns Created) as appropriate.
+Then proceed to the next task — keep going until you hit a HUMAN task, a CHECKPOINT, or the end of the current phase. Do not advance past a task without completing both the progress.md update and the ledger append.
 
 6.4 If the next task is type `AI+HUMAN_REVIEW`, execute it fully, log the result, then STOP and ask the human to review before continuing.
 
@@ -388,7 +398,7 @@ This bias reflects the structural truth that trunk leads, leaves inherit. Parall
 
 8.2 **Always append to the progress file.** Never delete or overwrite previous entries. The log is an audit trail.
 
-8.3 **Be explicit about file changes.** Every task that creates or modifies files must list them in the progress log. Use workspace-relative paths.
+8.3 **Be explicit about file changes.** Every task that creates or modifies files must list them in the progress log. Use workspace-relative paths. At the same time, append the same file list to `closeout-prep.md §2` — both logs must be updated together. Never update one without the other.
 
 8.4 **Stay in scope.** Each task has defined inputs, actions, and outputs. Don't do extra work beyond what the task specifies — the plan is sequenced deliberately.
 

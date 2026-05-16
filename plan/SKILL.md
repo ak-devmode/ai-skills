@@ -369,6 +369,34 @@ If the parent scope has no `## Repo Graph` section (older scope, or single-repo
 work), skip this step and note in Phase 0 log: "Parent scope predates Repo Graph
 contract — freshness validation skipped."
 
+5.6.2 **Read all sibling plan files in the scope folder** — for child plans,
+read every other `*-PLAN.md` file in the same scope folder, in numeric order
+(e.g., `47.1-…-PLAN.md`, `47.2-…-PLAN.md`, etc.), as initial context. This is
+mandatory, not opportunistic. **The active plan is not enough.**
+
+Why this matters (and why this rule exists — repeated decision damage from
+skipping it):
+- Earlier phases (check `progress.md` to see which are done) have already
+  established system state, file shapes, and naming conventions. Decisions
+  made there constrain what's possible now and cannot be re-litigated.
+- Later phases (still uncompleted) describe what's downstream. The active
+  phase must not paint into a corner that breaks a future phase — e.g.
+  picking a schema, API shape, or branch model that the later phase needs to
+  unwind.
+- `scope.md` is also required reading (covered by 5.6) — it's the umbrella
+  decisions and constraints that span phases.
+
+The `artifacts/` subfolder is for scope-execution by-products: review
+summaries, generated specs, sample outputs, dashboard JSON, reference data.
+Do **not** read it eagerly — exercise judgment per active task. The folder
+name signals "reference material, pull on demand." Common triggers:
+- Task references a specific artifact by name → read that file
+- A prior phase logged "draft in artifacts/X.md" → read it before extending
+- User asks about a decision recorded there → read it
+
+Log the list of sibling plans actually read in `closeout-prep.md §6 (Docs
+Loaded During Planning)` alongside the CLAUDE/ARCH/CROSS-REPO entries.
+
 5.7 **Branch detection** — Determine the working branch:
 - If the plan has a `**Branch:**` field: confirm with the user — "Plan specifies branch `<branch>`. Confirm this is correct before we proceed." Wait for confirmation before continuing.
 - If the plan has no `**Branch:**` field: derive a name as `feature/<plan-stem>` (e.g., `cashier-standards-PLAN.md` → `feature/cashier-standards`). Announce it: "No branch specified — will use `feature/<derived-name>`."

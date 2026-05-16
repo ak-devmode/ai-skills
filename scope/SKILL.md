@@ -72,7 +72,8 @@ case "$(pwd)" in
 esac
 if [ -n "$PLANS_DIR" ]; then
   echo "PLANS_DIR=$PLANS_DIR"
-  ls -la "$PLANS_DIR"/scope-* 2>/dev/null || echo "no active scopes"
+  # Active scope folders are numbered `<N>-<slug>/` (wellmed/PMG convention).
+  ls -d "$PLANS_DIR"/[0-9]*-*/ 2>/dev/null || echo "no active scopes"
   echo "---INDEX---"
   cat "$PLANS_DIR/PLANS-INDEX.md" 2>/dev/null || echo "no PLANS-INDEX.md yet"
 else
@@ -444,12 +445,23 @@ Resolve based on the project detected in Step 0:
 If the plans directory doesn't exist, stop and tell the user — don't create it
 silently (it implies the docs repo is missing).
 
-### 5.2 Slug
+### 5.2 Slug and scope number
 
 Determine the slug: lowercase, hyphenated, 3–5 words from the task title.
 Example: "wellmed-saga-handler-phase2", "pmg-report-export", "auth-refresh-bug"
 
-The scope folder path is: `{plans_dir}/scope-{slug}/`
+**Auto-assign the next sequential scope number `{N}`.** Read
+`{plans_dir}/PLANS-INDEX.md`, find the highest `#` value across both Archived
+and Active tables (ignore sub-numbers like `39.1` — only whole numbers count),
+and increment by 1. This `{N}` prefixes the scope folder and every child plan,
+matching the wellmed/PMG convention.
+
+If `PLANS-INDEX.md` doesn't yet exist, the header is created in Step 5.8 and
+`{N}` starts at 1.
+
+The scope folder path is: `{plans_dir}/{N}-{slug}/` (e.g.
+`~/Projects/pmg/pmg-docs/plans/32-pmg-testsuite/`). Archive folder name uses
+the same convention: `{plans_dir}/archive/{N}-{slug}/`.
 
 ### 5.3 File references
 
@@ -468,7 +480,7 @@ See `/markdown-style` §11 (Scope Documents) for full conventions. The required 
 ```markdown
 # {Task title}
 **Project:** {detected project}  **Branch:** {branch}  **Date:** {today's date}
-**Scope folder:** {plans_dir}/scope-{slug}/
+**Scope folder:** {plans_dir}/{N}-{slug}/
 **Source repo(s):** {absolute paths to repos this task touches}
 
 ## Context
@@ -535,7 +547,7 @@ See `/markdown-style` §10 (Progress Files) for full conventions: Resume Context
 # Progress: {Task title}
 
 ## Resume Context
-**Scope:** {plans_dir}/scope-{slug}/scope.md
+**Scope:** {plans_dir}/{N}-{slug}/scope.md
 **Last action:** Scope created ({today's date})
 **Next action:** {first YES skill from checklist}
 **Open blockers:** {human steps or external deps, or "None"}
@@ -583,7 +595,7 @@ The Resume Context block is the only section overwritten on update; everything e
 ### 5.6 Create artifacts/ subdirectory
 
 ```bash
-mkdir -p {plans_dir}/scope-{slug}/artifacts
+mkdir -p {plans_dir}/{N}-{slug}/artifacts
 ```
 
 This directory holds any non-code artifacts produced during execution (dashboard JSON,
@@ -596,13 +608,13 @@ Check `{plans_dir}/` for files related to this scope's slug — PRDs, concepting
 or any other working files created before the scope folder:
 
 ```bash
-ls {plans_dir}/*{slug}* 2>/dev/null | grep -v "scope-{slug}"
+ls {plans_dir}/*{slug}* 2>/dev/null | grep -v "{N}-{slug}"
 ```
 
 Move matching files into the scope folder so all task-related documents travel together:
 ```bash
-mv {plans_dir}/prd-{slug}*.md {plans_dir}/scope-{slug}/ 2>/dev/null
-mv {plans_dir}/*{slug}*.md {plans_dir}/scope-{slug}/ 2>/dev/null
+mv {plans_dir}/prd-{slug}*.md {plans_dir}/{N}-{slug}/ 2>/dev/null
+mv {plans_dir}/*{slug}*.md {plans_dir}/{N}-{slug}/ 2>/dev/null
 ```
 
 Exclude `PLANS-INDEX.md`, `TO-DO.md`, and any files already inside subdirectories.
@@ -611,12 +623,11 @@ working files at the top level.
 
 ### 5.8 Update PLANS-INDEX.md
 
-**Auto-assign the next sequential plan number.** Read `{plans_dir}/PLANS-INDEX.md`,
-find the highest `#` value in both Archived and Active tables (ignore sub-numbers like
-`39.1` — only whole numbers count), and increment by 1. This becomes `{N}` for the
-scope and all its child plans.
+`{N}` was already resolved in Step 5.2 and used to name the scope folder; this
+step just appends the index row.
 
-If creating the file for the first time, add the header and start numbering at 1:
+If `PLANS-INDEX.md` doesn't yet exist, create it with the header below and
+start numbering at 1:
 
 ```markdown
 # Plans Index
@@ -631,7 +642,7 @@ All scopes, PRDs, and plans across the project. Types: `prd` (business requireme
 Append the scope entry with its assigned number:
 
 ```markdown
-| {N} | {date} | scope | scope-{slug}/ | {project} | Active | {one-line description} |
+| {N} | {date} | scope | {N}-{slug}/ | {project} | Active | {one-line description} |
 ```
 
 ### 5.9 Generate plan stubs (phased scopes only)
@@ -644,13 +655,13 @@ Plan stubs use **sub-numbers** of the scope's assigned `{N}` from Step 5.7:
 - Phase 2 → `{N}.2`
 - etc.
 
-Plan stub filename: `{plans_dir}/scope-{slug}/{N}.{P}-{slug}-PLAN.md`
+Plan stub filename: `{plans_dir}/{N}-{slug}/{N}.{P}-{slug}-PLAN.md`
 where `{P}` is the phase number (1, 2, 3, ...).
 
 Example: scope #39, slug `cashier-settlement`, 3 phases →
-- `scope-cashier-settlement/39.1-cashier-settlement-PLAN.md`
-- `scope-cashier-settlement/39.2-cashier-settlement-PLAN.md`
-- `scope-cashier-settlement/39.3-cashier-settlement-PLAN.md`
+- `39-cashier-settlement/39.1-cashier-settlement-PLAN.md`
+- `39-cashier-settlement/39.2-cashier-settlement-PLAN.md`
+- `39-cashier-settlement/39.3-cashier-settlement-PLAN.md`
 
 See `/markdown-style` §8 (Plan Documents) and §8.9 (Plan Stubs) for full conventions. The required stub shape:
 
@@ -662,12 +673,12 @@ See `/markdown-style` §8 (Plan Documents) and §8.9 (Plan Stubs) for full conve
 **Author:** Alex
 **Status:** Draft
 **Plan #:** {N}.{P}
-**Parent scope:** {plans_dir}/scope-{slug}/scope.md
+**Parent scope:** {plans_dir}/{N}-{slug}/scope.md
 **Branch:** {branch or TBD}
 
 ## Related Docs
-- `{plans_dir}/scope-{slug}/scope.md` — parent scope
-- `{plans_dir}/scope-{slug}/progress.md` — progress tracker
+- `{plans_dir}/{N}-{slug}/scope.md` — parent scope
+- `{plans_dir}/{N}-{slug}/progress.md` — progress tracker
 
 ---
 
@@ -691,7 +702,7 @@ See `/markdown-style` §8 (Plan Documents) and §8.9 (Plan Stubs) for full conve
 
 Also add a PLANS-INDEX entry for each plan stub (sub-numbered under the scope):
 ```markdown
-| {N}.{P} | {date} | plan | scope-{slug}/{N}.{P}-{slug}-PLAN.md | {project} | Draft | Phase {P} — {phase description} |
+| {N}.{P} | {date} | plan | {N}-{slug}/{N}.{P}-{slug}-PLAN.md | {project} | Draft | Phase {P} — {phase description} |
 ```
 
 ---
@@ -718,7 +729,7 @@ restructuring phase boundaries, moving tasks between plans, and optimizing the
 overall sequence.
 
 Example handoff:
-- "Run `/autoplan` on `scope-{slug}/scope.md`"
+- "Run `/autoplan` on `{N}-{slug}/scope.md`"
 - NOT "Start with `/plan-ceo-review` on `39.1-{slug}-PLAN.md`"
 
 After gstack completes, copy any artifacts it creates in `~/.gstack/projects/$SLUG/`
@@ -731,7 +742,7 @@ to `{scope-folder}/artifacts/` so the scope folder stays self-contained.
 When the user indicates the task is complete (all YES skills done, or user says
 "archive this"), or when you detect all skill checklist items are done:
 
-7.1 Move the scope folder to `{plans_dir}/archive/scope-{slug}/`.
+7.1 Move the scope folder to `{plans_dir}/archive/{N}-{slug}/`.
 
 7.2 Update `PLANS-INDEX.md`: change the status from `Active` to `Done ({date})`
 for the scope row and all its child plan rows.

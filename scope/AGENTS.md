@@ -91,7 +91,7 @@ Engineering review is expected for non-trivial plans. CEO/product review is expe
 
 ## 7. Write Scope Files
 
-Create `{plans_dir}/scope-{slug}/` with:
+Create `{plans_dir}/{N}-{slug}/` with:
 
 - `scope.md`
 - `progress.md`
@@ -183,7 +183,7 @@ Do not paste the full scope document into chat.
 
 When the task is done:
 
-1. Move the scope folder to `{plans_dir}/archive/scope-{slug}/`.
+1. Move the scope folder to `{plans_dir}/archive/{N}-{slug}/`.
 2. Mark the scope and child plans done in `PLANS-INDEX.md`.
 3. Evaluate whether repo instruction files, README files, or project docs need updates.
 4. Confirm branch, commit, push, and remaining active scopes.

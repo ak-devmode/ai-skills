@@ -394,7 +394,7 @@ Progress files pair with plans and scopes to track execution state across sessio
 
 10.1.1 Plan progress file: `{plan-stem}-PROGRESS.md` next to its plan file (`39.2-cashier-PLAN.md` ↔ `39.2-cashier-PROGRESS.md`). Plain `PROGRESS.md` is acceptable for plans named plain `PLAN.md`.
 
-10.1.2 Scope progress file: `progress.md` inside the scope folder (`scope-{slug}/progress.md`).
+10.1.2 Scope progress file: `progress.md` inside the scope folder (`{N}-{slug}/progress.md`).
 
 10.1.3 Always co-located with the parent document. Never separate.
 
@@ -468,12 +468,12 @@ Scope documents orchestrate multi-skill, multi-phase work. They are the parent o
 
 ### 11.1 Naming and Folder
 
-11.1.1 Scope folder name: `scope-{slug}/` where slug is lowercase, hyphenated, 3–5 words derived from the task title.
+11.1.1 Scope folder name: `{N}-{slug}/` where `{N}` is the sequential scope number assigned in `PLANS-INDEX.md` and `slug` is lowercase, hyphenated, 3–5 words derived from the task title. Matches the wellmed/PMG convention (e.g. `32-pmg-testsuite/`, `47-kalpa-grafana-dashboard/`). Legacy `scope-<slug>/` folders exist in archives — preserved in place, not renamed.
 
 11.1.2 The folder lives in the project's central plans directory, not in the source repo:
-- PMG: `~/Projects/pmg/pmg-docs/plans/scope-{slug}/`
-- WellMed: `~/Projects/wellmed/kalpa-docs/plans/scope-{slug}/`
-- AI-skills: `~/Projects/ai-skills/plans/scope-{slug}/`
+- PMG: `~/Projects/pmg/pmg-docs/plans/{N}-{slug}/`
+- WellMed: `~/Projects/wellmed/kalpa-docs/plans/{N}-{slug}/`
+- AI-skills: `~/Projects/ai-skills/plans/{N}-{slug}/`
 
 11.1.3 Inside the scope folder: `scope.md`, `progress.md`, `artifacts/`, and (for phased scopes) sub-numbered plan stubs `{N}.{P}-{slug}-PLAN.md`.
 
@@ -482,7 +482,7 @@ Scope documents orchestrate multi-skill, multi-phase work. They are the parent o
 ```markdown
 # {Task title}
 **Project:** {detected project}  **Branch:** {branch}  **Date:** {today's date}
-**Scope folder:** {plans_dir}/scope-{slug}/
+**Scope folder:** {plans_dir}/{N}-{slug}/
 **Source repo(s):** {list of repos this task touches, with absolute paths}
 ```
 

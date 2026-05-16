@@ -19,7 +19,8 @@ Known plans directories:
 - PMG: `~/Projects/pmg/pmg-docs/plans/`
 - WellMed: `~/Projects/wellmed/kalpa-docs/plans/`
 
-Check `scope-*/` subdirectories for child plans generated from a scope.
+Check scope subdirectories — named `<N>-<slug>/` (current convention) or
+`scope-<slug>/` (legacy) — for child plans generated from a scope.
 
 Progress file naming:
 

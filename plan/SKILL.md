@@ -1,6 +1,6 @@
 ---
 name: plan
-version: 3.1.0
+version: 3.2.0
 description: |
   Execute tasks from a structured plan document step by step, logging progress and
   stopping at human checkpoints. Plan files follow the naming convention *-PLAN.md
@@ -212,6 +212,72 @@ Before executing any tasks, run Phase 0. If it already appears in PROGRESS.md as
 - Read the parent scope's `scope.md` for architecture decisions and constraints
 - Log the parent scope path in Phase 0 of the progress file
 - This gives you full project context without the user having to paste anything
+
+5.6.1 **Scope freshness validation** — If the parent scope's `scope.md` contains a
+`## Repo Graph` section (added by /scope Step 0.5), validate the snapshot against
+current repo state before executing any tasks.
+
+**Hard rule:** /plan validates the snapshot. It does **not** re-research the graph.
+If validation surfaces drift the user wants resolved with new research, route back
+to `/scope` — do not extend Phase 0 into a second scoping pass.
+
+Procedure:
+
+1. Parse the Repo Graph table from `scope.md`. For each row, extract:
+   - Repo path
+   - Recorded HEAD SHA
+   - Recorded current branch (if listed)
+   - SDK pin (if listed)
+
+2. For each repo, compare against current state:
+
+```bash
+REPO=~/Projects/wellmed/wellmed-consultation  # example, from scope row
+CURRENT_SHA=$(git -C "$REPO" rev-parse --short HEAD 2>/dev/null)
+CURRENT_BRANCH=$(git -C "$REPO" branch --show-current 2>/dev/null)
+# Count commits since the recorded SHA
+git -C "$REPO" rev-list --count "${RECORDED_SHA}..HEAD" 2>/dev/null
+```
+
+3. **Classify each repo:**
+   - **Unchanged** — current SHA matches recorded SHA. Log silently, proceed.
+   - **Advanced on same branch** — current SHA differs but is a descendant of
+     recorded SHA, on the same branch. Surface: "scope recorded X, current is Y,
+     N commits since. Most likely safe — confirm or call out specific files of
+     concern."
+   - **Diverged** — current branch differs, OR current SHA is not a descendant of
+     recorded SHA, OR the repo has uncommitted changes that weren't there at
+     scope time. Surface as drift: "scope recorded X on branch B1, current is Y
+     on branch B2. This may invalidate scope assumptions."
+   - **Missing** — recorded repo path no longer exists. Surface as drift.
+
+4. **Decide the gate:**
+   - If all repos are **Unchanged**: log "✅ Repo Graph snapshot matches current
+     state" and proceed.
+   - If any repo is **Advanced on same branch** (no diverged repos): present the
+     list and ask user to confirm "proceed" or call out files of concern. Default
+     is proceed.
+   - If any repo is **Diverged** or **Missing**: STOP. Present the drift report
+     and ask: "Re-scope, override (acknowledge drift and continue), or abort?"
+     Do not proceed without explicit user direction.
+
+5. **SDK-pin asymmetry check** — if the Repo Graph table has SDK Pin entries,
+   verify each repo's current pin matches what was recorded. Asymmetry across
+   consumer repos (e.g., consultation on go-sdk v1.4.2 but cashier on v1.4.0)
+   is a flag, not a hard stop — surface it once and let the user direct.
+
+6. **Log the validation result** in `closeout-prep.md §11 (Risk Flags)` even on
+   pass — future closeout-extended uses this audit trail.
+
+**What this step does NOT do:**
+- Re-run /scope's Step 0.5/0.6/0.7 from scratch
+- Re-grep ADRs or contracts
+- Build a new Repo Graph
+- Modify the parent scope's `scope.md` (that's user-directed, via /scope)
+
+If the parent scope has no `## Repo Graph` section (older scope, or single-repo
+work), skip this step and note in Phase 0 log: "Parent scope predates Repo Graph
+contract — freshness validation skipped."
 
 5.7 **Branch detection** — Determine the working branch:
 - If the plan has a `**Branch:**` field: confirm with the user — "Plan specifies branch `<branch>`. Confirm this is correct before we proceed." Wait for confirmation before continuing.

@@ -1,6 +1,6 @@
 ---
 name: scope
-version: 3.1.0
+version: 3.2.0
 description: |
   Task scoping, skill router, and progress tracker. Reads current context (git diff,
   branch, CLAUDE.md, open files), eliminates assumptions via two rounds of open-ended
@@ -90,6 +90,181 @@ After running the above, synthesize what you know:
 
 ---
 
+## Step 0.5 — Cross-Repo Graph Discovery (gated on CROSS-REPO.md)
+
+If `CROSS-REPO.md` exists in the current repo, this work is multi-repo by default.
+Most plumbing inconsistencies in microservice work come from agents reading one repo
+in isolation and silently assuming branch/version/contract parity with the rest of
+the graph. Make the graph state explicit and mechanical here so plan can't drift.
+
+If `CROSS-REPO.md` does NOT exist:
+- Note this in the synthesis ("repo is graph-orphaned — no Pattern Sources or
+  Consumers declared")
+- If the work clearly spans repos (e.g., the user mentions another repo, or git
+  diff touches a shared contract), suggest running `/cross-repo-init` first
+- Otherwise proceed to Step 1 as a single-repo task
+
+If `CROSS-REPO.md` exists, run the blocks below.
+
+### 0.5.1 Parse Pattern Sources and Consumers
+
+```bash
+# Print the Pattern Sources + Consumers tables for parsing
+cat CROSS-REPO.md
+```
+
+Extract every repo path from the Pattern Sources, Consumers (Direct gRPC + Edge +
+Documentation), and any other graph tables. Build the working set: `{current repo}
+∪ Pattern Sources ∪ Consumers`. External Dependents (AWS, Redis, third-party APIs)
+are not walked here — only sibling repos in `~/Projects/`.
+
+### 0.5.2 Snapshot each repo's state
+
+For each repo in the working set, capture:
+
+```bash
+# For each repo path from CROSS-REPO.md:
+REPO=~/Projects/wellmed/wellmed-consultation  # example
+echo "=== $REPO ==="
+git -C "$REPO" rev-parse --short HEAD 2>/dev/null || echo "MISSING_REPO"
+git -C "$REPO" branch --show-current 2>/dev/null
+git -C "$REPO" log -1 --format='%ai %s' 2>/dev/null
+# SDK pin (Go repos)
+grep -E 'wellmed-infrastructure|go-sdk' "$REPO/go.mod" 2>/dev/null | head -2
+# Uncommitted work signal
+git -C "$REPO" status --short 2>/dev/null | head -3
+```
+
+Record per repo:
+- **Path** (absolute, under `~/Projects/`)
+- **Trunk branch declared** (from CROSS-REPO.md if listed, else infer)
+- **Current branch** (`git branch --show-current`)
+- **Current HEAD SHA** (short, 7 chars)
+- **Pinned SDK version** if applicable (from `go.mod` / `package.json`)
+- **Dirty?** (yes if `git status --short` non-empty)
+- **Last commit date** (so plan can judge staleness)
+
+Flag any of these as **drift to surface to the user before Round 1**:
+- Current branch ≠ declared trunk branch on a repo we'll touch
+- Pinned SDK version differs across consumer repos (asymmetry)
+- A repo in the graph is missing from `~/Projects/` (not cloned)
+- A repo has uncommitted changes (someone else is mid-task there)
+
+These don't block — they just need to be acknowledged. Drift discovered here often
+reframes the task ("oh, consultation is still on the old SDK, that changes phase 1").
+
+### 0.5.3 Hold the snapshot for scope.md
+
+Keep the table in working memory. It will be written verbatim into scope.md's
+`## Repo Graph` section in Step 5.4. /plan reads this section to validate freshness
+before executing (see /plan's scope freshness validation pass).
+
+---
+
+## Step 0.6 — Contract Cascade Detection
+
+Microservice plumbing inconsistencies usually originate from contract-surface changes
+(proto files, Prisma schemas, OpenAPI specs, GraphQL schemas) being made in one repo
+without the consumer updates being explicitly in-scope. Detect this mechanically.
+
+### 0.6.1 Scan the diff for contract-surface files
+
+```bash
+# Combined diff (staged + unstaged + recent commits on this branch)
+git diff --name-only HEAD~5..HEAD 2>/dev/null
+git diff --name-only HEAD 2>/dev/null
+git diff --staged --name-only 2>/dev/null
+```
+
+Treat these as contract surfaces:
+- `*.proto` — gRPC contracts
+- `prisma/schema.prisma`, `**/schema.prisma` — Prisma data model (DB contract)
+- `openapi.yaml`, `openapi.yml`, `openapi.json`, `**/openapi.*` — REST contracts
+- `*.graphql`, `*.graphqls`, `schema.graphql` — GraphQL contracts
+- Files under `proto/`, `contracts/`, `schemas/` directories
+
+### 0.6.2 If contract files changed, auto-cascade
+
+If ANY contract-surface file is in the diff AND `CROSS-REPO.md` exists:
+
+1. **Every Consumer from CROSS-REPO.md is in-scope by default.** Add each to the
+   Repo Graph table with a "Consumer update required" note.
+2. **Add a per-Consumer task to the scope.** For each Consumer repo:
+   - "Regenerate proto stubs / Prisma client / OpenAPI types from updated contract"
+   - "Update call sites that use the changed surface"
+   - "Run consumer's test suite against updated contract"
+3. **Surface this to the user in Round 1** as a confirmation, not a question — they
+   may legitimately want to defer a consumer to a later scope, but the default is
+   that contract changes cascade.
+
+Example Round 1 framing:
+> "Contract changes detected in `proto/canonical_visit.proto`. Default scope
+> includes Consumer updates in wellmed-consultation, wellmed-cashier, and
+> wellmed-gateway-go. Confirm cascade, or call out which Consumers defer."
+
+### 0.6.3 If no contract files changed
+
+Note in synthesis: "No contract-surface changes detected — Consumer repos read-only
+for this scope." Skip the cascade.
+
+---
+
+## Step 0.7 — ADR-First Check
+
+Architectural decisions live in central docs, not in-repo. When agents work in a
+single repo, they re-derive answers to questions that have already been decided
+across the project — often worse than the ADR says. Surface relevant ADRs before
+asking the user any Round 1 questions, so the user can correct premises rather than
+answering questions whose answers are already on disk.
+
+### 0.7.1 Resolve the ADR directory
+
+```bash
+# Resolve based on project (matches Step 0 PLANS_DIR logic)
+case "$(pwd)" in
+  *Projects/pmg*)     ADR_DIR="$HOME/Projects/pmg/pmg-docs/adrs" ;;
+  *Projects/wellmed*) ADR_DIR="$HOME/Projects/wellmed/kalpa-docs/adrs" ;;
+  *Projects/ai-skills*) ADR_DIR="" ;;  # no ADRs for ai-skills itself
+  *)                  ADR_DIR="" ;;
+esac
+[ -n "$ADR_DIR" ] && ls "$ADR_DIR" 2>/dev/null | head -30
+```
+
+If `ADR_DIR` is empty or missing, skip this step.
+
+### 0.7.2 Grep ADRs for task keywords
+
+Extract 3–6 keywords from the task title, branch name, and diff (e.g., for branch
+`feature/visit-saga-rollback`: keywords = `visit, saga, rollback, orchestrat`).
+Grep each ADR file for matches:
+
+```bash
+# Example — adjust keywords to the task
+grep -li -E '(visit|saga|rollback|orchestrat)' "$ADR_DIR"/*.md 2>/dev/null
+```
+
+For each matching ADR, read the title + status + relevant section.
+
+### 0.7.3 Surface ADRs before Round 1
+
+Present matched ADRs to the user as a confirmation block, not a question:
+
+> **ADR alignment check** — work appears to touch these decisions:
+> - **ADR-005** (saga orchestration ownership) — `Status: Accepted v1.1`
+> - **ADR-006** (no mid-saga module gRPC calls) — `Status: Accepted`
+>
+> Default assumption: this work **conforms** to both. If it **extends** or
+> **contradicts** any of them, say so now — that changes scope and may require
+> an ADR amendment in this scope.
+
+Record the user's response (conform / extend / contradict + which ADRs) for the
+`## ADR Alignment` section of scope.md.
+
+If no ADRs match: note "No ADR matches for keywords — proceeding without ADR
+alignment block" in synthesis.
+
+---
+
 ## Step 1 — Round 1: Assumption Removal
 
 Ask 5–15 open-ended questions in a **single response** as a numbered list. The user answers by number. **Never use multiple-choice or pre-framed answer options** — open-ended only. The user prefers many specific questions over a few broad ones.
@@ -100,6 +275,9 @@ Ask 5–15 open-ended questions in a **single response** as a numbered list. The
 - Cover where ambiguity exists: scope boundary, timeline, prod vs exploratory, UI involvement, compliance, coordination with other services/people, testing strategy, cross-repo touchpoints
 - For WellMed context: include SATU SEHAT compliance angle if the change touches patient data, API endpoints, or health records
 - For PMG context: include worker health data handling, regulatory angle where relevant
+- **If CROSS-REPO.md exists** (Step 0.5 ran): ALWAYS include a cross-repo coordination question that lists the Consumer repos by name and asks which are in-scope vs deferred. Don't ask abstractly ("any other repos?") — name them.
+- **If Step 0.6 detected contract changes:** lead with the cascade-confirmation framing, not a question — the default is that all Consumers update.
+- **If Step 0.7 surfaced ADRs:** confirm conform/extend/contradict before any other questions — premises first, design second.
 - Skip anything already clear from context — every question must move the design
 
 **Example open-ended questions (generate dynamically based on what's ambiguous):**
@@ -296,6 +474,36 @@ See `/markdown-style` §11 (Scope Documents) for full conventions. The required 
 ## Context
 {1–3 sentences: what this is, why it's being done, what triggered it}
 
+## Repo Graph
+{Required if CROSS-REPO.md exists in the primary repo (Step 0.5 ran). Omit
+ otherwise with a one-line note "Single-repo task — no CROSS-REPO.md present."
+
+ The SHA snapshot below is the freshness contract /plan validates against
+ before executing. Do NOT edit these SHAs by hand once recorded — if state
+ changes, /plan will surface the drift.}
+
+| Repo | Role | Trunk | Current Branch | HEAD SHA | SDK Pin | In Scope? | Notes |
+|---|---|---|---|---|---|---|---|
+| wellmed-backbone | primary | develop | feature/foo | abc1234 | n/a (trunk) | YES | the change |
+| wellmed-consultation | consumer | develop | develop | def5678 | go-sdk v1.4.2 | YES | proto regen + call site |
+| wellmed-cashier | consumer | develop | develop | 9876fed | go-sdk v1.4.0 | DEFERRED | scope #N+1 |
+| wellmed-infrastructure | pattern source | develop | develop | aaa1111 | — | READ-ONLY | reference patterns |
+
+**Drift flagged in Step 0.5:** {list each drift or "none"}
+**Snapshot taken:** {today's date} {time if multi-session work expected}
+
+## ADR Alignment
+{Required if Step 0.7 surfaced ADR matches. Omit otherwise with one-line note
+ "No ADR matches for task keywords."}
+
+| ADR | Title | Status | This work … |
+|---|---|---|---|
+| ADR-005 | Saga orchestration ownership | Accepted v1.1 | Conforms |
+| ADR-006 | No mid-saga module gRPC calls | Accepted | Conforms |
+
+If any row says "Extends" or "Contradicts", note the rationale and whether an
+ADR amendment is in-scope for this work.
+
 ## Phases
 {Phased scopes only — per phase: ### Phase N — {name} + description of deliverables}
 
@@ -306,7 +514,8 @@ See `/markdown-style` §11 (Scope Documents) for full conventions. The required 
 {Existing code/infra/patterns this builds on. Workspace-relative paths.}
 
 ## NOT in Scope
-{Explicit exclusions to prevent scope creep}
+{Explicit exclusions to prevent scope creep. If Step 0.6 detected a contract
+ cascade and some Consumers are deferred, list them here by name.}
 
 ## Skill Sequence
 {Four tables grouped by phase — Plan Reviews, Implementation Support, Review & QA,

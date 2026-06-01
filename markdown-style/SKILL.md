@@ -1,6 +1,6 @@
 ---
 name: markdown-style
-version: 1.0.0
+version: 1.1.0
 description: "Use for creating, updating, or revising structured .md documents — strategy docs, PRDs, plans, playbooks, integration specs, or any markdown maintained over time and loaded into future context windows. Trigger on: 'create a plan', 'draft a PRD', 'update the doc', 'write this up as a document', or references to versioned documents. Do NOT use for READMEs, quick notes, or throwaway content."
 allowed-tools:
   - Bash
@@ -298,12 +298,18 @@ When all tasks in a plan are marked complete in the progress file:
 ```markdown
 ---
 ### 🔲 CHECKPOINT: {Description}
+**Gate**: A human | B concurrency | C review/merge | D deploy/verify | E irreversible | F compliance
 **Review**: what the human should check before continuing
 **Resume**: what to tell Claude to continue (e.g., "continue the {slug} plan")
 ---
 ```
 
 8.7.2 The task-runner stops at every CHECKPOINT and does not proceed without explicit human instruction.
+
+8.7.3 The **Gate** field classifies the phase boundary (the six types are defined in
+/scope "Phase Boundaries"). It is set by /scope when generating phase stubs and read by
+/plan to decide whether to suggest `/clear` at the boundary (pause-and-clear at A/D/E,
+roll through at B/C). Checkpoints inserted by hand outside a /scope phase may omit it.
 
 ### 8.8 Workspace-Relative File References
 

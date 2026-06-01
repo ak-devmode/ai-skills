@@ -1,6 +1,6 @@
 ---
 name: cross-repo-init
-version: 1.1.0
+version: 1.2.0
 description: |
   Bootstrap **and ongoing maintenance** of the trio — CROSS-REPO.md, ARCHITECTURE.md,
   and CLAUDE.md — for a repo so /plan and /closeout-extended have the metadata they
@@ -99,12 +99,30 @@ look at the branch that holds current work — not just whatever happens to
 be checked out.
 
 ```bash
-# Enumerate non-stale remote branches with divergence vs default
+# Enumerate non-stale remote branches and classify each vs trunk, so a branch
+# already integrated into trunk is NOT mistaken for live drift (same merged-vs-
+# unmerged test the SessionStart git-hygiene hook uses: rev-list count of commits
+# the branch holds that trunk does not).
 git -C "$REPO_ROOT" fetch --prune origin 2>/dev/null  # best-effort refresh
-git -C "$REPO_ROOT" for-each-ref --format='%(refname:short) %(committerdate:iso-strict)' refs/remotes/origin \
-  | grep -vE '/(HEAD|gh-pages)$'
+TRUNK="origin/$DEFAULT_BRANCH"   # swap to origin/develop once the cascade below selects it
+for ref in $(git -C "$REPO_ROOT" for-each-ref --format='%(refname:short)' refs/remotes/origin \
+              | grep -vE '/(HEAD|gh-pages)$'); do
+  [ "$ref" = "$TRUNK" ] && continue
+  ahead=$(git -C "$REPO_ROOT" rev-list --count "$TRUNK..$ref" 2>/dev/null)
+  when=$(git -C "$REPO_ROOT" log -1 --format='%cs' "$ref" 2>/dev/null)
+  if [ "${ahead:-0}" = "0" ]; then
+    echo "MERGED  $ref  ($when)"          # fully contained in trunk — NOT drift
+  else
+    echo "LIVE    $ref  ($when, +$ahead)" # unmerged commits — a real candidate
+  fi
+done
 git -C "$REPO_ROOT" rev-list --left-right --count "origin/$DEFAULT_BRANCH...origin/develop" 2>/dev/null || true
 ```
+
+A branch that reads `+N ahead` but was **squash-merged** is also already in
+trunk by content; ancestry can't see that. Confirm the ambiguous ones with
+`git -C "$REPO_ROOT" cherry "$TRUNK" "$ref"` — if every line is prefixed `-`
+(all commits already applied upstream), treat it as MERGED.
 
 **Pick the survey branch** (the one auto-detection scans against), using
 this cascade:
@@ -125,17 +143,25 @@ Branch survey:
   origin/develop:         <exists with N commits ahead of default | does not exist>
   Survey branch chosen:   $SURVEY_BRANCH    (reason: <which step in the cascade>)
 
-Recently-active feature branches (informational only — not scanned by
-default; flag any that look like architecture/SDK-restructure work):
-  - feat/sdk-restructure-opsi3   (2026-04-21)
-  - feature/architecture-adaptation  (2026-04-09)
-  - ...
+Recently-active feature branches, classified vs trunk (informational —
+not scanned by default):
+  LIVE   (unmerged work — real candidates):
+    - feat/sdk-restructure-opsi3   (2026-04-21, +12)
+  MERGED (already in trunk — NOT live drift, do not flag):
+    - feature/architecture-adaptation  (2026-04-09)
 ```
 
-If a feature branch name suggests it carries load-bearing architecture
-work (`*adapter*`, `*restructure*`, `*architecture*`, `*shared*`, `*sdk*`,
-`*infra*`), surface it explicitly and ask the user whether to include it
-in the auto-detection scan (numbered inline option).
+**Only a LIVE branch may be flagged for scan inclusion.** If a LIVE branch
+name suggests load-bearing architecture work (`*adapter*`, `*restructure*`,
+`*architecture*`, `*shared*`, `*sdk*`, `*infra*`), surface it explicitly and
+ask the user whether to include it in the auto-detection scan (numbered
+inline option).
+
+A **MERGED** branch is recorded as "merged into trunk — not drift" and is
+**never** flagged, even when its name matches the architecture pattern: its
+content is already on trunk, so the survey-branch scan (§2.2 cascade) covers
+it. This is the fix for the old heuristic that treated any matched-name
+branch as live drift and re-surfaced long-merged work every run.
 
 **All auto-detection in Step 1 (§3.2.3, §3.2.4) and Step 2 (§4.1) MUST
 run against `$SURVEY_BRANCH`, not the checked-out branch.** Use

@@ -41,8 +41,10 @@ start to understand which skills exist and how they fit together.
   CROSS-REPO.md graph. v1.0.0. Works in ephemeral git worktrees; never
   commits or pushes. Inherits the trio sync from /closeout (no separate pass).
 - `cross-repo-init/` — Bootstrap AND ongoing maintenance of the trio
-  (CROSS-REPO.md, ARCHITECTURE.md, CLAUDE.md) for a repo. v1.1.0; invoked
-  by /closeout as its Step 8. Templates live in `cross-repo-init/templates/`.
+  (CROSS-REPO.md, ARCHITECTURE.md, CLAUDE.md) for a repo. v1.2.0; invoked
+  by /closeout as its Step 8. Branch survey classifies feature branches
+  merged-vs-live so merged work isn't re-flagged as drift. Templates live
+  in `cross-repo-init/templates/`.
 
 ### 1.2 Document-style skills
 
@@ -210,7 +212,7 @@ graphs.
 | `plan` | v3.4.0 | Plan = one phase bounded by a gate; /clear only at human/deploy/irreversible gates. |
 | `closeout` | v1.0.0 | Step 8 trio-sync via /cross-repo-init; Step 11 /plan §12 archive. Dogfooded. |
 | `closeout-extended` | v1.0.0 | Inherits /closeout trio sync per neighbor; worktree-isolated. |
-| `cross-repo-init` | v1.1.0 | Bootstrap + ongoing maintenance; invoked by /closeout Step 8. |
+| `cross-repo-init` | v1.2.0 | Bootstrap + ongoing maintenance; invoked by /closeout Step 8. Branch survey now classifies merged-vs-live branches. |
 | `kalpa/` | Stable | Six WellMed-project skills. |
 | `member-record-amend` | Stable | |
 
@@ -235,8 +237,9 @@ graphs.
 - `.claude/CLAUDE.md` reconciliation prompt during /cross-repo-init Step 2
   (the trigger that surfaced the assess-first lesson — already partly
   baked into v1.1, refine further).
-- Feature-branch heuristic: note "merged into trunk" status inline rather
-  than treating matched-name branches as live drift.
+- ~~Feature-branch heuristic: note "merged into trunk" status inline rather
+  than treating matched-name branches as live drift.~~ **DONE** (cross-repo-init
+  v1.2.0, 2026-06-01 — merged-vs-live classification in §2.2).
 - Branch-aware code surveying cascade (already in v1.1; mark verified).
 - Standard ARCHITECTURE.md §6 Drift section template (already in v1.1; mark verified).
 

@@ -1,0 +1,5 @@
+# Local Claude Code runtime artifacts (regenerated per session)
+.claude/logs/
+
+# macOS
+.DS_Store

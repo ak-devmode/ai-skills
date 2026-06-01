@@ -2,12 +2,14 @@
 name: cross-repo-init
 version: 1.1.0
 description: |
-  Bootstrap the trio — CROSS-REPO.md, ARCHITECTURE.md, and CLAUDE.md — for a repo so
-  /plan and /closeout-extended have the metadata they depend on. CROSS-REPO.md declares
-  Pattern Sources (repos this follows patterns from) and Consumers (repos that depend on
-  this repo's contracts). ARCHITECTURE.md is a short, agent-load-bearing architecture
-  snapshot. CLAUDE.md is the per-repo agent context. Idempotent: re-running on a healthy
-  repo produces no diff.
+  Bootstrap **and ongoing maintenance** of the trio — CROSS-REPO.md, ARCHITECTURE.md,
+  and CLAUDE.md — for a repo so /plan and /closeout-extended have the metadata they
+  depend on. CROSS-REPO.md declares Pattern Sources (repos this follows patterns from)
+  and Consumers (repos that depend on this repo's contracts). ARCHITECTURE.md is a
+  short, agent-load-bearing architecture snapshot. CLAUDE.md is the per-repo agent
+  context. **Idempotent** — re-running on a healthy repo produces no diff, which is
+  why /closeout invokes this skill as its Step 8 (trio sync) on every run and
+  /closeout-extended inherits the same pass per neighbor.
 
   When an existing CLAUDE.md or ARCHITECTURE.md is present (commonly with the rich
   content living in `.claude/CLAUDE.md` and a thin or stale version at repo root, or
@@ -16,8 +18,11 @@ description: |
   versions archive to `archive/<name>-v<version>.md`.
 
   Use when asked to "cross-repo init", "bootstrap cross-repo", "add CROSS-REPO.md",
-  "onboard this repo for closeout", "set up this repo for /closeout-extended", or
-  when /plan or /closeout halts asking for CROSS-REPO.md.
+  "onboard this repo for closeout", "set up this repo for /closeout-extended", "sync
+  the trio", "trio drift check", or when /plan or /closeout halts asking for
+  CROSS-REPO.md. Also invoked automatically by /closeout's Step 8 — when called from
+  that context, runs in the current working directory (worktree or primary tree, as
+  /closeout chose).
 allowed-tools:
   - Bash
   - Read

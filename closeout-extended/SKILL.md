@@ -4,7 +4,7 @@ version: 1.0.0
 description: |
   Recursive cross-repo self-heal across the CROSS-REPO.md graph. Walks Pattern Sources
   upward and Consumers outward (default max depth 2, per-repo override available),
-  applying /closeout's 11-step engine in an ephemeral git worktree per neighbor repo.
+  applying /closeout's 12-step engine in an ephemeral git worktree per neighbor repo.
   User reviews each worktree's diff manually — /closeout-extended never commits or
   pushes. Resumable via closeout-extended-progress.md.
 
@@ -48,20 +48,29 @@ inline questions.
 ## 1. How It Works
 
 ```
-  Step 1   Run /closeout's 11-step engine on the local repo
+  Step 1   Run /closeout's 12-step engine on the local repo
+            (includes /closeout Step 8 — trio sync via /cross-repo-init for local repo)
   Step 2   Read CROSS-REPO.md; validate against current state
   Step 3   Build traversal list (Pattern Sources upward, Consumers outward, depth ≤ 2)
   Step 4   Filter cycle-detection-visited repos
   Step 5   For each neighbor:
               5a  Detect trunk branch (from override or default develop→main)
               5b  Create or reuse ephemeral worktree on neighbor's trunk
-              5c  Apply /closeout 11-step engine in worktree
+              5c  Apply /closeout 12-step engine in worktree
                     - Skip tests if neighbor only received doc-only edits
                     - Surface upward edit proposals (per-edit user confirmation)
+                    - Trio sync (/closeout Step 8) runs in worktree — repairs
+                      CROSS-REPO.md / ARCHITECTURE.md / CLAUDE.md for the neighbor
               5d  Update closeout-extended-progress.md after each neighbor
   Step 6   Aggregate cross-repo summary with worktree paths per neighbor
   Step 7   Print final report; surface CROSS-REPO drift; list deferred upward edits
 ```
+
+**Trio coverage:** because Step 1 invokes `/closeout` locally and Step 5c invokes
+`/closeout` per neighbor (each of which now includes `/cross-repo-init` as its
+Step 8), every visited repo gets its trio (`CROSS-REPO.md`, `ARCHITECTURE.md`,
+`CLAUDE.md`) audited and drift-repaired. No separate per-neighbor trio pass is
+needed in this skill — it inherits from `/closeout`.
 
 All neighbor edits live in `/tmp/closeout-<scope-slug>-<neighbor-name>/`. User
 reviews each worktree's diff, commits where they want, discards what they don't.
@@ -73,7 +82,13 @@ Cleanup is opt-in via `--cleanup-worktrees`.
   for this run. Hard cap at 4 to prevent runaway recursion on graphs with bidirectional
   edges that escape cycle detection due to symlink/path differences.
 - `--skip-tests` — Bypass tests for every repo visited. Loudly flagged in summary.
+- `--skip-trio-sync` — Bypass `/closeout`'s Step 8 trio sync for every repo
+  visited (local + neighbors). Passed through to each `/closeout` invocation.
+  Use when you've recently run `/cross-repo-init` across the fleet and don't
+  want a redundant pass per neighbor. Loudly flagged in summary.
 - `--dry-run` — Walk the graph and print what would happen but write nothing.
+  Propagates to each `/closeout` invocation (which in turn skips its Step 8
+  /cross-repo-init invocation since /cross-repo-init has no native --dry-run).
 - `--cleanup-worktrees` — After the user has finished reviewing, remove all
   ephemeral worktrees created during the run. (Run AFTER review, not as part of
   the main flow.)
@@ -84,7 +99,10 @@ Cleanup is opt-in via `--cleanup-worktrees`.
 ## 3. Step 1 — Run /closeout Locally
 
 3.1 Invoke /closeout in the current repo. Pass through any relevant flags
-(`--skip-tests`, `--dry-run`). Capture the structured summary.
+(`--skip-tests`, `--skip-trio-sync`, `--dry-run`). Capture the structured summary.
+This includes /closeout's Step 8 trio sync via /cross-repo-init — so the local
+repo's `CROSS-REPO.md` / `ARCHITECTURE.md` / `CLAUDE.md` are audited and
+repaired as part of this Step, before any neighbor traversal begins.
 
 3.2 Read the local closeout's flagged items, especially:
 - §4 entries with `recommendation: extend <source>` — these drive upward traversal.
@@ -203,9 +221,9 @@ derived from the local repo's plan or scope folder name.
 7.2.3 cd into the worktree for all subsequent operations on this neighbor. Edits
 land in the worktree only — neighbor's primary working tree is untouched.
 
-### 7.3 Apply /closeout 11-step engine in the worktree (§5c)
+### 7.3 Apply /closeout 12-step engine in the worktree (§5c)
 
-7.3.1 Invoke /closeout's 11 steps within the worktree. **Two adaptations:**
+7.3.1 Invoke /closeout's 12 steps within the worktree. **Three adaptations:**
 
 1. **Test skipping for doc-only edits (Issue 15B):**
    - Before Step 3 (test execution), pre-scan the proposed edits that /closeout
@@ -213,17 +231,30 @@ land in the worktree only — neighbor's primary working tree is untouched.
      (.md, .mdx) — i.e., doc drift fixes only, no code touched — skip Step 3 and
      log "doc-only neighbor — tests skipped per Issue 15B."
    - If ANY edit touches code, run tests normally.
+   - **Trio sync (Step 8) is NOT considered for doc-only test-skipping** —
+     CROSS-REPO.md and ARCHITECTURE.md drift can exist on a neighbor that only
+     received doc-only code-side edits, and trio sync is exactly the kind of
+     repair that's most valuable for doc-only neighbors. Trio sync always runs
+     unless `--skip-trio-sync` was passed.
 
 2. **Upward edit proposals require user confirmation (per §7.4):**
    - Step 5 (§4 triage) may produce upward edit proposals. For neighbors visited
      via the **upward** direction, every proposed §4 edit gets the structured
      proposal in §7.4 of this document.
 
-7.3.2 Step 10 (archive) is **skipped** for neighbors — only the local repo gets
+3. **Trio sync writes ride along with /closeout's diff:**
+   - /closeout's Step 8 invokes /cross-repo-init in the worktree. Any
+     proposed edits to `CROSS-REPO.md`, `ARCHITECTURE.md`, or `CLAUDE.md`
+     land in the same worktree as the rest of /closeout's edits, and the
+     user reviews them together when inspecting `cd <worktree> && git diff`.
+   - For neighbors that already passed /cross-repo-init recently, Step 8 is
+     a no-op (per its idempotency contract).
+
+7.3.2 Step 11 (archive) is **skipped** for neighbors — only the local repo gets
 its scope archived. Neighbor closeouts are scoped to "make edits in worktree,"
 not "complete a scope."
 
-7.3.3 Step 11 (summary) output for each neighbor is captured for aggregation in
+7.3.3 Step 12 (summary) output for each neighbor is captured for aggregation in
 Step 6.
 
 ### 7.4 Upward Edit Proposal (3D — Rich Context + Per-Edit Confirmation + Leaf-Side Default)
@@ -317,14 +348,18 @@ After each neighbor completes (or is skipped), append to
 ║                                                                           ║
 ║    [✓] <repo-A>  (depth 1) — <N> edits in /tmp/closeout-<slug>-<A>/       ║
 ║         status: HEALED | NOT HEALED (<reason>) | DOC-ONLY                 ║
+║         trio:   {N edits across CROSS-REPO/ARCH/CLAUDE} | no drift | SKIP ║
 ║    [✓] <repo-B>  (depth 1) — no edits needed                              ║
+║         trio:   no drift                                                  ║
 ║    [✓] <repo-C>  (depth 2) — <N> edits in /tmp/closeout-<slug>-<C>/       ║
+║         trio:   <summary>                                                 ║
 ║                                                                           ║
 ║  ─── Upward (Pattern Sources) ───────────────────────────────────────     ║
 ║                                                                           ║
 ║    [✓] <trunk-A>  (depth 1) — <N> trunk extensions in <worktree-path>     ║
 ║         <K> upward proposals reviewed: <A>=applied, <B>=leaf-side,        ║
 ║         <C>=deferred-to-TODO                                              ║
+║         trio:   <summary>                                                 ║
 ║                                                                           ║
 ║  ─── Skipped ───────────────────────────────────────────────────────      ║
 ║                                                                           ║
@@ -361,7 +396,7 @@ was killed), surface in the summary's header as **NOT HEALED — <repo> incomple
 worktrees created in this run: `git worktree remove <path>` per neighbor. (When
 invoked without prior worktree creation, this flag is a no-op.)
 
-9.3 If the local repo's /closeout step 10 archived the local scope, the scope
+9.3 If the local repo's /closeout step 11 archived the local scope, the scope
 folder is no longer at its original path. /closeout-extended's worktrees reference
 the local scope only by name — they don't depend on the original path.
 
@@ -383,8 +418,10 @@ the local scope only by name — they don't depend on the original path.
 ## Visited
 
 - [✓] {repo-name} (depth {N}) — {M} edits in {worktree-path}
+      trio-sync: {N edits to CROSS-REPO/ARCH/CLAUDE | no drift | SKIPPED | INCOMPLETE}
       finished {ISO timestamp}
 - [✓] {repo-name} (depth {N}) — no edits
+      trio-sync: no drift
 - [skip] {repo-name} — cycle (already visited at depth {prior})
 - [skip] {repo-name} — dirty worktree, user chose discard
 - [ ] {repo-name} (depth {N}) — pending
@@ -398,8 +435,13 @@ the local scope only by name — they don't depend on the original path.
 
 ## CROSS-REPO drift findings
 
+- {finding — from Step 2 validation against local CROSS-REPO.md}
 - {finding}
-- {finding}
+
+## Trio-sync outcomes (Step 8 within each /closeout invocation)
+
+- {repo-name}: {N edits | no drift | SKIPPED (--skip-trio-sync) | INCOMPLETE (<reason>)}
+- {repo-name}: {summary}
 ```
 
 10.3 Append entries as neighbors complete. On re-run of /closeout-extended (e.g.,
@@ -472,8 +514,17 @@ Edits-by-file are easier to read with relative paths within each neighbor; workt
 paths must be absolute (`/tmp/...`) since they're outside any repo.
 
 12.8 **/closeout, not re-implementation, is the per-repo engine.** Every neighbor
-visit invokes /closeout's 11 steps. /closeout-extended's job is graph walk +
+visit invokes /closeout's 12 steps. /closeout-extended's job is graph walk +
 upward proposal flow, not per-repo healing logic.
+
+12.9 **Trio sync is inherited, not duplicated.** /closeout's Step 8 invokes
+/cross-repo-init. Because /closeout-extended invokes /closeout on the local repo
+(Step 1) and per neighbor (Step 5c), every visited repo's trio gets audited and
+repaired by /cross-repo-init's idempotent procedure. /closeout-extended does NOT
+have its own /cross-repo-init pass — that would double-call and produce no
+additional value. The only trio responsibility unique to /closeout-extended is
+the graph-level CROSS-REPO drift validation in Step 2 (which checks the local
+repo's declared neighbors against on-disk reality before traversal).
 
 ## 13. Recipe — First Run
 
@@ -500,8 +551,11 @@ scope.
 
 6. Observe Step 5 outward visit (pmg-chatwoot):
    - Worktree created at `/tmp/closeout-<slug>-pmg-chatwoot/` on `develop`
-   - /closeout 11-step engine applied in worktree
+   - /closeout 12-step engine applied in worktree
    - Doc-only edits → tests skipped (verify in summary)
+   - /closeout Step 8 trio sync invoked in worktree — on a healthy trio, no
+     diff; on drift, proposes edits to CROSS-REPO.md / ARCHITECTURE.md /
+     CLAUDE.md alongside other /closeout edits in the same worktree
 
 7. Observe Step 5 upward visit (wellmed-infrastructure):
    - Worktree created at `/tmp/closeout-<slug>-wellmed-infrastructure/` on
@@ -531,4 +585,9 @@ scope.
     /closeout-extended. Verify it logs `(cycle) pmg-integrations already visited
     at depth 0, skipping back-edge` and doesn't loop.
 
-13. `/closeout-extended --cleanup-worktrees`. Verify all worktrees removed.
+13. Test `--skip-trio-sync`: re-run `/closeout-extended --skip-trio-sync` and
+    verify that /closeout's Step 8 is bypassed for local + every neighbor, with
+    "trio sync skipped per flag" surfaced in both per-repo summaries and the
+    aggregate summary's flag header.
+
+14. `/closeout-extended --cleanup-worktrees`. Verify all worktrees removed.

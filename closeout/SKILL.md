@@ -41,7 +41,7 @@ inline questions answered by number.
 
 ## 1. How It Works
 
-`/closeout` runs eleven steps in order. Each step is conditional — if its inputs are
+`/closeout` runs twelve steps in order. Each step is conditional — if its inputs are
 absent (e.g., no §3 entries in the ledger), the step logs "skipped, no input" and
 moves on. The skill is **safe to re-run**: each step is idempotent on healthy state,
 so running /closeout twice on a healed repo produces no diff on the second pass.
@@ -54,10 +54,11 @@ so running /closeout twice on a healed repo produces no diff on the second pass.
   Step 5  §4 triage: surface "fold into <source>" recommendations
   Step 6  §7 doc drift edits (two-pass: grep-all + LLM-review CLAUDE/ARCH)
   Step 7  ARCHITECTURE.md drift validation + edits
-  Step 8  §10 coverage report (read-only — no auto-fix)
-  Step 9  Memory writes for cross-cutting findings (auto-write, no prompt)
-  Step 10 Invoke /plan §12 archive logic (DO NOT duplicate)
-  Step 11 Summary: what changed, what's blocked, where to look
+  Step 8  Trio sync via /cross-repo-init (CROSS-REPO.md + trio template drift; idempotent)
+  Step 9  §10 coverage report (read-only — no auto-fix)
+  Step 10 Memory writes for cross-cutting findings (auto-write, no prompt)
+  Step 11 Invoke /plan §12 archive logic (DO NOT duplicate)
+  Step 12 Summary: what changed, what's blocked, where to look
 ```
 
 All edits land in the working tree. **/closeout never commits.** The user reviews
@@ -68,7 +69,10 @@ the diff and commits manually — this is the safety boundary.
 Read flags from the user's invocation. Default to none if unspecified.
 
 - `--skip-tests` — Step 3 test gate is bypassed. Loudly flagged in summary.
-- `--skip-memory` — Step 9 memory writes are skipped. Useful when running closeout
+- `--skip-trio-sync` — Step 8 trio sync via /cross-repo-init is bypassed. Loudly
+  flagged in summary. Use when you intend to run /cross-repo-init manually later
+  or when you know the trio is fresh from a recent /cross-repo-init run.
+- `--skip-memory` — Step 10 memory writes are skipped. Useful when running closeout
   in a dry-run context.
 - `--dry-run` — All steps execute up to but not including any file write or
   `git` mutation. Output what *would* happen.
@@ -288,41 +292,88 @@ Components, Data Flow, Key Decisions, External Integrations, Cross-Repo Position
 9.5 Step 5 may have added an "accept as new" pattern entry to ARCHITECTURE.md
 §3 Key Decisions — coordinate so the same line isn't proposed twice.
 
-## 10. Step 8 — Coverage Map (Read-Only)
+## 10. Step 8 — Trio Sync via /cross-repo-init
 
-10.1 Read §10 (Coverage Map) entries from the ledger. If empty, derive a coverage
+10.1 The trio is `CROSS-REPO.md`, `ARCHITECTURE.md`, and `CLAUDE.md`. Steps 6 and
+7 above touched CLAUDE.md and ARCHITECTURE.md via grep + LLM doc-drift logic,
+but `CROSS-REPO.md` is not in their scope. This step fills that gap by invoking
+`/cross-repo-init`'s idempotent trio-sync procedure for the local repo.
+
+10.2 **Invoke /cross-repo-init.** Read `~/.claude/skills/cross-repo-init/SKILL.md`
+and execute its steps in-place (same convention as Step 11's reuse of /plan §12 —
+do NOT duplicate the logic, follow the source skill verbatim). /cross-repo-init:
+- Audits `CROSS-REPO.md` for drift — declared Pattern Source paths still exist,
+  declared Consumers still reference claimed contracts, optional
+  `max-depth-override` and `trunk-branch` fields are consistent with current state.
+- Re-audits `CLAUDE.md` and `ARCHITECTURE.md` against its templates — typically
+  a no-op when Step 6/7 already cleaned them, but catches **template-shaped drift**
+  (missing canonical sections, sidecar duplicates at `.claude/CLAUDE.md`, archive
+  candidates) that the grep+LLM passes do not look for.
+- Writes proposed edits to the working tree; user reviews alongside the rest of
+  /closeout's diff.
+
+10.3 If `CROSS-REPO.md` is absent, /cross-repo-init scaffolds it from its template
+and surfaces a proposal. Per /cross-repo-init's contract, scaffolds require user
+confirmation before write. /closeout does not halt on a missing CROSS-REPO.md —
+it lets /cross-repo-init handle the on-ramp.
+
+10.4 **Idempotency:** if the trio is healthy, /cross-repo-init produces no diff
+(`cross-repo-init/SKILL.md:9` — "re-running on a healthy repo produces no diff").
+Cost on healthy repos is one read pass.
+
+10.5 **Coordination with Steps 6 and 7:** /cross-repo-init runs AFTER the doc-drift
+steps so it sees CLAUDE.md and ARCHITECTURE.md in their post-drift-repair state.
+This order minimizes redundant edit proposals — by the time /cross-repo-init looks,
+Step 6/7's narrative-drift fixes are already in the working tree, and
+/cross-repo-init only adds what the grep+LLM passes don't cover.
+
+10.6 If `--skip-trio-sync` was passed, skip this step and log "trio sync skipped
+per flag — CROSS-REPO.md drift not validated this run" in §1 of the summary.
+
+10.7 If `--dry-run` was passed, skip the /cross-repo-init invocation and log
+"would invoke /cross-repo-init for trio sync." /cross-repo-init v1.1 does not
+have its own --dry-run flag; rather than partially honoring dry-run inside it,
+/closeout opts to skip the invocation entirely under --dry-run.
+
+10.8 Log to the summary's Step 8 line: `Trio sync: {N} edits proposed across
+{CROSS-REPO.md | ARCHITECTURE.md | CLAUDE.md}` or `Trio sync: no drift (idempotent
+no-op)` or `Trio sync: SKIPPED (--skip-trio-sync | --dry-run)`.
+
+## 11. Step 9 — Coverage Map (Read-Only)
+
+11.1 Read §10 (Coverage Map) entries from the ledger. If empty, derive a coverage
 report from §2 (Files Changed) — for each modified `.go`/`.js`/`.ts`/`.py` file,
 check whether a corresponding `_test.go`/`.test.js`/`.test.ts`/`test_*.py` was
 also modified or created in §2.
 
-10.2 Categorize:
+11.2 Categorize:
 - **Covered:** code change has corresponding test change.
 - **Uncovered:** code change with no test change.
 - **Test-only:** test change with no code change.
 
-10.3 Surface in summary under "Coverage Map" — counts plus an inline list of
+11.3 Surface in summary under "Coverage Map" — counts plus an inline list of
 uncovered files (up to 20, then summarize). Do NOT auto-write tests. The output
 is informational; the user decides whether to backfill tests, accept the gap,
 or open a follow-up plan.
 
-10.4 If §10 entries reference business nodes from the PRD (e.g., "User Story 3.2 —
+11.4 If §10 entries reference business nodes from the PRD (e.g., "User Story 3.2 —
 covered by `test/sla_escalation_test.go`"), include those mappings in the summary
 to give the user a feature-level view in addition to file-level.
 
-## 11. Step 9 — Memory Writes for Cross-Cutting Findings
+## 12. Step 10 — Memory Writes for Cross-Cutting Findings
 
-11.1 If `--skip-memory` was passed, skip this step.
+12.1 If `--skip-memory` was passed, skip this step.
 
-11.2 Scan §4 (Patterns Created) for entries with `fold into <source>` recommendations
+12.2 Scan §4 (Patterns Created) for entries with `fold into <source>` recommendations
 where the source is a different repo from the local repo. These are the
 "newly-discovered pattern source" findings worth remembering across sessions.
 
-11.3 Scan §11 (Risk Flags) for entries that look like recurring failure modes —
+12.3 Scan §11 (Risk Flags) for entries that look like recurring failure modes —
 indicators are: phrases like "discovered that X always fails when Y", "third time
 seeing this in <repo>", or risk flags that reference systemic issues (auth
 flakiness, deploy ordering, contract drift).
 
-11.4 For each cross-cutting finding, write a memory entry per the conventions in
+12.4 For each cross-cutting finding, write a memory entry per the conventions in
 the user's auto memory rules (see CLAUDE.md system reminder):
 - Type: `reference` (for pattern sources) or `feedback` (for recurring failure
   modes) — choose based on whether the finding is a pointer to a place or a rule
@@ -331,16 +382,16 @@ the user's auto memory rules (see CLAUDE.md system reminder):
   frontmatter, body lead with rule + **Why:** + **How to apply:** lines.
 - Update `MEMORY.md` index with a one-line pointer.
 
-11.5 Auto-write — no prompt. Per Issue 13B (plan v0.2), de-dup gap is accepted —
+12.5 Auto-write — no prompt. Per Issue 13B (plan v0.2), de-dup gap is accepted —
 observe in practice, don't pre-emptively engineer. If a duplicate memory is later
 flagged by the user, that's the signal to add de-dup logic.
 
-11.6 Log written memory entries in step 11's summary under "Memory writes" with
+12.6 Log written memory entries in step 12's summary under "Memory writes" with
 paths so the user can audit.
 
-## 12. Step 10 — Archive Scope via /plan §12 Code Path
+## 13. Step 11 — Archive Scope via /plan §12 Code Path
 
-12.1 **Do NOT duplicate /plan's archive logic.** Read /plan/SKILL.md §12 (Plan
+13.1 **Do NOT duplicate /plan's archive logic.** Read /plan/SKILL.md §12 (Plan
 Completion & Archive) and follow that procedure verbatim:
 - §12.1 Extract deferred TODOs
 - §12.2 Append to TO-DO.md
@@ -351,22 +402,22 @@ Completion & Archive) and follow that procedure verbatim:
 - §12.7 Print completion summary
 - §12.8 Sibling plan discovery
 
-12.2 Skip §12.6 (the "prompt for /closeout") since /closeout is what's running.
+13.2 Skip §12.6 (the "prompt for /closeout") since /closeout is what's running.
 
-12.3 If the scope is at the scope level (not a single plan), invoke /scope §7
+13.3 If the scope is at the scope level (not a single plan), invoke /scope §7
 archive procedure additionally — when ALL plans in a scope are complete, archive
 the scope folder itself.
 
-12.4 If `--dry-run`, log "would archive scope folder to `{archive-path}`" and
+13.4 If `--dry-run`, log "would archive scope folder to `{archive-path}`" and
 don't move files.
 
-12.5 **Reuse, do not re-implement.** If /plan §12 changes shape in a future
+13.5 **Reuse, do not re-implement.** If /plan §12 changes shape in a future
 version, /closeout follows automatically. The point of factoring archive logic
 into /plan §12 is exactly to avoid two skills having drifting implementations.
 
-## 13. Step 11 — Summary
+## 14. Step 12 — Summary
 
-13.1 Print a structured summary to the user:
+14.1 Print a structured summary to the user:
 
 ```
 ✅ /closeout complete — {repo-name}
@@ -383,10 +434,11 @@ into /plan §12 is exactly to avoid two skills having drifting implementations.
   [✓] 5  §4 triage: {A} accepted, {F} fold-into edits proposed, {D} deferred to /closeout-extended
   [✓] 6  Doc drift: {N} docs edited ({L} CLAUDE/README/docs)
   [✓] 7  ARCHITECTURE.md: {edits or "no drift"}
-  [✓] 8  Coverage: {C} covered, {U} uncovered, {T} test-only
-  [✓] 9  Memory: {M} entries written
-  [✓] 10 Archived: {archive-path}
-  [✓] 11 Summary (this)
+  [✓] 8  Trio sync: {N edits across CROSS-REPO/ARCH/CLAUDE} | no drift | SKIPPED
+  [✓] 9  Coverage: {C} covered, {U} uncovered, {T} test-only
+  [✓] 10 Memory: {M} entries written
+  [✓] 11 Archived: {archive-path}
+  [✓] 12 Summary (this)
 
 📝 Edits in working tree (review before commit):
   - {file} — {one-line intent}
@@ -411,14 +463,14 @@ Next:
   - For cross-repo healing: `/closeout-extended`
 ```
 
-13.2 If any step had a failure (e.g., tests failing), make the failure prominent
+14.2 If any step had a failure (e.g., tests failing), make the failure prominent
 in the header. Don't bury it.
 
-13.3 If `--dry-run`, header changes to "🔍 /closeout dry-run complete — no files
+14.3 If `--dry-run`, header changes to "🔍 /closeout dry-run complete — no files
 written" and the "Edits in working tree" section becomes "Edits that WOULD be applied"
 with the same content.
 
-## 14. Resumability
+## 15. Resumability
 
 /closeout is not multi-session by design — one run, one summary. If a run fails
 mid-way (e.g., tests hang and user kills it), there's no "resume from step 7"
@@ -428,67 +480,79 @@ state file. Re-running /closeout from the top is safe because:
 - Step 6/7 doc edits use Edit with exact `old_string` match — if a prior partial
   run already applied an edit, the second run's Edit will fail-clean (no match)
   and log "already applied" rather than corrupt.
-- Step 9 memory writes check for existing entry by file path before writing.
-- Step 10 archive checks PLANS-INDEX status before mutating (skips if already Done).
+- Step 8 trio sync is idempotent (re-running /cross-repo-init on a healthy trio
+  produces no diff).
+- Step 10 memory writes check for existing entry by file path before writing.
+- Step 11 archive checks PLANS-INDEX status before mutating (skips if already Done).
 
 For genuinely long runs where re-running is wasteful, /closeout-extended (which
 wraps this skill) provides resumability via `closeout-extended-progress.md`.
 For a single repo, just re-run /closeout from the top.
 
-## 15. Failure Modes & Recovery
+## 16. Failure Modes & Recovery
 
-15.1 **Ledger missing or unreadable:** halt with clear message at Step 1. User
+16.1 **Ledger missing or unreadable:** halt with clear message at Step 1. User
 options: run /plan to populate, or run `/review` for ad-hoc review without ledger.
 
-15.2 **Ledger schema mismatch:** halt at Step 3. User options: upgrade /plan or
+16.2 **Ledger schema mismatch:** halt at Step 3. User options: upgrade /plan or
 run `/review`.
 
-15.3 **Tests fail:** continue but mark NOT HEALED. User fixes tests then re-runs
+16.3 **Tests fail:** continue but mark NOT HEALED. User fixes tests then re-runs
 /closeout (or skips with `--skip-tests` for a doc-only closeout).
 
-15.4 **Pattern source path missing during §3 spot-check:** flag in summary, do
+16.4 **Pattern source path missing during §3 spot-check:** flag in summary, do
 not halt. The pattern source may be in a Pattern Source repo that the local repo
 doesn't have checked out. /closeout-extended (which walks Pattern Sources) is the
 right place to verify these — local /closeout just flags.
 
-15.5 **Doc edit conflict** (Edit's `old_string` doesn't match): log "skipped
+16.5 **Doc edit conflict** (Edit's `old_string` doesn't match): log "skipped
 edit on `{doc}:{line}` — content changed since /plan ran" in summary. User
 manually applies or re-runs after fixing.
 
-15.6 **Archive step fails** (e.g., target archive dir already exists): halt at
-step 10 with diagnostic. /plan §12 archive is the load-bearing operation — better
+16.6 **/cross-repo-init halts or errors during Step 8:** log the diagnostic,
+mark trio sync as `INCOMPLETE` in the summary, and continue to Step 9. Trio
+sync drift is not blocking — the rest of /closeout's work (memory writes,
+archive) should still complete. User can re-run /cross-repo-init manually.
+
+16.7 **Archive step fails** (e.g., target archive dir already exists): halt at
+step 11 with diagnostic. /plan §12 archive is the load-bearing operation — better
 to surface and let user resolve than to half-archive.
 
-## 16. Important Behaviors
+## 17. Important Behaviors
 
-16.1 **Never modify the ledger.** closeout-prep.md is read-only to /closeout.
+17.1 **Never modify the ledger.** closeout-prep.md is read-only to /closeout.
 The ledger is the audit trail of what /plan did; /closeout records its own work
 in the final summary and in commit messages (when the user commits), not in the
 ledger.
 
-16.2 **Never commit.** /closeout writes to working tree only. The user reviews
+17.2 **Never commit.** /closeout writes to working tree only. The user reviews
 the diff and commits manually. This is the safety boundary that distinguishes
 "healed" from "auto-pushed and broken."
 
-16.3 **Never auto-fix tests.** Test failures are surfaced, not patched.
+17.3 **Never auto-fix tests.** Test failures are surfaced, not patched.
 Auto-test-fixing is too easy to get wrong and easy to mask real bugs.
 
-16.4 **Workspace-relative paths everywhere.** Every file reference in the summary
+17.4 **Workspace-relative paths everywhere.** Every file reference in the summary
 uses paths relative to the repo root.
 
-16.5 **Be loud about flags.** `--skip-tests` and `--skip-memory` always appear
-in the summary header. The user should never have to hunt for "did I run with
-skip-tests?"
+17.5 **Be loud about flags.** `--skip-tests`, `--skip-trio-sync`, and `--skip-memory`
+always appear in the summary header. The user should never have to hunt for
+"did I run with skip-tests?"
 
-16.6 **Stay local.** If the ledger or any step would require touching another
+17.6 **Stay local.** If the ledger or any step would require touching another
 repo (Pattern Source updates, Consumer code mods), defer to /closeout-extended.
 /closeout is the local-scope skill; cross-repo is /closeout-extended's job.
 
-16.7 **Numbered inline questions only.** Per the closeout-skills framework rules,
+17.7 **Trio sync is the local repo's CROSS-REPO.md gate.** /closeout owns
+CROSS-REPO.md drift for the local repo (Step 8); /closeout-extended owns it for
+each neighbor by virtue of invoking /closeout per neighbor. Do not add a separate
+CROSS-REPO.md pass anywhere else — there should be exactly one path.
+
+17.8 **Numbered inline questions only.** Per the closeout-skills framework rules,
 AskUserQuestion is banned. Step 2 branch confirmation and any other interactive
 moments use numbered options answered by number.
 
-## 17. Recipe — First Run
+## 18. Recipe — First Run
 
 Manual verification recipe for confirming /closeout works end-to-end on a real
 scope. To be exercised in plan Phase 5 §8.6.
@@ -498,14 +562,19 @@ scope. To be exercised in plan Phase 5 §8.6.
 3. Observe Step 1 reads the ledger and reports counts.
 4. Observe Step 2 confirms branch (or prompts if mismatch).
 5. Observe Step 3 runs the test suite and reports pass/fail.
-6. Observe Steps 4-9 surface drift, propose edits, and write memory entries.
-7. Observe Step 10 invokes /plan §12 — scope folder moves to `archive/`,
+6. Observe Steps 4-7 surface drift, propose edits to CLAUDE/README/ARCHITECTURE/docs.
+7. Observe Step 8 invokes /cross-repo-init — on a healthy trio, no diff; on
+   drift (missing Pattern Source path, stale Consumer claim, missing canonical
+   trio section), proposes edits to working tree.
+8. Observe Steps 9-10 surface coverage and write memory entries.
+9. Observe Step 11 invokes /plan §12 — scope folder moves to `archive/`,
    PLANS-INDEX status flips to Done, TO-DO.md is appended.
-8. Observe Step 11 summary lists all edits with workspace-relative paths.
-9. `git diff` — verify edits are sensible. `git status` — verify scope folder
-   is in archive.
-10. Re-run `/closeout` — observe idempotency: no new edits proposed on healthy
-    state, summary reports "no changes needed."
+10. Observe Step 12 summary lists all edits with workspace-relative paths,
+    including Step 8 trio-sync edits.
+11. `git diff` — verify edits are sensible. `git status` — verify scope folder
+    is in archive.
+12. Re-run `/closeout` — observe idempotency: no new edits proposed on healthy
+    state (Step 8 trio sync is no-op), summary reports "no changes needed."
 
 Failure modes to test:
 - Delete closeout-prep.md and re-run — expect halt at Step 1.

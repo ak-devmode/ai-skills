@@ -1,6 +1,6 @@
 ---
 name: scope
-version: 3.2.0
+version: 3.3.0
 description: |
   Task scoping, skill router, and progress tracker. Reads current context (git diff,
   branch, CLAUDE.md, open files), eliminates assumptions via two rounds of open-ended
@@ -32,6 +32,39 @@ The scope folder is the **single source of truth** for a task's plan, decisions,
 progress. It lives in a central plans directory (not in the source repo) so that work
 spanning multiple repos is tracked in one place and past scopes form a searchable
 engineering journal.
+
+---
+
+## Phase Boundaries — the one rule the rest of this skill points at
+
+A phase is a unit of deliverable work bounded by a **gate**: a reason the work
+*must* pause or split that comes from the work itself, not from context-window size.
+There are exactly six gate types:
+
+- **A. Human gate** — work can't proceed until a human acts: edits/approves content,
+  performs an external action (paste a snippet, create an SSM param, flip DNS), or
+  makes a go/no-go call after seeing the prior output.
+- **B. Concurrency boundary** — independent workstreams over disjoint file sets that
+  could each be built/tested/committed/PR'd without colliding. Splitting here enables
+  parallel execution or clean independent PRs.
+- **C. Review/merge gate** — a chunk that should land as one reviewable PR before the
+  next builds on it (PR-sized, not context-sized).
+- **D. Deploy/verify gate** — must be deployed and observed in an environment before
+  the next step is safe (ship the contract → verify consumers → migrate).
+- **E. Risk/irreversibility gate** — a destructive or one-way step (data migration,
+  big-bang cutover) earns its own phase + rollback note, regardless of size.
+- **F. Compliance gate** — a regulatory checkpoint (e.g. SATU SEHAT) that blocks
+  later work.
+
+**Token/context size is NOT a gate.** Automatic context compaction means a single
+phase may span multiple sessions; a large phase gets intra-phase resume checkpoints
+inside its one plan file (see §5.9), it does not get split into more phases. Conversely,
+several gate-free chunks of work belong in ONE phase even if that phase is large —
+do not mint a new phase just because you estimate the work won't fit one window.
+
+If a boundary isn't one of A–F, it is not a phase boundary — it's just a long phase.
+Every CHECKPOINT this skill emits records its gate type so /plan knows whether to
+pause-and-clear (A/D/E — you're stopping anyway) or roll straight through (B/C).
 
 ---
 
@@ -302,31 +335,13 @@ End with: "Answer by number. Skip any that don't apply."
 
 After processing Round 1 answers, ask the task-specific design questions that determine the best solution architecture. Same format: numbered, open-ended, no multiple choice, single response. Target 3–10 questions depending on complexity.
 
-Generate questions based on task type:
+Generate questions based on task type — these are seeds, not a script; expand to 3–10
+that actually move the design:
 
-**For new API/service work:**
-1. Synchronous call chain or async/saga pattern, and what drives the choice?
-2. Which service owns the new data, and where does it live in the DB schema?
-3. New migration needed, or extending existing tables?
-4. What's the contract surface (endpoints, events, schema fields) and which other services consume it?
-
-**For UI features:**
-1. Mobile-first or desktop-primary?
-2. Which existing component patterns should this reuse? Point to closest example.
-3. What's the empty / error / loading state behavior?
-4. What does the happy path look like end-to-end?
-
-**For bug fixes:**
-1. Is there a regression test missing, or is this a genuine edge case not worth testing?
-2. Is it reproducible locally — do you have a test case that triggers it?
-3. Has this affected production, or was it caught pre-merge?
-4. What's the suspected root cause area?
-
-**For infra/devops:**
-1. Terraform-managed or manual?
-2. Blue/green deployment or in-place?
-3. Rollback plan needed in scope?
-4. What downstream systems break if this fails?
+- **New API/service:** sync vs async/saga (and why); which service owns the data + DB schema home; new migration vs extend; contract surface + consumers.
+- **UI feature:** mobile-first vs desktop; which existing component patterns to reuse (point to closest); empty/error/loading behavior; the end-to-end happy path.
+- **Bug fix:** missing regression test vs genuine edge case; reproducible locally; hit production or caught pre-merge; suspected root-cause area.
+- **Infra/devops:** Terraform-managed vs manual; blue/green vs in-place; rollback in scope; what downstream breaks on failure.
 
 If Round 1 already resolved the design questions (small task), skip Round 2 and proceed directly to output. Otherwise fire as a single numbered response.
 
@@ -334,26 +349,34 @@ If Round 1 already resolved the design questions (small task), skip Round 2 and 
 
 ## Step 3 — Determine Scale: Atomic vs Phased
 
-Based on all answers, decide the execution model:
+Based on all answers, decide the execution model. **Phasing is decided by gates
+(A–F from "Phase Boundaries" above), never by estimated token size.**
 
-**Atomic** (single session, no child plans) if ALL of these are true:
-- One service, one repo
-- Fits in a single context window (~200k tokens of work)
-- Clear implementation path, no architecture decisions to evaluate
-- Scope can orchestrate gstack skills directly without breaking into plans
+**Atomic** (single plan, no phase splits) if the work crosses **zero** gates:
+- No human hand-off mid-stream, no deploy-then-verify dependency, no irreversible
+  step that wants its own rollback, no compliance checkpoint
+- The deliverables are coupled enough that one PR / one review makes sense
+- This holds even if the work is large — a big gate-free task is one atomic plan
+  that may span several sessions via compaction + intra-phase checkpoints, not
+  several phases
 
-**Phased** (multiple plans, each ~1 context window) if ANY of these are true:
-- Task spans > 2 services or repos
-- Estimated work exceeds 1 context window (~200k tokens)
-- Involves architecture decisions with options to evaluate
-- Has a regulatory/compliance gate that blocks later work
-- Multiple distinct deliverables that benefit from separate sessions
+**Phased** (one plan file per phase) if the work crosses **one or more gates**:
+- Count the gates A–F the work crosses; each gate is a phase boundary
+- Tightly-coupled, gate-free chunks between two gates collapse into a single phase
+- Tag each resulting boundary with its gate type — it flows into the CHECKPOINT
+  (§5.9) so /plan knows whether to pause-and-clear (A/D/E) or roll through (B/C)
 
-When phased, each phase becomes a plan file (~1 context window = ~1 session).
-Scope generates plan stubs that `/plan` (task-runner) can execute. See Step 5.9.
+When phased, each phase becomes one plan file. Scope generates plan stubs that
+`/plan` (task-runner) can execute. See Step 5.9.
 
-If ambiguous after Round 1+2: ask "How much time do you have for this? [Full session
-today / Just this hour / Multi-session across days]" before proceeding.
+**Sanity check before finalizing the phase count:** for each proposed boundary, name
+the gate (A–F). If you can't, the two phases are really one — merge them. This is the
+guard against over-phasing a single coherent build into size-driven fragments.
+
+If genuinely ambiguous after Round 1+2 (you can't tell whether a human hand-off
+exists): ask the one question that resolves it, e.g. "Does anything here wait on you
+or another person mid-stream, or is it one straight build?" — not "how much time do
+you have," which conflates size with gates.
 
 ---
 
@@ -539,6 +562,8 @@ ADR amendment is in-scope for this work.
 
 The full skill checklist tables (18 rows across four sections) follow the same shape shown in Step 4. Each row gets `[ ] YES` / `[ ] OPTIONAL` / `[N/A]` with a tailored note. Mandatory: `/plan-ceo-review` is always YES.
 
+**Boilerplate collapse:** still *consider* all 18 (the forcing function), but in the emitted scope.md, when a task has no UI surface, collapse the seven design/browser skills (`/browse`, `/qa`, `/design-consultation`, `/design-review`, `/design-html`, `/design-shotgun`, `/plan-design-review`) into a single line — `N/A ×7 — no UI surface` — instead of seven near-identical rows. Same for any other all-N/A cluster. Keep YES/OPTIONAL rows itemized.
+
 ### 5.5 Create progress.md
 
 See `/markdown-style` §10 (Progress Files) for full conventions: Resume Context block schema, append-only rule, Decisions Log dual-entry. The required structure:
@@ -693,12 +718,25 @@ See `/markdown-style` §8 (Plan Documents) and §8.9 (Plan Stubs) for full conve
 
 ---
 ### 🔲 CHECKPOINT: Phase {P} Complete
+**Gate**: {A human | B concurrency | C review/merge | D deploy/verify | E irreversible | F compliance}
 **Review**: {what the human should verify}
 **Resume**: "continue the {N}.{P} {slug} plan"
 ---
 ```
 
-**Sizing rule:** If a phase looks like it exceeds ~200k tokens of work (many files, complex logic, multiple integrations), split it into two plans. More small plans beat one that won't fit in a context window.
+The **Gate** field is required on every phase-boundary CHECKPOINT. /plan reads it to
+decide whether to suggest `/clear` (A/D/E — a natural pause) or continue without
+prompting (B/C). The final phase of a scope uses the gate that best describes its
+exit (often E for a cutover, or C if it just merges).
+
+**Sizing rule (token size is a within-phase concern, never a phasing trigger):** Do
+NOT split a phase because you estimate it exceeds a context window. A phase may span
+multiple sessions — automatic compaction carries the working set, and the plan file's
+intra-phase resume checkpoints (`"continue the {N}.{P} plan"`) let a fresh session
+pick up mid-phase. Only split one phase into two plan files as a last resort when the
+work is *both* very large *and* detail-dense (e.g. a wide refactor where exact
+signatures must survive across sessions) — and when you do, label the split boundary
+explicitly as "same gate, sequential sessions," not a new gate.
 
 Also add a PLANS-INDEX entry for each plan stub (sub-numbered under the scope):
 ```markdown
@@ -880,6 +918,6 @@ relevant to the current task):
 - **N/A is per-task, not per-project.** WellMed and PMG both have UIs.
 - **No gstack branding in output files.** scope.md and progress.md look like your own docs.
 - **Slug is deterministic.** Based on task title, not date. Dates go inside the file.
-- **Plans dir must exist.** If the resolved plans directory doesn't exist, stop and tell the user. Don't create it (it implies the docs repo is missing or not cloned).
+- **Plans dir must exist** (see §5.1 — stop, don't create silently).
 - **Central, not local.** Scope folders always go in the plans directory, never in the source repo's `docs/` folder.
 - **Progress is append-only.** Never delete or overwrite previous Progress Log entries. The Resume Context block is the only section that gets overwritten (it always reflects current state).

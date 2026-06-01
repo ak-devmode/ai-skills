@@ -39,7 +39,8 @@ independent — share conventions, not code.
 - **Trunk branch:** `main`. Solo-dev repo (ak-devmode/ai-skills).
 - Direct commits on `main` are the default. No PR workflow.
 - Conventional commit prefix: free-form, but match recent history —
-  `feat:`, `fix:`, `docs:`, `plan:`, `cross-repo-init:`, etc. Subject
+  `feature:` (spelled out, not `feat:`), `fix:`, `docs:`, `plan:`,
+  `cross-repo-init:`, etc. Subject
   starts with the affected skill or area in brackets when applicable
   (e.g. `plan: [Task 5.5] ...`).
 - Long-running work is tracked in `plans/<scope>/<scope>-PROGRESS.md`
@@ -78,9 +79,10 @@ target repos.
 3.5 **Cross-skill reuse, not duplication.** When you find a routine that
 two skills need, factor it into one skill's section and have the other
 reference it by section number. Current examples:
-- `/closeout` Step 10 invokes `/plan` §12 archive logic.
-- `/closeout-extended` invokes `/closeout`'s 11-step engine per neighbor
-  repo in a worktree.
+- `/closeout` Step 8 invokes `/cross-repo-init` for trio sync.
+- `/closeout` Step 11 invokes `/plan` §12 archive logic.
+- `/closeout-extended` invokes `/closeout`'s engine per neighbor repo in a
+  worktree (inheriting the trio sync rather than duplicating it).
 
 3.6 **Templates live in `templates/` (shared) or `<skill>/templates/`
 (private).** `closeout-prep.md.template` is in the top-level `templates/`
@@ -105,7 +107,7 @@ plan/tests/verification-recipes.md  — manual test recipes for /plan rules
 closeout/SKILL.md               — local self-heal
 closeout-extended/SKILL.md      — cross-repo recursive self-heal
 closeout-extended/tests/upward-traversal-recipe.md
-cross-repo-init/SKILL.md        — trio bootstrap
+cross-repo-init/SKILL.md        — trio bootstrap + maintenance (invoked by /closeout Step 8)
 cross-repo-init/templates/      — CROSS-REPO / ARCHITECTURE / CLAUDE templates + examples
 markdown-style/SKILL.md         — markdown formatting rules
 kalpa/<sub-skills>/SKILL.md     — WellMed/Kalpa-project skills
@@ -189,13 +191,11 @@ is distinct from `~/Projects/pmg/pmg-docs/plans/` and
 projects). Per `reference_ai_skills_plans_dir.md`, `/scope` and `/plan`
 recognize this dir.
 
-9.2 **Active scope:** `plans/closeout-skills/` — building /closeout,
-/closeout-extended, /cross-repo-init plus the /plan extensions. Phase 5
-(dogfood pass) is wrapping up: PMG side complete (pmg-integrations
-PR #68, pmg-chatwoot PR #115, pmg-docs pushed direct to main); WellMed
-side complete (kalpa-docs + wellmed-infrastructure + 9 leaves); ai-skills
-itself is the last leaf, closed by the trio commit that introduced this
-file.
+9.2 **Recent work:** `plans/closeout-skills/` (complete) shipped /closeout,
+/closeout-extended, /cross-repo-init plus the /plan Phase 0 + Pattern-First
+extensions across the PMG and WellMed fleets. Most recent direct-to-main
+work (2026-06-01): gate-driven phasing across /scope, /plan, /markdown-style,
+and /closeout Step 8 trio-sync via /cross-repo-init.
 
 9.3 **Global agent memory** at
 `~/.claude/projects/-Users-alexknecht-Projects-pmg/memory/` is shared
@@ -216,4 +216,4 @@ opens). Repo-relevant pointers:
 
 ---
 
-<!-- Last scaffolded/audited by /cross-repo-init: 2026-05-11 -->
+<!-- Last scaffolded by /cross-repo-init: 2026-05-11; manual consistency pass: 2026-06-01 -->

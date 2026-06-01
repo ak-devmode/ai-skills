@@ -11,7 +11,7 @@ Optimized for agent consumption: Claude Code reads this file at session
 start to understand which skills exist and how they fit together.
 -->
 
-**Last refreshed:** 2026-05-11
+**Last refreshed:** 2026-06-01 (manual consistency pass — gate-phasing + closeout trio-sync)
 **Maintained by:** manual edits + /closeout when invoked by plans rooted here
 
 ---
@@ -28,19 +28,21 @@ start to understand which skills exist and how they fit together.
   need into a structured PRD.
 - `scope/` — Task scoping, skill router, and progress tracker. Reads
   current context, eliminates assumptions via numbered inline questions,
-  outputs a phased scope with skill checklist.
+  outputs a phased scope with skill checklist. v3.3.0: phases defined by
+  work gates (A–F), not context-window size.
 - `plan/` — Task Execution Engine. Executes tasks from a *-PLAN.md
-  document with progress logging and human checkpoints. Currently v3.1.0;
-  Phase 2 of the closeout-skills scope extended Phase 0 + the Pattern-First
-  Rule.
-- `closeout/` — Local repo self-heal after a /plan run. New (Phase 3 of
-  the closeout-skills scope). Consumes `templates/closeout-prep.md.template`.
+  document with progress logging and human checkpoints. v3.4.0: a plan is
+  one phase bounded by a gate (not a context window); /clear suggested only
+  at human/deploy/irreversible gate boundaries.
+- `closeout/` — Local repo self-heal after a /plan run. v1.0.0. Consumes
+  `templates/closeout-prep.md.template`. Step 8 runs trio sync via
+  /cross-repo-init; Step 11 invokes /plan §12 archive logic.
 - `closeout-extended/` — Recursive cross-repo self-heal across the
-  CROSS-REPO.md graph. New (Phase 4 of the closeout-skills scope). Works
-  in ephemeral git worktrees; never commits or pushes.
-- `cross-repo-init/` — Bootstrap the trio (CROSS-REPO.md, ARCHITECTURE.md,
-  CLAUDE.md) for a repo. v1.1 (post-WellMed-dogfood). Templates live in
-  `cross-repo-init/templates/`.
+  CROSS-REPO.md graph. v1.0.0. Works in ephemeral git worktrees; never
+  commits or pushes. Inherits the trio sync from /closeout (no separate pass).
+- `cross-repo-init/` — Bootstrap AND ongoing maintenance of the trio
+  (CROSS-REPO.md, ARCHITECTURE.md, CLAUDE.md) for a repo. v1.1.0; invoked
+  by /closeout as its Step 8. Templates live in `cross-repo-init/templates/`.
 
 ### 1.2 Document-style skills
 
@@ -114,9 +116,10 @@ start to understand which skills exist and how they fit together.
           ai-skills's own development
 ```
 
-Cross-skill invocation: `/closeout` invokes `/plan` §12 archive logic
-(not re-implementing it). `/closeout-extended` invokes `/closeout` per
-neighbor repo. `/scope` references the full skill catalog by name.
+Cross-skill invocation: `/closeout` invokes `/cross-repo-init` (Step 8,
+trio sync) and `/plan` §12 archive logic (Step 11) — not re-implementing
+either. `/closeout-extended` invokes `/closeout` per neighbor repo and
+inherits the trio sync. `/scope` references the full skill catalog by name.
 
 ---
 
@@ -197,28 +200,29 @@ graphs.
      in §1. Plus: contracts (frontmatter, conventions) that have evolved
      past what older skills follow. -->
 
-### 6.1 Skill catalog status (2026-05-11)
+### 6.1 Skill catalog status (2026-06-01)
 
 | Skill | Status | Notes |
 |---|---|---|
-| `markdown-style` | Stable | Established before the closeout-skills scope. |
-| `prd` | Stable | |
-| `scope` | Stable | |
-| `plan` | v3.1.0, recently updated | Phase 0 + Pattern-First Rule extensions from Phase 2 of closeout-skills. |
-| `closeout` | New, Phase 3 of closeout-skills | Awaiting end-to-end dogfood pass. |
-| `closeout-extended` | New, Phase 4 of closeout-skills | Awaiting end-to-end dogfood pass. |
-| `cross-repo-init` | v1.1, recently bumped | Folded post-WellMed dogfood findings (assess-first, CLAUDE.md folding, branch-survey cascade). Phase 5 dogfooding it now. |
+| `markdown-style` | v1.1.0 | CHECKPOINT format carries the **Gate** field. |
+| `prd` | v1.0.0 | |
+| `scope` | v3.3.0 | Gate-driven phasing — phases defined by work gates (A–F), not token size. |
+| `plan` | v3.4.0 | Plan = one phase bounded by a gate; /clear only at human/deploy/irreversible gates. |
+| `closeout` | v1.0.0 | Step 8 trio-sync via /cross-repo-init; Step 11 /plan §12 archive. Dogfooded. |
+| `closeout-extended` | v1.0.0 | Inherits /closeout trio sync per neighbor; worktree-isolated. |
+| `cross-repo-init` | v1.1.0 | Bootstrap + ongoing maintenance; invoked by /closeout Step 8. |
 | `kalpa/` | Stable | Six WellMed-project skills. |
 | `member-record-amend` | Stable | |
 
 ### 6.2 Active scope
 
-- `plans/closeout-skills/` — closeout-skills scope is in Phase 5 (dogfood
-  pass). As of 2026-05-11: PMG side complete (pmg-integrations,
-  pmg-docs, pmg-chatwoot trios committed; pmg-integrations and
-  pmg-chatwoot have open PRs); WellMed side complete (kalpa-docs +
-  wellmed-infrastructure + 9 leaves + 2 marketing/sparse repos);
-  ai-skills itself is the last leaf and this commit closes it.
+- `plans/closeout-skills/` — **complete.** Shipped and dogfooded /closeout,
+  /closeout-extended, /cross-repo-init plus the /plan Phase 0 + Pattern-First
+  extensions across the PMG and WellMed fleets.
+- Most recent direct-to-main work (2026-06-01): gate-driven phasing across
+  /scope, /plan, /markdown-style, plus /closeout Step 8 trio-sync via
+  /cross-repo-init. No dedicated scope folder — shipped under the repo's
+  small-fix direct-commit convention.
 
 ### 6.3 Open items deferred to v1.1 of closeout-skills
 
@@ -238,4 +242,4 @@ graphs.
 
 ---
 
-<!-- Last scaffolded/audited by /cross-repo-init: 2026-05-11 -->
+<!-- Last scaffolded by /cross-repo-init: 2026-05-11; manual consistency pass: 2026-06-01 -->

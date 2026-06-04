@@ -1,6 +1,6 @@
 ---
 name: repo-cleanup
-version: 1.1.0
+version: 1.2.0
 description: |
   Branch hygiene and repo upkeep. Classifies all non-protected branches against the
   trunk(s) using layered signals (PR merge state, ancestry, gone-upstream, patch
@@ -252,6 +252,14 @@ message to the branch owner.
    full table, **deleted branches with SHAs**, Manual Actions block, housekeeping
    results, Open Questions.
 3. `gh auth switch --user <original-account>` if Step 0 switched it.
+4. **The very LAST thing in the terminal summary — after everything else — must
+   be a fenced block containing the exact commands the user has to run because
+   the skill is permission-blocked from running them** (e.g. `git branch -D`),
+   under a heading like `### Your actions (Claude is blocked from these)`.
+   One command per line, each with its evidence comment, nothing after the
+   block. This keeps the human's TODO unmissable and cleanly separated from
+   what the skill already did. If nothing is blocked, end with
+   `No actions needed from you.` instead.
 
 ---
 

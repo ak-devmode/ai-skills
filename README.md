@@ -12,6 +12,8 @@ Custom Claude Code skills for the PMG/Kalpa team. Includes our own skills plus a
 | `/plan` | Single-session execution from a plan file |
 | `/prd` | Product Requirements Document generator |
 | `/markdown-style` | Structured markdown document creation |
+| `/repo-cleanup` | Branch hygiene: classify, prune merged, flag in-flight (current repo) |
+| `/repo-cleanup-all` | Alias for `/repo-cleanup --all` — fleet sweep across a GitHub org/user |
 | `/kalpa/*` | Kalpa-specific skills (coding standards, API gen, migrations, FHIR) |
 
 ### 1.2 gstack skills (installed automatically)

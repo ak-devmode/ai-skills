@@ -1,6 +1,6 @@
 ---
 name: repo-cleanup
-version: 1.0.0
+version: 1.1.0
 description: |
   Branch hygiene and repo upkeep. Classifies all non-protected branches against the
   trunk(s) using layered signals (PR merge state, ancestry, gone-upstream, patch
@@ -166,6 +166,34 @@ ones are tiebreakers, never sole prune evidence):
 | ABANDONED? | ahead of trunk, no open PR, last commit > 30 days (or closed-unmerged PR) | Open Questions |
 | TEAM | author not in §1.2 | report-only, Open Questions, whatever the other signals say |
 | UNKNOWN | conflicting signals | Open Questions |
+
+### Step 2b — Content-landed check (dirty-cherry resolution)
+
+A branch with a **merged PR but a dirty cherry** (`git cherry` shows `+` commits)
+is NOT automatically SQUASHED — squash merges with conflict resolution, or later
+trunk edits to the same files, change patch-ids and break signal 4. Before
+bucketing, verify the content actually landed:
+
+1. **Added-file check**: pick files the branch *added*
+   (`git diff --diff-filter=A --name-only <merge-base>..<branch>`) and test they
+   exist on trunk: `git cat-file -e origin/<trunk>:<path>`.
+2. **Searchable-change check**: for modified files, grep trunk for a distinctive
+   string the branch introduced (`git grep <token> origin/<trunk> -- <path>`).
+3. **Timestamp check**: compare each `+` commit's date (`git log -1 --format=%ci`)
+   against the PR's `mergedAt`. A commit *after* mergedAt was pushed post-merge
+   and is genuinely unlanded work.
+
+Outcomes:
+
+- All `+` commits' content verified on trunk → **SQUASHED** (note "content
+  verified" in the signals column).
+- Any commit whose content is absent from BOTH trunks → **UNKNOWN**, with the
+  orphaned commit SHA + subject named in Open Questions. Never delete a branch
+  carrying an orphaned commit until the user decides (re-raise vs drop) — when
+  they drop it, record the SHA in the log for recovery-until-GC.
+
+This step exists because the dogfood run (pmg-integrations, 2026-06-04) found a
+real orphaned CI fix that diff-naive logic would have silently deleted.
 
 ### Step 3 — Verdict table
 

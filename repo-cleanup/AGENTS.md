@@ -26,6 +26,11 @@ PR merge state (ground truth) > ancestry (`--merged`) > `[gone]` upstream >
 patch equivalence (`git cherry`) > three-dot diff (tiebreaker only, never sole
 evidence). `git fetch --prune` must run before any signal is read.
 
+**Dirty cherry + merged PR ≠ SQUASHED** — run the Step 2b content-landed check
+(added-file existence, distinctive-string grep, commit-date vs mergedAt). A
+commit absent from both trunks is orphaned work → UNKNOWN, never delete
+without the user's decision.
+
 ## 4. Buckets
 
 SAFE_PRUNE (ancestry-merged → `git branch -d`) · SQUASHED (PR-merged but not

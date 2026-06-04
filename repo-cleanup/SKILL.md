@@ -1,6 +1,6 @@
 ---
 name: repo-cleanup
-version: 1.2.0
+version: 1.2.1
 description: |
   Branch hygiene and repo upkeep. Classifies all non-protected branches against the
   trunk(s) using layered signals (PR merge state, ancestry, gone-upstream, patch
@@ -256,10 +256,12 @@ message to the branch owner.
    be a fenced block containing the exact commands the user has to run because
    the skill is permission-blocked from running them** (e.g. `git branch -D`),
    under a heading like `### Your actions (Claude is blocked from these)`.
-   One command per line, each with its evidence comment, nothing after the
-   block. This keeps the human's TODO unmissable and cleanly separated from
-   what the skill already did. If nothing is blocked, end with
-   `No actions needed from you.` instead.
+   One command per line, nothing after the block. **NO trailing `#` comments
+   on the command lines** — interactive zsh has `interactive_comments` off by
+   default, so comment words get parsed as arguments, and glob chars in
+   comments (e.g. `2(F)`) abort the whole line with `no matches found`.
+   Put evidence in prose above the block or in the log file, never inline.
+   If nothing is blocked, end with `No actions needed from you.` instead.
 
 ---
 

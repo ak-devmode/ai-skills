@@ -300,7 +300,11 @@ Components, Data Flow, Key Decisions, External Integrations, Cross-Repo Position
 
 ## 10. Step 8 — Trio Sync via /cross-repo-init
 
-10.1 The trio is `CROSS-REPO.md`, `ARCHITECTURE.md`, and `CLAUDE.md`. Steps 6 and
+10.1 The trio is `CROSS-REPO.md`, `ARCHITECTURE.md`, and `CLAUDE.md`. If the
+repo's CROSS-REPO.md Traversal Config declares a `fleet-doc:` (kalpa-docs:
+`FLEET.md`), the trio is a **quartet** — include the fleet doc in the sync
+(freshness stamp + inventory drift; content refresh on infra-touching scopes is
+Step 6 §8.7's job). Steps 6 and
 7 above touched CLAUDE.md and ARCHITECTURE.md via grep + LLM doc-drift logic,
 but `CROSS-REPO.md` is not in their scope. This step fills that gap by invoking
 `/cross-repo-init`'s idempotent trio-sync procedure for the local repo.
@@ -342,8 +346,9 @@ have its own --dry-run flag; rather than partially honoring dry-run inside it,
 /closeout opts to skip the invocation entirely under --dry-run.
 
 10.8 Log to the summary's Step 8 line: `Trio sync: {N} edits proposed across
-{CROSS-REPO.md | ARCHITECTURE.md | CLAUDE.md}` or `Trio sync: no drift (idempotent
-no-op)` or `Trio sync: SKIPPED (--skip-trio-sync | --dry-run)`.
+{CROSS-REPO.md | ARCHITECTURE.md | CLAUDE.md | <declared fleet-doc>}` or `Trio
+sync: no drift (idempotent no-op)` or `Trio sync: SKIPPED (--skip-trio-sync |
+--dry-run)`. Where a fleet-doc is declared, say "Quartet sync" instead.
 
 ## 11. Step 9 — Coverage Map (Read-Only)
 

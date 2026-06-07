@@ -49,6 +49,13 @@ inline questions answered by number.
 `CLAUDE.md` (the trio). All three are scaffolded from templates in this skill's
 `templates/` directory.
 
+**Optional fourth member (quartet).** A repo may declare a canonical infra/fleet
+doc via a `fleet-doc:` line in CROSS-REPO.md's Traversal Config (e.g. kalpa-docs
+declares `fleet-doc: FLEET.md`). Where declared, the trio is a quartet: audit the
+fleet doc's `Last verified` stamp and inventory freshness alongside the other
+three. No template exists for it — never scaffold one; only audit what's declared.
+("Quartet" here is the doc set — not the PG/ES/Redis/RMQ stateful quartet.)
+
 - **If a file is absent:** scaffold from template, auto-detect what can be detected,
   present proposal to user, write on approval.
 - **If a file is present:** audit for drift, propose targeted additions / corrections,

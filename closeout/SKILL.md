@@ -264,6 +264,12 @@ the diff at the end.
 
 8.6 If `--dry-run`, log proposed edits to working memory and don't write.
 
+8.7 **Fleet/topology doc freshness.** If the scope touched cloud infrastructure
+(EC2 instances, security groups, ALB/target groups, SSM namespaces, DNS), add the
+project's canonical fleet doc (WellMed: `kalpa-docs/FLEET.md`) to the Pass 1 doc
+list even if the ledger's §7 omits it, refresh its inventory tables, and bump its
+`Last verified` stamp.
+
 ## 9. Step 7 — ARCHITECTURE.md Drift Validation
 
 9.1 If `ARCHITECTURE.md` doesn't exist in the repo root, log "no ARCHITECTURE.md

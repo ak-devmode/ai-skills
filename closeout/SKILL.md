@@ -264,6 +264,12 @@ the diff at the end.
 
 8.6 If `--dry-run`, log proposed edits to working memory and don't write.
 
+8.7 **Fleet/topology doc freshness.** If the scope touched cloud infrastructure
+(EC2 instances, security groups, ALB/target groups, SSM namespaces, DNS), add the
+project's canonical fleet doc (WellMed: `kalpa-docs/FLEET.md`) to the Pass 1 doc
+list even if the ledger's §7 omits it, refresh its inventory tables, and bump its
+`Last verified` stamp.
+
 ## 9. Step 7 — ARCHITECTURE.md Drift Validation
 
 9.1 If `ARCHITECTURE.md` doesn't exist in the repo root, log "no ARCHITECTURE.md
@@ -294,7 +300,11 @@ Components, Data Flow, Key Decisions, External Integrations, Cross-Repo Position
 
 ## 10. Step 8 — Trio Sync via /cross-repo-init
 
-10.1 The trio is `CROSS-REPO.md`, `ARCHITECTURE.md`, and `CLAUDE.md`. Steps 6 and
+10.1 The trio is `CROSS-REPO.md`, `ARCHITECTURE.md`, and `CLAUDE.md`. If the
+repo's CROSS-REPO.md Traversal Config declares a `fleet-doc:` (kalpa-docs:
+`FLEET.md`), the trio is a **quartet** — include the fleet doc in the sync
+(freshness stamp + inventory drift; content refresh on infra-touching scopes is
+Step 6 §8.7's job). Steps 6 and
 7 above touched CLAUDE.md and ARCHITECTURE.md via grep + LLM doc-drift logic,
 but `CROSS-REPO.md` is not in their scope. This step fills that gap by invoking
 `/cross-repo-init`'s idempotent trio-sync procedure for the local repo.
@@ -336,8 +346,9 @@ have its own --dry-run flag; rather than partially honoring dry-run inside it,
 /closeout opts to skip the invocation entirely under --dry-run.
 
 10.8 Log to the summary's Step 8 line: `Trio sync: {N} edits proposed across
-{CROSS-REPO.md | ARCHITECTURE.md | CLAUDE.md}` or `Trio sync: no drift (idempotent
-no-op)` or `Trio sync: SKIPPED (--skip-trio-sync | --dry-run)`.
+{CROSS-REPO.md | ARCHITECTURE.md | CLAUDE.md | <declared fleet-doc>}` or `Trio
+sync: no drift (idempotent no-op)` or `Trio sync: SKIPPED (--skip-trio-sync |
+--dry-run)`. Where a fleet-doc is declared, say "Quartet sync" instead.
 
 ## 11. Step 9 — Coverage Map (Read-Only)
 

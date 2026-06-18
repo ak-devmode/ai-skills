@@ -167,6 +167,11 @@ Assign the next whole number for the scope. Use sub-numbers for child plans:
 - Plan `39.1`
 - Plan `39.2`
 
+**Program members (ADR-029):** if the scope is a member of an existing Program
+(`plans/{program}/brief.md`), still create a flat top-level `{N}-{slug}/` scope +
+PLANS-INDEX row — never nest it in the program folder. Then point the `brief.md`
+member row at `{N}-{slug}` and retire the `C{n}`/`M{n}` placeholder.
+
 ## 11. Handoff
 
 After writing files, report only:

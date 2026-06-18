@@ -486,6 +486,28 @@ The scope folder path is: `{plans_dir}/{N}-{slug}/` (e.g.
 `~/Projects/pmg/pmg-docs/plans/32-pmg-testsuite/`). Archive folder name uses
 the same convention: `{plans_dir}/archive/{N}-{slug}/`.
 
+### 5.2.1 Program-member scopes (ADR-029)
+
+If the work being scoped is a **member of an existing Program** (a
+`plans/{program-slug}/` folder with a `brief.md` member list — e.g.
+`catalog-program`, `consultation-mcu-program`), it still gets a normal **flat,
+top-level** `{plans_dir}/{N}-{slug}/` folder and a normal PLANS-INDEX row
+(Step 5.8). **Member scopes never live inside the program folder** — the
+`C{n}`/`M{n}` folders there are placeholders (`NOT-YET-SCOPED.md`), not scopes.
+
+Detect a program member when: the user names a program or one of its `C{n}`/`M{n}`
+members, or the task maps to a member row in some `plans/*/brief.md`.
+
+After the scope files exist, complete the graduation (ADR-029 §2.3.2):
+- Update the program `brief.md` member row to point at `{N}-{slug}` and mark it
+  scoped (was "not yet scoped").
+- Retire the placeholder: rewrite its `C{n}-{slug}/NOT-YET-SCOPED.md` to a one-line
+  pointer at `{N}-{slug}` (or remove the placeholder folder — `brief.md` now carries
+  the member→scope mapping).
+
+This keeps every scope flat-numbered and visible to a `plans/*` scan and to
+PLANS-INDEX, while the program `brief.md` stays the members registry.
+
 ### 5.3 File references
 
 Because the scope folder lives outside the source repo, **all file references in

@@ -9,6 +9,7 @@ Custom Claude Code skills for the PMG/Kalpa team. Includes our own skills plus a
 | Skill | Description |
 |-------|-------------|
 | `/scope` | Task scoping and multi-skill orchestration |
+| `/scope-review` | Review a team scope/PRD/plan at the right altitude, in Alex's voice |
 | `/plan` | Single-session execution from a plan file |
 | `/prd` | Product Requirements Document generator |
 | `/markdown-style` | Structured markdown document creation |

@@ -17,7 +17,6 @@ allowed-tools:
   - Grep
   - Write
   - Edit
-  - AskUserQuestion
 ---
 
 # /prd — Product Requirements Document
@@ -27,6 +26,29 @@ the business need deeply, challenge assumptions, evaluate alternative approaches
 produce a structured PRD that a technical team (or /scope) can act on.
 
 A PRD answers **what** and **why**. It does NOT answer **how** — that's /scope's job.
+
+---
+
+## Interaction Model — how to ask
+
+**NEVER use `AskUserQuestion`.** Every question round is asked in the chat as a single
+**numbered, unbounded list** the user answers free-form or skips. This mirrors /plan's
+halt-and-ask convention (SKILL.md §7.5: "NEVER use AskUserQuestion — numbered inline
+options only").
+
+- **One flat numbered list, no cap.** No 4-question widget limit and no multiple-choice
+  boxes — a plain numbered list. Include every question a wrong assumption on would
+  produce the wrong requirements.
+- **Open-ended + free-form.** Questions are not multiple choice. The user answers any
+  subset by number and skips the rest; you follow up on the unanswered ones next round.
+- **Recommend, don't just interrogate.** Where you have a view, state a **lean /
+  recommendation** with the one-line tradeoff so the user can confirm with a word or
+  override. Be a thought partner.
+- **Skippable by design.** Every question must be safe to skip. A skipped question
+  becomes an Open Question (§7) in the PRD — never a blocker.
+- **Structure first.** Lead with a short synthesis of what you already know (from context
+  + prior answers), then the list. Don't open cold with questions.
+- **Loop.** Keep rounds going until the open set is resolved or the user says "write it."
 
 ---
 
@@ -65,8 +87,8 @@ After running the above, synthesize:
 
 ## Step 1 — Round 1: Problem Understanding
 
-Generate 5–8 questions focused on the **business problem**, not the solution.
-Fire them all in a single `AskUserQuestion` call.
+Generate the business-problem questions that matter (not the solution) and present them
+per the **Interaction Model** above — one numbered, unbounded, skippable list. No cap.
 
 **Rules for Round 1:**
 - Do NOT ask about technical implementation — that's /scope's job
@@ -95,7 +117,7 @@ After processing Round 1 answers, evaluate alternatives before committing to a
 direction. This is the most valuable part of the PRD process — it prevents building
 the wrong thing.
 
-Generate 3–5 questions that explore alternative approaches:
+Generate the questions that explore alternative approaches (no hard cap):
 
 **Example questions (generate dynamically):**
 - "Have you considered [alternative A]? It would [tradeoff]."
@@ -108,7 +130,7 @@ Generate 3–5 questions that explore alternative approaches:
 For each alternative surfaced, briefly state the tradeoff (pro/con) so the user
 can make an informed decision.
 
-Fire Round 2 as a single `AskUserQuestion` batch.
+Present Round 2 per the **Interaction Model** (one numbered, skippable list).
 If Round 1 already resolved the direction clearly (small, obvious need), skip Round 2.
 
 ---
@@ -293,6 +315,9 @@ Do NOT re-print the entire PRD. Just the handoff summary above.
   are clearly inferior, documenting why prevents re-litigation later.
 - **Challenge the problem.** Don't take the first statement of the problem at face
   value. Ask "is this the real problem?" at least once in Round 1.
+- **Never `AskUserQuestion`.** Every question round is a numbered, unbounded, free-form,
+  skippable inline list (see **Interaction Model**), each item carrying a recommendation
+  where you have one. Skipped questions become Open Questions (§7), never blockers.
 - **No gstack branding in output files.** PRDs look like your own docs.
 - **Central, not local.** PRDs go in the plans directory, not in the source repo.
 - **Workspace-relative paths.** All file references relative to workspace root.

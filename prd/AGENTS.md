@@ -24,7 +24,7 @@ If the project is unknown, ask where the PRD should live.
 
 ## 3. Problem Understanding
 
-Ask 5-8 business-focused questions in one batch. Do not ask implementation questions.
+Ask the business-focused questions that matter as one numbered, unbounded list the user answers free-form or skips. **Never use AskUserQuestion** — numbered inline only (mirrors /plan SKILL.md §7.5). No cap. Do not ask implementation questions.
 
 Cover:
 
@@ -41,7 +41,7 @@ Challenge the first statement of the problem. Ask whether it is the real problem
 
 ## 4. Alternatives
 
-Before writing requirements, evaluate alternatives. Ask 3-5 questions that test other ways to solve the problem.
+Before writing requirements, evaluate alternatives. Ask the questions that test other ways to solve the problem as one numbered, skippable list (no cap; never AskUserQuestion), with a recommendation per item where you have one.
 
 Consider:
 
@@ -181,6 +181,7 @@ Do not paste the whole PRD into chat.
 ## 9. Behavior Rules
 
 - Stay business-first, not tech-first.
+- Never use AskUserQuestion. Ask in numbered, unbounded, free-form, skippable inline lists; give a recommendation per question where you have one. Skipped questions become Open Questions, not blockers.
 - Requirements must be testable.
 - Alternatives are mandatory.
 - Numbered headings are mandatory.

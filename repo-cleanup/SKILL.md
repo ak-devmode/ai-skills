@@ -1,6 +1,6 @@
 ---
 name: repo-cleanup
-version: 1.2.1
+version: 1.3.0
 description: |
   Branch hygiene and repo upkeep. Classifies all non-protected branches against the
   trunk(s) using layered signals (PR merge state, ancestry, gone-upstream, patch
@@ -10,14 +10,21 @@ description: |
   table, a durable log with recovery SHAs, and an open-questions list.
   Default scope is the current repo. `--all <owner>` sweeps every repo in a GitHub
   org/user (see /repo-cleanup-all for the no-flags alias).
+  In a **docs/plans repo** (one containing `plans/PLANS-INDEX.md`) it ALSO runs a
+  plans-hygiene pass (§6): classify each active scope by completion, archive only
+  the provably-complete ones (program members into their program's `archive/`),
+  extract leftover TODOs, and fix PLANS-INDEX active/archived drift.
   Use when asked to "clean up branches", "prune branches", "repo cleanup",
-  "branch hygiene", "which branches can I delete", or "what's still in flight".
+  "branch hygiene", "which branches can I delete", "what's still in flight", or —
+  in a docs repo — "archive completed scopes", "clean up the plans", "which
+  scopes can I archive".
 allowed-tools:
   - Bash
   - Read
   - Glob
   - Grep
   - Write
+  - Edit
   - AskUserQuestion
 ---
 
@@ -111,6 +118,12 @@ run the same day).
   matching `origin` URL:
   - clone found → full classification + local prune flow
   - no clone → remote-only analysis via `gh` API; report-only row, no deletions
+- **Docs-plans hygiene** (auto, additive): when the target repo contains
+  `plans/PLANS-INDEX.md` (detected in Step 0), run §6 **in addition to** branch
+  hygiene — it never replaces it. If the user's request is *only* about plans
+  ("archive completed scopes", "clean up the plans"), you may run §6 alone and
+  skip the branch flow. Both share the same discipline: one read-only
+  classification pass → one confirmation gate → act → durable log.
 
 ---
 
@@ -128,7 +141,13 @@ run the same day).
 4. Detect trunk: `git symbolic-ref refs/remotes/origin/HEAD` (run
    `git remote set-head origin --auto` if unset).
 5. Verify the working tree is clean enough to proceed (a dirty tree is fine — we
-   never checkout — but note it in the report).
+   never checkout — but note it in the report). **Record the pre-existing dirty
+   set** (`git status --porcelain` at start): any file already modified before this
+   run is NOT ours — §6 must exclude it from any commit (a concurrent agent may be
+   editing a scope in another context; see §6.5).
+6. **Docs-plans repo detection:** if `plans/PLANS-INDEX.md` exists in the repo,
+   set a flag to run §6 (Docs-plans hygiene) after the branch flow (or alone, per
+   §2). If absent, skip §6 entirely.
 
 ### Step 1 — Trunk reference gate
 
@@ -284,3 +303,123 @@ a future clone, or the GitHub UI's branches page.
   `gh pr list --state all --limit 200` per repo over per-branch calls.
 - Detached HEAD or mid-rebase/merge state: halt classification for that repo,
   report it, continue the sweep.
+
+---
+
+## 6. Docs-plans hygiene (conditional — runs when `plans/PLANS-INDEX.md` exists)
+
+This phase does for **plan/scope docs** what §3 does for branches: classify every
+active item by completion with evidence, archive only what is provably done, hand
+the leftovers somewhere durable, and leave an audit trail. Runs additively after
+branch hygiene, or alone if the request is plans-only (§2).
+
+**Prime directives (docs):**
+
+1. **Never archive on a guess.** Only move a scope whose completion is *evidenced*
+   (D1). "Old" and "sitting in `plans/`" are NOT completion. Draft, parked,
+   shelved, and in-progress scopes stay put.
+2. **Never lose a leftover.** Every open TODO / deferred note in an archived scope
+   is extracted to `TO-DO.md` first (D3) — or the scope is not archived.
+3. **One classification pass, one confirmation gate, then act** (as §3).
+4. **Only commit your own edits.** Stage by explicit path; exclude any file in the
+   Step-0 pre-existing dirty set — a concurrent context may own it. Report excluded.
+
+### D0 — Inventory the plans tree
+
+Under `{repo}/plans/` (skip `archive/`), list and classify:
+- **Scope folders** `<N>-<slug>/` — have a `progress.md` or `<N>-<slug>-PROGRESS.md`.
+- **Standalone plans** `<N>-<slug>-PLAN.md` / `<slug>-PLAN.md`.
+- **Program folders** `<slug>-program/` — have a `<slug>-brief.md`; they own their
+  OWN `archive/`, and their live members are flat `<N>-<slug>/` folders elsewhere.
+- **Loose `.md`** — classify by content (D0.1); do NOT assume every loose file is a plan.
+
+D0.1 **Loose-file taxonomy** (mis-archiving a reference doc is a bug):
+- **Plan** (`*-PLAN.md`) → archive candidate.
+- **Reference / vision doc** (describes a *system*, not a unit of work; no PLAN
+  suffix; e.g. `manifest-complete-flow.md`) → **NEVER archive**; living reference.
+- **Operational queue / log** (a generated run-list, e.g. a bulk-send queue) →
+  archivable once its run is consumed.
+- **Registry** (`PLANS-INDEX.md`, `TO-DO.md`) → never archived; these get edited.
+
+### D1 — Read the authoritative status
+
+For each active-tree item, gather completion signals, priority order:
+
+| # | signal | where | reading |
+|---|--------|-------|---------|
+| 1 | PLANS-INDEX status/desc | the item's row | "Done (date)"/"Shipped"/"Live in prod" = strong done; "Draft"/"Ready"/"Active"/"PARKED"/"SHELVED"/"HOLD" = NOT done |
+| 2 | progress phase checkboxes | `progress.md` OR `<N>-<slug>-PROGRESS.md` — **glob BOTH, naming is non-uniform** | all phases done = done; any Draft/Pending/⏳ = not |
+| 3 | closeout-prep status | `closeout-prep.md` if present | **WEAK** — `Status: in-progress` is common even on shipped scopes; presence ≠ done |
+| + | leftover scan | unchecked `[ ]`, "deferred/remaining/gated/parked" notes | must be captured (D3) before archiving |
+
+Signals 1+2 are authoritative; 3 is a tiebreaker only.
+
+### D2 — Classify
+
+| verdict | criteria | action |
+|---------|----------|--------|
+| ARCHIVE | signals 1+2 agree done/shipped/live AND leftovers are capturable | D3 → D4 |
+| KEEP_ACTIVE | any phase draft/ready/in-progress/not-started | leave; report status |
+| PARKED | explicit PARKED / HOLD / SHELVED | leave; report — **never archive** |
+| GATED | shipped but a cleanup / observation-window / operator-cutover step still pending | Open Questions — confirm before archiving |
+| UNCLEAR | signals conflict, or a standalone plan with no completion record | Open Questions — ask, never guess |
+
+Render one verdict table `| item | type | verdict | evidence |`. Every verdict must
+be explainable from its evidence column — no bare verdicts (mirror §3.3).
+
+### D3 — Extract leftovers to TO-DO.md (before any move)
+
+For each ARCHIVE item:
+- Scan its progress/plan for open `[ ]` + deferred/parked notes.
+- **Check whether `TO-DO.md` ALREADY has a `## … (Scope N / Plan N)` section** —
+  extraction is often incremental. If so, verify coverage; do NOT duplicate.
+- Else append `## {Title} (Scope N) — follow-ups` + the open items + a `Source:` line.
+- Distinguish **scope-end deliverables that live in THIS repo** (e.g. an ADR the
+  scope deferred to `adrs/`) — offer to complete those before archiving, rather
+  than parking them; code-repo deliverables stay as TODOs.
+
+### D4 — Archive to the RIGHT location + update the index
+
+1. **git mv to the correct archive:**
+   - **Standalone scope / plan** → `plans/archive/<N>-<slug>/` (keep the numeric
+     prefix on newer scopes; retain the original name).
+   - **Program member** (the scope is listed in some
+     `plans/<slug>-program/<slug>-brief.md`) → `plans/<slug>-program/archive/<N>-<slug>/`,
+     **NOT** the repo-wide archive (ADR-002 §2.3.4 / ADR-029 — mirrors /scope §7.1
+     + /closeout). Also flip that member's row in `<slug>-brief.md` to **Archived**
+     + the new path.
+   - Use `git mv` (history preserved as a rename).
+2. **Fix stale `Source:` pointers** in `TO-DO.md`: any line pointing at the pre-move
+   path → repoint to the new `archive/…` path (a moved scope leaves danglers).
+3. **PLANS-INDEX.md:** move the item's row(s) (scope + all child phase rows) from
+   the "Active / In Progress" table to "Archived (Complete)". The Archived table has
+   **fewer columns** (no Status/Project) — strip them, fold the outcome ("Done
+   {date}") into the Description, set Location to the `archive/…` path.
+4. **Index-hygiene sub-check:** scan the Active table for rows whose Location is
+   ALREADY `archive/…` (done + physically archived but stranded in Active) → move
+   those to the Archived table too. Then verify: no duplicate row IDs, no empty
+   rows, Active holds only genuinely-live items.
+
+### D5 — Confirmation gate, act, log
+
+1. Present in ONE gate: the D2 verdict table + proposed moves + leftover
+   extractions + the Open-Questions list (GATED/UNCLEAR). Use **numbered inline
+   questions**, not AskUserQuestion, for the docs pass. Nothing moves until the user
+   picks the archive set.
+2. On approval, do D3→D4 for the confirmed set.
+3. **Commit only your own edits.** `git add` the specific paths you changed + the
+   renames — NEVER `git add -A` / `commit -a`. Exclude every path in the Step-0
+   pre-existing dirty set and report them ("left uncommitted — modified by another
+   context"). Verify the branch first (docs repos like `pmg-docs` commit direct to
+   `main` — confirm the repo's convention) and **ask before committing** (respect
+   commit-gating).
+4. Log to the §1.4 destination (same file as branch hygiene): verdict table,
+   what was archived + where, leftovers extracted, index-hygiene fixes, Open Questions.
+
+### D6 — This phase must NEVER
+
+- Archive a PARKED / SHELVED / HOLD / in-progress / not-started scope.
+- Archive a reference/vision doc (D0.1) or a registry file.
+- Archive a program member into the repo-wide `archive/` (goes to the program's own).
+- Duplicate a `TO-DO.md` section that already exists.
+- Commit a file it did not itself edit (the concurrent-context exclusion).

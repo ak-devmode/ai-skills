@@ -514,6 +514,12 @@ After the scope files exist, complete the graduation (ADR-029 §2.3.2):
 This keeps every scope flat-numbered and visible to a `plans/*` scan and to
 PLANS-INDEX, while the program `{slug}-brief.md` stays the members registry.
 
+On completion the member does **not** archive to the repo-wide `archive/` — Step 7
+(and `/closeout`) moves it into the **program's own** `{program-slug}/archive/`.
+Full member lifecycle: **stub** (placeholder in the program folder) → **live**
+(flat `{N}-{slug}/`, PLANS-INDEX-visible) → **archived** (`{program-slug}/archive/`).
+See Step 7.1.
+
 ### 5.3 File references
 
 Because the scope folder lives outside the source repo, **all file references in
@@ -808,12 +814,28 @@ to `{scope-folder}/artifacts/` so the scope folder stays self-contained.
 When the user indicates the task is complete (all YES skills done, or user says
 "archive this"), or when you detect all skill checklist items are done:
 
-7.1 Move the scope folder to `{plans_dir}/archive/{N}-{slug}/`.
+7.1 **Determine the archive location:**
+- **Standalone scope** (not a program member): move the scope folder to
+  `{plans_dir}/archive/{N}-{slug}/` (the repo-wide archive).
+- **Program-member scope** (§5.2.1 — a member of a `plans/{program-slug}/`
+  program whose `{slug}-brief.md` lists this `{N}-{slug}`): move it into the
+  **program's own archive instead** — `{plans_dir}/{program-slug}/archive/{N}-{slug}/`
+  — NOT the repo-wide `archive/`. This is the final leg of the program-member
+  lifecycle **stub → live (flat `{N}-{slug}/`) → archived (in the program's
+  `archive/`)** (ADR-029 §2.3.4; PMG port ADR-002 §2.3.4). Detect membership by
+  scanning `{plans_dir}/*-program/*-brief.md` for a member row that names this
+  scope.
 
-7.2 Update `PLANS-INDEX.md`: change the status from `Active` to `Done ({date})`
-for the scope row and all its child plan rows.
+7.2 Update `PLANS-INDEX.md`: change the scope row and all its child plan rows from
+`Active` to `Done ({date})`, and repoint their `Folder/File` column to the actual
+path used in 7.1 (`archive/{N}-{slug}/` or `{program-slug}/archive/{N}-{slug}/`).
 
-7.3 Confirm to the user what was archived and where.
+7.3 **Program members only:** update the program `{slug}-brief.md` — flip this
+member's row to **Archived** and point it at the new
+`{program-slug}/archive/{N}-{slug}/` path. The brief stays the members registry
+across the whole lifecycle.
+
+7.4 Confirm to the user what was archived and where.
 
 ---
 

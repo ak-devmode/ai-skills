@@ -417,7 +417,10 @@ Completion & Archive) and follow that procedure verbatim:
 
 13.3 If the scope is at the scope level (not a single plan), invoke /scope §7
 archive procedure additionally — when ALL plans in a scope are complete, archive
-the scope folder itself.
+the scope folder itself. /scope §7.1 routes the destination: standalone scopes →
+repo-wide `archive/`; **program-member scopes → the program's own
+`{program-slug}/archive/` + a `{slug}-brief.md` member-row update** (ADR-002
+§2.3.4 / ADR-029). Inherited automatically — do not re-implement here.
 
 13.4 If `--dry-run`, log "would archive scope folder to `{archive-path}`" and
 don't move files.

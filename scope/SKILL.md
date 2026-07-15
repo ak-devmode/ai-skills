@@ -399,6 +399,8 @@ frontends and all skills are potentially applicable.
 | No user-visible change | `/document-release` → mark OPTIONAL |
 | Small single-session task | `/retro` → mark OPTIONAL |
 
+**Table Identity Map (Step 4.5) is likewise conditional:** mark it N/A with a one-line reason when the scope has **no DB table write/DDL surface**; run it when the scope creates, alters, re-owns, or adds a write path to a table.
+
 **Mandatory skills:**
 - `/plan-ceo-review` is **always YES**. It catches "why are we doing it this way at all?"
   reframes that save entire phases of wasted work. Run it first, before eng review.
@@ -450,6 +452,54 @@ Skills are grouped by workflow phase. Mark each YES, OPTIONAL, or N/A with reaso
 | 18 | /retro | ? | End of sprint | Retrospective |
 
 ---
+
+## Step 4.5 — Table Identity Map (when the scope writes to / alters DB tables)
+
+**Trigger — skip with an N/A reason otherwise.** Run this step only when the scope
+**creates or alters a table, changes a table's write-owner, or adds a write path to
+an existing table.** Signals: migration files, `AutoMigrate`/raw DDL, ORM model
+changes, schema-registry edits, a new write repository/method. A scope with **no DB
+write/DDL surface** marks this N/A (Step 4). This is a database-table discipline, not
+a general contract step — proto/API cascades are Step 0.6.
+
+**Why.** Write-ownership and column-shape are where drift and premise errors live (the
+scope-48 retro: reviewers can't catch errors about structure they can't see). Forcing
+the *current* structure onto the page, cited, before proposing changes is what stops a
+plan from silently inventing, dropping, renaming, or re-owning a table.
+
+**Produce two things:**
+
+1. **A canonical table-identity reference** — one row per table the scope touches,
+   grounded in **primary source, cited `repo/path:line`** (never inferred from docs):
+
+   | Table | Write-owner (MS) | Physical schema | Key columns | Read-by | Source cite |
+   |---|---|---|---|---|---|
+
+   For a small surface (1–3 tables) this lives inline in scope.md. For a large or
+   multi-repo surface, emit `artifacts/schema-reference.md` and reference it from
+   scope.md — one shape source, so the scope body and plan stubs can't drift. Size it
+   to the surface; do not pad.
+
+2. **A deviation ledger** — every change to the write/DDL surface, each with the cited
+   current-state it departs from:
+
+   | Table | Deviation (create / drop / rename / re-own / change-shape) | From (current, cited) | To (target) | Rationale |
+   |---|---|---|---|---|
+
+**The rule — deny-by-default on deviation.** The default is **match the existing
+structure**. Every deviation-ledger row is an **explicit decision requiring user
+approval** before it enters plan stubs (Step 5.9). /scope surfaces the ledger at
+handoff (Step 6); unapproved deviations are **not** baked into phase tasks. A table the
+scope only **reads** is pinned as a dependency (owner + consumed shape), **not** gated —
+you can't deviate what you don't own. The target shape may be go-forward (per an ADR /
+design doc); this gate makes each go-forward deviation an approved decision, it does not
+forbid it.
+
+**Ownership-guard tie-in (WellMed).** "Which MS write-owns each table" is the ADR-028
+one-owner-per-table question. Cross-check each written table against
+`wellmed-backbone/internal/db/migration/adr028_ownership.go`; a deviation that crosses an
+owner boundary is an ADR-028 amendment — flag it in ADR Alignment (§5.4) and treat its
+approval as a gate-A decision.
 
 ## Step 5 — Determine Plans Directory & Write Output Files
 
@@ -581,6 +631,12 @@ ADR amendment is in-scope for this work.
 
 ## What Already Exists
 {Existing code/infra/patterns this builds on. Workspace-relative paths.}
+
+## Table Identity Map
+{Required if Step 4.5 ran (scope writes to / alters DB tables): the cited
+ table-identity reference (inline for a small surface, or a one-line pointer to
+ artifacts/schema-reference.md for a large one) + the deviation ledger. Omit with
+ "No DB write/DDL surface — Step 4.5 N/A" otherwise.}
 
 ## NOT in Scope
 {Explicit exclusions to prevent scope creep. If Step 0.6 detected a contract
@@ -762,6 +818,12 @@ The **Gate** field is required on every phase-boundary CHECKPOINT. /plan reads i
 decide whether to suggest `/clear` (A/D/E — a natural pause) or continue without
 prompting (B/C). The final phase of a scope uses the gate that best describes its
 exit (often E for a cutover, or C if it just merges).
+
+**Table-write phases carry the identity map.** If a phase's tasks create/alter/re-own
+a table, its CHECKPOINT **Review** field must reference the Step 4.5 Table Identity Map
+and name the **approved** deviations landing in that phase — an unapproved deviation is
+not eligible to ship. A table-write phase that crosses an owner boundary is a gate-A
+(or E, if irreversible) checkpoint, never a roll-through B/C.
 
 **Sizing rule (token size is a within-phase concern, never a phasing trigger):** Do
 NOT split a phase because you estimate it exceeds a context window. A phase may span

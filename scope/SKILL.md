@@ -1,6 +1,6 @@
 ---
 name: scope
-version: 3.4.0
+version: 3.5.0
 description: |
   Task scoping, skill router, and progress tracker. Reads current context (git diff,
   branch, CLAUDE.md, open files), eliminates assumptions via two rounds of open-ended
@@ -661,6 +661,18 @@ See `/markdown-style` §10 (Progress Files) for full conventions: Resume Context
 ```markdown
 # Progress: {Task title}
 
+## Operating Contract (pinned — survives compaction; re-read on every resume)
+{Ground rules agreed with the user at scope/plan kickoff — execution posture
+(deliberate vs fast), mismatch handling (STOP vs proceed), regrounding rules,
+ADR-edit boundaries, check-in cadence, context posture. Number them. If none
+were stated, seed with the defaults below and refine at /plan kickoff:}
+1. Scope↔code mismatch = STOP, investigate in-context, report before proceeding.
+2. Re-validate each phase's surface against live code before entering it; raise
+   gaps in batched blocks, not per-step.
+3. Wrap + commit + check in at every phase boundary; progress updates land more
+   frequently than boundaries (compaction defense). This file alone must be
+   sufficient for a cold context to resume.
+
 ## Resume Context
 **Scope:** {plans_dir}/{N}-{slug}/scope.md
 **Last action:** Scope created ({today's date})
@@ -1020,7 +1032,9 @@ URL to change, etc.), add it to the Human Steps table in progress.md with status
 When a user asks to resume work on a scope (or you detect an active scope folder
 relevant to the current task):
 
-1. Read `progress.md` — the Resume Context block tells you where things stand
+1. Read `progress.md` — the pinned **Operating Contract** block first (the
+   ground rules survive compaction and bind every session), then the Resume
+   Context block for where things stand
 2. Read `scope.md` — the plan and skill checklist tell you what's next
 3. Summarize current state to the user before proceeding
 4. Continue from where the Resume Context says to pick up

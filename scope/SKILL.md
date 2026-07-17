@@ -1,6 +1,6 @@
 ---
 name: scope
-version: 3.3.0
+version: 3.4.0
 description: |
   Task scoping, skill router, and progress tracker. Reads current context (git diff,
   branch, CLAUDE.md, open files), eliminates assumptions via two rounds of open-ended
@@ -955,7 +955,11 @@ Ready to start? I'll clear context and begin:
 (Y to clear context and continue / N to stop here)
 ```
 
-8.4.3 If the user says yes, tell them to run `/clear` then provide the exact
+8.4.3 If the user says yes, first run the `/ready-to-clear` validation (mandatory
+— see that skill): spawn the fresh validator subagent with paths + claim "scope
+{N} fully complete and archived". On `NOT READY`, perform the listed fixes and
+re-validate (max 3 cycles, then surface failures inline and do NOT tell the user
+to clear). Only on `READY`, tell them to run `/clear` then provide the exact
 prompt to paste:
 
 ```

@@ -1,6 +1,6 @@
 ---
 name: closeout
-version: 1.0.0
+version: 1.1.0
 description: |
   Local repo self-heal after a /plan run. Consumes closeout-prep.md and leaves the
   repo healthier than /plan found it: re-runs tests, spot-checks pattern references,
@@ -479,6 +479,15 @@ Next:
 
 14.2 If any step had a failure (e.g., tests failing), make the failure prominent
 in the header. Don't bury it.
+
+14.3 **Clear-readiness note.** /closeout intentionally leaves an uncommitted
+working tree (§17.2) — that dirty state is a **declared exception**, not
+clear-ready state. If the user (or a calling skill) wants to `/clear` after
+closeout, run the `/ready-to-clear` validation first; it will enumerate the
+closeout-produced edits as declared exceptions and verify everything else
+(progress truth, archive integrity, cold-resume reconstruction). Never present
+"closeout complete" as implying "safe to clear" — the user's commit is still
+pending, and the validator's verdict quotes exactly what remains.
 
 14.3 If `--dry-run`, header changes to "🔍 /closeout dry-run complete — no files
 written" and the "Edits in working tree" section becomes "Edits that WOULD be applied"

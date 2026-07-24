@@ -270,6 +270,30 @@ project's canonical fleet doc (WellMed: `kalpa-docs/FLEET.md`) to the Pass 1 doc
 list even if the ledger's §7 omits it, refresh its inventory tables, and bump its
 `Last verified` stamp.
 
+8.8 **API-surface delta (gated on an `api/` dictionary).** Fires only when the
+workspace has an `api/` dictionary (marker: `api/README.md` with the generated+annotated
+convention header) AND this scope touched an FE-facing route or payload shape (scan
+closeout-prep §2 Files Changed + §5 Cross-Repo Touchpoints for gateway route files,
+backbone RPC/DTO changes, or infra adapter DTO changes). Else skip with a one-line note.
+Presence-activated + generic (any repo that adopts an `api/` dict opts in).
+
+This is the **semantic** freshness layer — the mechanical layer (routes/schema
+regenerated, pins current) is CI's job via the generators + staleness check. Here:
+
+1. **Regenerate the generated regions** — re-run the dict's generators (WellMed:
+   `apidoc-routes` in the gateway repo, `apidoc-schema` in the infra repo) and update the
+   `<!-- gen:routes -->` / `<!-- gen:payload:<DTO> -->` regions of the affected
+   `api/<domain>.md`. Never hand-edit inside the markers.
+2. **Refresh hand annotations OUTSIDE the markers** for anything the schema can't express
+   that this scope changed: a new tag divergence, a "send Y not X" gotcha, a canonical-DTO
+   change, a new known-gap.
+3. **New route with no dict entry?** Add its `api/<domain>.md` (route region + payload per
+   its contract-source category) + a route→DTO registry row.
+4. **Category shift?** If a route moved contract categories (e.g. passthrough → typed
+   proto), update its registry row and note it.
+5. Record the api/ delta in the Step 12 summary. (An FE-facing change that shipped without
+   a dict update is exactly the drift the staleness check would later flag — cheaper here.)
+
 ## 9. Step 7 — ARCHITECTURE.md Drift Validation
 
 9.1 If `ARCHITECTURE.md` doesn't exist in the repo root, log "no ARCHITECTURE.md

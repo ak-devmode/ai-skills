@@ -299,6 +299,43 @@ alignment block" in synthesis.
 
 ---
 
+## Step 0.8 — API-Surface / Endpoint Map (gated on an `api/` dictionary)
+
+Fires **only** when the workspace has an API dictionary — marker: an `api/README.md`
+whose header declares the generated+annotated convention (e.g. WellMed
+`kalpa-docs/api/`). If absent, skip and note in synthesis: "No `api/` dictionary —
+endpoint-map step N/A." Presence-activated and generic: any repo that adopts an `api/`
+dict opts in for free.
+
+**Why.** This stops scopes from shipping "3/4-baked" — application logic without the
+FE-facing gateway endpoint wired. Leaving the endpoint for later forces someone to
+re-interpret the scope's intent at the integration layer, which diverges from the plan
+and creates bug surface. The mapping belongs at scope time, not after.
+
+**Produce `artifacts/endpoint-map.md`** — for each unit of new or changed app logic the
+scope introduces, the gateway route that exposes it (**new or existing**) + its payload
+contract source, read from the dict's registry (don't re-derive the shape from Go):
+
+| Logic unit (service / handler / saga) | Gateway route (METHOD path) | New / Existing | Payload contract source | In this scope? |
+|---|---|---|---|---|
+
+Rules:
+- Every create/update/read the scope adds **must** map to a gateway route. A logic unit
+  with no route is a completeness gap — either pull the route into scope, or record why
+  the FE surface is deliberately deferred and to which follow-up.
+- Use the dict (`api/<domain>.md` + the route→DTO registry) to identify the route and
+  its contract category rather than re-deriving from source — this is the token/time
+  saver, and it's only safe because the dict is generated + staleness-checked.
+- This artifact feeds **`/plan-eng-review`** as the completeness gate: eng review checks
+  each mapped route is wired end-to-end, and that the big-data/payload tradeoffs
+  (pagination, filter surface, what's in the body) are decided **at the contract** — those
+  are completeness decisions wearing a technical costume.
+
+Tag the endpoint-map in scope.md (a `## Endpoint Map` section or a pointer to the
+artifact) so `/plan` and `/plan-eng-review` pick it up.
+
+---
+
 ## Step 1 — Round 1: Assumption Removal
 
 Ask 5–15 open-ended questions in a **single response** as a numbered list. The user answers by number. **Never use multiple-choice or pre-framed answer options** — open-ended only. The user prefers many specific questions over a few broad ones.

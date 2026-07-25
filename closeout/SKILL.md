@@ -46,19 +46,25 @@ absent (e.g., no §3 entries in the ledger), the step logs "skipped, no input" a
 moves on. The skill is **safe to re-run**: each step is idempotent on healthy state,
 so running /closeout twice on a healed repo produces no diff on the second pass.
 
+**Two steps are NOT conditional.** Step 11 (archive) always runs — it is what
+"closeout" means, and skipping it leaves the scope indistinguishable from active work
+(§13.0). Step 12 always runs the archive gate script before reporting anything
+(§14.0). A missing ledger degrades the run (§3.1a); it never cancels these two.
+
 ```
-  Step 1  Read closeout-prep.md, verify schema version
+  Step 1  Read closeout-prep.md → LEDGER-LESS MODE if absent (never halt)
   Step 2  Verify scope/plan branch is checked out
   Step 3  Run local test suite (--skip-tests bypasses, with loud flag)
   Step 4  §3 spot-check: do referenced patterns still exist at file:line?
   Step 5  §4 triage: surface "fold into <source>" recommendations
   Step 6  §7 doc drift edits (two-pass: grep-all + LLM-review CLAUDE/ARCH)
+            + §8.7a service-doc sweep when a contract was retired/renamed
   Step 7  ARCHITECTURE.md drift validation + edits
   Step 8  Trio sync via /cross-repo-init (CROSS-REPO.md + trio template drift; idempotent)
   Step 9  §10 coverage report (read-only — no auto-fix)
   Step 10 Memory writes for cross-cutting findings (auto-write, no prompt)
-  Step 11 Invoke /plan §12 archive logic (DO NOT duplicate)
-  Step 12 Summary: what changed, what's blocked, where to look
+  Step 11 Invoke /plan §12 archive logic (DO NOT duplicate)  <-- MANDATORY, §13.0
+  Step 12 verify-archive.sh gate, THEN summary                <-- gate first, §14.0
 ```
 
 All edits land in the working tree. **/closeout never commits.** The user reviews
@@ -84,9 +90,32 @@ If a flag is set, log it in §1 of the summary.
 3.1 Locate the ledger:
 - If invoked from a scope folder (parent has `scope.md`): `{scope-folder}/closeout-prep.md`
 - If invoked from a standalone plan folder: `{plan-folder}/closeout-prep.md`
-- If neither exists, halt with: "No closeout-prep.md found. /closeout requires a
-  populated ledger written by /plan. If /plan was run before the ledger feature
-  shipped, run `/review` instead to do an ad-hoc review."
+- If neither exists, **DO NOT halt — run in LEDGER-LESS MODE** (§3.1a). A missing
+  ledger must never leave the scope unarchived.
+
+3.1a **LEDGER-LESS MODE.** `/plan` does not always write a ledger — a fast,
+ops-heavy scope that lands several phases in one day can skip it entirely (observed:
+scope 99, 2026-07-23, four phases in a day, no ledger). The old behaviour halted at
+Step 1, which meant **Step 11 was never reached and the scope silently stayed
+active** — that is the bug this mode exists to prevent. When no ledger is found:
+
+1. Announce it plainly: "No `closeout-prep.md` — running ledger-less: doc-heal +
+   archive only. Ledger-driven steps will be skipped."
+2. **NEVER reconstruct or back-date a ledger.** It is an audit trail of what /plan
+   actually did; fabricating one after the fact forges that record. Absent is
+   absent — say so.
+3. Skip the ledger-driven steps as `NO LEDGER` (§3 spot-check, §4 triage, §10
+   coverage map, §11 risk flags). Log each as skipped-for-cause in the summary.
+4. **Still run, in full:** Step 2 (branch), Step 3 (tests), Step 6 (doc drift —
+   derive the doc list from `git diff` per §8.1 instead of ledger §7), Step 7
+   (ARCHITECTURE), Step 8 (trio sync), Step 10 (memory), and **Step 11 (archive) —
+   which is mandatory and never skipped, see §13.0**.
+5. Record the absence in the archived `progress.md` so the gap is visible later, and
+   note it in the scope's PLANS-INDEX row.
+
+A ledger-less run is a **degraded** closeout, not a failed one. Say "HEALED
+(ledger-less)" in the summary header — never plain "HEALED", which would overstate
+the coverage.
 
 3.2 Read the ledger header. Verify `**Schema version:**` is present. The canonical
 template (used for schema reference) lives at `~/Projects/ai-skills/templates/closeout-prep.md.template` — shared across `/plan`, `/closeout`, and `/closeout-extended`.
@@ -270,6 +299,32 @@ project's canonical fleet doc (WellMed: `kalpa-docs/FLEET.md`) to the Pass 1 doc
 list even if the ledger's §7 omits it, refresh its inventory tables, and bump its
 `Last verified` stamp.
 
+8.7a **Service-doc sweep for retired/renamed contracts (the docs-hub blind spot).**
+Fires whenever the scope **retired, renamed, or replaced a cross-MS contract** — a
+proto, RPC, service, table, saga, or env var. Repo trios (`CLAUDE.md` /
+`ARCHITECTURE.md` / `CROSS-REPO.md`) are not the only place a contract is described:
+the docs hub carries per-service narrative docs (WellMed: `kalpa-docs/services/*.md`)
+that **no repo-scoped pass ever looks at**.
+
+Procedure — for each retired/renamed symbol:
+
+1. `grep -rn "<symbol>" <docs-hub>/services/` plus the hub's `ARCHITECTURE.md`.
+2. For each hit, **verify against the repo on trunk before editing** — `ls` the
+   client dir, grep the symbol in `internal/`. Trust neither doc; the code decides.
+3. **Retire in place, don't delete:** strike the stale claim, state what actually
+   happens now, and keep a one-line note that it was retired and by which scope. A
+   silently-deleted section leaves the next reader with no explanation.
+4. Bump that doc's Edit Log with the correction and the verification you ran.
+
+> **Why this exists.** Scope 57 retired `CanonicalVisitService`. `/closeout-extended`
+> swept 14/14 repos green and even fixed the consultation *repo's* trio for this exact
+> error — while `kalpa-docs/services/consultation.md` still documented the service as
+> live in four places, including an entire §7 describing a client stub against a
+> service that never had a live Go impl. Found eight days later. A "N/N repos swept"
+> exit code is not evidence the service docs are right, because service docs are not
+> repos. A doc that confidently describes a retired contract is worse than a missing
+> one.
+
 8.8 **API-surface delta (gated on an `api/` dictionary).** Fires only when the
 workspace has an `api/` dictionary (marker: `api/README.md` with the generated+annotated
 convention header) AND this scope touched an FE-facing route or payload shape (scan
@@ -426,6 +481,28 @@ paths so the user can audit.
 
 ## 13. Step 11 — Archive Scope via /plan §12 Code Path
 
+13.0 **ARCHIVE IS THE POINT OF CLOSEOUT — IT IS MANDATORY.** Moving the scope into
+`archive/` is the act that signifies everything is done; it is the one step whose
+omission makes the whole run worthless, because the scope stays indistinguishable
+from active work. Rules:
+
+- **Never skip, defer, or "leave for the user."** If earlier steps found problems,
+  archive anyway and record the problems in the row + `progress.md`. A scope with
+  known residuals is still a completed scope — residuals live in `TO-DO.md`
+  (that is the standing convention: a scope closes on delivery).
+- **The only thing that blocks archival is unfinished plan work** — a plan still
+  `❌ FAILED` or `⏸️ WAITING_HUMAN` per /plan §12. Failing tests do NOT block it;
+  they downgrade the status text, per §5.4.
+- **Runs in LEDGER-LESS MODE too** (§3.1a). No ledger is not a reason to skip.
+- **Reaching Step 12 without having archived is a defect.** §14.0's gate catches it.
+
+Two real misses this rule exists to prevent (both 2026-07): scope 99 — /closeout
+halted at Step 1 on a missing ledger, so Step 11 never ran; scope 57 — the work was
+done via /closeout-extended, whose neighbor passes all skip Step 11, so no pass in
+the run owned archival. Both sat "active" in PLANS-INDEX for days after completion,
+and in both cases a stale index row meant later hygiene passes read them as live
+work and left them alone.
+
 13.1 **Do NOT duplicate /plan's archive logic.** Read /plan/SKILL.md §12 (Plan
 Completion & Archive) and follow that procedure verbatim:
 - §12.1 Extract deferred TODOs
@@ -455,7 +532,30 @@ into /plan §12 is exactly to avoid two skills having drifting implementations.
 
 ## 14. Step 12 — Summary
 
-14.1 Print a structured summary to the user:
+14.0 **RUN THE ARCHIVE GATE FIRST — before printing anything.** Prose cannot enforce
+itself: an agent can believe it archived and be wrong, or can have exited early and
+never reached Step 11. So assert the end state with a script, not with confidence:
+
+```bash
+~/.claude/skills/closeout/scripts/verify-archive.sh <plans-dir> <scope-number>
+```
+
+It checks that the live scope folder is gone from the plans root, that
+`archive/<N>-<slug>/` exists (or the program's `archive/` for a program member), that
+the PLANS-INDEX row reads done AND points into `archive/`, and that no
+`closeout-prep.md` is stranded outside `archive/`.
+
+- **Exit 0** — proceed to 14.1 and report complete.
+- **Exit 1** — **you are not done.** Do NOT print the success summary. Fix exactly
+  what it names (it prints the fix for each failure), then re-run it. Only report
+  complete once it passes.
+- **Exit 2** — bad arguments; resolve the plans dir and scope number and retry.
+
+Never report `/closeout complete` on a non-zero gate, and never paraphrase a failure
+as a warning. If the gate cannot pass — e.g. a plan is genuinely still
+`WAITING_HUMAN` so §13.0 forbids archiving — say so explicitly in the header:
+"NOT ARCHIVED — {reason}", and state what has to happen first. Under `--dry-run`,
+skip the gate and note "archive gate not run (dry-run)."
 
 ```
 ✅ /closeout complete — {repo-name}

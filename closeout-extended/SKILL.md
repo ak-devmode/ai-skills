@@ -48,8 +48,8 @@ inline questions.
 ## 1. How It Works
 
 ```
-  Step 1   Run /closeout's 12-step engine on the local repo
-            (includes /closeout Step 8 — trio sync via /cross-repo-init for local repo)
+  Step 1   Run /closeout's 12-step engine on the local repo  <-- DISTINCT PASS,
+            (includes Step 8 trio sync AND Step 11 archive)       RUNS FIRST, §1.1
   Step 2   Read CROSS-REPO.md; validate against current state
   Step 3   Build traversal list (Pattern Sources upward, Consumers outward, depth ≤ 2)
   Step 4   Filter cycle-detection-visited repos
@@ -62,9 +62,77 @@ inline questions.
                     - Trio sync (/closeout Step 8) runs in worktree — repairs
                       CROSS-REPO.md / ARCHITECTURE.md / CLAUDE.md for the neighbor
               5d  Update closeout-extended-progress.md after each neighbor
+  Step 5.9 DOCS-HUB TERMINAL STOP — always last, always visited (§1.2)
   Step 6   Aggregate cross-repo summary with worktree paths per neighbor
   Step 7   Print final report; surface CROSS-REPO drift; list deferred upward edits
+            + COMPLETION GATE: refuse "N/N complete" if Step 1 never archived (§1.3)
 ```
+
+### 1.1 Step 1 is a distinct pass and it runs FIRST — not "the anchor repo's turn"
+
+The local repo is **not** just the first entry in the traversal list. It is the only
+repo whose pass carries **Step 11 (archive)**, because the scope folder belongs to it,
+not to any neighbor (§7.3.2 skips archive for neighbors — correctly). So:
+
+- Run Step 1 as its own pass, to completion, **on the primary tree — not in an
+  ephemeral worktree** — before Step 2 begins traversal.
+- Mark the local repo visited only after Step 1 finishes. If it also appears in the
+  traversal list (it usually does, as the anchor), the traversal **skips** it —
+  do not re-process it through the neighbor path.
+- **A neighbor-path pass over the local repo does NOT satisfy Step 1.** Neighbor
+  passes are worktree-only, non-committing, and skip archive. Running the anchor
+  "as one of the N" leaves nobody holding archival.
+
+> **The failure this fixes.** Scope 57's sweep declared local repo = `wellmed-backbone`,
+> then processed backbone as one of 14 in `/tmp/closeout-fleet-backbone/`. Every pass
+> was a neighbor pass, so every pass skipped Step 11 — and the scope sat "active" in
+> PLANS-INDEX for a week after all three plans had merged. The run was *correct* at
+> what it did (14/14 trios healed) and still left the scope unclosed, because the
+> local-repo designation was nominal.
+
+**If the sweep is a fleet drift sweep rather than a scope closeout** (i.e. a scope is
+merely the *trigger*, as in scope 57's "basically every MS — it's time"), say so
+explicitly at the top of the progress file AND state which run owns the scope's
+archival. Then either run Step 1 properly here, or record "archive deferred to a
+separate `/closeout` for scope N" as an open item — never leave it implicit.
+
+### 1.2 Step 5.9 — the docs-hub terminal stop
+
+The **docs hub** (the repo holding `plans/` + per-service narrative docs; WellMed:
+`kalpa-docs`) is usually **not a trio neighbor** — it has no Go code, so it appears in
+CROSS-REPO graphs only as a "Documentation consumer" edge, or not at all. It is
+therefore never traversed, while being exactly where the scope folder, `PLANS-INDEX.md`,
+`TO-DO.md`, `services/*.md`, and the hub `ARCHITECTURE.md` live.
+
+Fix: after the neighbor loop and before aggregation, **always visit the docs hub**,
+regardless of whether the graph names it:
+
+1. Resolve it from the plans-dir convention (WellMed → `~/Projects/wellmed/kalpa-docs`,
+   PMG → `~/Projects/pmg/pmg-docs`).
+2. Run /closeout's **§8.7a service-doc sweep** for every contract the sweep found
+   retired or renamed in any repo — this is the pass that catches a `services/*.md`
+   describing a dead contract.
+3. Reconcile the hub `ARCHITECTURE.md` (WellMed: §11 built-vs-designed) against what
+   the sweep just confirmed is built.
+4. Work in the **primary tree**, not a worktree — this is where the archive and index
+   live, and they must not be stranded in `/tmp`.
+
+It is a *terminal* stop because it consumes findings from every prior repo — it cannot
+run until they have.
+
+### 1.3 Completion gate — "N/N repos swept" is not "closeout complete"
+
+Before printing the final report, assert both:
+
+- **Step 1 ran on the primary tree and archived**, via
+  `~/.claude/skills/closeout/scripts/verify-archive.sh <plans-dir> <scope-number>`
+  (skip only when the run is a declared fleet drift sweep per §1.1, in which case
+  print which run owns archival).
+- **Step 5.9 ran.**
+
+If either failed, the header must say **"repos swept, CLOSEOUT INCOMPLETE"** and name
+what is missing. Never let a green per-repo tally imply the scope is closed — that
+conflation is precisely how scope 57 read as finished while sitting unarchived.
 
 **Trio coverage:** because Step 1 invokes `/closeout` locally and Step 5c invokes
 `/closeout` per neighbor (each of which now includes `/cross-repo-init` as its
@@ -253,6 +321,14 @@ land in the worktree only — neighbor's primary working tree is untouched.
 7.3.2 Step 11 (archive) is **skipped** for neighbors — only the local repo gets
 its scope archived. Neighbor closeouts are scoped to "make edits in worktree,"
 not "complete a scope."
+
+⚠ **This clause is load-bearing in one direction only: it does not license the run to
+skip archival entirely.** Because every neighbor pass skips Step 11, archival has
+exactly one owner — the local-repo Step 1 pass, which **must run first, on the primary
+tree, as its own distinct pass** (§1.1). Processing the anchor repo through the
+neighbor path satisfies nothing. Also skipped for neighbors, for the same reason:
+Step 12's archive gate (§14.0 of /closeout) — the gate belongs to the Step 1 pass and
+to the §1.3 completion gate, not to each worktree.
 
 7.3.3 Step 12 (summary) output for each neighbor is captured for aggregation in
 Step 6.

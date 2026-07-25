@@ -31,9 +31,24 @@ Why 57 defeats signal A: its own Plans table was STALE — row 57.1 still read
 hand, so a scope can finish without its table saying so. Signal B is the backstop for
 exactly that, and vice versa.
 
-KNOWN LIMIT, stated honestly: a scope that keeps NEITHER its Plans table nor a
-completion header current will not be caught. This is a safety net, not a proof. The
-enforcing check is verify-archive.sh, run inside /closeout itself.
+KNOWN LIMITS, stated honestly. This is a safety net, not a proof — output is a list of
+CANDIDATES for a human to judge, never a directive to archive:
+
+  - False negatives: a scope keeping NEITHER its Plans table nor a completion header
+    current is not caught.
+  - False positives: "all plans executed" is NOT "scope concluded." A scope whose
+    deliverable is a PROTOTYPE awaiting a product decision reads as finished by every
+    file signal and must still stay open. Real case — scope 83 (EIS Dinkes): all 3
+    plans Done and browser-verified, but the deliverable is a mock-data mockup living
+    on `origin/develop` and never promoted to trunk, with "confirm demo-vs-production
+    positioning" and "supply real ILP indicators" both unresolved. Nothing in the
+    repo expresses "awaiting go/no-go", so no signal here can infer it.
+
+Note that pending Human Steps do NOT discriminate: scope 99 had three and was still
+correctly archivable (residuals belong in TO-DO). Whether a scope is concluded is a
+judgement call about intent, which is why this script only ever asks.
+
+The enforcing check is verify-archive.sh, run inside /closeout itself.
 
 Exit: 0 always (advisory, never blocks a session). Prints nothing when clean.
 Usage: scan-archive-drift.py <plans-dir> [<plans-dir> ...]
@@ -149,12 +164,15 @@ def main():
         label = os.path.basename(os.path.dirname(plans_dir.rstrip("/")))
         print()
         print(
-            f"Archive drift in {label}/plans — scope(s) reading as finished but still "
-            f"at the plans root:"
+            f"Possible archive drift in {label}/plans — scope(s) whose own records read "
+            f"as finished, still at the plans root:"
         )
         for num, name, why in findings:
-            print(f"  - scope {num} ({name}) — {why}; not archived")
-        print("  Run /closeout for each (it archives + repoints PLANS-INDEX). Verify with:")
+            print(f"  - scope {num} ({name}) — {why}")
+        print("  These are CANDIDATES, not a to-do list. Confirm each is actually")
+        print("  concluded before archiving — a prototype awaiting a go/no-go decision")
+        print("  looks identical to a shipped scope from the files alone. Ask first.")
+        print("  Once confirmed: /closeout <scope>, then verify with:")
         print(
             f"    ~/.claude/skills/closeout/scripts/verify-archive.sh "
             f"{plans_dir} <scope-number>"

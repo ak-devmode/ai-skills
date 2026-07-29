@@ -69,15 +69,37 @@ GitHub owner lookups are case-insensitive; the table holds canonical casing.
 If a repo's origin owner is not in this table: **ask** which account to use —
 never guess.
 
-### 1.2 My identities (author matching)
+### 1.2 My identities (author matching) — DERIVED, never hardcoded
 
-Branches whose last commit author matches none of these are TEAM branches
-(report-only):
+**Do not hardcode emails here.** This skill runs across multiple orgs/accounts
+(kalpa-health uses one committer identity, Padma-Medical-Group another), so a
+literal list silently misclassifies every branch in whichever org is not listed.
+Build the identity set per repo, at run time:
 
-| kind  | value                          |
-|-------|--------------------------------|
-| email | alex@pbmcgroup.com             |
-| email | (any email in local git config user.email across repo roots) |
+```bash
+# In the target repo — collect every identity git would attribute to the user.
+{ git -C "$REPO" config --get user.email
+  git -C "$REPO" config --global --get user.email
+  git -C "$REPO" config --get user.name
+  git -C "$REPO" config --global --get user.name
+} 2>/dev/null | sort -u
+```
+
+A branch is **MINE** when its last commit author email OR name matches any value
+in that set; otherwise **TEAM** (report-only per prime directive #2). Match
+case-insensitively and compare the whole value, not a substring — a substring
+match on a shared domain (`@kalpahealth.com`) would claim teammates' branches.
+
+If the derived set is empty (no git identity configured anywhere), **ask** rather
+than defaulting — treating everything as TEAM makes the run inert, and treating
+everything as MINE is unsafe.
+
+> **Why this is derived.** A run on 2026-07-29 against `wellmed-infrastructure` +
+> `wellmed-backbone` classified all 78 of the user's branches as TEAM, because the
+> table listed only `alex@pbmcgroup.com` while both repos commit as
+> `alex@kalpahealth.com` (local *and* global config). Every verdict came back
+> report-only and the sweep would have deleted nothing. The identity is already on
+> disk in git config — read it there instead of maintaining a copy.
 
 ### 1.3 Repo roots (local clone discovery for `--all`)
 

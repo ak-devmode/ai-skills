@@ -192,7 +192,8 @@ See `/markdown-style` §8 (Plan Documents) for full conventions: header fields, 
 
 **Version:** 1.0
 **Date:** DD Month YYYY
-**Author:** Name
+**Created by:** Name (derived from git config at creation — never a literal)
+**Executed by:** TBD until execution starts — see §3.1
 **ADR:** [optional link to ADR]
 **Status:** Draft | Ready to execute | In Progress | Complete
 **Branch:** (optional) feature/[branch-name] — derives `feature/<plan-stem>` if omitted
@@ -228,6 +229,31 @@ The CHECKPOINT's **Gate** field (set by /scope) classifies the phase boundary. I
 drives the `/clear` suggestion at sibling-plan handoff (§12.8.4): pause-and-clear at
 A/D/E, roll through at B/C. If a plan predates gate tagging and has no Gate field,
 treat it as B/C (don't prompt to clear).
+
+### 3.1 Stamp `Executed by` at phase start — write it, never ask for it
+
+The first time this skill executes a task in a plan whose `Executed by` reads
+`TBD`, stamp it before running the task. Derive both halves, never prompt:
+
+```bash
+git -C "$REPO" config --get user.name || git -C "$REPO" config --global --get user.name
+```
+
+Write `**Executed by:** {derived name} / Claude` — the human accountable for the
+phase plus the agent that ran it. That compound is what teams already converged on
+by hand (`Hamzah / Claude` on scope 98, `Fajri + Claude` on scope 83) before the
+schema had a slot for it. If git config yields nothing, write `TBD / Claude` and
+surface it at the next checkpoint rather than guessing.
+
+Re-stamp per plan file, not per scope: sibling plans of one scope routinely run in
+different hands, which is the whole reason this is separate from `Created by`.
+Never overwrite a non-`TBD` value — if a different executor picks up a partly-run
+plan, append (`Hamzah / Claude, then Abdul / Claude`) so the handoff stays legible.
+
+**Gate.** `/plan` §12 closeout-prep must not mark a plan Complete while its
+`Executed by` is still `TBD` — that means the stamp step was skipped, and an
+unattributed finished plan is indistinguishable from an attributed one after the
+fact. Treat it as a blocking finding, not a warning.
 
 ## 4. Progress Document Format
 

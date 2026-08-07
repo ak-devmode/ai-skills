@@ -47,6 +47,27 @@ independent — share conventions, not code.
   rather than git WIP. Multiple sessions append to the progress file;
   the work commits when a phase or scope completes.
 
+### 2.1 After every merge to `main` — propagate, don't assume
+
+Skills are consumed by symlink from `~/.claude/skills/<name>` into this repo, so
+Alex's machine picks up a merge instantly. **Nobody else's does.** A merge here is
+not delivery. On each merge to `main`:
+
+- [ ] Announce it to the team so they `git pull` their ai-skills clone. A
+      teammate on a stale clone runs a stale skill and produces documents that
+      silently violate the convention just changed.
+- [ ] Check for **vendored copies** of these skills in other repos and refresh or
+      delete them. Known copy: `kalpa-docs/claude-skills/` — four flat `.md`
+      files hand-copied in March 2026, still frozen there, 305 lines against
+      markdown-style's 548, missing §10 and §11 entirely and missing `/scope`
+      altogether. A stale duplicate is worse than no copy: an agent working in
+      that repo reads it and follows superseded rules.
+
+> **Why this is a checklist item and not a habit.** The March copy was made once,
+> for team onboarding, and never touched again — nothing in any skill told anyone
+> it existed or that it had to track canon. Propagation that depends on someone
+> remembering an undocumented copy is propagation that stops happening.
+
 ---
 
 ## 3. Architecture decisions you must know

@@ -624,6 +624,7 @@ See `/markdown-style` §11 (Scope Documents) for full conventions. The required 
 ```markdown
 # {Task title}
 **Project:** {detected project}  **Branch:** {branch}  **Date:** {today's date}
+**Created by:** {derived — see below}
 **Scope folder:** {plans_dir}/{N}-{slug}/
 **Source repo(s):** {absolute paths to repos this task touches}
 
@@ -690,6 +691,28 @@ ADR amendment is in-scope for this work.
 The full skill checklist tables (18 rows across four sections) follow the same shape shown in Step 4. Each row gets `[ ] YES` / `[ ] OPTIONAL` / `[N/A]` with a tailored note. Mandatory: `/plan-ceo-review` is always YES.
 
 **Boilerplate collapse:** still *consider* all 18 (the forcing function), but in the emitted scope.md, when a task has no UI surface, collapse the seven design/browser skills (`/browse`, `/qa`, `/design-consultation`, `/design-review`, `/design-html`, `/design-shotgun`, `/plan-design-review`) into a single line — `N/A ×7 — no UI surface` — instead of seven near-identical rows. Same for any other all-N/A cluster. Keep YES/OPTIONAL rows itemized.
+
+**`Created by` — DERIVED, never hardcoded.** Read the name off git config at run
+time, the same way `/repo-cleanup` §1.2 derives committer identity:
+
+```bash
+git -C "$REPO" config --get user.name || git -C "$REPO" config --global --get user.name
+```
+
+If nothing is configured anywhere, write `TBD` and say so — never substitute a
+name from an example, this file, or another scope.
+
+> **Why this is derived.** Until 2026-08-07 the plan-stub template below carried
+> the literal string `**Author:** Alex`. It was silently wrong for every teammate
+> who ran `/scope`, and their sessions responded by either overwriting it or
+> deleting the line: all 7 plans of scope 102 and all 4 of scope 110 (Hamzah), and
+> 81.10–81.12 plus 97.2 (Abdul), carry no author at all, while every scope Alex
+> created has one. A personal name baked into a shared template does not degrade
+> gracefully — it decays in exactly the hands it is wrong for.
+
+`Created by` records who *conceived* the scope and is written once, at creation.
+Who *executes* it is recorded per phase by `/plan` — see `/plan` §3.1 — because a
+scope's phases routinely run in different hands than the one that scoped it.
 
 ### 5.5 Create progress.md
 
@@ -834,7 +857,8 @@ See `/markdown-style` §8 (Plan Documents) and §8.9 (Plan Stubs) for full conve
 
 **Version:** 0.1 (stub — detail filled at session start)
 **Date:** {today's date}
-**Author:** Alex
+**Created by:** {derived from git config — see §5.4; never a literal name}
+**Executed by:** TBD
 **Status:** Draft
 **Plan #:** {N}.{P}
 **Parent scope:** {plans_dir}/{N}-{slug}/scope.md

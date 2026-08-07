@@ -569,6 +569,32 @@ Every scope.md includes these sections in this order:
 
 11.6.2 Source repo paths in the header use absolute paths so the user can navigate to them directly.
 
+### 11.7 PLANS-INDEX Conventions
+
+`PLANS-INDEX.md` is read into agent context to orient a session, so its size is a
+running cost, not a cosmetic concern. Four rules keep it bounded.
+
+11.7.1 **Two tables, one shape.** Active Plans and Completed / Archived both use
+`| # | Status | Folder | Description | Created by |`. A row that does not match
+that shape does not belong in the file — see `/plan` §12.4 for what a headerless
+append does over time.
+
+11.7.2 **Table membership follows disk state, never scope number.** A scope whose
+folder sits under `archive/` belongs in Completed / Archived; one with a live
+folder at `plans/` root belongs in Active. Never archive index rows by cutting
+below a number — "old" and "done" are unrelated, and a number-based sweep removes
+live low-numbered scopes while leaving finished high-numbered ones in place.
+
+11.7.3 **The row moves with the folder, in the same commit.** Archiving is
+event-driven at `/closeout`, not a periodic tidy-up, so a backlog never forms. Any
+drift detector is a backstop, not the mechanism.
+
+11.7.4 **Status cells cap at ~300 characters**, overflowing to
+`… → detail in {folder}progress.md`. Counts, file paths and line numbers belong in
+the scope's `progress.md`. The index says where to look, not what happened.
+
+11.7.5 **No per-plan rows.** Each scope's `progress.md` is the plan-level record.
+
 ---
 
 *Keywords (for skill-trigger matching):* strategy document, marketing plan, PRD, product requirements, working document, plan, update the doc, revise the plan, add to the document, versioned document, structured markdown, operational playbook, migration plan, integration spec, code documentation, implementation plan, architecture doc, PLAN.md, task runner, execution plan

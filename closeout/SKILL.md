@@ -509,7 +509,11 @@ Completion & Archive) and follow that procedure verbatim:
 - §12.2 Append to TO-DO.md
 - §12.3 Archive the plan (child plans stay in scope folder; standalone plans
   move to `archive/`)
-- §12.4 Update PLANS-INDEX.md
+- §12.4 Update PLANS-INDEX.md — **move the scope's row from Active Plans to
+  Completed / Archived in the same commit as the folder move**, compressed to one
+  line. Never append a per-plan row. This is the step that keeps the index from
+  accumulating stale Active rows (37 of 61 on 2026-08-07) and headerless
+  fragments; see `/markdown-style` §11.7.
 - §12.5 Update parent scope (if applicable)
 - §12.7 Print completion summary
 - §12.8 Sibling plan discovery

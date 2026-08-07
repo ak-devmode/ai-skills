@@ -834,16 +834,38 @@ mv {progress-file} {archive-dir}/
 
 ### 12.4 Update PLANS-INDEX.md
 
-Find the plan's row in `{plans_dir}/PLANS-INDEX.md` by matching the `#` column
-(e.g., `39.2`) or the `Folder/File` column. Change its status from `Active` or
-`In Progress` to `Done ({date})`.
+**Never append a per-plan row.** The index tracks scopes; the plan-level record is
+the scope's own `progress.md`. Both index tables are five columns —
+`| # | Status | Folder | Description | Created by |` — and any row that does not
+match that shape does not belong in the file.
 
-If no row exists (standalone plans created before /scope), append one:
-```markdown
-| {plan_number} | {date} | plan | archive/{plan-stem}/ | {project} | Done ({date}) | {one-line summary} |
-```
+> **Why this rule exists.** This step used to say "if no row exists, append one",
+> with a seven-column template (`| {n} | {date} | plan | {path} | {project} |
+> {status} | {summary} |`). Nothing wrote a header for it, so those rows accreted
+> into a 40-row untabled fragment glued onto the end of the WellMed index —
+> invisible as a table, unmaintained, and by 2026-08-07 the *only* index
+> registration for scopes 101, 106, 107 and 108. Two of those were live and had no
+> Active row at all. An append with no header is not a record; it is a leak.
 
-If the plan has no number, assign the next available whole number from the index.
+For a **child plan** (per §2.3): update nothing here. Record completion in the
+scope `progress.md` (§12.5). The scope's index row changes only when the whole
+scope closes.
+
+For a **standalone plan** or a **closing scope**, move the row between tables to
+match what just happened on disk:
+
+- Scope folder moved to `archive/` → move its row from **Active Plans** to
+  **Completed / Archived**, in the same commit as the folder move. A row whose
+  table disagrees with the folder's location is the drift the SessionStart hook
+  reports; do not leave it for the hook to find.
+- Compress the moved row: `| {n} | ✅ Done ({date}) | {archive path} | {one
+  sentence} | {creator} |`. Forensic detail stays in `progress.md`.
+- Still active → leave the row in place and cap its Status cell at ~300
+  characters, appending `… → detail in {folder}progress.md` if it overflows.
+
+If the plan has no number, assign the next available whole number — read it from
+`git show origin/main:{plans_dir}/PLANS-INDEX.md`, never the local working tree,
+since concurrent sessions race for scope numbers.
 
 ### 12.5 Update parent scope (if applicable)
 

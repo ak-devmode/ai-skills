@@ -55,7 +55,18 @@ For PRDs, migration plans, integration specs, operational playbooks — **what, 
   [ ] 2.2.2.4 Cutover production number — @Alex (blocks 2.2.3)
 ```
 
-2.2.3 **Owner tags:** `@Name` on every task. Use `@TBD` if ownership is unclear.
+2.2.3 **Owner tags:** `@Name` on tasks whose owner differs from the document's
+executor — a handoff, an external dependency, or a task waiting on someone
+specific. Use `@TBD` when a task is genuinely unassigned. Do **not** tag every
+task: in a plan executed end-to-end by one person, per-task tags restate the
+header on every line and are the first thing to go stale.
+
+> **Why this was narrowed (2026-08-07).** The rule previously mandated `@Name` on
+> *every* task. It was ignored wholesale — scopes 98, 102 and 108 carry zero owner
+> tags across every plan file. A rule obeyed nowhere is worse than no rule, because
+> its presence implies ownership is tracked when it isn't. Ownership now lives at
+> the grain people actually work at: `Created by` / `Executed by` in the header
+> (§8.2, §11.2), with `@Name` reserved for genuine per-task exceptions.
 
 2.2.4 **Acceptance criteria** follow each objective's task list: 1–3 concrete, testable conditions.
 
@@ -230,10 +241,19 @@ Plan documents drive autonomous task execution via the task-runner skill. They i
 8.2.1 Plan documents require these additional header fields beyond the standard version block:
 
 ```markdown
-**Author:** Name
+**Created by:** Name
+**Executed by:** Name / Claude  (or "TBD" until execution starts)
 **ADR:** path/to/adr.md  (or "N/A")
 **Status:** Draft | Ready to execute | In Progress | Complete
 ```
+
+8.2.1.1 **Both names are derived from `git config user.name`, never typed and
+never copied from an example.** `Created by` is written once at creation;
+`Executed by` is stamped by `/plan` at phase start (`/plan` §3.1) and may differ
+per sibling plan. The single `**Author:**` field these replace could not hold both
+roles, so sessions improvised — six different formats across nine scopes, and no
+value at all on fifteen plan files. Supersedes `**Author:**`; existing documents
+keep theirs until touched.
 
 8.2.2 Status must be set to "Ready to execute" before handing off to the task-runner. A plan with "Draft" status will be rejected by the pre-flight check.
 
@@ -488,9 +508,15 @@ Scope documents orchestrate multi-skill, multi-phase work. They are the parent o
 ```markdown
 # {Task title}
 **Project:** {detected project}  **Branch:** {branch}  **Date:** {today's date}
+**Created by:** {derived from git config user.name — never a literal}
 **Scope folder:** {plans_dir}/{N}-{slug}/
 **Source repo(s):** {list of repos this task touches, with absolute paths}
 ```
+
+11.2.1 `Created by` records who conceived the scope. There is deliberately no
+scope-level `Executed by`: a scope's phases run in different hands, so execution
+attribution belongs on each plan file (§8.2), not on the parent. The index carries
+`Created by` as a column so attribution is visible without opening the folder.
 
 ### 11.3 Required Sections
 

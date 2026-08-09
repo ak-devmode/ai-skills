@@ -1,6 +1,6 @@
 ---
 name: review
-version: 2.0.1
+version: 2.1.0
 description: |
   Pre-landing code review in two passes: gstack's review engine for generic
   correctness, security, and diff quality, then a Kalpa/PMG domain pass that a
@@ -41,6 +41,25 @@ have, because it depends on ADRs and production history that live in Alex's repo
 path, or `staged`) → the current branch's diff against its trunk → the working-tree
 diff. Never review a bare `HEAD` when a branch diff is available; the branch diff is
 what lands.
+
+1.1.1 **Read the adjacent pre-existing code, not only the diff.** For every file the
+diff touches, read the whole file; for every script or module the diff calls into,
+read the function it calls. A diff-scoped review cannot see a caller that was already
+wrong, and that is where the expensive findings live.
+
+> **This is not theoretical.** On the first real run (108.6 dashboards), the
+> checklist pass over the diff found 4 findings and missed 2 — both in pre-existing
+> code adjacent to the change, and both fail-open verification bugs: an AWS call that
+> exits 0 with `[]` on a wrong profile or region (so a mistyped `AWS_PROFILE` would
+> have silently emptied a host-status wall), and a sync script that verified a
+> dashboard *count* but never its *content*. Codex's cross-model pass caught both; the
+> diff-scoped pass structurally could not.
+
+1.1.2 **Fail-open verification is its own finding class.** Any command whose failure
+mode is "succeeds and returns empty" — cloud describe/list calls, a count-based
+check, a grep whose miss is indistinguishable from absence — is a finding whenever
+something downstream treats its output as proof. Ask of every verification in the
+diff: what does this do when its input is wrong rather than missing?
 
 1.2 **Project**, from the repo path — this selects which Pass 2 groups apply:
 
@@ -87,6 +106,26 @@ ai-skills-authored skills (`ai-skills/CLAUDE.md` §3.2), and this skill owns the
 invocation.
 
 2.4 Capture the engine's findings for the merge in §4. Do not re-rank them yet.
+
+2.5 **Verify the engine's telemetry actually wrote — exit 0 is not proof.**
+`gstack-review-log` and friends derive `SLUG` and `BRANCH` from the **current working
+directory**, not from a flag. Read back what you wrote:
+
+```bash
+~/.claude/skills/gstack/bin/gstack-review-read     # NO_REVIEWS => nothing was logged
+```
+
+`NO_REVIEWS` after a log call means the write went to a path derived from the wrong
+cwd. Re-run the log from **inside the repo being reviewed** — `cd` is correct here,
+and is the documented exception to the never-`cd` rule.
+
+> **Why this needs saying.** A session that follows the house style — drive git with
+> `git -C <worktree>` from a non-git cwd, never `cd` — puts every cwd-deriving tool in
+> exactly the state where it resolves to nothing, appends to a garbage path, and exits
+> 0. The first real `/review` run hit this: the log call wrote nothing, `-read`
+> returned `NO_REVIEWS`, and the run moved on because the exit code was clean. Same
+> family as `/closeout` §14.0 — a green command is not a completed action, and the only
+> honest check is reading back from the destination.
 
 ---
 
@@ -208,6 +247,31 @@ Verdict: {SHIP | SHIP AFTER BLOCKING | DO NOT SHIP} — {one sentence}
 group verified clean are different results, and collapsing them is how a review
 overstates its coverage. Same reason `/closeout` says "HEALED (ledger-less)" rather
 than "HEALED."
+
+### 4.5 Write the report to the scope's artifacts/ — always, not on request
+
+Inline text and a JSONL entry are not a record: the inline scrolls away and the JSONL
+is not readable by a human deciding whether to merge. Write the file.
+
+```bash
+PLANS_DIR="$(~/Projects/ai-skills/scripts/resolve-plans-dir.sh)" || exit
+# Active scope folder for this work — by scope number from the branch, else the one
+# whose slug matches, else ask rather than guess.
+DEST="$PLANS_DIR/{N}-{slug}/artifacts/review-{branch-or-plan}.md"
+```
+
+Naming: `review-{branch}.md`, or `review-{N}.{P}.md` when reviewing a specific plan's
+work (e.g. `review-108.6-dashboards-v2.md`). Same folder gstack artifacts get copied
+into, per the standing convention that a scope folder stays self-contained.
+
+The file carries, in this order: the §4.3 header and verdict; every finding with its
+`file:line`, consequence and fix; **which findings were fixed in-band versus left**;
+and a final section recording **what the review did not cover** — passes skipped,
+specialists not dispatched, groups marked `n/a`, and why. That last section is the
+point. A report that lists only what was checked reads, three weeks later, as though
+coverage was complete.
+
+Log the artifact path in the scope's `progress.md` Artifacts section.
 
 ---
 

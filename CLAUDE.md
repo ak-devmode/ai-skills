@@ -111,6 +111,24 @@ because both `/plan` (writes it) and `/closeout` (reads it) need it.
 `cross-repo-init/templates/` holds the CROSS-REPO / ARCHITECTURE /
 CLAUDE templates because only `/cross-repo-init` consumes them.
 
+**Scripts follow the same split** — `scripts/` (shared) or
+`<skill>/scripts/` (private, e.g. `closeout/scripts/verify-archive.sh`).
+See `scripts/README.md` for contracts and exit codes.
+
+3.6.1 **Deterministic work goes in a script, not in prose.** If a step has
+one correct answer — resolving a path, claiming a number, mutating a table,
+classifying SHAs — an LLM following instructions is strictly worse than
+executing code, because it fails differently every time and nobody notices.
+Prose belongs to judgment: what to ask, when to stop, which trade-off wins.
+
+> **Why this is a rule.** Two of Alex's worst index defects were prose steps.
+> "Read PLANS-INDEX, find the highest number, increment" raced two sessions
+> into the same scope number (110 → renumbered 111). "If no row exists,
+> append one," with a seven-column template and no header writer, accreted
+> 40 untabled rows that were for a while the only registration for scopes
+> 101/106/107/108. Neither was a comprehension failure. Both were prose
+> asked to be a program.
+
 3.7 **Symlinks, not copies, for `~/.claude/skills/`.** Adding a new
 skill: create directory + SKILL.md, then run `./setup.sh` — it links
 every top-level dir, arbitrates name collisions, and prunes links whose
@@ -156,6 +174,10 @@ review/SKILL.md                 — two-pass review: gstack engine + Kalpa domai
 kalpa-*/SKILL.md                — WellMed/Kalpa project skills (flat, namespaced — §3.8)
 member-record-amend/SKILL.md    — PMG Padma Care record-edit skill
 templates/closeout-prep.md.template   — ledger schema (shared by /plan + /closeout)
+scripts/README.md               — contracts + exit codes for the shared scripts
+scripts/resolve-plans-dir.sh    — plans-dir resolution (one owner, 5 callers)
+scripts/claim-scope-number.sh   — scope numbering, race-defensive across 4 sources
+scripts/plans-index.py          — PLANS-INDEX validate/add/move, schema-enforcing
 plans/PLANS-INDEX.md            — local plans tracking ai-skills development
 plans/<scope>/                  — active scope folders
 plans/archive/                  — completed scopes

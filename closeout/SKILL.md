@@ -1,6 +1,6 @@
 ---
 name: closeout
-version: 1.1.0
+version: 1.2.0
 description: |
   Local repo self-heal after a /plan run. Consumes closeout-prep.md and leaves the
   repo healthier than /plan found it: re-runs tests, spot-checks pattern references,
@@ -120,7 +120,17 @@ the coverage.
 3.2 Read the ledger header. Verify `**Schema version:**` is present. The canonical
 template (used for schema reference) lives at `~/Projects/ai-skills/templates/closeout-prep.md.template` — shared across `/plan`, `/closeout`, and `/closeout-extended`.
 
-3.3 Compare the ledger's schema version against this skill's expected version (currently `1.0`):
+3.3 Compare the ledger's schema version against the **template's**, read at run time
+from `~/Projects/ai-skills/templates/closeout-prep.md.template` — never against a
+version restated in this file. A number written in two places drifts; this paragraph
+used to say "currently `1.0`" while its own example said the skill expects `1.1`, so
+neither reader could tell which was authoritative.
+
+```bash
+grep -m1 '^\*\*Schema version:\*\*' ~/Projects/ai-skills/templates/closeout-prep.md.template
+```
+
+Then:
 - **Match:** proceed.
 - **Older minor (e.g., `1.0` when skill expects `1.1`):** proceed with a warning logged
   to §1 of the summary — "ledger written by older /plan; some fields may be missing.
@@ -608,7 +618,7 @@ Next:
 14.2 If any step had a failure (e.g., tests failing), make the failure prominent
 in the header. Don't bury it.
 
-14.3 **Clear-readiness note.** /closeout intentionally leaves an uncommitted
+14.2a **Clear-readiness note.** /closeout intentionally leaves an uncommitted
 working tree (§17.2) — that dirty state is a **declared exception**, not
 clear-ready state. If the user (or a calling skill) wants to `/clear` after
 closeout, run the `/ready-to-clear` validation first; it will enumerate the
@@ -642,11 +652,22 @@ For a single repo, just re-run /closeout from the top.
 
 ## 16. Failure Modes & Recovery
 
-16.1 **Ledger missing or unreadable:** halt with clear message at Step 1. User
-options: run /plan to populate, or run `/review` for ad-hoc review without ledger.
+16.1 **Ledger missing or unreadable:** do **NOT** halt — run LEDGER-LESS MODE
+(§3.1a) and still reach Step 11. Announce the degradation, skip the ledger-driven
+steps as `NO LEDGER`, and title the summary "HEALED (ledger-less)".
 
-16.2 **Ledger schema mismatch:** halt at Step 3. User options: upgrade /plan or
-run `/review`.
+> **This section used to say "halt with clear message at Step 1."** That is the
+> exact bug §3.1a exists to prevent: halting at Step 1 means Step 11 never runs, so
+> the scope stays indistinguishable from active work. Scope 99 sat "active" in
+> PLANS-INDEX for days after four phases landed in a day, because the fast run wrote
+> no ledger. The fix landed in §3.1a and this paragraph was never updated, so the
+> skill documented both behaviours at once — and §18 still had a *test* asserting
+> the halt. Corrected 2026-08-09.
+
+16.2 **Ledger schema mismatch:** halt at **Step 1** (§3.3 — the schema gate lives
+in Step 1, not Step 3). Only a major-version or unknown mismatch halts; an older
+minor proceeds with a warning. User options: upgrade /plan and re-run, or run
+`/review` for an ad-hoc review. Never auto-migrate the ledger.
 
 16.3 **Tests fail:** continue but mark NOT HEALED. User fixes tests then re-runs
 /closeout (or skips with `--skip-tests` for a doc-only closeout).
@@ -728,7 +749,14 @@ scope. To be exercised in plan Phase 5 §8.6.
     state (Step 8 trio sync is no-op), summary reports "no changes needed."
 
 Failure modes to test:
-- Delete closeout-prep.md and re-run — expect halt at Step 1.
-- Edit the ledger to set schema version `99.0` — expect halt at Step 3.
+- Delete closeout-prep.md and re-run — expect **LEDGER-LESS MODE**, not a halt:
+  the announcement in §3.1a, ledger-driven steps marked `NO LEDGER`, Step 11
+  archive **still runs**, and the summary header reads "HEALED (ledger-less)".
+  (This test previously asserted "expect halt at Step 1" — the scope-99 bug. If a
+  run ever halts here again, that is the regression.)
+- Edit the ledger to set schema version `99.0` — expect halt at Step 1 (major
+  mismatch). Set it to one minor behind — expect a warning and a completed run.
 - Break a §3 pattern source reference (move the source file) — expect flag in
   summary, no halt.
+- Exit before Step 11 somehow — expect Step 12's `verify-archive.sh` gate to fail
+  and the summary to say "NOT ARCHIVED", never "complete".

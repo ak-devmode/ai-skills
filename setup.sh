@@ -65,7 +65,7 @@ echo ""
 echo "2. Linking ai-skills into $SKILLS_DIR..."
 
 # Directories under ai-skills that are deliberately NOT skills.
-NON_SKILL_DIRS=" templates plans "
+NON_SKILL_DIRS=" templates plans scripts "
 
 skipped_loudly=0
 for skill_dir in "$AI_SKILLS_DIR"/*/; do

@@ -1,6 +1,6 @@
 ---
 name: markdown-style
-version: 1.1.0
+version: 1.2.0
 description: "Use for creating, updating, or revising structured .md documents — strategy docs, PRDs, plans, playbooks, integration specs, or any markdown maintained over time and loaded into future context windows. Trigger on: 'create a plan', 'draft a PRD', 'update the doc', 'write this up as a document', or references to versioned documents. Do NOT use for READMEs, quick notes, or throwaway content."
 allowed-tools:
   - Bash
@@ -226,7 +226,7 @@ Always the final section. Table format. Entries should not exceed 2-3 sentences.
 
 ## 8. Plan Documents (Mode B Extension)
 
-Plan documents drive autonomous task execution via the task-runner skill. They inherit all Mode B rules plus the following.
+Plan documents drive autonomous task execution via `/plan`. They inherit all Mode B rules plus the following.
 
 ### 8.1 Naming Convention
 
@@ -234,7 +234,11 @@ Plan documents drive autonomous task execution via the task-runner skill. They i
 
 8.1.2 Plain `PLAN.md` (no prefix or suffix) is acceptable only for single-plan repositories where there is no ambiguity.
 
-8.1.3 Store plans in `kalpa-docs/plans/[topic]/[topic]-PLAN.md` for cross-cutting plans. For repo-local plans that will never cross into other repos, they may live in `docs/` within the repo — but must be migrated to kalpa-docs archive on completion (see 8.4).
+8.1.3 Plans live in the project's central plans directory, resolved by
+`~/Projects/ai-skills/scripts/resolve-plans-dir.sh` — never hardcode one project's
+path. A child plan of a scope sits in that scope's folder as
+`{N}-{slug}/{N}.{P}-{slug}-PLAN.md` (§8.9); a standalone plan gets its own
+`{plans_dir}/{stem}/` folder. Plans do not live in a source repo's `docs/`.
 
 ### 8.2 Required Header Fields
 
@@ -255,13 +259,13 @@ roles, so sessions improvised — six different formats across nine scopes, and 
 value at all on fifteen plan files. Supersedes `**Author:**`; existing documents
 keep theirs until touched.
 
-8.2.2 Status must be set to "Ready to execute" before handing off to the task-runner. A plan with "Draft" status will be rejected by the pre-flight check.
+8.2.2 Status must be set to "Ready to execute" before handing off to `/plan`. A plan with "Draft" status will be rejected by the pre-flight check.
 
 8.2.3 **PLANS-INDEX row status** uses a compact taxonomy distinct from document Status: `Draft | Active | Done ({date})`. The index tracks the row's lifecycle in the project; the document's Status field tracks internal execution state. Both can be true at once (e.g., a plan with internal Status "In Progress" and index status "Active").
 
 ### 8.3 Related Docs Section (Required)
 
-8.3.1 Every plan document must include a `## Related Docs` section immediately after the header block, before Phase 1. This scopes the authoring cross-check (8.3.2) and the task-runner pre-flight validation.
+8.3.1 Every plan document must include a `## Related Docs` section immediately after the header block, before Phase 1. This scopes the authoring cross-check (8.3.2) and `/plan`'s pre-flight validation.
 
 ```markdown
 ## Related Docs
@@ -274,23 +278,29 @@ keep theirs until touched.
 
 ### 8.4 Closing Cleanup (Required on Completion)
 
-When all tasks in a plan are marked complete in the progress file:
+8.4.1 **A child plan never archives on its own.** It stays in its scope folder; the
+whole folder moves when every sibling is done (`/plan` §12.3.0). Completion is
+recorded by status only — the scope's `progress.md` subsection, its Plans table, and
+the index row.
 
-8.4.1 Move the plan file (`[topic]-PLAN.md`) to `kalpa-docs/plans/archive/`.
+8.4.2 **A standalone plan** archives as a folder: `{plans_dir}/{stem}/` →
+`{plans_dir}/archive/{stem}/`, carrying its progress file, artifacts, and any swept
+PRDs with it.
 
-8.4.2 Move the paired progress file (`[topic]-PROGRESS.md`) to `kalpa-docs/plans/archive/` alongside the plan.
+8.4.3 **A program-member scope** archives into its program's own
+`{program-slug}/archive/`, not the repo-wide `archive/` (`/scope` §7.1).
 
-8.4.3 Do not leave completed plans or progress logs in repo-local `docs/` directories. The kalpa-docs archive is the single source of completed work history.
-
-8.4.4 If the plan lived in a repo-local `docs/` directory, confirm the archive move with the user before deleting the original location, since git history already tracks the file.
+8.4.4 The index row moves in the same commit as the folder (§11.7.3), via
+`scripts/plans-index.py move`. A row whose table disagrees with the folder's location
+on disk is the drift a hygiene pass will later report.
 
 ### 8.5 Optional Header Fields
 
-8.5.1 `**Branch:**` — feature branch the plan executes on. If omitted, the task-runner derives `feature/<plan-stem>` from the filename.
+8.5.1 `**Branch:**` — feature branch the plan executes on. If omitted, `/plan` derives `feature/<plan-stem>` from the filename.
 
 8.5.2 `**Parent scope:**` — path to parent `scope.md` when the plan is a child of a /scope. Triggers parent-scope context loading at pre-flight.
 
-8.5.3 `**Plan #:**` — explicit plan number when the filename doesn't encode one. For child plans of a scope, use sub-numbering format `{N}.{P}` (scope number . phase number). The task-runner prefers this field over filename-derived numbers.
+8.5.3 `**Plan #:**` — explicit plan number when the filename doesn't encode one. For child plans of a scope, use sub-numbering format `{N}.{P}` (scope number . phase number). `/plan` prefers this field over filename-derived numbers.
 
 ### 8.6 Task Structure
 
@@ -324,7 +334,7 @@ When all tasks in a plan are marked complete in the progress file:
 ---
 ```
 
-8.7.2 The task-runner stops at every CHECKPOINT and does not proceed without explicit human instruction.
+8.7.2 `/plan` stops at every CHECKPOINT and does not proceed without explicit human instruction.
 
 8.7.3 The **Gate** field classifies the phase boundary (the six types are defined in
 /scope "Phase Boundaries"). It is set by /scope when generating phase stubs and read by
@@ -345,19 +355,19 @@ roll through at B/C). Checkpoints inserted by hand outside a /scope phase may om
 
 8.9.3 Child plans must include `**Parent scope:**` in the header (see 8.5.2).
 
-8.9.4 Child plans do not archive individually. They remain in the scope folder until the entire scope is archived. The task-runner enforces this.
+8.9.4 Child plans do not archive individually. They remain in the scope folder until the entire scope is archived. `/plan` enforces this.
 
 ---
 
 ## 9. PRD Documents (Mode B Extension)
 
-PRDs define what to build and why. They are the authoring step before a Plan — a PRD answers the product question, a Plan answers the execution question. PRDs are authored in claude.ai (Opus) and handed off to Claude Code for plan creation.
+PRDs define what to build and why. They are the authoring step before a Plan — a PRD answers the product question, a Plan answers the execution question. Author them with `/prd`, which runs the assumption-reduction rounds and writes the file; `/scope` then turns an approved PRD into phases.
 
 ### 9.1 Naming and Storage
 
 9.1.1 All PRD files use the suffix convention: `[feature]-PRD.md` (e.g., `consultation-booking-PRD.md`, `satu-sehat-sync-PRD.md`).
 
-9.1.2 Store PRDs in `kalpa-docs/development/prds/[feature]-PRD.md`.
+9.1.2 PRDs live in the project's plans directory (`scripts/resolve-plans-dir.sh`), and are swept into a scope folder when one is created from them (`/scope` §5.7).
 
 9.1.3 Status field in the header block: `Draft | In Review | Approved`. A PRD must be **Approved** before a Plan is created from it.
 

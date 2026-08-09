@@ -343,6 +343,18 @@ def cmd_move(args) -> int:
     if args.status:
         cells[1] = args.status
     if args.folder:
+        # Refuse a --folder that does not exist on disk. The row already holds a
+        # path that is usually correct; overriding it with a guess replaces good
+        # data with bad. This guard exists because on 2026-08-09 a `move` passed
+        # --folder with an invented slug (51-manifest-ocr-pipeline) over the row's
+        # own correct archive/51-padmacare-household-labels.
+        want = args.folder.strip().strip("`").rstrip("/")
+        base = os.path.dirname(os.path.abspath(args.index))
+        if want and not os.path.exists(os.path.join(base, want)):
+            print(f"plans-index: --folder '{args.folder}' does not exist under "
+                  f"{base}. Omit --folder to keep the row's existing path, or pass "
+                  f"one that resolves.", file=sys.stderr)
+            return 2
         cells[2] = args.folder
     row = build_row(cells[0], cells[1], cells[2], cells[3], cells[4])
 

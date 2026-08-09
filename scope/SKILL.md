@@ -1,12 +1,12 @@
 ---
 name: scope
-version: 3.5.0
+version: 3.6.0
 description: |
   Task scoping, skill router, and progress tracker. Reads current context (git diff,
   branch, CLAUDE.md, open files), eliminates assumptions via two rounds of open-ended
   numbered inline questions, then outputs a phased scope with a full 18-skill checklist
   marking N/A skills with reasons. For multi-session work, generates plan stub files
-  (one per phase, each ~1 context window) that /plan (task-runner) can execute. Creates
+  (one per phase, each ~1 context window) that /plan can execute. Creates
   a tracking folder (scope.md + progress.md) in the project's central plans directory.
   Progress.md is a living document updated throughout execution.
   Use when asked to "scope this", "plan this task", "what skills do I need", "before
@@ -23,6 +23,13 @@ allowed-tools:
 ---
 
 # /scope — Task Scoping, Skill Router & Progress Tracker
+
+> **v3.6.0 (2026-08-09).** Deterministic steps now call `ai-skills/scripts/*`:
+> plans-dir resolution, scope-number claiming (which **raced** as prose — scope 110
+> collided), and PLANS-INDEX writes (whose old 7-column template matched no reader).
+> `/ship` is N/A always rather than conditional. Step 0 greps the index instead of
+> cat-ing ~31k tokens. Removed the standalone `mkdir artifacts` step and the
+> close-background-shells step (harness-tracked now).
 
 You are acting as a structured scoping agent. Your job: read context, ask two focused
 rounds of questions to eliminate assumptions, then produce a phased PRD with a ranked
@@ -96,22 +103,15 @@ cat CLAUDE.md 2>/dev/null | head -60 || cat .claude/CLAUDE.md 2>/dev/null | head
 ```
 
 ```bash
-# Detect project from PWD, then read ONLY the matching plans directory
-case "$(pwd)" in
-  *Projects/pmg*)        PLANS_DIR="$HOME/Projects/pmg/pmg-docs/plans" ;;
-  *Projects/wellmed*)    PLANS_DIR="$HOME/Projects/wellmed/kalpa-docs/plans" ;;
-  *Projects/ai-skills*)  PLANS_DIR="$HOME/Projects/ai-skills/plans" ;;
-  *)                     PLANS_DIR="" ;;
-esac
-if [ -n "$PLANS_DIR" ]; then
-  echo "PLANS_DIR=$PLANS_DIR"
-  # Active scope folders are numbered `<N>-<slug>/` (wellmed/PMG convention).
-  ls -d "$PLANS_DIR"/[0-9]*-*/ 2>/dev/null || echo "no active scopes"
-  echo "---INDEX---"
-  cat "$PLANS_DIR/PLANS-INDEX.md" 2>/dev/null || echo "no PLANS-INDEX.md yet"
-else
-  echo "Unrecognized project — ask the user where the plans directory should live"
-fi
+# Plans dir comes from the script — one owner, five callers (scripts/README.md).
+# Exit 3 = unrecognized project (ask the user); exit 4 = docs repo not cloned.
+PLANS_DIR="$(~/Projects/ai-skills/scripts/resolve-plans-dir.sh)" || exit
+echo "PLANS_DIR=$PLANS_DIR"
+ls -d "$PLANS_DIR"/[0-9]*-*/ 2>/dev/null || echo "no active scopes"
+# GREP the index, never cat it — it is ~31k tokens in WellMed (/plan §1.1).
+grep -n '^## ' "$PLANS_DIR/PLANS-INDEX.md" 2>/dev/null
+grep -nE '^\| *[0-9]+ .*(Ready to execute|In progress|Active)' "$PLANS_DIR/PLANS-INDEX.md" 2>/dev/null | head -20
+~/Projects/ai-skills/scripts/plans-index.py validate "$PLANS_DIR/PLANS-INDEX.md" 2>&1 | tail -5
 ```
 
 After running the above, synthesize what you know:
@@ -404,7 +404,7 @@ Based on all answers, decide the execution model. **Phasing is decided by gates
   (§5.9) so /plan knows whether to pause-and-clear (A/D/E) or roll through (B/C)
 
 When phased, each phase becomes one plan file. Scope generates plan stubs that
-`/plan` (task-runner) can execute. See Step 5.9.
+`/plan` can execute. See Step 5.9.
 
 **Sanity check before finalizing the phase count:** for each proposed boundary, name
 the gate (A–F). If you can't, the two phases are really one — merge them. This is the
@@ -549,31 +549,34 @@ approval as a gate-A decision.
 ### 5.1 Plans directory resolution
 
 The scope folder lives in a **central plans directory**, not in the source repo.
-Resolve based on the project detected in Step 0:
-
-| Project | Plans directory |
-|---|---|
-| PMG (any repo under `~/Projects/pmg/`) | `~/Projects/pmg/pmg-docs/plans/` |
-| WellMed (any repo under `~/Projects/wellmed/`) | `~/Projects/wellmed/kalpa-docs/plans/` |
-| ai-skills (`~/Projects/ai-skills/`) | `~/Projects/ai-skills/plans/` |
-| Other | Ask the user: "Where should the scope folder live?" |
-
-If the plans directory doesn't exist, stop and tell the user — don't create it
-silently (it implies the docs repo is missing).
+Already resolved in Step 0 by `scripts/resolve-plans-dir.sh`; reuse that value. On
+exit 3 (unrecognized project) ask the user where the scope folder should live; on
+exit 4 (resolved but missing) stop — a missing plans dir means the docs repo isn't
+cloned, and creating it silently hides that.
 
 ### 5.2 Slug and scope number
 
 Determine the slug: lowercase, hyphenated, 3–5 words from the task title.
 Example: "wellmed-saga-handler-phase2", "pmg-report-export", "auth-refresh-bug"
 
-**Auto-assign the next sequential scope number `{N}`.** Read
-`{plans_dir}/PLANS-INDEX.md`, find the highest `#` value across both Archived
-and Active tables (ignore sub-numbers like `39.1` — only whole numbers count),
-and increment by 1. This `{N}` prefixes the scope folder and every child plan,
-matching the wellmed/PMG convention.
+**Claim `{N}` with the script — never by reading the index yourself:**
 
-If `PLANS-INDEX.md` doesn't yet exist, the header is created in Step 5.8 and
-`{N}` starts at 1.
+```bash
+N="$(~/Projects/ai-skills/scripts/claim-scope-number.sh "$PLANS_DIR")"
+```
+
+It maxes over four sources — `origin/main`'s index, the local index, scope folders on
+disk, and branch names — and prints its provenance to stderr. Read that stderr: when
+local and origin disagree, another session has pushed or you have unpushed rows, and
+the note says so.
+
+> **Why this is a script.** This step used to say "read `PLANS-INDEX.md`, find the
+> highest, increment" against the **local working tree**, while `/plan` §12.4 already
+> knew to read `git show origin/main:…` "since concurrent sessions race for scope
+> numbers." The two skills disagreed and the one that mints numbers was the wrong
+> one. Scope 110 collided and had to be renumbered 111.
+
+`{N}` prefixes the scope folder and every child plan.
 
 The scope folder path is: `{plans_dir}/{N}-{slug}/` (e.g.
 `~/Projects/pmg/pmg-docs/plans/32-pmg-testsuite/`). Archive folder name uses
@@ -785,16 +788,6 @@ were stated, seed with the defaults below and refine at /plan kickoff:}
 
 The Resume Context block is the only section overwritten on update; everything else is append-only.
 
-### 5.6 Create artifacts/ subdirectory
-
-```bash
-mkdir -p {plans_dir}/{N}-{slug}/artifacts
-```
-
-This directory holds any non-code artifacts produced during execution (dashboard JSON,
-email templates, architecture diagrams, exported configs, etc.). Reference them from
-progress.md when created.
-
 ### 5.7 Sweep related files into scope folder
 
 Check `{plans_dir}/` for files related to this scope's slug — PRDs, concepting docs,
@@ -814,29 +807,38 @@ Exclude `PLANS-INDEX.md`, `TO-DO.md`, and any files already inside subdirectorie
 After this step, only the scope folder remains in `plans/` for this task — no orphaned
 working files at the top level.
 
-### 5.8 Update PLANS-INDEX.md
+### 5.8 Update PLANS-INDEX.md — via the script, never by hand
 
-`{N}` was already resolved in Step 5.2 and used to name the scope folder; this
-step just appends the index row.
-
-If `PLANS-INDEX.md` doesn't yet exist, create it with the header below and
-start numbering at 1:
-
-```markdown
-# Plans Index
-
-All scopes, PRDs, and plans across the project. Types: `prd` (business requirements),
-`scope` (multi-skill orchestration), `plan` (single-session executable task).
-
-| # | Date | Type | Folder/File | Project | Status | Description |
-|---|------|------|-------------|---------|--------|-------------|
+```bash
+~/Projects/ai-skills/scripts/plans-index.py add "$PLANS_DIR/PLANS-INDEX.md" \
+  --num "$N" --status "📝 Draft ($(date +%F))" --folder "\`{N}-{slug}/\`" \
+  --desc "{3–4 sentences: what this is and what it changes}" \
+  --creator "$(git config user.name)"
 ```
 
-Append the scope entry with its assigned number:
+The script refuses to append against a non-canonical header instead of leaking a
+mismatched row. Canonical shape, both tables:
 
 ```markdown
-| {N} | {date} | scope | {N}-{slug}/ | {project} | Active | {one-line description} |
+| # | Status | Folder | Description | Created by |
+|---|--------|--------|-------------|------------|
 ```
+
+**Write the Description as 3–4 real sentences, not a label.** This column is Alex's
+high-level tracker — he reads it from the console to see what has been going on across
+the project, so it is the one place worth spending words (`/markdown-style` §11.7.4).
+Say what the scope changes and why, not just its title.
+
+If `PLANS-INDEX.md` doesn't exist, create it with the two canonical tables
+(`## Active Plans` and `## Completed / Archived`, each with the header above) and
+start at 1.
+
+> **Why the shape is enforced in code.** The old version of this step carried a
+> seven-column template (`| {n} | {date} | scope | {path} | {project} | {status} |
+> {desc} |`) that matched no reader. PMG's index still had two conflicting shapes as
+> late as 2026-08-09 and 39 of its Active rows rendered their description **nowhere**,
+> because an undeclared column shifted every cell right. `plans-index.py` exists so a
+> shape mismatch is a refusal rather than a silent leak.
 
 ### 5.9 Generate plan stubs (phased scopes only)
 
@@ -985,11 +987,6 @@ across the whole lifecycle.
 After archiving (Step 7), run the full post-flight checklist. These steps are NOT
 optional — they are part of scope completion. Do not declare the scope done until
 all post-flight items are addressed.
-
-### 8.1 Close background shells
-
-Check for any background shells or processes started during scope execution.
-Wrap them up or inform the user if they cannot be closed programmatically.
 
 ### 8.2 Run /closeout-extended (self-heal)
 

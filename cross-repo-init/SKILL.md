@@ -1,6 +1,6 @@
 ---
 name: cross-repo-init
-version: 1.2.0
+version: 1.3.0
 description: |
   Bootstrap **and ongoing maintenance** of the trio — CROSS-REPO.md, ARCHITECTURE.md,
   and CLAUDE.md — for a repo so /plan and /closeout-extended have the metadata they
@@ -585,7 +585,7 @@ Also verify post-fold state:
 - No `wellmed-system-architecture.md` (or similar predecessor) at repo root
   if it was archived in §4.4.
 
-## 7. Step 5 — Report
+## 6.1 Step 5 — Report
 
 ```
 ✅ /cross-repo-init complete for <REPO_NAME>
@@ -717,35 +717,7 @@ authoring CROSS-REPO.md for either, make the distinction explicit in the
 archetype declaration and in §4 Notes — /closeout-extended needs to walk
 both edges for full coverage.
 
-## 8. First Run Recipe — pmg-integrations (Phase 5 dogfood target)
-
-For the very first dogfood run:
-
-```bash
-cd ~/Projects/pmg/pmg-integrations
-```
-
-Then invoke /cross-repo-init. Expected behavior:
-
-1. Detects repo: pmg-integrations
-2. CROSS-REPO.md absent → scaffolds
-3. Auto-detects: wellmed-infrastructure as Pattern Source (from imports in adapters)
-4. Auto-detects (best-effort): pmg-chatwoot, padmacare-wp, KP2MI-foreign-workers,
-   mcu-status as Consumers (from cross-repo grep)
-5. User reviews proposal, accepts or refines
-6. Writes CROSS-REPO.md
-7. ARCHITECTURE.md absent → scaffolds
-8. Auto-detects Components from top-level dirs (handlers, lib, operations, cron, etc.)
-9. User fills in Data Flow diagram (skill prompts)
-10. Key Decisions lifted from CLAUDE.md + memory
-11. External Integrations detected from SSM patterns + client imports
-12. User reviews proposal, accepts or refines
-13. Writes ARCHITECTURE.md
-14. Re-runs idempotency check → both files HEALTHY → report success
-
-Commit on current branch. Repo is now ready for /plan + /closeout flows.
-
-## 9. Known Limitations
+## 8. Known Limitations
 
 - **Consumer detection requires sibling repos to be checked out locally.** If
   `~/Projects/pmg/pmg-chatwoot` isn't cloned, /cross-repo-init won't detect it as a
@@ -755,7 +727,7 @@ Commit on current branch. Repo is now ready for /plan + /closeout flows.
   mentioning the repo name doesn't mean it's a real consumer). User reviews and prunes.
 - **Templates must exist at `<SKILL_DIR>/templates/`** — symlink setup matters.
 
-## 10. Recovery from Failed Runs
+## 9. Recovery from Failed Runs
 
 If the skill halts mid-way (e.g., user closed the terminal), nothing is left in a
 broken state — files are only written after explicit user approval at the end of each

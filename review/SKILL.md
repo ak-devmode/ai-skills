@@ -1,6 +1,6 @@
 ---
 name: review
-version: 2.0.0
+version: 2.0.1
 description: |
   Pre-landing code review in two passes: gstack's review engine for generic
   correctness, security, and diff quality, then a Kalpa/PMG domain pass that a
@@ -63,7 +63,20 @@ is a finding about the ADR, and must say so.
 2.1 Read `~/.claude/skills/gstack/review/SKILL.md` and execute it against the
 resolved target. That path is the gstack repo root symlink, which is stable
 regardless of which skill owns the bare `/review` name — do not reach for
-`~/.claude/skills/review`, which is this skill.
+`~/.claude/skills/review/SKILL.md`, which is this skill.
+
+**Its assets are all under `~/.claude/skills/gstack/review/`** — `checklist.md`,
+`greptile-triage.md`, `design-checklist.md`, `specialists/*.md`. If a path in that
+engine 404s, resolve it there before concluding anything is stale.
+
+> **Why that warning is here.** gstack's `review/SKILL.md` is inconsistent with
+> itself: 8 of its asset paths use `~/.claude/skills/gstack/review/...`, but 2 —
+> `checklist.md` and `greptile-triage.md` — use `~/.claude/skills/review/...`, which
+> only worked while gstack owned the bare name. Taking that name for this skill broke
+> those two, and the first real run correctly found the files missing but wrongly
+> blamed this skill's Step 2. `setup.sh` now shims both into
+> `~/.claude/skills/review/` so either path resolves; gstack is upstream-tracking and
+> is never edited to fix this.
 
 2.2 Skip Pass 1 entirely on `--kalpa-only`. Note the skip in the report header —
 never let a domain-only run read as a full review.

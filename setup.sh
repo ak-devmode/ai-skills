@@ -123,12 +123,53 @@ done
 
 [ "$skipped_loudly" -gt 0 ] && echo "   ($skipped_loudly issue(s) above — skills listed there are NOT installed)"
 
+# --- asset shims for reclaimed names -------------------------------------------
+# When we take a bare name from gstack, any of ITS files that referenced the name
+# self-referentially now resolve into OUR directory and 404.
+#
+# gstack's review/SKILL.md is inconsistent with itself: 8 asset paths use
+# `~/.claude/skills/gstack/review/...` (which still works, via the repo-root link)
+# but 2 use `~/.claude/skills/review/...` — checklist.md and greptile-triage.md.
+# Our /review invokes that engine, so those two must resolve.
+#
+# Fix at the install layer, not by editing gstack (upstream-tracking) and not by
+# committing absolute symlinks into ai-skills. Convert the reclaimed name into
+# gstack's own install shape — a real dir holding a SKILL.md symlink — and add the
+# shimmed assets beside it.
+shim_reclaimed_assets() {
+  local name="$1"; shift
+  local ours="$AI_SKILLS_DIR/$name/SKILL.md"
+  [ -f "$ours" ] || return 0
+
+  local target="$SKILLS_DIR/$name"
+  if [ -L "$target" ]; then rm -f "$target"; fi
+  mkdir -p "$target"
+  ln -snf "$ours" "$target/SKILL.md"
+
+  local shimmed=0 asset
+  for asset in "$@"; do
+    if [ -e "$GSTACK_DIR/$name/$asset" ]; then
+      ln -snf "$GSTACK_DIR/$name/$asset" "$target/$asset"
+      shimmed=$((shimmed + 1))
+    fi
+  done
+  echo "   $name — install shape converted; $shimmed gstack asset(s) shimmed"
+}
+
+echo ""
+echo "2b. Shimming assets for reclaimed names..."
+if [ -f "$AI_SKILLS_DIR/review/SKILL.md" ] && [ -d "$GSTACK_DIR/review" ]; then
+  shim_reclaimed_assets review checklist.md greptile-triage.md
+else
+  echo "   none"
+fi
+
 echo ""
 
 # --- prune ai-skills links whose source is gone (renames, flattenings) ---
 # A dir symlink into ai-skills that no longer resolves is a leftover from a
 # rename. Claude Code may still half-discover through it, so remove it.
-echo "2b. Pruning stale ai-skills links..."
+echo "2c. Pruning stale ai-skills links..."
 pruned=0
 for entry in "$SKILLS_DIR"/*; do
   [ -L "$entry" ] || continue

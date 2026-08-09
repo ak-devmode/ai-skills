@@ -14,6 +14,8 @@ already caused real data loss. Prose cannot enforce itself — the same reasonin
 | `resolve-plans-dir.sh` | A `case` block copy-pasted into 5 skills | /scope, /plan, /prd, /closeout, /repo-cleanup |
 | `claim-scope-number.sh` | "read the index, find the highest, increment" — **raced; scope 110 collided** | /scope §5.2 |
 | `plans-index.py` | "append a row" with no header written — **leaked 40 untabled rows** | /scope §5.8, /plan §11.4, /closeout §13, /repo-cleanup §6 |
+| `repo-graph-snapshot.sh` | /scope §0.5.2's serial per-repo walk | /scope §0.5.2 |
+| `edit-guard.py` | `python3 - <<PY` string-replaces that **no-op silently** | any scripted multi-file edit |
 
 ## Contracts
 
@@ -41,6 +43,25 @@ a row it was not asked to touch.
 Canonical row shape (decided 2026-08-09):
 
     | # | Status | Folder | Description | Created by |
+
+## edit-guard.py
+
+    edit-guard.py <spec.json|-> [--write] [--root DIR]
+      exit: 0 all validated (applied with --write) · 1 an edit failed, NOTHING written · 2 bad spec
+
+Ops: `replace` (exact substring, must match `count` times, default 1) · `sub` (regex,
+`expect` or `expect_min`) · `cut` (from one anchor to another, optional `with`).
+
+**All-or-nothing.** Every edit is validated against current file contents before any
+write, so a partially-applied refactor never becomes the new baseline. A missed anchor,
+an ambiguous one, a regex matching 0 times, or an `old == new` no-op each fail the run.
+
+Use it instead of a `python3 - <<PY` replace whenever an edit spans multiple files or
+you are about to commit the result. On 2026-08-09 three such edits reported success
+while changing nothing: an anchor that ignored leading whitespace, a regex anchored to
+`^### 12\\.` that skipped seven body items, and a `--folder` override writing an
+invented path over a correct one. All three printed a MISS to stdout and all three were
+followed by a commit. Printing is not checking.
 
 `validate` reports as ISSUES only things that are actually broken: a
 non-canonical header, mixed row widths, an unparseable `#`, or a row whose table

@@ -131,6 +131,19 @@ Prose belongs to judgment: what to ask, when to stop, which trade-off wins.
 > 101/106/107/108. Neither was a comprehension failure. Both were prose
 > asked to be a program.
 
+3.6.2 **A scripted edit must fail when it changes nothing.** Use
+`scripts/edit-guard.py` for any multi-file or pre-commit edit rather than a
+`python3 - <<PY` string-replace. It validates every anchor before writing
+anything and exits non-zero on a miss, an ambiguous match, or a no-op.
+
+> **Why.** On 2026-08-09, three scripted edits in one session reported success
+> while changing nothing — an anchor that ignored leading whitespace, a regex
+> anchored to `^### 12\\.` that skipped seven body items, and a `--folder`
+> override that wrote an invented path over a correct one. Each printed a MISS
+> to stdout; each was followed by a commit. This is the same failure family as
+> `gstack-review-log` exiting 0 after writing nothing, and as §14.0's archive
+> gate: **a green result is not a completed action.** Printing is not checking.
+
 3.7 **Symlinks, not copies, for `~/.claude/skills/`.** Adding a new
 skill: create directory + SKILL.md, then run `./setup.sh` — it links
 every top-level dir, arbitrates name collisions, and prunes links whose

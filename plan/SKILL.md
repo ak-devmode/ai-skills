@@ -647,7 +647,7 @@ full plan context.
 
 ### 11.3 Archive the plan
 
-12.3.0 **Child plans stay in place.** If the plan lives inside a scope folder
+11.3.0 **Child plans stay in place.** If the plan lives inside a scope folder
 (named `<N>-<slug>/`, or legacy `scope-<slug>/`)
 (child of a /scope), do NOT move or archive the plan files. The plan file stays
 in the scope folder, and its progress lives as a subsection inside the scope's
@@ -658,13 +658,13 @@ the parent scope's progress.md Plans table + scope-level Resume Context, mark
 the child plan's subsection Resume Context as "Plan complete — N/N tasks done",
 and extract TODOs. Skip §11.3.1 through §11.3.2 entirely for child plans.
 
-12.3.1 **Standalone plans — determine the archive directory:**
+11.3.1 **Standalone plans — determine the archive directory:**
 - Numbered plan (e.g., `39.2-cashier-settlement`):
   `{plans_dir}/archive/39.2-cashier-settlement/`
 - Unnumbered plan (e.g., `ci-hardening`):
   `{plans_dir}/archive/ci-hardening/`
 
-12.3.2 **Standalone plans — archive based on where the plan lives:**
+11.3.2 **Standalone plans — archive based on where the plan lives:**
 
 **Standalone plan in its own folder** (e.g., `{plans_dir}/ci-hardening/`):
 Move the entire folder to archive — this includes the plan, progress, PRDs,
@@ -773,13 +773,13 @@ parent scope's progress.md was updated.
 After reporting completion, check the plan's parent folder (scope folder or plans
 directory) for other plan files that haven't been executed yet:
 
-12.8.1 List `*-PLAN.md` files in the same directory as the completed plan.
+11.8.1 List `*-PLAN.md` files in the same directory as the completed plan.
 
-12.8.2 Cross-reference each with `PLANS-INDEX.md` — exclude any marked `Done`.
+11.8.2 Cross-reference each with `PLANS-INDEX.md` — exclude any marked `Done`.
 Also check the parent scope's `progress.md` Plans table if inside a scope
 folder (named `<N>-<slug>/`, or legacy `scope-<slug>/`).
 
-12.8.3 If pending sibling plans exist, present them to the user:
+11.8.3 If pending sibling plans exist, present them to the user:
 
 ```
 📋 Sibling plans in {folder}:
@@ -789,7 +789,7 @@ folder (named `<N>-<slug>/`, or legacy `scope-<slug>/`).
 Continue to the next plan? (Y to proceed / N to stop here)
 ```
 
-12.8.4 If the user says yes, invoke `/plan` on the next pending sibling (by plan
+11.8.4 If the user says yes, invoke `/plan` on the next pending sibling (by plan
 number order). **Whether to suggest `/clear` first is keyed off the gate type** of
 the CHECKPOINT just completed (the `**Gate**:` field in the plan's phase CHECKPOINT,
 set by /scope §5.9):

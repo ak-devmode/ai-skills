@@ -16,16 +16,18 @@ immediately, via the symlinks at `~/.claude/skills/<name>`.
 
 ## 1. What this repo is
 
-Alex's personal Claude Code skills repo. Each top-level directory (except
-`templates/` and `plans/`) is a skill registered with Claude Code via a
+Alex's personal Claude Code skills repo. Each top-level directory except
+`templates/`, `scripts/` and `plans/` is a skill, registered with Claude Code by a
 symlink at `~/.claude/skills/<name>` → `~/Projects/ai-skills/<name>`.
+(That exclusion list is `NON_SKILL_DIRS` in `setup.sh` — keep them in sync.)
 Edits land immediately — there is no build, no deploy, no version bump
 required for behavior to change.
 
 Skills published here govern Alex's planning + execution workflow
 (`/prd`, `/scope`, `/plan`, `/closeout`, `/closeout-extended`,
 `/cross-repo-init`), markdown formatting (`/markdown-style`), and a
-handful of project-specific helpers (`kalpa/`, `member-record-amend`).
+handful of project-specific helpers (`kalpa-*`, `member-record-amend`),
+plus `/review`, which layers a Kalpa domain pass over gstack's engine.
 See `ARCHITECTURE.md §1` for the full catalog with status.
 
 A sibling skills repo at `~/Projects/gstack/` (upstream
@@ -101,7 +103,7 @@ target repos.
 two skills need, factor it into one skill's section and have the other
 reference it by section number. Current examples:
 - `/closeout` Step 8 invokes `/cross-repo-init` for trio sync.
-- `/closeout` Step 11 invokes `/plan` §12 archive logic.
+- `/closeout` Step 11 invokes `/plan` §11 archive logic.
 - `/closeout-extended` invokes `/closeout`'s engine per neighbor repo in a
   worktree (inheriting the trio sync rather than duplicating it).
 
@@ -161,7 +163,9 @@ name that can't collide is better than a name that gets arbitrated.
 
 ```
 prd/SKILL.md                    — PRD generator
-scope/SKILL.md                  — task scoping + skill router
+scope/SKILL.md                  — task scoping + skill router (judgment + gates only)
+scope/references/               — conventions + postmortems, loaded on demand
+scope/templates/                — scope.md / progress.md / plan-stub / skill-checklist
 plan/SKILL.md                   — task execution engine (Phase 0 + Pattern-First Rule)
 plan/tests/verification-recipes.md  — manual test recipes for /plan rules
 closeout/SKILL.md               — local self-heal
@@ -220,7 +224,7 @@ Claude Code invocation:
   text inside skills.
 - **Do not fork an existing skill into a parallel implementation.** If
   `/closeout` and `/plan` need the same archive logic, /closeout
-  invokes /plan §12 — never duplicates it. (See §3.5 of this file and
+  invokes /plan §11 — never duplicates it. (See §3.5 of this file and
   Pattern-First Rule in `plan/SKILL.md` §7.)
 - **Do not add a feature without a /scope or /plan entry.** Multi-step
   work tracked in `plans/<scope>/`; one-off small fixes can go direct

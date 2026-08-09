@@ -32,7 +32,7 @@ skills from this repo via symlinks), not contract-based.
 ## Pattern Sources
 
 <!-- Skills here may follow conventions from each other (e.g. /closeout
-     reuses /plan §12 archive logic), but those are intra-repo links — not
+     reuses /plan §11 archive logic), but those are intra-repo links — not
      cross-repo Pattern Sources. -->
 
 (none — standalone leaf)

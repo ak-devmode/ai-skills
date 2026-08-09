@@ -17,7 +17,7 @@ time. Never a literal, never copied from an example. (§5.4, and `/plan` §3.1.)
 ## 2. Scope numbers race, and the skill that mints them read the wrong source
 
 `/scope` §5.2 used to say "read `PLANS-INDEX.md`, find the highest `#`, increment"
-against the **local working tree**. `/plan` §12.4 already knew better, saying to read
+against the **local working tree**. `/plan` §11.4 already knew better, saying to read
 `git show origin/main:…` "since concurrent sessions race for scope numbers." Two skills,
 two answers, and the one that assigns numbers was the wrong one. Scope 110 collided with
 a concurrent session and had to be renumbered 111.

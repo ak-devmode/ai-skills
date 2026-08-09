@@ -483,7 +483,7 @@ local and origin disagree, another session has pushed or you have unpushed rows,
 the note says so.
 
 > **Why this is a script.** This step used to say "read `PLANS-INDEX.md`, find the
-> highest, increment" against the **local working tree**, while `/plan` §12.4 already
+> highest, increment" against the **local working tree**, while `/plan` §11.4 already
 > knew to read `git show origin/main:…` "since concurrent sessions race for scope
 > numbers." The two skills disagreed and the one that mints numbers was the wrong
 > one. Scope 110 collided and had to be renumbered 111.
@@ -660,7 +660,7 @@ to `{scope-folder}/artifacts/` so the scope folder stays self-contained.
 
 ## Step 7 — Archive (end of task)
 
-**`/plan` §12 owns archive logic — follow it, don't duplicate it.** `/closeout` §13 does
+**`/plan` §11 owns archive logic — follow it, don't duplicate it.** `/closeout` §13 does
 the same. This step adds only the routing that is specific to a scope:
 
 7.1 **Where it goes.** A standalone scope moves to `{plans_dir}/archive/{N}-{slug}/`. A

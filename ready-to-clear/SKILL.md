@@ -7,7 +7,7 @@ description: |
   (commits, dirty trees, branches) and runs a cold-resume test before any /clear
   suggestion is allowed. Use when asked "is it safe to clear", "ready to clear",
   "validate resume state", or "can I clear now". Also invoked as a MANDATORY gate
-  by /plan (§12.8.4/§12.8.5), /scope (Step 8.4), and after /closeout, before those
+  by /plan (§11.8.4/§11.8.5), /scope (Step 8.4), and after /closeout, before those
   skills suggest /clear. Catches the end-of-context failure mode where the executing
   session believes it is done but progress/ledger/index writes were dropped.
 allowed-tools:
@@ -43,7 +43,7 @@ open `NOT READY` verdict — surface the failure list to the user instead.
 ## 2. Invocation Contexts
 
 - **Standalone** — user asks "ready to clear?" at any point. Run Steps 3–6.
-- **From /plan** — at §12.8.4 (A/D/E gate handoff) and §12.8.5 (scope complete),
+- **From /plan** — at §11.8.4 (A/D/E gate handoff) and §11.8.5 (scope complete),
   before the `/clear` suggestion is emitted.
 - **From /scope** — at Step 8.4.3, before telling the user to run `/clear`.
 - **After /closeout** — /closeout intentionally leaves an uncommitted working tree
@@ -123,14 +123,14 @@ found along the way and it never made it into the record."
 
 ### 5.D Completion integrity (only when the claim says complete/archived)
 
-- TODOs extracted to TO-DO.md with a section for this plan (/plan §12.2).
+- TODOs extracted to TO-DO.md with a section for this plan (/plan §11.2).
 - PLANS-INDEX.md row status matches the claim (plan → Done; scope archival
   repointed paths per /scope Step 7.2).
 - Parent scope progress.md: Plans table row updated + scope-level Resume Context
-  repointed (/plan §12.5).
+  repointed (/plan §11.5).
 - Closeout state is explicit: either /closeout ran (evidence: doc-drift edits,
   summary, archive) or the deferral is durable (TO-DO.md entry + Resume Context
-  "Open blockers" line — /plan §12.6). A closeout that is neither run nor
+  "Open blockers" line — /plan §11.6). A closeout that is neither run nor
   durably deferred = FAIL.
 
 ### 5.E Cold-resume test (the sharpest check)

@@ -279,7 +279,7 @@ keep theirs until touched.
 ### 8.4 Closing Cleanup (Required on Completion)
 
 8.4.1 **A child plan never archives on its own.** It stays in its scope folder; the
-whole folder moves when every sibling is done (`/plan` §12.3.0). Completion is
+whole folder moves when every sibling is done (`/plan` §11.3.0). Completion is
 recorded by status only — the scope's `progress.md` subsection, its Plans table, and
 the index row.
 
@@ -586,7 +586,7 @@ running cost, not a cosmetic concern. Four rules keep it bounded.
 
 11.7.1 **Two tables, one shape.** Active Plans and Completed / Archived both use
 `| # | Status | Folder | Description | Created by |`. A row that does not match
-that shape does not belong in the file — see `/plan` §12.4 for what a headerless
+that shape does not belong in the file — see `/plan` §11.4 for what a headerless
 append does over time.
 
 11.7.2 **Table membership follows disk state, never scope number.** A scope whose
@@ -621,7 +621,7 @@ index row is the glance.
 
 > **Why this reversed (2026-08-09).** This rule used to read "No per-plan rows."
 > WellMed carried 132 of them and PMG 76, all deliberate, all useful. `/plan`
-> §12.4's stronger claim ("never append a per-plan row") was aimed at a real
+> §11.4's stronger claim ("never append a per-plan row") was aimed at a real
 > defect — a *headerless* append that leaked 40 untabled rows — and over-corrected
 > from "append without a header" to "never append." The header is the thing that
 > matters, and `scripts/plans-index.py` now enforces it mechanically.

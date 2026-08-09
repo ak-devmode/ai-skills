@@ -13,7 +13,7 @@ already caused real data loss. Prose cannot enforce itself — the same reasonin
 |---|---|---|
 | `resolve-plans-dir.sh` | A `case` block copy-pasted into 5 skills | /scope, /plan, /prd, /closeout, /repo-cleanup |
 | `claim-scope-number.sh` | "read the index, find the highest, increment" — **raced; scope 110 collided** | /scope §5.2 |
-| `plans-index.py` | "append a row" with no header written — **leaked 40 untabled rows** | /scope §5.8, /plan §12.4, /closeout §13, /repo-cleanup §6 |
+| `plans-index.py` | "append a row" with no header written — **leaked 40 untabled rows** | /scope §5.8, /plan §11.4, /closeout §13, /repo-cleanup §6 |
 
 ## Contracts
 

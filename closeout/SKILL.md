@@ -5,13 +5,13 @@ description: |
   Local repo self-heal after a /plan run. Consumes closeout-prep.md and leaves the
   repo healthier than /plan found it: re-runs tests, spot-checks pattern references,
   triages new patterns, repairs doc drift in CLAUDE.md / README / ARCHITECTURE / docs,
-  writes cross-cutting memory entries, and archives the scope via /plan's §12 code path.
+  writes cross-cutting memory entries, and archives the scope via /plan's §11 code path.
 
   Scope is the local repo only — for recursive self-heal across CROSS-REPO.md neighbors,
   use /closeout-extended instead.
 
   Use when asked to "closeout", "close out the plan", "self-heal this repo",
-  "finalize the scope", "wrap up the plan", or as the follow-up prompted by /plan §12.6
+  "finalize the scope", "wrap up the plan", or as the follow-up prompted by /plan §11.6
   after a plan completes. Also triggers when /plan reports "all tasks complete" and asks
   whether to run closeout now.
 allowed-tools:
@@ -63,7 +63,7 @@ so running /closeout twice on a healed repo produces no diff on the second pass.
   Step 8  Trio sync via /cross-repo-init (CROSS-REPO.md + trio template drift; idempotent)
   Step 9  §10 coverage report (read-only — no auto-fix)
   Step 10 Memory writes for cross-cutting findings (auto-write, no prompt)
-  Step 11 Invoke /plan §12 archive logic (DO NOT duplicate)  <-- MANDATORY, §13.0
+  Step 11 Invoke /plan §11 archive logic (DO NOT duplicate)  <-- MANDATORY, §13.0
   Step 12 verify-archive.sh gate, THEN summary                <-- gate first, §14.0
 ```
 
@@ -399,7 +399,7 @@ but `CROSS-REPO.md` is not in their scope. This step fills that gap by invoking
 `/cross-repo-init`'s idempotent trio-sync procedure for the local repo.
 
 10.2 **Invoke /cross-repo-init.** Read `~/.claude/skills/cross-repo-init/SKILL.md`
-and execute its steps in-place (same convention as Step 11's reuse of /plan §12 —
+and execute its steps in-place (same convention as Step 11's reuse of /plan §11 —
 do NOT duplicate the logic, follow the source skill verbatim). /cross-repo-init:
 - Audits `CROSS-REPO.md` for drift — declared Pattern Source paths still exist,
   declared Consumers still reference claimed contracts, optional
@@ -489,7 +489,7 @@ flagged by the user, that's the signal to add de-dup logic.
 12.6 Log written memory entries in step 12's summary under "Memory writes" with
 paths so the user can audit.
 
-## 13. Step 11 — Archive Scope via /plan §12 Code Path
+## 13. Step 11 — Archive Scope via /plan §11 Code Path
 
 13.0 **ARCHIVE IS THE POINT OF CLOSEOUT — IT IS MANDATORY.** Moving the scope into
 `archive/` is the act that signifies everything is done; it is the one step whose
@@ -501,7 +501,7 @@ from active work. Rules:
   known residuals is still a completed scope — residuals live in `TO-DO.md`
   (that is the standing convention: a scope closes on delivery).
 - **The only thing that blocks archival is unfinished plan work** — a plan still
-  `❌ FAILED` or `⏸️ WAITING_HUMAN` per /plan §12. Failing tests do NOT block it;
+  `❌ FAILED` or `⏸️ WAITING_HUMAN` per /plan §11. Failing tests do NOT block it;
   they downgrade the status text, per §5.4.
 - **Runs in LEDGER-LESS MODE too** (§3.1a). No ledger is not a reason to skip.
 - **Reaching Step 12 without having archived is a defect.** §14.0's gate catches it.
@@ -513,22 +513,22 @@ the run owned archival. Both sat "active" in PLANS-INDEX for days after completi
 and in both cases a stale index row meant later hygiene passes read them as live
 work and left them alone.
 
-13.1 **Do NOT duplicate /plan's archive logic.** Read /plan/SKILL.md §12 (Plan
+13.1 **Do NOT duplicate /plan's archive logic.** Read /plan/SKILL.md §11 (Plan
 Completion & Archive) and follow that procedure verbatim:
-- §12.1 Extract deferred TODOs
-- §12.2 Append to TO-DO.md
-- §12.3 Archive the plan (child plans stay in scope folder; standalone plans
+- §11.1 Extract deferred TODOs
+- §11.2 Append to TO-DO.md
+- §11.3 Archive the plan (child plans stay in scope folder; standalone plans
   move to `archive/`)
-- §12.4 Update PLANS-INDEX.md — **move the scope's row from Active Plans to
+- §11.4 Update PLANS-INDEX.md — **move the scope's row from Active Plans to
   Completed / Archived in the same commit as the folder move**, compressed to one
   line. Never append a per-plan row. This is the step that keeps the index from
   accumulating stale Active rows (37 of 61 on 2026-08-07) and headerless
   fragments; see `/markdown-style` §11.7.
-- §12.5 Update parent scope (if applicable)
-- §12.7 Print completion summary
-- §12.8 Sibling plan discovery
+- §11.5 Update parent scope (if applicable)
+- §11.7 Print completion summary
+- §11.8 Sibling plan discovery
 
-13.2 Skip §12.6 (the "prompt for /closeout") since /closeout is what's running.
+13.2 Skip §11.6 (the "prompt for /closeout") since /closeout is what's running.
 
 13.3 If the scope is at the scope level (not a single plan), invoke /scope §7
 archive procedure additionally — when ALL plans in a scope are complete, archive
@@ -540,9 +540,9 @@ repo-wide `archive/`; **program-member scopes → the program's own
 13.4 If `--dry-run`, log "would archive scope folder to `{archive-path}`" and
 don't move files.
 
-13.5 **Reuse, do not re-implement.** If /plan §12 changes shape in a future
+13.5 **Reuse, do not re-implement.** If /plan §11 changes shape in a future
 version, /closeout follows automatically. The point of factoring archive logic
-into /plan §12 is exactly to avoid two skills having drifting implementations.
+into /plan §11 is exactly to avoid two skills having drifting implementations.
 
 ## 14. Step 12 — Summary
 
@@ -687,7 +687,7 @@ sync drift is not blocking — the rest of /closeout's work (memory writes,
 archive) should still complete. User can re-run /cross-repo-init manually.
 
 16.7 **Archive step fails** (e.g., target archive dir already exists): halt at
-step 11 with diagnostic. /plan §12 archive is the load-bearing operation — better
+step 11 with diagnostic. /plan §11 archive is the load-bearing operation — better
 to surface and let user resolve than to half-archive.
 
 ## 17. Important Behaviors
@@ -739,7 +739,7 @@ scope. To be exercised in plan Phase 5 §8.6.
    drift (missing Pattern Source path, stale Consumer claim, missing canonical
    trio section), proposes edits to working tree.
 8. Observe Steps 9-10 surface coverage and write memory entries.
-9. Observe Step 11 invokes /plan §12 — scope folder moves to `archive/`,
+9. Observe Step 11 invokes /plan §11 — scope folder moves to `archive/`,
    PLANS-INDEX status flips to Done, TO-DO.md is appended.
 10. Observe Step 12 summary lists all edits with workspace-relative paths,
     including Step 8 trio-sync edits.

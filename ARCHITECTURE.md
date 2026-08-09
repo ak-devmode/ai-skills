@@ -36,7 +36,7 @@ start to understand which skills exist and how they fit together.
   at human/deploy/irreversible gate boundaries.
 - `closeout/` — Local repo self-heal after a /plan run. v1.0.0. Consumes
   `templates/closeout-prep.md.template`. Step 8 runs trio sync via
-  /cross-repo-init; Step 11 invokes /plan §12 archive logic.
+  /cross-repo-init; Step 11 invokes /plan §11 archive logic.
 - `closeout-extended/` — Recursive cross-repo self-heal across the
   CROSS-REPO.md graph. v1.0.0. Works in ephemeral git worktrees; never
   commits or pushes. Inherits the trio sync from /closeout (no separate pass).
@@ -119,7 +119,7 @@ start to understand which skills exist and how they fit together.
 ```
 
 Cross-skill invocation: `/closeout` invokes `/cross-repo-init` (Step 8,
-trio sync) and `/plan` §12 archive logic (Step 11) — not re-implementing
+trio sync) and `/plan` §11 archive logic (Step 11) — not re-implementing
 either. `/closeout-extended` invokes `/closeout` per neighbor repo and
 inherits the trio sync. `/scope` references the full skill catalog by name.
 
@@ -162,7 +162,7 @@ work goes on main; in-progress work that spans sessions is tracked in
 in `~/.claude/skills/<name>` immediately because that path is a symlink
 to this repo. There is no "deploy" step.
 
-3.8 **Cross-skill reuse, not duplication.** /closeout reuses /plan §12
+3.8 **Cross-skill reuse, not duplication.** /closeout reuses /plan §11
 archive logic directly (does not duplicate). /closeout-extended invokes
 /closeout per neighbor (does not duplicate self-heal logic). When a
 common pattern emerges, factor it into one skill's section and have
@@ -210,7 +210,7 @@ graphs.
 | `prd` | v1.0.0 | |
 | `scope` | v3.3.0 | Gate-driven phasing — phases defined by work gates (A–F), not token size. |
 | `plan` | v3.4.0 | Plan = one phase bounded by a gate; /clear only at human/deploy/irreversible gates. |
-| `closeout` | v1.0.0 | Step 8 trio-sync via /cross-repo-init; Step 11 /plan §12 archive. Dogfooded. |
+| `closeout` | v1.2.0 | Step 8 trio-sync via /cross-repo-init; Step 11 /plan §11 archive. Dogfooded. |
 | `closeout-extended` | v1.0.0 | Inherits /closeout trio sync per neighbor; worktree-isolated. |
 | `cross-repo-init` | v1.2.0 | Bootstrap + ongoing maintenance; invoked by /closeout Step 8. Branch survey now classifies merged-vs-live branches. |
 | `kalpa/` | Stable | Six WellMed-project skills. |

@@ -276,7 +276,37 @@ Healthy. `COMPRESS` the two question rounds on the same reasoning as `/scope` St
 
 **KEEP AS-IS.** No changes proposed. Reference implementation for the target shape.
 
-### 4.9 Secondary
+### 4.9 ~/.claude/CLAUDE.md — 97 lines, 1,169 words (personal/master)
+
+Healthier than the skills, because it is mostly *preference* rather than *procedure* —
+and preference doesn't accrete the same way. Two problems: it hand-maintains a list the
+harness already injects, and it carries two rules that want to live in a skill.
+
+| Section | Verdict | Note |
+|---|---|---|
+| Interaction Style (3 bullets) | **KEEP** | Challenge-my-thinking / answer-inline-first / outline-multi-step shape every response. Non-derivable. |
+| Document Formatting (3 bullets) | **KEEP** | Numbered headings, checkbox actions, ASCII-not-Mermaid. The Mermaid rule includes "convert on edit," which is the enforcement half — keep it. |
+| Code Preferences (2 bullets) | **KEEP** | Comment block at top, prefer diffs. Cheap. |
+| Shell Command Style | **KEEP + close the gap** | `cd X && Y` bypassing the allowlist is a non-obvious harness fact and the single most useful line in the file. But see §5.12. |
+| Tips & Shortcuts | **KEEP** | Ghostty, no IDE — prevents a whole class of bad advice. |
+| Workflow — planning hierarchy | **KEEP** | |
+| Workflow — skill inventory (gstack list, custom list, kalpa list) | **CUT the enumeration, KEEP the locations** | The harness injects the live skill list every session. This hand-maintained copy can only drift, and has: it advertises 6 kalpa skills of which **2 are registered** (§5.11), lists `/review` under both gstack and kalpa when gstack wins the collision, and omits 8 of your own — `/closeout`, `/closeout-extended`, `/cross-repo-init`, `/repo-cleanup`, `/repo-cleanup-all`, `/scope-review`, `/ready-to-clear`, `/md2docx`, `/member-record-amend`. What's non-derivable and stays: *where* they live and that gstack updates via `git pull`. |
+| Workflow — plans live centrally | **KEEP** | The two paths + PLANS-INDEX. Load-bearing. |
+| Workflow — plan artifacts copy | **MOVE → /scope §6.1** | `/scope` already says half of this. Duplicate. |
+| Workflow — "Skip /ship in PMG and WellMed" (~150 words) | **MOVE → /scope §4 N/A table** | Its own last sentence is "`/scope` should mark `/ship` N/A for these repos with this reason." A rule asking to be enforced by a skill instead of remembered by prose. Phase 3 is rewriting that table anyway. Leave one line here. |
+| My Context (businesses) | **KEEP** | |
+| Personal Coding Prefs — Go | **COMPRESS** | `go build ./...` / `go test ./...` / `golangci-lint run` / `gofmt -w .` is the standard toolchain. Keep only: prefer table-driven tests, context for cancellation, handle errors explicitly. |
+| Personal Coding Prefs — Node | **DELETE — model** | Build/dev/test commands are read from `package.json`. Prettier + ESLint are detected from config presence. |
+| Personal Coding Prefs — Python | **DELETE — model** | venv + black + "type hints appreciated" — all standard defaults. |
+| Personal Coding Prefs — Database | **COMPRESS to 1 line** | "PostgreSQL for all persistent storage" is context worth keeping. "Use migrations for schema changes" and "parameterized queries (never string concat)" are 2023-era guardrails — no current model concatenates SQL. |
+| Git Preferences | **KEEP** | `feature:` not `feat:` is a real commitlint constraint that a model *will* get wrong by default. Highest-value line in the section. |
+| Commit proactively / never orphan WIP | **KEEP** | Includes the ai-skills-dirties-a-repo-that-is-never-CWD insight and names the hook that backstops it. Exactly right. |
+| Branch defaults | **KEEP** | Per-repo trunk, never commit to trunk, verify HEAD at session start. |
+
+**Target: 97 → ~60 lines.** Every deletion is derivable toolchain content; the two
+rule-shaped items relocate into the skill that can actually enforce them.
+
+### 4.10 Secondary
 
 `/repo-cleanup` (447) and `/scope-review` (361) reviewed at heading level only. Both
 read as more disciplined than the core eight — `/repo-cleanup` because it is inherently
@@ -375,6 +405,88 @@ three projects, and child plans explicitly **do not** archive individually (`/pl
 §12.3.0, and §8.9.4 four sections later in the same file).
 
 - [ ] Rewrite to the three-project convention; remove the per-plan archive instruction.
+
+### 5.9 Memory is CWD-scoped, and every memory citation in ai-skills points at the wrong scope
+
+`ai-skills/CLAUDE.md` §9.3 states that the memory dir at
+`~/.claude/projects/-Users-alexknecht-Projects-pmg/memory/` "happens to load when
+working in any project Alex opens." **It doesn't.** Memory is scoped by a path derived
+from the working directory. Nine scopes exist:
+
+```
+  -Users-alexknecht-Projects-pmg                     148 files   <- real
+  -Users-alexknecht-Projects-WellMed                 224 files   <- real
+  -Users-alexknecht                                   19 files
+  -Users-alexknecht-Projects-bernard                   8 files
+  -Users-alexknecht-Projects                           8 files
+  -Users-alexknecht-Projects-narawangsa                 7 files
+  -Users-alexknecht-Projects-pmg-pmg-docs               4 files
+  -Users-alexknecht-Projects-pmg-chatwoot-services      2 files
+  -Users-alexknecht-Projects-WellMed-kalpa-docs         1 file
+```
+
+All 11 memory files that ai-skills' skills cite as justification exist **only** in the
+pmg scope. So when a skill runs in WellMed — the 224-file scope, where most of the work
+happens — those citations dead-end:
+
+| Citing skill | § | Cited file | Loadable in WellMed? |
+|---|---|---|---|
+| `/cross-repo-init` | 7.10 | `feedback_kalpa_health_lowercase.md` | no |
+| `/plan` | 5.8 | `feedback_branch_workflow.md` | no |
+| `/closeout` | 4.3 | `feedback_branch_workflow.md` | no |
+| `/closeout-extended` | 7.1.2 | `feedback_branch_off_develop.md` | no |
+| `ai-skills/CLAUDE.md` | 9.3 | 9 more | no |
+
+The *rules* survive, because each is also stated inline — which is the only reason this
+hasn't bitten visibly. But the evidence pointer is broken, and "see
+`feedback_branch_off_develop.md`" reads to a teammate's agent as a file it should have
+been able to read.
+
+- [ ] Stop citing memory paths from skills. A skill that needs a rule states the rule.
+- [ ] Fix `ai-skills/CLAUDE.md` §9.3 to describe the actual scoping.
+
+### 5.10 Memory is fragmenting into orphan scopes
+
+Seven of the nine scopes above are splinters holding 49 files between them. Starting a
+session from a *subdirectory* (`pmg/pmg-docs`, `wellmed/kalpa-docs`,
+`pmg/chatwoot-services`) mints a new scope, and anything written there is invisible from
+the parent project thereafter. `-Users-alexknecht-Projects-WellMed-kalpa-docs` has one
+file that no WellMed session will ever see.
+
+- [ ] Decide: consolidate the splinters into the two real scopes, or accept the split and
+      document which is authoritative. The 19 files at `-Users-alexknecht` may be the
+      right home for genuinely cross-project facts.
+
+### 5.11 Four of six kalpa skills are not registered; `/review` resolves to gstack's
+
+`ai-skills/kalpa/` has **no `SKILL.md` of its own** — it is a container holding six
+sub-skill directories. `setup.sh` (line 67) iterates `$AI_SKILLS_DIR/*/` and symlinks
+each top-level directory, so it links the *container*. Nested discovery is partial:
+this session's skill list contains `generate-api` and `migrate` and nothing else from
+`kalpa/`. Invisible: `coding-standards`, `kalpa-context`, `satu-sehat-fhir`, and kalpa's
+`review` — the last of which collides with gstack's `/review`, and gstack wins.
+
+Global `~/.claude/CLAUDE.md` advertises all six by name.
+
+This is the same failure class as the ax-installer shadowing gstack's `/retro`, already
+recorded in memory. `setup.sh` was patched four commits ago (`5ccf54a`) to "arbitrate
+skill-name collisions instead of skipping" — so the mechanism exists, but `kalpa/`'s
+nesting routes around it.
+
+- [ ] Either flatten to namespaced top-level dirs (`kalpa-review`, `kalpa-coding-standards`, …)
+      or give `kalpa/` a router `SKILL.md` the way `/gstack` has one. Flattening is the
+      smaller change and makes the collision impossible rather than arbitrated.
+- [ ] Have `setup.sh` fail loudly when a directory under `ai-skills/` contains no
+      `SKILL.md` and no router — silent partial registration is what hid this.
+
+### 5.12 The `cd` rule's own exception lives somewhere else
+
+Global CLAUDE.md: "Never use `cd` as the first verb unless there is genuinely no path
+flag for the tool (rare)." Memory `reference_bash_tool_zsh_no_wordsplit.md` records the
+actual exception: `golangci-lint` has no `-C` flag, so `cd` is correct there. A rule and
+its only known exception should not be two documents apart.
+
+- [ ] Name the exception inline in CLAUDE.md.
 
 ---
 
@@ -497,6 +609,16 @@ Ordered by dependency. Each phase is one reviewable unit.
 - [ ] Run the `/markdown-style` §3.3 numbering audit across every body
 - [ ] Version-bump each SKILL.md; record supersessions in `references/postmortems.md`
 
+### 7.2a Phase 3b — the harness layer (independent of the skill rewrite)
+
+- [ ] Flatten or route `kalpa/` so all six skills register (§5.11); make `setup.sh` fail
+      loudly on a SKILL.md-less directory
+- [ ] Rewrite `~/.claude/CLAUDE.md` per §4.9 — 97 → ~60 lines
+- [ ] Relocate the `/ship`-N/A rule and the plan-artifacts-copy rule into `/scope`
+- [ ] Fix `ai-skills/CLAUDE.md` §9.3's memory-scope claim (§5.9)
+- [ ] Decide memory-scope consolidation (§5.10)
+- [ ] Strip memory-path citations out of skill bodies (§5.9)
+
 ### 7.3 Phase 4 — fan-out, deletions, propagation
 
 - [ ] Parallelize per §6.2; replace `/closeout-extended` §7.2 with `Agent(isolation: "worktree")`
@@ -516,26 +638,31 @@ Ordered by dependency. Each phase is one reviewable unit.
 
 ---
 
-## 8. Open questions for review
+## 8. Decisions
 
-8.1 **PLANS-INDEX canonical shape** — the 5-column form in `/markdown-style` §11.7.1
-drops `Date` and `Type`. Intended, or an artifact of compressing an example? All three
-indexes need migrating either way, so this decides once.
+8.1 **PLANS-INDEX canonical shape** — RESOLVED 2026-08-09: 5 columns
+`| # | Status | Folder | Description | Created by |`. `Date` and `Type` are dropped;
+`plans-index.py` enforces. All three indexes migrate, including ai-skills' own (§5.2).
 
-8.2 **`Created by` in the index** — §11.7.1's 5th column is `Created by`, but the
-WellMed index has 61 rows that mostly predate that field. Backfill from git, leave
-blank, or drop the column?
+8.2 **`/scope` Step 4's 18-skill checklist** — RESOLVED 2026-08-09: the forcing function
+survives as "consider all 18, emit only what applies." ~90 lines → ~20 in the body, four
+tables to `templates/skill-checklist.md`.
 
-8.3 **How much postmortem prose survives.** My default: the *rule* stays in the body
-as 1–3 lines, the forensics move to `references/postmortems.md` verbatim. The counter-case
-is that the forensics are what make the rule stick — you wrote them for that reason.
-Say the word and they stay inline, at a cost of roughly 180 lines across the eight.
+### 8.3 Still open
 
-8.4 **`/scope` Step 4's 18-skill checklist** — I want to cut ~90 lines to ~20 and move
-the four tables to a template. That checklist is the most visible thing `/scope` produces
-for your team. Confirm the forcing function survives as "consider all 18, emit only what
-applies", or tell me it needs to stay itemized in the body.
+8.3.1 **`Created by` backfill** — §11.7.1's 5th column is `Created by`, but the WellMed
+index has 61 rows that mostly predate the field. Backfill from git history, leave blank,
+or drop the column? (Backfill is cheap — `git log --diff-filter=A` on each scope folder.)
 
-8.5 **Scope this as a tracked scope?** This is 3 phases of real work in `ai-skills`. It
+8.3.2 **How much postmortem prose survives inline.** Default: the *rule* stays in the
+body as 1–3 lines, the forensics move to `references/postmortems.md` verbatim. The
+counter-case is that the forensics are what make the rule stick — you wrote them for
+that reason. Cost of keeping them inline: ~180 lines across the eight.
+
+8.3.3 **Memory-scope consolidation** (§5.10) — merge the seven splinter scopes into the
+two real ones, or accept the split and declare which is authoritative?
+
+8.3.4 **Track this as a numbered scope?** Three phases of real work in `ai-skills`. It
 should probably have a `plans/{N}-skills-relook/` folder with progress tracking — using
-the skills to rebuild the skills. Say go and I'll run `/scope` on it properly.
+the skills to rebuild the skills, which also dogfoods every change. Say go and I'll run
+`/scope` on it properly.

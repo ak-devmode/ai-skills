@@ -1,0 +1,34 @@
+<!-- /scope §5.9 writes one per phase as {N}.{P}-{slug}-PLAN.md. Stub depth is fine;
+     the executing /plan session deepens it. The Gate field is REQUIRED. -->
+# Plan {N}.{P}: {Phase name}
+
+**Version:** 0.1 (stub — detail filled at session start)
+**Date:** {today's date}
+**Created by:** {derived from git config — see §5.4; never a literal name}
+**Executed by:** TBD
+**Status:** Draft
+**Plan #:** {N}.{P}
+**Parent scope:** {plans_dir}/{N}-{slug}/scope.md
+**Branch:** {branch or TBD}
+
+## Related Docs
+- `{plans_dir}/{N}-{slug}/scope.md` — parent scope
+- `{plans_dir}/{N}-{slug}/progress.md` — progress tracker
+
+---
+
+## Phase {P}: {Phase Name}
+
+### Task {P}.1: {Task Title}
+- **Type**: AI | HUMAN | AI+HUMAN_REVIEW
+- **Input**: {workspace-relative paths}
+- **Action**: {outline — detail filled at session start}
+- **Output**: {files/artifacts produced}
+- **Acceptance**: {how to verify}
+
+---
+### 🔲 CHECKPOINT: Phase {P} Complete
+**Gate**: {A human | B concurrency | C review/merge | D deploy/verify | E irreversible | F compliance}
+**Review**: {what the human should verify}
+**Resume**: "continue the {N}.{P} {slug} plan"
+---

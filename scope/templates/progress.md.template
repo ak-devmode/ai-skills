@@ -1,0 +1,58 @@
+<!-- /scope §5.5 writes this. The Operating Contract block is pinned and survives
+     compaction; the Resume Context block is the ONLY overwritable section. -->
+# Progress: {Task title}
+
+## Operating Contract (pinned — survives compaction; re-read on every resume)
+{Ground rules agreed with the user at scope/plan kickoff — execution posture
+(deliberate vs fast), mismatch handling (STOP vs proceed), regrounding rules,
+ADR-edit boundaries, check-in cadence, context posture. Number them. If none
+were stated, seed with the defaults below and refine at /plan kickoff:}
+1. Scope↔code mismatch = STOP, investigate in-context, report before proceeding.
+2. Re-validate each phase's surface against live code before entering it; raise
+   gaps in batched blocks, not per-step.
+3. Wrap + commit + check in at every phase boundary; progress updates land more
+   frequently than boundaries (compaction defense). This file alone must be
+   sufficient for a cold context to resume.
+
+## Resume Context
+**Scope:** {plans_dir}/{N}-{slug}/scope.md
+**Last action:** Scope created ({today's date})
+**Next action:** {first YES skill from checklist}
+**Open blockers:** {human steps or external deps, or "None"}
+**Key files changed:** None yet
+
+---
+
+## Decisions Log
+- ({today's date}) {Key decisions from scoping rounds that shaped the approach}
+
+---
+
+## Progress Log
+
+| Date | Skill/Action | Status | Notes |
+|------|--------------|--------|-------|
+| {date} | /scope | Done | Scope created — {one-line summary} |
+
+---
+
+## Human Steps
+
+| Step | Status | Notes |
+|------|--------|-------|
+| (none identified yet) | — | — |
+
+---
+
+## Plans
+{Omit this section for atomic scopes. For phased scopes:}
+
+| # | Plan File | Phase | Status | Notes |
+|---|-----------|-------|--------|-------|
+| {N}.1 | {N}.1-{slug}-PLAN.md | Phase 1 — {name} | Draft | |
+| {N}.2 | {N}.2-{slug}-PLAN.md | Phase 2 — {name} | Draft | |
+
+---
+
+## Artifacts
+(none yet)

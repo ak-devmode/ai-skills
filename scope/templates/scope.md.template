@@ -1,0 +1,66 @@
+<!-- /scope §5.4 writes this. Placeholders in {braces}. Sections marked Required-if
+     are omitted with a one-line reason when their trigger did not fire. -->
+# {Task title}
+**Project:** {detected project}  **Branch:** {branch}  **Date:** {today's date}
+**Created by:** {derived — see below}
+**Scope folder:** {plans_dir}/{N}-{slug}/
+**Source repo(s):** {absolute paths to repos this task touches}
+
+## Context
+{1–3 sentences: what this is, why it's being done, what triggered it}
+
+## Repo Graph
+{Required if CROSS-REPO.md exists in the primary repo (Step 0.5 ran). Omit
+ otherwise with a one-line note "Single-repo task — no CROSS-REPO.md present."
+
+ The SHA snapshot below is the freshness contract /plan validates against
+ before executing. Do NOT edit these SHAs by hand once recorded — if state
+ changes, /plan will surface the drift.}
+
+| Repo | Role | Trunk | Current Branch | HEAD SHA | SDK Pin | In Scope? | Notes |
+|---|---|---|---|---|---|---|---|
+| wellmed-backbone | primary | develop | feature/foo | abc1234 | n/a (trunk) | YES | the change |
+| wellmed-consultation | consumer | develop | develop | def5678 | go-sdk v1.4.2 | YES | proto regen + call site |
+| wellmed-cashier | consumer | develop | develop | 9876fed | go-sdk v1.4.0 | DEFERRED | scope #N+1 |
+| wellmed-infrastructure | pattern source | develop | develop | aaa1111 | — | READ-ONLY | reference patterns |
+
+**Drift flagged in Step 0.5:** {list each drift or "none"}
+**Snapshot taken:** {today's date} {time if multi-session work expected}
+
+## ADR Alignment
+{Required if Step 0.7 surfaced ADR matches. Omit otherwise with one-line note
+ "No ADR matches for task keywords."}
+
+| ADR | Title | Status | This work … |
+|---|---|---|---|
+| ADR-005 | Saga orchestration ownership | Accepted v1.1 | Conforms |
+| ADR-006 | No mid-saga module gRPC calls | Accepted | Conforms |
+
+If any row says "Extends" or "Contradicts", note the rationale and whether an
+ADR amendment is in-scope for this work.
+
+## Phases
+{Phased scopes only — per phase: ### Phase N — {name} + description of deliverables}
+
+## Architecture
+{Optional — ASCII diagrams only, omit for simple bug fixes}
+
+## What Already Exists
+{Existing code/infra/patterns this builds on. Workspace-relative paths.}
+
+## Table Identity Map
+{Required if Step 4.5 ran (scope writes to / alters DB tables): the cited
+ table-identity reference (inline for a small surface, or a one-line pointer to
+ artifacts/schema-reference.md for a large one) + the deviation ledger. Omit with
+ "No DB write/DDL surface — Step 4.5 N/A" otherwise.}
+
+## NOT in Scope
+{Explicit exclusions to prevent scope creep. If Step 0.6 detected a contract
+ cascade and some Consumers are deferred, list them here by name.}
+
+## Skill Sequence
+{Four tables grouped by phase — Plan Reviews, Implementation Support, Review & QA,
+ Ship & Post-ship. Fill in the 18-skill checklist from Step 4.}
+
+## Key Decisions Captured
+{Bullets from Round 1 + Round 2 answers that shaped this scope}

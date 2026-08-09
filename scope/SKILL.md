@@ -154,38 +154,22 @@ are not walked here — only sibling repos in `~/Projects/`.
 
 ### 0.5.2 Snapshot each repo's state
 
-For each repo in the working set, capture:
-
 ```bash
-# For each repo path from CROSS-REPO.md:
-REPO=~/Projects/wellmed/wellmed-consultation  # example
-echo "=== $REPO ==="
-git -C "$REPO" rev-parse --short HEAD 2>/dev/null || echo "MISSING_REPO"
-git -C "$REPO" branch --show-current 2>/dev/null
-git -C "$REPO" log -1 --format='%ai %s' 2>/dev/null
-# SDK pin (Go repos)
-grep -E 'wellmed-infrastructure|go-sdk' "$REPO/go.mod" 2>/dev/null | head -2
-# Uncommitted work signal
-git -C "$REPO" status --short 2>/dev/null | head -3
+~/Projects/ai-skills/scripts/repo-graph-snapshot.sh   # reads CROSS-REPO.md, emits the table
 ```
 
-Record per repo:
-- **Path** (absolute, under `~/Projects/`)
-- **Trunk branch declared** (from CROSS-REPO.md if listed, else infer)
-- **Current branch** (`git branch --show-current`)
-- **Current HEAD SHA** (short, 7 chars)
-- **Pinned SDK version** if applicable (from `go.mod` / `package.json`)
-- **Dirty?** (yes if `git status --short` non-empty)
-- **Last commit date** (so plan can judge staleness)
+It fans out over the working set in parallel and emits the `## Repo Graph` table
+directly — path, declared trunk, current branch, HEAD SHA, SDK pin, dirty flag, last
+commit date.
 
-Flag any of these as **drift to surface to the user before Round 1**:
-- Current branch ≠ declared trunk branch on a repo we'll touch
-- Pinned SDK version differs across consumer repos (asymmetry)
-- A repo in the graph is missing from `~/Projects/` (not cloned)
-- A repo has uncommitted changes (someone else is mid-task there)
+**Flag these as drift to surface before Round 1** (none of them block; they need
+acknowledging, and they often reframe the task — "consultation is still on the old SDK,
+that changes phase 1"):
 
-These don't block — they just need to be acknowledged. Drift discovered here often
-reframes the task ("oh, consultation is still on the old SDK, that changes phase 1").
+- current branch differs from the declared trunk on a repo we'll touch
+- SDK pin differs across consumer repos (asymmetry)
+- a declared repo is missing from `~/Projects/` (not cloned)
+- a repo has uncommitted changes — someone else is mid-task there
 
 ### 0.5.3 Hold the snapshot for scope.md
 
@@ -203,19 +187,8 @@ without the consumer updates being explicitly in-scope. Detect this mechanically
 
 ### 0.6.1 Scan the diff for contract-surface files
 
-```bash
-# Combined diff (staged + unstaged + recent commits on this branch)
-git diff --name-only HEAD~5..HEAD 2>/dev/null
-git diff --name-only HEAD 2>/dev/null
-git diff --staged --name-only 2>/dev/null
-```
-
-Treat these as contract surfaces:
-- `*.proto` — gRPC contracts
-- `prisma/schema.prisma`, `**/schema.prisma` — Prisma data model (DB contract)
-- `openapi.yaml`, `openapi.yml`, `openapi.json`, `**/openapi.*` — REST contracts
-- `*.graphql`, `*.graphqls`, `schema.graphql` — GraphQL contracts
-- Files under `proto/`, `contracts/`, `schemas/` directories
+Scan the combined diff (branch commits, unstaged, staged) for contract surfaces — the
+list is in `references/conventions.md` §4.
 
 ### 0.6.2 If contract files changed, auto-cascade
 
@@ -251,33 +224,12 @@ across the project — often worse than the ADR says. Surface relevant ADRs befo
 asking the user any Round 1 questions, so the user can correct premises rather than
 answering questions whose answers are already on disk.
 
-### 0.7.1 Resolve the ADR directory
+### 0.7.1 Find the ADRs this work touches
 
-```bash
-# Resolve based on project (matches Step 0 PLANS_DIR logic)
-case "$(pwd)" in
-  *Projects/pmg*)     ADR_DIR="$HOME/Projects/pmg/pmg-docs/adrs" ;;
-  *Projects/wellmed*) ADR_DIR="$HOME/Projects/wellmed/kalpa-docs/adrs" ;;
-  *Projects/ai-skills*) ADR_DIR="" ;;  # no ADRs for ai-skills itself
-  *)                  ADR_DIR="" ;;
-esac
-[ -n "$ADR_DIR" ] && ls "$ADR_DIR" 2>/dev/null | head -30
-```
-
-If `ADR_DIR` is empty or missing, skip this step.
-
-### 0.7.2 Grep ADRs for task keywords
-
-Extract 3–6 keywords from the task title, branch name, and diff (e.g., for branch
-`feature/visit-saga-rollback`: keywords = `visit, saga, rollback, orchestrat`).
-Grep each ADR file for matches:
-
-```bash
-# Example — adjust keywords to the task
-grep -li -E '(visit|saga|rollback|orchestrat)' "$ADR_DIR"/*.md 2>/dev/null
-```
-
-For each matching ADR, read the title + status + relevant section.
+WellMed keeps them at `kalpa-docs/adrs/`, PMG at `pmg-docs/adrs/`; ai-skills has none, so
+skip. Extract 3–6 keywords from the task title, branch name and diff, then grep the ADR
+files for them and read the title, status and relevant section of each match. Parallel is
+fine — the greps are independent.
 
 ### 0.7.3 Surface ADRs before Round 1
 
@@ -351,18 +303,10 @@ Ask 5–15 open-ended questions in a **single response** as a numbered list. The
 - **If Step 0.7 surfaced ADRs:** confirm conform/extend/contradict before any other questions — premises first, design second.
 - Skip anything already clear from context — every question must move the design
 
-**Example open-ended questions (generate dynamically based on what's ambiguous):**
-
-1. Is this greenfield or modifying existing code, and which files specifically?
-2. How much time is available — single session today, or multi-session across days?
-3. Is this going to production this sprint, or exploratory/staging only?
-4. Is there a UI component, or is this purely backend/infra?
-5. Should testing be in-scope here, or tracked separately?
-6. Which other services or teammates need coordination?
-7. What's the SATU SEHAT / regulatory angle, if any? (WellMed)
-8. What user-facing outcome should we verify, or is this internal only?
-9. Which existing patterns should this follow — point me to the closest reference if you know one
-10. What's deliberately out of scope so I don't expand into it?
+Cover where ambiguity actually exists — scope boundary, prod vs exploratory, UI
+involvement, compliance angle, coordination with other people or services, testing,
+cross-repo touchpoints, what's deliberately excluded, and which existing pattern to
+follow. Generate the questions from *this* task; a generic list produces generic answers.
 
 End with: "Answer by number. Skip any that don't apply."
 
@@ -372,13 +316,13 @@ End with: "Answer by number. Skip any that don't apply."
 
 After processing Round 1 answers, ask the task-specific design questions that determine the best solution architecture. Same format: numbered, open-ended, no multiple choice, single response. Target 3–10 questions depending on complexity.
 
-Generate questions based on task type — these are seeds, not a script; expand to 3–10
-that actually move the design:
-
-- **New API/service:** sync vs async/saga (and why); which service owns the data + DB schema home; new migration vs extend; contract surface + consumers.
-- **UI feature:** mobile-first vs desktop; which existing component patterns to reuse (point to closest); empty/error/loading behavior; the end-to-end happy path.
-- **Bug fix:** missing regression test vs genuine edge case; reproducible locally; hit production or caught pre-merge; suspected root-cause area.
-- **Infra/devops:** Terraform-managed vs manual; blue/green vs in-place; rollback in scope; what downstream breaks on failure.
+Ask what determines the architecture, by task type: for a new API/service — sync vs
+async and why, which service owns the data and its schema home, new migration vs extend,
+contract surface and consumers. For UI — mobile-first vs desktop, which existing
+component patterns to reuse, empty/error/loading behaviour, the end-to-end happy path.
+For a bug fix — missing regression test vs genuine edge case, reproducible locally, hit
+production or caught pre-merge, suspected root-cause area. For infra — Terraform-managed
+vs manual, blue/green vs in-place, rollback in scope, what breaks downstream on failure.
 
 If Round 1 already resolved the design questions (small task), skip Round 2 and proceed directly to output. Otherwise fire as a single numbered response.
 
@@ -456,45 +400,13 @@ instead of skills 1–4 individually when you want a fast full-review pass.
 
 Skills are grouped by workflow phase. Mark each YES, OPTIONAL, or N/A with reason.
 
-### Plan Reviews (run first)
+**The tables live in `templates/skill-checklist.md`** — four sections (Plan Reviews,
+Implementation Support, Review & QA, Ship & Post-ship) covering all 18. Read it when
+writing the checklist; don't reproduce it from memory.
 
-| # | Skill | Apply? | When | Notes |
-|---|-------|--------|------|-------|
-| 1 | /plan-ceo-review | **ALWAYS YES** | 1st | Reframe scope, challenge premises, find the 10-star version |
-| 2 | /plan-eng-review | ? | 2nd | Architecture + data flow |
-| 3 | /plan-design-review | ? | 2nd | Design audit before implementation |
-| 4 | /plan-devex-review | ? | 2nd | DX audit — dev-facing APIs, CLIs, SDKs, docs |
-
-### Implementation Support
-
-| # | Skill | Apply? | When | Notes |
-|---|-------|--------|------|-------|
-| 5 | /investigate | ? | Pre-impl | Root cause debugging for bug fixes |
-| 6 | /design-consultation | ? | Pre-impl | UI/UX design guidance |
-| 7 | /design-html | ? | During impl | Production HTML/CSS from approved designs |
-| 8 | /design-shotgun | ? | Pre-impl | Generate + compare design variants |
-
-### Review & QA
-
-| # | Skill | Apply? | When | Notes |
-|---|-------|--------|------|-------|
-| 9 | /review | ? | After impl | Pre-landing diff review |
-| 10 | /health | ? | After impl | Code quality score (linter, tests, dead code) |
-| 11 | /qa | ? | After ship | Browser-based QA on staging |
-| 12 | /qa-only | ? | After impl | Run test suite (go test, npm test) |
-| 13 | /browse | ? | During QA | Headless browser for UI verification |
-| 14 | /devex-review | ? | After impl | Live DX audit — docs, getting-started, TTHW |
-| 15 | /setup-browser-cookies | ? | Pre-QA | Set up browser session for QA |
-
-### Ship & Post-ship
-
-| # | Skill | Apply? | When | Notes |
-|---|-------|--------|------|-------|
-| 16 | /ship | **N/A always** | — | Not in use. Promotion is /review → PR → merge → /closeout |
-| 17 | /document-release | ? | Post-ship | Sync docs with changes |
-| 18 | /retro | ? | End of sprint | Retrospective |
-
----
+Consider all 18 — that is the forcing function — but **emit only what applies.** Mark
+each YES / OPTIONAL / N/A with a one-line reason, and collapse an all-N/A cluster to a
+single line (`N/A x7 — no UI surface`) rather than seven near-identical rows.
 
 ## Step 4.5 — Table Identity Map (when the scope writes to / alters DB tables)
 
@@ -584,209 +496,43 @@ the same convention: `{plans_dir}/archive/{N}-{slug}/`.
 
 ### 5.2.1 Program-member scopes (ADR-029)
 
-If the work being scoped is a **member of an existing Program** (a
-`plans/{program-slug}/` folder with a `{slug}-brief.md` member list — e.g.
-`catalog-program/catalog-brief.md`, `control-tower-program/control-tower-brief.md`),
-it still gets a normal **flat,
-top-level** `{plans_dir}/{N}-{slug}/` folder and a normal PLANS-INDEX row
-(Step 5.8). **Member scopes never live inside the program folder** — the
-`C{n}`/`M{n}` folders there are placeholders (`NOT-YET-SCOPED.md`), not scopes.
-
-The program control surface is named **`{slug}-brief.md`** — the program folder's
-slug with any `-program` suffix dropped (ADR-029 v1.2; e.g. `control-tower-program/`
-→ `control-tower-brief.md`). A new program scaffold creates that slugged file, never
-a bare `brief.md`.
-
-Detect a program member when: the user names a program or one of its `C{n}`/`M{n}`
-members, or the task maps to a member row in some `plans/*/*-brief.md`.
-
-After the scope files exist, complete the graduation (ADR-029 §2.3.2):
-- Update the program `{slug}-brief.md` member row to point at `{N}-{slug}` and mark it
-  scoped (was "not yet scoped").
-- Retire the placeholder: rewrite its `C{n}-{slug}/NOT-YET-SCOPED.md` to a one-line
-  pointer at `{N}-{slug}` (or remove the placeholder folder — `{slug}-brief.md` now carries
-  the member→scope mapping).
-
-This keeps every scope flat-numbered and visible to a `plans/*` scan and to
-PLANS-INDEX, while the program `{slug}-brief.md` stays the members registry.
-
-On completion the member does **not** archive to the repo-wide `archive/` — Step 7
-(and `/closeout`) moves it into the **program's own** `{program-slug}/archive/`.
-Full member lifecycle: **stub** (placeholder in the program folder) → **live**
-(flat `{N}-{slug}/`, PLANS-INDEX-visible) → **archived** (`{program-slug}/archive/`).
-See Step 7.1.
+A member of an existing program still gets a normal **flat, top-level**
+`{plans_dir}/{N}-{slug}/` folder and a normal index row — member scopes never live
+inside the program folder. Full lifecycle, detection, the `{slug}-brief.md` naming rule,
+and the graduation steps are in `references/conventions.md` §1. On completion the member
+archives into the **program's own** `archive/`, not the repo-wide one (§7.1).
 
 ### 5.3 File references
 
-Because the scope folder lives outside the source repo, **all file references in
-scope.md and progress.md must use paths relative to the workspace root** (e.g.,
-`padma-integrations/lib/xendit.js`, not `lib/xendit.js`). This avoids ambiguity
-about which repo a path refers to.
-
-For PMG: paths relative to `~/Projects/pmg/`
-For WellMed: paths relative to `~/Projects/wellmed/`
+Workspace-relative paths throughout, per `/markdown-style` §8.8 — relative to
+`~/Projects/pmg/` or `~/Projects/wellmed/`, because the scope folder lives outside the
+source repo and a bare filename is ambiguous about which repo it means.
 
 ### 5.4 Create scope.md
 
-See `/markdown-style` §11 (Scope Documents) for full conventions. The required structure:
+Write from `templates/scope.md.template`. Section conventions are `/markdown-style`
+§11; omit a Required-if section with a one-line reason rather than leaving it empty.
 
-```markdown
-# {Task title}
-**Project:** {detected project}  **Branch:** {branch}  **Date:** {today's date}
-**Created by:** {derived — see below}
-**Scope folder:** {plans_dir}/{N}-{slug}/
-**Source repo(s):** {absolute paths to repos this task touches}
+**`Created by` is DERIVED, never hardcoded** — read the name off git config at run
+time (`git config user.name`, falling back to `--global`). If nothing is configured
+anywhere, write `TBD` and say so. Never substitute a name from an example, this file,
+or another scope; see `references/postmortems.md` for what that cost.
 
-## Context
-{1–3 sentences: what this is, why it's being done, what triggered it}
-
-## Repo Graph
-{Required if CROSS-REPO.md exists in the primary repo (Step 0.5 ran). Omit
- otherwise with a one-line note "Single-repo task — no CROSS-REPO.md present."
-
- The SHA snapshot below is the freshness contract /plan validates against
- before executing. Do NOT edit these SHAs by hand once recorded — if state
- changes, /plan will surface the drift.}
-
-| Repo | Role | Trunk | Current Branch | HEAD SHA | SDK Pin | In Scope? | Notes |
-|---|---|---|---|---|---|---|---|
-| wellmed-backbone | primary | develop | feature/foo | abc1234 | n/a (trunk) | YES | the change |
-| wellmed-consultation | consumer | develop | develop | def5678 | go-sdk v1.4.2 | YES | proto regen + call site |
-| wellmed-cashier | consumer | develop | develop | 9876fed | go-sdk v1.4.0 | DEFERRED | scope #N+1 |
-| wellmed-infrastructure | pattern source | develop | develop | aaa1111 | — | READ-ONLY | reference patterns |
-
-**Drift flagged in Step 0.5:** {list each drift or "none"}
-**Snapshot taken:** {today's date} {time if multi-session work expected}
-
-## ADR Alignment
-{Required if Step 0.7 surfaced ADR matches. Omit otherwise with one-line note
- "No ADR matches for task keywords."}
-
-| ADR | Title | Status | This work … |
-|---|---|---|---|
-| ADR-005 | Saga orchestration ownership | Accepted v1.1 | Conforms |
-| ADR-006 | No mid-saga module gRPC calls | Accepted | Conforms |
-
-If any row says "Extends" or "Contradicts", note the rationale and whether an
-ADR amendment is in-scope for this work.
-
-## Phases
-{Phased scopes only — per phase: ### Phase N — {name} + description of deliverables}
-
-## Architecture
-{Optional — ASCII diagrams only, omit for simple bug fixes}
-
-## What Already Exists
-{Existing code/infra/patterns this builds on. Workspace-relative paths.}
-
-## Table Identity Map
-{Required if Step 4.5 ran (scope writes to / alters DB tables): the cited
- table-identity reference (inline for a small surface, or a one-line pointer to
- artifacts/schema-reference.md for a large one) + the deviation ledger. Omit with
- "No DB write/DDL surface — Step 4.5 N/A" otherwise.}
-
-## NOT in Scope
-{Explicit exclusions to prevent scope creep. If Step 0.6 detected a contract
- cascade and some Consumers are deferred, list them here by name.}
-
-## Skill Sequence
-{Four tables grouped by phase — Plan Reviews, Implementation Support, Review & QA,
- Ship & Post-ship. Fill in the 18-skill checklist from Step 4.}
-
-## Key Decisions Captured
-{Bullets from Round 1 + Round 2 answers that shaped this scope}
-```
-
-The full skill checklist tables (18 rows across four sections) follow the same shape shown in Step 4. Each row gets `[ ] YES` / `[ ] OPTIONAL` / `[N/A]` with a tailored note. Mandatory: `/plan-ceo-review` is always YES.
-
-**Boilerplate collapse:** still *consider* all 18 (the forcing function), but in the emitted scope.md, when a task has no UI surface, collapse the seven design/browser skills (`/browse`, `/qa`, `/design-consultation`, `/design-review`, `/design-html`, `/design-shotgun`, `/plan-design-review`) into a single line — `N/A ×7 — no UI surface` — instead of seven near-identical rows. Same for any other all-N/A cluster. Keep YES/OPTIONAL rows itemized.
-
-**`Created by` — DERIVED, never hardcoded.** Read the name off git config at run
-time, the same way `/repo-cleanup` §1.2 derives committer identity:
-
-```bash
-git -C "$REPO" config --get user.name || git -C "$REPO" config --global --get user.name
-```
-
-If nothing is configured anywhere, write `TBD` and say so — never substitute a
-name from an example, this file, or another scope.
-
-> **Why this is derived.** Until 2026-08-07 the plan-stub template below carried
-> the literal string `**Author:** Alex`. It was silently wrong for every teammate
-> who ran `/scope`, and their sessions responded by either overwriting it or
-> deleting the line: all 7 plans of scope 102 and all 4 of scope 110 (Hamzah), and
-> 81.10–81.12 plus 97.2 (Abdul), carry no author at all, while every scope Alex
-> created has one. A personal name baked into a shared template does not degrade
-> gracefully — it decays in exactly the hands it is wrong for.
-
-`Created by` records who *conceived* the scope and is written once, at creation.
-Who *executes* it is recorded per phase by `/plan` — see `/plan` §3.1 — because a
-scope's phases routinely run in different hands than the one that scoped it.
+`Created by` records who *conceived* the scope, written once at creation. Who
+*executes* it is recorded per phase by `/plan` §3.1, because a scope's phases
+routinely run in different hands than the one that scoped it.
 
 ### 5.5 Create progress.md
 
-See `/markdown-style` §10 (Progress Files) for full conventions: Resume Context block schema, append-only rule, Decisions Log dual-entry. The required structure:
+Write from `templates/progress.md.template`. Conventions are `/markdown-style` §10.
 
-```markdown
-# Progress: {Task title}
+Two things carry the weight. The **Operating Contract** is pinned and re-read on every
+resume — it holds the ground rules agreed at kickoff (execution posture, mismatch
+handling, check-in cadence), numbered so they can be cited. Seed it with the template's
+three defaults if none were stated. The **Resume Context** block is the only
+overwritable section in the file; everything else is append-only.
 
-## Operating Contract (pinned — survives compaction; re-read on every resume)
-{Ground rules agreed with the user at scope/plan kickoff — execution posture
-(deliberate vs fast), mismatch handling (STOP vs proceed), regrounding rules,
-ADR-edit boundaries, check-in cadence, context posture. Number them. If none
-were stated, seed with the defaults below and refine at /plan kickoff:}
-1. Scope↔code mismatch = STOP, investigate in-context, report before proceeding.
-2. Re-validate each phase's surface against live code before entering it; raise
-   gaps in batched blocks, not per-step.
-3. Wrap + commit + check in at every phase boundary; progress updates land more
-   frequently than boundaries (compaction defense). This file alone must be
-   sufficient for a cold context to resume.
-
-## Resume Context
-**Scope:** {plans_dir}/{N}-{slug}/scope.md
-**Last action:** Scope created ({today's date})
-**Next action:** {first YES skill from checklist}
-**Open blockers:** {human steps or external deps, or "None"}
-**Key files changed:** None yet
-
----
-
-## Decisions Log
-- ({today's date}) {Key decisions from scoping rounds that shaped the approach}
-
----
-
-## Progress Log
-
-| Date | Skill/Action | Status | Notes |
-|------|--------------|--------|-------|
-| {date} | /scope | Done | Scope created — {one-line summary} |
-
----
-
-## Human Steps
-
-| Step | Status | Notes |
-|------|--------|-------|
-| (none identified yet) | — | — |
-
----
-
-## Plans
-{Omit this section for atomic scopes. For phased scopes:}
-
-| # | Plan File | Phase | Status | Notes |
-|---|-----------|-------|--------|-------|
-| {N}.1 | {N}.1-{slug}-PLAN.md | Phase 1 — {name} | Draft | |
-| {N}.2 | {N}.2-{slug}-PLAN.md | Phase 2 — {name} | Draft | |
-
----
-
-## Artifacts
-(none yet)
-```
-
-The Resume Context block is the only section overwritten on update; everything else is append-only.
+### 5.6 Create the artifacts/ subdirectory alongside scope.md and progress.md.
 
 ### 5.7 Sweep related files into scope folder
 
@@ -858,62 +604,22 @@ Example: scope #39, slug `cashier-settlement`, 3 phases →
 - `39-cashier-settlement/39.2-cashier-settlement-PLAN.md`
 - `39-cashier-settlement/39.3-cashier-settlement-PLAN.md`
 
-See `/markdown-style` §8 (Plan Documents) and §8.9 (Plan Stubs) for full conventions. The required stub shape:
+Write each from `templates/plan-stub.md.template`; conventions are `/markdown-style`
+§8 and §8.9.
 
-```markdown
-# Plan {N}.{P}: {Phase name}
+**The Gate field is required on every phase-boundary CHECKPOINT.** `/plan` reads it to
+decide whether to suggest `/clear` (A/D/E — a natural pause) or roll through (B/C). The
+final phase uses the gate that best describes its exit.
 
-**Version:** 0.1 (stub — detail filled at session start)
-**Date:** {today's date}
-**Created by:** {derived from git config — see §5.4; never a literal name}
-**Executed by:** TBD
-**Status:** Draft
-**Plan #:** {N}.{P}
-**Parent scope:** {plans_dir}/{N}-{slug}/scope.md
-**Branch:** {branch or TBD}
+**A table-write phase carries the identity map.** If a phase creates, alters or re-owns
+a table, its CHECKPOINT Review field must name the Step 4.5 deviations landing in that
+phase — an unapproved deviation is not eligible to ship. Crossing an owner boundary
+makes it gate A (or E if irreversible), never a roll-through B/C.
 
-## Related Docs
-- `{plans_dir}/{N}-{slug}/scope.md` — parent scope
-- `{plans_dir}/{N}-{slug}/progress.md` — progress tracker
-
----
-
-## Phase {P}: {Phase Name}
-
-### Task {P}.1: {Task Title}
-- **Type**: AI | HUMAN | AI+HUMAN_REVIEW
-- **Input**: {workspace-relative paths}
-- **Action**: {outline — detail filled at session start}
-- **Output**: {files/artifacts produced}
-- **Acceptance**: {how to verify}
-
----
-### 🔲 CHECKPOINT: Phase {P} Complete
-**Gate**: {A human | B concurrency | C review/merge | D deploy/verify | E irreversible | F compliance}
-**Review**: {what the human should verify}
-**Resume**: "continue the {N}.{P} {slug} plan"
----
-```
-
-The **Gate** field is required on every phase-boundary CHECKPOINT. /plan reads it to
-decide whether to suggest `/clear` (A/D/E — a natural pause) or continue without
-prompting (B/C). The final phase of a scope uses the gate that best describes its
-exit (often E for a cutover, or C if it just merges).
-
-**Table-write phases carry the identity map.** If a phase's tasks create/alter/re-own
-a table, its CHECKPOINT **Review** field must reference the Step 4.5 Table Identity Map
-and name the **approved** deviations landing in that phase — an unapproved deviation is
-not eligible to ship. A table-write phase that crosses an owner boundary is a gate-A
-(or E, if irreversible) checkpoint, never a roll-through B/C.
-
-**Sizing rule (token size is a within-phase concern, never a phasing trigger):** Do
-NOT split a phase because you estimate it exceeds a context window. A phase may span
-multiple sessions — automatic compaction carries the working set, and the plan file's
-intra-phase resume checkpoints (`"continue the {N}.{P} plan"`) let a fresh session
-pick up mid-phase. Only split one phase into two plan files as a last resort when the
-work is *both* very large *and* detail-dense (e.g. a wide refactor where exact
-signatures must survive across sessions) — and when you do, label the split boundary
-explicitly as "same gate, sequential sessions," not a new gate.
+**Sizing is a within-phase concern, never a phasing trigger.** Do not split a phase
+because you estimate it exceeds a context window; compaction plus intra-phase resume
+checkpoints handle that. Split one phase into two files only when the work is *both*
+very large *and* detail-dense, and label the split "same gate, sequential sessions."
 
 Also add a PLANS-INDEX entry for each plan stub (sub-numbered under the scope):
 ```markdown
@@ -954,33 +660,21 @@ to `{scope-folder}/artifacts/` so the scope folder stays self-contained.
 
 ## Step 7 — Archive (end of task)
 
-When the user indicates the task is complete (all YES skills done, or user says
-"archive this"), or when you detect all skill checklist items are done:
+**`/plan` §12 owns archive logic — follow it, don't duplicate it.** `/closeout` §13 does
+the same. This step adds only the routing that is specific to a scope:
 
-7.1 **Determine the archive location:**
-- **Standalone scope** (not a program member): move the scope folder to
-  `{plans_dir}/archive/{N}-{slug}/` (the repo-wide archive).
-- **Program-member scope** (§5.2.1 — a member of a `plans/{program-slug}/`
-  program whose `{slug}-brief.md` lists this `{N}-{slug}`): move it into the
-  **program's own archive instead** — `{plans_dir}/{program-slug}/archive/{N}-{slug}/`
-  — NOT the repo-wide `archive/`. This is the final leg of the program-member
-  lifecycle **stub → live (flat `{N}-{slug}/`) → archived (in the program's
-  `archive/`)** (ADR-029 §2.3.4; PMG port ADR-002 §2.3.4). Detect membership by
-  scanning `{plans_dir}/*-program/*-brief.md` for a member row that names this
-  scope.
+7.1 **Where it goes.** A standalone scope moves to `{plans_dir}/archive/{N}-{slug}/`. A
+**program member** moves into the program's own `{plans_dir}/{program-slug}/archive/`
+instead — never the repo-wide archive (ADR-029 §2.3.4). Detect membership by scanning
+`{plans_dir}/*-program/*-brief.md` for a row naming this scope.
 
-7.2 Update `PLANS-INDEX.md`: change the scope row and all its child plan rows from
-`Active` to `Done ({date})`, and repoint their `Folder/File` column to the actual
-path used in 7.1 (`archive/{N}-{slug}/` or `{program-slug}/archive/{N}-{slug}/`).
+7.2 **The index row moves in the same commit as the folder**, via
+`scripts/plans-index.py move --num {N} --to archived`. Omit `--folder` unless the path
+actually changes — the row's existing path is usually right, and the script refuses a
+path that does not resolve.
 
-7.3 **Program members only:** update the program `{slug}-brief.md` — flip this
-member's row to **Archived** and point it at the new
-`{program-slug}/archive/{N}-{slug}/` path. The brief stays the members registry
-across the whole lifecycle.
-
-7.4 Confirm to the user what was archived and where.
-
----
+7.3 **Program members:** flip the member's row in `{slug}-brief.md` to Archived and
+point it at the new path. The brief stays the members registry across the lifecycle.
 
 ## Step 8 — Post-flight Cleanup (runs after archive)
 
@@ -1014,96 +708,29 @@ Verify all changes are committed and pushed:
 
 ### 8.4 Context clearing & next scope
 
-This is the final step. After all cleanup is done:
+Check the index for other active scopes in this project. If a logical next one exists (a
+downstream scope that was waiting on this, or the next in a series), offer to continue.
 
-8.4.1 Check `PLANS-INDEX.md` for other active scopes in the same project.
+Before telling the user to `/clear`, **run `/ready-to-clear` — mandatory.** Spawn the
+fresh validator with paths plus the claim "scope {N} fully complete and archived". On
+`NOT READY`, perform the listed fixes and re-validate; after 3 cycles, surface the
+failures inline and do **not** tell them to clear. Only on `READY`, quote the resume
+reconstruction and give them the exact prompt to paste.
 
-8.4.2 If a logical next scope exists (e.g., a downstream scope that was waiting
-on this one, or the next numbered scope in a series), offer to continue:
-
-```
-Scope #{N} complete and archived. Next active scope:
-  → #{next} {scope-name} — {description from index}
-
-Ready to start? I'll clear context and begin:
-  /plan {next-scope-first-plan-number}
-
-(Y to clear context and continue / N to stop here)
-```
-
-8.4.3 If the user says yes, first run the `/ready-to-clear` validation (mandatory
-— see that skill): spawn the fresh validator subagent with paths + claim "scope
-{N} fully complete and archived". On `NOT READY`, perform the listed fixes and
-re-validate (max 3 cycles, then surface failures inline and do NOT tell the user
-to clear). Only on `READY`, tell them to run `/clear` then provide the exact
-prompt to paste:
-
-```
-Run /plan {next-plan-number}
-```
-
-8.4.4 If there are no active follow-on scopes, simply report completion:
-
-```
-✅ Scope #{N} fully complete. No active follow-on scopes found.
-```
-
----
+If there are no follow-on scopes, just report completion.
 
 ## Ongoing: Progress Tracking Rules
 
-These rules apply **throughout execution**, not just during the /scope skill itself.
-They govern how progress.md is maintained as work proceeds.
+`/markdown-style` §10 owns these — append-only, the Resume Context is the only
+overwritable block, decisions go in both the Decisions Log and the Progress Log, paths
+are workspace-relative. Three additions specific to a scope's execution:
 
-### Rule 1: Update progress.md after every significant action
-
-After any of the following, append to the Progress Log table and update the
-Resume Context block:
-
-- A skill from the checklist completes (log: date, skill name, status, key findings)
-- A phase is completed (log: phase name, commit hash, test count if applicable)
-- A key decision is made during execution (also add to Decisions Log section)
-- A blocker is discovered or resolved (also update Human Steps table)
-- An artifact is created (also add to Artifacts section)
-
-**Update the Resume Context block every time you update the Progress Log.** The
-Resume Context must always reflect the current state — it's the "paste this to
-get oriented" block.
-
-### Rule 2: Decisions go in two places
-
-Non-obvious decisions made during execution go in:
-1. The **Decisions Log** section (with date and rationale)
-2. The **Progress Log** table (brief note in the Notes column)
-
-Decisions that change the scope itself (reframes, additions, cuts) should also be
-reflected in scope.md — update the relevant Phase description or add to
-"Key Decisions Captured."
-
-### Rule 3: File references use workspace-relative paths
-
-All file paths in progress.md use paths relative to the workspace root
-(e.g., `padma-integrations/lib/xendit.js`). Never bare filenames.
-
-### Rule 4: Human steps are tracked
-
-When a human step is discovered during execution (SSM parameter to create, webhook
-URL to change, etc.), add it to the Human Steps table in progress.md with status
-`[ ] Pending`. Update to `[x] Done` when completed.
-
-### Rule 5: On context resume, read scope + progress first
-
-When a user asks to resume work on a scope (or you detect an active scope folder
-relevant to the current task):
-
-1. Read `progress.md` — the pinned **Operating Contract** block first (the
-   ground rules survive compaction and bind every session), then the Resume
-   Context block for where things stand
-2. Read `scope.md` — the plan and skill checklist tell you what's next
-3. Summarize current state to the user before proceeding
-4. Continue from where the Resume Context says to pick up
-
----
+- **Update the Resume Context every time you append to the Progress Log.** It is the
+  "paste this to get oriented" block; a stale one is worse than an empty one.
+- **A human step discovered mid-execution goes in the Human Steps table immediately**,
+  as `[ ] Pending` — not in prose, where it will be missed.
+- **On resume, read the pinned Operating Contract first**, then the Resume Context, then
+  `scope.md`. Summarize where things stand before doing anything.
 
 ## Behavior Rules
 

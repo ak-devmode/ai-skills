@@ -29,7 +29,16 @@ import re
 import sys
 
 CANONICAL = ["#", "Status", "Folder", "Description", "Created by"]
-CELL_CAP = 300  # markdown-style §11.7.4
+
+# Soft guidance, never enforced. The Description column is Alex's high-level
+# tracking surface — he reads it from the console to see what has been going on,
+# so 3-4 sentences there is the intended use, not bloat. A row past this gets a
+# note; it is NEVER truncated. Truncating it would destroy the only copy of some
+# decision rationale (the 2026-08-09 audit initially proposed exactly that, on
+# the strength of a written 300-char cap that had been violated 80 times — a rule
+# contradicted that consistently is a rule that is wrong, per markdown-style
+# §2.2.3's own reasoning).
+CELL_SOFT = 900
 
 ACTIVE_HEADINGS = ("active plans", "active / in progress", "active")
 ARCHIVED_HEADINGS = ("completed / archived", "archived (complete)", "archived", "completed")
@@ -106,10 +115,15 @@ def sub_num(cell: str) -> bool:
 
 
 def slug_row(cell: str) -> bool:
-    """A deliberately un-numbered row: a program control surface or a standing doc
-    (`catalog-program`, `roadmap`). These are valid index rows, not malformed ones —
-    flagging them as junk is how a validator earns being ignored."""
-    return bool(re.match(r"^`?[a-z][a-z0-9-]*`?$", cell.strip().strip("*")))
+    """A deliberately un-numbered row. Three valid forms: a program control surface
+    or standing doc (`catalog-program`, `roadmap`); an em/en-dash or "TBD" marking a
+    row that has no scope number yet (a PRD awaiting scoping); or blank. These are
+    valid index rows, not malformed ones — flagging them as junk is how a validator
+    earns being ignored."""
+    c = cell.strip().strip("*`")
+    return c in {"", "—", "–", "-", "TBD", "n/a"} or bool(
+        re.match(r"^[a-z][a-z0-9-]*$", c)
+    )
 
 
 # ---------------------------------------------------------------- validate
@@ -126,9 +140,11 @@ def cmd_validate(args) -> int:
     size = os.path.getsize(args.index)
     print(f"  size: {size:,} bytes (~{size // 4000:,}k tokens if read whole)")
     if size > 20000:
-        issues.append(
-            f"file is {size:,} bytes — it is listed as a canonical source to read "
-            f"every session (/plan §1.1), so this is a per-session context cost"
+        notes.append(
+            f"file is {size:,} bytes (~{size // 4000}k tokens). The descriptions are "
+            f"deliberate — they are the console status tracker. The cost to manage is "
+            f"on the READING side: grep the rows you need, never read the whole file "
+            f"into context (/plan §1.1)"
         )
 
     if not scope_tables:
@@ -158,33 +174,38 @@ def cmd_validate(args) -> int:
                     (ln + 1, cells[0][:40])
                 )
             for ci, c in enumerate(cells):
-                if len(c) > CELL_CAP:
+                if len(c) > CELL_SOFT:
                     oversized.append((ln + 1, cells[0] if cells else "?", ci, len(c)))
 
-        if len(widths) > 1:
-            issues.append(
-                f"'{label}' has mixed row widths: "
-                + ", ".join(f"{n} cols x{c}" for n, c in sorted(widths.items()))
-            )
+        # A row SHORT of the canonical width renders fine (trailing cells are
+        # empty) and is expected: `Created by` was added 2026-08-09 and fills
+        # forward only — Alex declined a back-look, so pre-existing rows are
+        # short by design. A row LONGER than the header is genuinely broken:
+        # the extra cell renders nowhere and is invisible in the table.
         for n, c in sorted(widths.items()):
-            if n != len(CANONICAL):
+            if n > len(CANONICAL):
                 issues.append(
                     f"'{label}': {c} row(s) have {n} cols, header declares "
-                    f"{len(CANONICAL)}"
+                    f"{len(CANONICAL)} — the extra cell(s) render nowhere"
+                )
+            elif n < len(CANONICAL):
+                notes.append(
+                    f"'{label}': {c} row(s) have {n} cols — trailing columns "
+                    f"empty, expected for rows predating 'Created by'"
                 )
 
         if per_plan:
-            issues.append(
-                f"'{label}' has {len(per_plan)} per-plan rows "
-                f"(markdown-style §11.7.5 / plan §12.4 forbid these; the scope's "
-                f"progress.md is the plan-level record). First few: "
-                + ", ".join(f"L{ln}:{n}" for ln, n in per_plan[:5])
+            notes.append(
+                f"'{label}' has {len(per_plan)} per-plan rows — intentional; "
+                f"phase-level rows are how Alex tracks progress from the console"
             )
         if oversized:
             worst = max(oversized, key=lambda t: t[3])
-            issues.append(
-                f"'{label}' has {len(oversized)} cell(s) over {CELL_CAP} chars "
-                f"(§11.7.4). Worst: row {worst[1]} col {worst[2]} at {worst[3]:,} chars"
+            notes.append(
+                f"'{label}' has {len(oversized)} cell(s) over {CELL_SOFT} chars "
+                f"(soft guidance only, nothing is truncated). Worst: row "
+                f"{worst[1]} col {worst[2]} at {worst[3]:,} chars — consider moving "
+                f"the detail to progress.md if it is rationale rather than status"
             )
         if bad_num:
             issues.append(
@@ -282,16 +303,15 @@ def cmd_add(args) -> int:
 
 
 def build_row(num, status, folder, desc, creator) -> str:
-    cells = [str(num), status, folder, desc, creator or "TBD"]
+    """Escape and flatten cells. Never truncates — see CELL_SOFT."""
+    cells = [str(num), status, folder, desc, creator or ""]
     out = []
     for i, c in enumerate(cells):
         c = c.replace("|", "\\|").replace("\n", " ").strip()
-        if len(c) > CELL_CAP:
-            # Truncate rather than reject: the index says where to look, not what
-            # happened (§11.7.4). Detail belongs in progress.md.
-            c = c[: CELL_CAP - 40].rstrip() + " … → detail in progress.md"
-            print(f"plans-index: col '{CANONICAL[i]}' exceeded {CELL_CAP} chars, "
-                  f"truncated with a pointer", file=sys.stderr)
+        if len(c) > CELL_SOFT:
+            print(f"plans-index: note — col '{CANONICAL[i]}' is {len(c):,} chars. "
+                  f"Kept in full; move it to progress.md if it is rationale rather "
+                  f"than status.", file=sys.stderr)
         out.append(c)
     return "| " + " | ".join(out) + " |"
 

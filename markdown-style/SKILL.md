@@ -589,11 +589,32 @@ live low-numbered scopes while leaving finished high-numbered ones in place.
 event-driven at `/closeout`, not a periodic tidy-up, so a backlog never forms. Any
 drift detector is a backstop, not the mechanism.
 
-11.7.4 **Status cells cap at ~300 characters**, overflowing to
-`… → detail in {folder}progress.md`. Counts, file paths and line numbers belong in
-the scope's `progress.md`. The index says where to look, not what happened.
+11.7.4 **The Description cell is a status surface — 3–4 sentences is the intended
+use, not bloat.** Alex reads this column from the console to see what has been
+going on across the project; it is the fastest high-level tracker he has. Write it
+to be read that way. Past roughly 900 characters, ask whether what you are adding
+is *status* (belongs here) or *rationale* (belongs in the scope's `progress.md`
+Decisions Log) — but never truncate an existing cell to hit a number.
 
-11.7.5 **No per-plan rows.** Each scope's `progress.md` is the plan-level record.
+> **Why this replaced a hard cap (2026-08-09).** This rule used to say "Status
+> cells cap at ~300 characters, overflowing to `… → detail in progress.md`." The
+> WellMed index carried 80 cells past that cap, several over 3,000 characters, and
+> the 2026-08-09 audit proposed compressing them on the strength of the written
+> rule. That was backwards: the long descriptions are load-bearing for the one
+> person who reads them. A cap violated 80 times is not drift — it is a rule that
+> was wrong, exactly as §2.2.3's `@Owner` narrowing already established.
+
+11.7.5 **Per-plan rows are allowed, and normal for a phased scope.** A `{N}.{P}`
+row per phase is how progress stays visible from the index without opening the
+folder. The scope's `progress.md` remains the authoritative, detailed record — the
+index row is the glance.
+
+> **Why this reversed (2026-08-09).** This rule used to read "No per-plan rows."
+> WellMed carried 132 of them and PMG 76, all deliberate, all useful. `/plan`
+> §12.4's stronger claim ("never append a per-plan row") was aimed at a real
+> defect — a *headerless* append that leaked 40 untabled rows — and over-corrected
+> from "append without a header" to "never append." The header is the thing that
+> matters, and `scripts/plans-index.py` now enforces it mechanically.
 
 ---
 

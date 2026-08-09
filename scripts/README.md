@@ -32,14 +32,19 @@ already caused real data loss. Prose cannot enforce itself — the same reasonin
     plans-index.py move <index> --num --to {active,archived} [--folder] [--status] [--dry-run]
 
 `add` and `move` refuse to write against a non-canonical header rather than
-silently appending a mismatched row. Cells over 300 chars are truncated with a
-`… → detail in progress.md` pointer (§11.7.4) — the index says where to look, not
-what happened. Neither command ever rewrites a row it was not asked to touch.
+silently appending a mismatched row. **Nothing is ever truncated** — the
+Description column is Alex's console status tracker, and 3-4 sentences there is
+the intended use (`markdown-style` §11.7.4). Cells past ~900 chars get a note, not
+a cut. Per-plan `{N}.{P}` rows are valid (§11.7.5). Neither command ever rewrites
+a row it was not asked to touch.
 
 Canonical row shape (decided 2026-08-09):
 
     | # | Status | Folder | Description | Created by |
 
-`validate` treats un-numbered rows whose `#` is a slug (`catalog-program`,
-`roadmap`) as valid programs/standing docs, not malformed rows — a validator that
-cries wolf is a validator that gets ignored.
+`validate` reports as ISSUES only things that are actually broken: a
+non-canonical header, mixed row widths, an unparseable `#`, or a row whose table
+disagrees with where its folder sits on disk. Everything else — un-numbered
+program rows (`catalog-program`, `roadmap`), per-plan rows, long descriptions — is
+a NOTE. A validator that cries wolf is a validator that gets ignored, which is the
+same failure as a rule nobody obeys.

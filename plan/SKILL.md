@@ -67,11 +67,28 @@ Do not reverse-engineer via SSM/AWS/`docker`/grep what a doc states directly.
 |---|---|
 | hosts · IPs · DB/DSN · docker · deploy paths · SSM layout · SGs | docs-repo `FLEET.md` (or the repo's infra doc) |
 | architecture · gRPC ports · ADRs · MS taxonomy · service boundaries | docs-repo `ARCHITECTURE.md` |
-| scope/plan status · what's active | `plans/PLANS-INDEX.md` |
+| scope/plan status · what's active | `plans/PLANS-INDEX.md` — **grep it, don't read it** (see below) |
 | per-repo conventions · build/test · gotchas | that repo's `CLAUDE.md` |
 
 A probe is a **last resort** for facts no doc records. When a probe *does* surface a fact
 the docs should have carried (or a doc is stale), fix the doc as part of the work.
+
+**Read these selectively.** `PLANS-INDEX.md` is 127 KB in WellMed (~31k tokens) and
+`FLEET.md` is comparable. Reading either whole, to answer one question, is the largest
+single avoidable context cost in a session. Grep for what you need:
+
+```bash
+IDX="$PLANS/PLANS-INDEX.md"
+grep -n '^| *112' "$IDX"                 # one scope + all its phase rows
+grep -n '^## \|^| *# *|' "$IDX"           # table structure only
+grep -nE '^\| *[0-9]+ .*(Ready to execute|In progress)' "$IDX"   # what's live
+~/Projects/ai-skills/scripts/plans-index.py next-number "$IDX"   # numbering only
+```
+
+The index is long **by design** — the 3–4 sentence descriptions are Alex's
+high-level tracker, read from the console (`/markdown-style` §11.7.4). Do not
+propose compressing it, and never truncate a row to save tokens. The cost belongs
+to the reader, and the reader's fix is to read less, not to make the file smaller.
 
 ## 2. Plan Discovery
 
@@ -834,18 +851,32 @@ mv {progress-file} {archive-dir}/
 
 ### 12.4 Update PLANS-INDEX.md
 
-**Never append a per-plan row.** The index tracks scopes; the plan-level record is
-the scope's own `progress.md`. Both index tables are five columns —
-`| # | Status | Folder | Description | Created by |` — and any row that does not
-match that shape does not belong in the file.
+**Never append a row by hand — use the script.** Both index tables are five
+columns, `| # | Status | Folder | Description | Created by |`, and
+`~/Projects/ai-skills/scripts/plans-index.py` is the only thing that should write
+one. It refuses to append against a non-canonical header rather than leaking a
+mismatched row:
 
-> **Why this rule exists.** This step used to say "if no row exists, append one",
-> with a seven-column template (`| {n} | {date} | plan | {path} | {project} |
-> {status} | {summary} |`). Nothing wrote a header for it, so those rows accreted
-> into a 40-row untabled fragment glued onto the end of the WellMed index —
-> invisible as a table, unmaintained, and by 2026-08-07 the *only* index
-> registration for scopes 101, 106, 107 and 108. Two of those were live and had no
-> Active row at all. An append with no header is not a record; it is a leak.
+```bash
+~/Projects/ai-skills/scripts/plans-index.py add  {index} --num {N} --status "…" \
+    --folder "…" --desc "…" --creator "$(git config user.name)"
+~/Projects/ai-skills/scripts/plans-index.py move {index} --num {N} --to archived \
+    --folder "archive/{N}-{slug}/" --status "✅ Done ({date})"
+```
+
+Per-plan `{N}.{P}` rows are fine — they are how a phased scope stays visible from
+the index (`/markdown-style` §11.7.5). What is not fine is an append with no
+header.
+
+> **Why this is a script and not a prose step.** This step used to say "if no row
+> exists, append one", with a seven-column template (`| {n} | {date} | plan |
+> {path} | {project} | {status} | {summary} |`). Nothing wrote a header for it, so
+> those rows accreted into a 40-row untabled fragment glued onto the end of the
+> WellMed index — invisible as a table, unmaintained, and by 2026-08-07 the *only*
+> index registration for scopes 101, 106, 107 and 108. Two of those were live and
+> had no Active row at all. An append with no header is not a record; it is a leak.
+> The 2026-08-09 fix was to stop asking prose to be a program: the header check
+> now lives in code that refuses, rather than in a sentence that can be skipped.
 
 For a **child plan** (per §2.3): update nothing here. Record completion in the
 scope `progress.md` (§12.5). The scope's index row changes only when the whole

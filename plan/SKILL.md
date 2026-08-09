@@ -799,8 +799,10 @@ set by /scope §5.9):
   the right moment to reset. **Before suggesting `/clear`, run the `/ready-to-clear`
   validation (mandatory — see that skill).** Spawn the fresh validator subagent with
   paths + claimed state only; on `NOT READY`, perform the listed fixes and re-validate
-  (max 3 cycles, then surface failures to the user and do NOT suggest clearing). Only
-  on `READY`, suggest clearing:
+  (max 3 cycles, then surface failures to the user and do NOT suggest clearing). On
+  `UNAVAILABLE` — the validator could not be spawned — the gate did not run: there is
+  nothing to remediate and **no in-context substitute**, so report that and the reason
+  and do NOT suggest clearing. Only on `READY`, suggest clearing:
 
   > Validated ready to clear — cold-resume: `/plan {next-plan-number}` → {first action}.
   > Phase boundary is a {human/deploy/irreversible} gate — natural place to reset.
@@ -813,10 +815,11 @@ set by /scope §5.9):
 Do not gate the `/clear` suggestion on "context feels heavy" — gate it on the boundary
 type. If context genuinely overflows mid-plan, compaction handles it transparently.
 
-12.8.5 If there are no pending siblings, the scope is fully complete. Run the
+11.8.5 If there are no pending siblings, the scope is fully complete. Run the
 `/ready-to-clear` validation with claim "scope {N} fully complete" (same mandatory
-gate as 12.8.4 — remediate on `NOT READY` before proceeding). Then announce
-completion and hand off to `/scope` Step 8 (post-flight cleanup):
+gate as 11.8.4 — remediate on `NOT READY`, and on `UNAVAILABLE` report that the gate
+could not run rather than proceeding as though it passed). Then announce completion
+and hand off to `/scope` Step 8 (post-flight cleanup):
 
 > All plans in this scope are complete. Run scope post-flight cleanup?
 > (archive scope, update index, update CLAUDE.md, clear context)

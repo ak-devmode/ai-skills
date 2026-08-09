@@ -1,6 +1,6 @@
 ---
 name: ready-to-clear
-version: 1.0.0
+version: 1.1.0
 description: |
   Independent clear-readiness validation. Spawns a FRESH subagent that checks disk
   truth (progress files, closeout-prep ledger, PLANS-INDEX) against git truth
@@ -71,7 +71,31 @@ progress file, closeout-prep.md, artifacts/).
 
 ## 4. Spawn the Validator
 
-Launch ONE fresh subagent (general-purpose, read-only mandate) with this prompt
+**Dispatch is pre-authorized and non-negotiable — this skill has no degraded mode.**
+Recent Claude Code versions default to not launching subagents unprompted. That
+default does not apply here: this skill declares `Agent`, and a caller invoking it is
+requesting exactly one thing — a verdict from a context that is not this one
+(`~/.claude/CLAUDE.md`, "Subagent dispatch inside skills is pre-authorized").
+
+4.0 **If the subagent cannot be spawned, return no verdict.** Do not self-assess, do
+not fall back to checking §5 inline, do not return `READY` with a caveat. Emit:
+
+```
+VERDICT: UNAVAILABLE — validator could not be spawned ({reason})
+Resume reconstruction: NOT ATTEMPTED
+```
+
+The calling skill treats `UNAVAILABLE` exactly as it treats `NOT READY`: **it must not
+suggest `/clear`.** It says the gate could not run and why, and lets the user decide.
+
+> **Why this fails closed instead of degrading.** §1's premise is that the `/clear`
+> suggestion is emitted by the most degraded context in the session, assessing its own
+> completeness — and that self-assessment is precisely what fails. A validator running
+> *in* that context is not a weaker check, it is the failure being audited wearing the
+> auditor's name. A missing verdict is honest; a self-issued one is worse than nothing,
+> because the caller will quote it as independent.
+
+4.1 Launch ONE fresh subagent (general-purpose, read-only mandate) with this prompt
 shape — paths substituted, nothing added:
 
 ```
@@ -153,7 +177,7 @@ the verdict — never silently absorbed.
 The validator returns exactly:
 
 ```
-VERDICT: READY | NOT READY
+VERDICT: READY | NOT READY | UNAVAILABLE
 Resume reconstruction: {command + first action, or "COULD NOT RECONSTRUCT"}
 Failures (numbered, empty if READY):
   1. [{check letter}] {what is wrong} → {the specific write/commit that fixes it}
@@ -169,6 +193,10 @@ debate — do not argue with the cold reader from the degraded context.
 
 7.2 Maximum 3 validation cycles. Still `NOT READY` after 3 → stop, present the
 remaining numbered failures to the user inline, and do NOT suggest `/clear`.
+
+7.2a On `UNAVAILABLE` there is nothing to remediate — the gate did not run. Do not
+retry in-context, and do not suggest `/clear`. Report that the validator could not be
+spawned, name the reason, and hand the decision to the user.
 
 7.3 On `READY`: the calling skill may emit its `/clear` suggestion, quoting the
 resume reconstruction line so the user sees what the next session will do:

@@ -1,6 +1,6 @@
 ---
 name: review
-version: 2.1.0
+version: 2.2.0
 description: |
   Pre-landing code review in two passes: gstack's review engine for generic
   correctness, security, and diff quality, then a Kalpa/PMG domain pass that a
@@ -227,6 +227,7 @@ production context that makes it actionable — and note the engine agreed.
 ```
 /review — {repo} @ {branch}  ({N} files, +{added}/-{removed})
 Passes: gstack engine {✓|SKIPPED} · Kalpa domain {✓|SKIPPED|n/a — generic repo}
+{DEGRADED: specialist subagents not dispatched ({reason}) — single-context pass only}
 
 BLOCKING ({n})
   1. {file:line} — {defect}. {consequence}. {fix}
@@ -297,3 +298,22 @@ the Pass 1 invocation (§2.3).
 5.6 **Report the cost when it's high.** Pass 1 loads a large engine. If the user
 asked for a quick look, say that `--kalpa-only` exists rather than silently
 spending the context.
+
+5.7 **Dispatch the specialists — invoking this skill is the authorization.** This
+skill declares `Agent`, and gstack's engine has specialist passes
+(`gstack/review/specialists/*.md`: security, performance, testing, red-team,
+maintainability, data-migration, api-contract). Recent Claude Code defaults to not
+launching subagents unprompted; that default does not apply to a skill whose
+`allowed-tools` declares `Agent`, because the user chose this skill knowing what it
+does (`~/.claude/CLAUDE.md`, "Subagent dispatch inside skills is pre-authorized").
+
+**If dispatch is genuinely unavailable, say so in the HEADER** (§4.3's `DEGRADED:`
+line) — not only in the coverage section. A single-context pass is a materially
+narrower review than a specialist fan-out, and the reader deciding whether to merge
+looks at the top. Recording it only at the bottom reads later as full coverage.
+
+> **Observed 2026-08-09.** The first real run couldn't dispatch (Agent restricted in
+> that session) and recorded the gap in its §5 rather than its header. That was the
+> reviewer being conscientious, not the skill working — the next run might not
+> notice, and a report that lists only what it checked is indistinguishable from a
+> complete one.

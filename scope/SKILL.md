@@ -714,8 +714,10 @@ downstream scope that was waiting on this, or the next in a series), offer to co
 Before telling the user to `/clear`, **run `/ready-to-clear` — mandatory.** Spawn the
 fresh validator with paths plus the claim "scope {N} fully complete and archived". On
 `NOT READY`, perform the listed fixes and re-validate; after 3 cycles, surface the
-failures inline and do **not** tell them to clear. Only on `READY`, quote the resume
-reconstruction and give them the exact prompt to paste.
+failures inline and do **not** tell them to clear. On `UNAVAILABLE` (the validator
+could not be spawned) the gate did not run — report that and the reason, and do not
+tell them to clear either; there is no in-context substitute for it. Only on `READY`,
+quote the resume reconstruction and give them the exact prompt to paste.
 
 If there are no follow-on scopes, just report completion.
 

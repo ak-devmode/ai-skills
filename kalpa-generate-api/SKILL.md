@@ -1,5 +1,5 @@
 ---
-name: generate-api
+name: kalpa-generate-api
 description: "Generate a complete REST API endpoint following WellMed project conventions — route, controller, service, repository, types, and tests."
 allowed-tools:
   - Bash

@@ -1,5 +1,5 @@
 ---
-name: satu-sehat-fhir
+name: kalpa-satu-sehat-fhir
 description: "SATU SEHAT FHIR validation — validate FHIR Bundle structure, Indonesian healthcare identifiers (NIK, IHS), ICD-10/LOINC coding, and common integration errors."
 allowed-tools:
   - Read

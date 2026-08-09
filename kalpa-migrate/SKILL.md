@@ -1,5 +1,5 @@
 ---
-name: migrate
+name: kalpa-migrate
 description: "Generate a Prisma database migration with safety checks, rollback plan, and WellMed conventions."
 allowed-tools:
   - Bash

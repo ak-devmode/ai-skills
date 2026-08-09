@@ -432,7 +432,7 @@ frontends and all skills are potentially applicable.
 | Not a bug fix or debugging task | `/investigate` → N/A |
 | No developer-facing output (API, CLI, SDK, docs) | `/plan-devex-review`, `/devex-review` → N/A |
 | No design exploration needed (known pattern) | `/design-shotgun` → N/A |
-| Task is not going to prod this sprint | `/ship` → mark OPTIONAL |
+| Always — Alex does not use `/ship` | `/ship` → **always N/A** (see below) |
 | No user-visible change | `/document-release` → mark OPTIONAL |
 | Small single-session task | `/retro` → mark OPTIONAL |
 
@@ -441,6 +441,12 @@ frontends and all skills are potentially applicable.
 **Mandatory skills:**
 - `/plan-ceo-review` is **always YES**. It catches "why are we doing it this way at all?"
   reframes that save entire phases of wasted work. Run it first, before eng review.
+
+**`/ship` is always N/A — not conditional.** Alex does not use it, in any repo. Mark it
+`N/A — not in use; promotion is /review → PR → merge → /closeout` and move on. Do not
+re-litigate it per scope, and do not ask whether this scope is prod-bound in order to
+decide: the answer does not depend on the scope. CI covers tests and diff review, deploy
+is automatic on merge, `/document-release` covers docs, and `/closeout` covers cleanup.
 
 **Shortcut:** `/autoplan` runs `/plan-ceo-review` + `/plan-design-review` +
 `/plan-eng-review` + `/plan-devex-review` in sequence with auto-decisions. Use it
@@ -484,7 +490,7 @@ Skills are grouped by workflow phase. Mark each YES, OPTIONAL, or N/A with reaso
 
 | # | Skill | Apply? | When | Notes |
 |---|-------|--------|------|-------|
-| 16 | /ship | ? | Final | PR creation + versioning |
+| 16 | /ship | **N/A always** | — | Not in use. Promotion is /review → PR → merge → /closeout |
 | 17 | /document-release | ? | Post-ship | Sync docs with changes |
 | 18 | /retro | ? | End of sprint | Retrospective |
 

@@ -64,10 +64,41 @@ echo ""
 # --- ai-skills (runs AFTER gstack so our names win on collision) ---
 echo "2. Linking ai-skills into $SKILLS_DIR..."
 
+# Directories under ai-skills that are deliberately NOT skills.
+NON_SKILL_DIRS=" templates plans "
+
+skipped_loudly=0
 for skill_dir in "$AI_SKILLS_DIR"/*/; do
   skill_name="$(basename "$skill_dir")"
   [[ "$skill_name" == .* ]] && continue
-  [ -f "$skill_dir/SKILL.md" ] || continue
+  case "$NON_SKILL_DIRS" in *" $skill_name "*) continue ;; esac
+
+  # A directory with no SKILL.md is never a skill, no matter what it contains.
+  # Claude Code will NOT reliably register skills nested one level deeper, so a
+  # container dir silently publishes some of its children and drops the rest.
+  # That is exactly how kalpa/ shipped 6 skills of which 2 registered and one
+  # (review) lost its name to gstack. Fail loudly instead of skipping.
+  if [ ! -f "$skill_dir/SKILL.md" ]; then
+    nested="$(find "$skill_dir" -mindepth 2 -maxdepth 2 -name SKILL.md 2>/dev/null | wc -l | tr -d ' ')"
+    if [ "$nested" -gt 0 ]; then
+      echo "   !! $skill_name — NOT A SKILL but contains $nested nested SKILL.md file(s)."
+      echo "      Nested skills do not register reliably. Flatten them to top-level"
+      echo "      dirs with namespaced names (e.g. ${skill_name}-<child>) so each is"
+      echo "      registered, then re-run setup."
+    else
+      echo "   !! $skill_name — no SKILL.md, not linked. Add one or list it in"
+      echo "      NON_SKILL_DIRS in setup.sh if it is deliberately not a skill."
+    fi
+    skipped_loudly=$((skipped_loudly + 1))
+    continue
+  fi
+
+  # Frontmatter `name` must match the directory — Claude Code resolves by dir.
+  fm_name="$(sed -n 's/^name: *//p' "$skill_dir/SKILL.md" | head -1)"
+  if [ -n "$fm_name" ] && [ "$fm_name" != "$skill_name" ]; then
+    echo "   !! $skill_name — frontmatter name is '$fm_name'. These must match."
+    skipped_loudly=$((skipped_loudly + 1))
+  fi
 
   target="$SKILLS_DIR/$skill_name"
   src="$(skill_source "$target")"
@@ -89,6 +120,26 @@ for skill_dir in "$AI_SKILLS_DIR"/*/; do
     ln -snf "$skill_dir" "$target"
   fi
 done
+
+[ "$skipped_loudly" -gt 0 ] && echo "   ($skipped_loudly issue(s) above — skills listed there are NOT installed)"
+
+echo ""
+
+# --- prune ai-skills links whose source is gone (renames, flattenings) ---
+# A dir symlink into ai-skills that no longer resolves is a leftover from a
+# rename. Claude Code may still half-discover through it, so remove it.
+echo "2b. Pruning stale ai-skills links..."
+pruned=0
+for entry in "$SKILLS_DIR"/*; do
+  [ -L "$entry" ] || continue
+  raw="$(readlink "$entry")"
+  case "$raw" in "$AI_SKILLS_DIR"/*) ;; *) continue ;; esac
+  [ -f "$raw/SKILL.md" ] && continue
+  rm -f "$entry"
+  echo "   $(basename "$entry") — pruned (source $raw no longer a skill)"
+  pruned=$((pruned + 1))
+done
+[ "$pruned" -eq 0 ] && echo "   none"
 
 echo ""
 

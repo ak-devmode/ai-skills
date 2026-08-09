@@ -112,9 +112,30 @@ because both `/plan` (writes it) and `/closeout` (reads it) need it.
 CLAUDE templates because only `/cross-repo-init` consumes them.
 
 3.7 **Symlinks, not copies, for `~/.claude/skills/`.** Adding a new
-skill: create directory + SKILL.md, then
-`ln -s ~/Projects/ai-skills/<name> ~/.claude/skills/<name>`. Removing:
-delete the symlink first, then archive or delete the directory.
+skill: create directory + SKILL.md, then run `./setup.sh` — it links
+every top-level dir, arbitrates name collisions, and prunes links whose
+source is gone. Removing: delete the directory, then re-run `./setup.sh`.
+Restart the session for either to register.
+
+3.8 **Skills are top-level directories with a `SKILL.md`. Never nested.**
+Claude Code does not reliably register a skill one level deeper than
+`~/.claude/skills/<name>/SKILL.md`. A container directory silently
+publishes *some* of its children and drops the rest.
+
+> **Why this is a rule and not a preference.** `kalpa/` was a container
+> holding six sub-skills with no `SKILL.md` of its own. `setup.sh` linked
+> the container; Claude Code registered **two** of the six. The other four
+> — `coding-standards`, `kalpa-context`, `satu-sehat-fhir`, and `review` —
+> were invisible for months, and because the bare name `review` was never
+> claimed, every `/review` Alex ran was gstack's. Fixed 2026-08-09 by
+> flattening to `kalpa-*` top-level dirs; `setup.sh` now fails loudly on a
+> SKILL.md-less directory that contains nested ones.
+
+3.9 **Namespace project-scoped skills.** Kalpa/WellMed skills are
+`kalpa-<name>`. A generic name (`migrate`, `generate-api`, `review`) in a
+shared namespace is a collision waiting for whichever installer runs last.
+`setup.sh` arbitrates bare-name collisions in ai-skills' favour, but a
+name that can't collide is better than a name that gets arbitrated.
 
 ---
 
@@ -131,7 +152,8 @@ closeout-extended/tests/upward-traversal-recipe.md
 cross-repo-init/SKILL.md        — trio bootstrap + maintenance (invoked by /closeout Step 8)
 cross-repo-init/templates/      — CROSS-REPO / ARCHITECTURE / CLAUDE templates + examples
 markdown-style/SKILL.md         — markdown formatting rules
-kalpa/<sub-skills>/SKILL.md     — WellMed/Kalpa-project skills
+review/SKILL.md                 — two-pass review: gstack engine + Kalpa domain pass
+kalpa-*/SKILL.md                — WellMed/Kalpa project skills (flat, namespaced — §3.8)
 member-record-amend/SKILL.md    — PMG Padma Care record-edit skill
 templates/closeout-prep.md.template   — ledger schema (shared by /plan + /closeout)
 plans/PLANS-INDEX.md            — local plans tracking ai-skills development
@@ -218,22 +240,29 @@ extensions across the PMG and WellMed fleets. Most recent direct-to-main
 work (2026-06-01): gate-driven phasing across /scope, /plan, /markdown-style,
 and /closeout Step 8 trio-sync via /cross-repo-init.
 
-9.3 **Global agent memory** at
-`~/.claude/projects/-Users-alexknecht-Projects-pmg/memory/` is shared
-across PMG and ai-skills work (the memory path is project-scoped to the
-pmg directory but happens to load when working in any project Alex
-opens). Repo-relevant pointers:
+9.3 **Agent memory is scoped by working directory — it does NOT follow you
+across projects.** Each project gets its own store at
+`~/.claude/projects/<cwd-slug>/memory/`. Nine exist; two are real
+(`-Users-alexknecht-Projects-pmg`, 148 files, and
+`-Users-alexknecht-Projects-WellMed`, 224) and the rest are splinters
+minted by starting a session from a subdirectory.
 
-- `feedback_no_askuserquestion.md` — banned in skills authored here
-- `feedback_numbered_questions.md` — numbered inline, not bulleted
-- `feedback_style.md` — communication/working-style
-- `feedback_branch_workflow.md` — solo-dev, work on current branch
-- `feedback_reuse_branches.md` — commit fixes onto open branches
-- `feedback_iterative_prompt_tuning.md` — one-at-a-time, sequential
-- `reference_ai_skills_plans_dir.md` — `/scope` + `/plan` recognize plans/
-- `project_closeout_skills.md` — closeout-skills scope status pointer
-- `project_pmg_wellmed_trunks.md` — independent-trunks rule (for skills
-  that reason about cross-repo work)
+> **Correction (2026-08-09).** This section previously claimed the
+> pmg-scoped store "happens to load when working in any project Alex
+> opens." It does not. Every memory file this repo's skills cited as
+> justification lives *only* in the pmg store, so those citations
+> dead-ended whenever a skill ran in WellMed — which is most of the time.
+
+**Therefore: a skill authored here never cites a memory path.** A skill
+that depends on a rule states the rule in its own body. Memory is for
+*this* session's agent, not a cross-project reference library, and a
+citation an agent cannot open is worse than no citation — it reads as a
+file the reader should have been able to find.
+
+Project-resident docs are the correct thing to cite instead, because they
+travel with the repo: the target repo's `CLAUDE.md`, its
+`ARCHITECTURE.md`, `CROSS-REPO.md`, and for WellMed the ADR index at
+`kalpa-docs/adrs/` and `kalpa-docs/FLEET.md`.
 
 ---
 

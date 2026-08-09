@@ -1,5 +1,5 @@
 ---
-name: coding-standards
+name: kalpa-coding-standards
 description: "WellMed coding standards — TypeScript patterns for service layer, repository, error handling, Zod validation, and testing. Use when writing or reviewing WellMed application code."
 allowed-tools:
   - Read

@@ -78,7 +78,8 @@ Read flags from the user's invocation. Default to none if unspecified.
 - `--skip-trio-sync` — Step 8 trio sync via /cross-repo-init is bypassed. Loudly
   flagged in summary. Use when you intend to run /cross-repo-init manually later
   or when you know the trio is fresh from a recent /cross-repo-init run.
-- `--skip-memory` — Step 10 memory writes are skipped. Useful when running closeout
+- `--skip-memory` — Step 10 is skipped entirely, both the contradiction check (12.2)
+  and the writes. Useful when running closeout
   in a dry-run context.
 - `--dry-run` — All steps execute up to but not including any file write or
   `git` mutation. Output what *would* happen.
@@ -460,20 +461,60 @@ or open a follow-up plan.
 covered by `test/sla_escalation_test.go`"), include those mappings in the summary
 to give the user a feature-level view in addition to file-level.
 
-## 12. Step 10 — Memory Writes for Cross-Cutting Findings
+## 12. Step 10 — Memory: Contradiction Check, then Writes
 
-12.1 If `--skip-memory` was passed, skip this step.
+12.1 If `--skip-memory` was passed, skip this step (both the contradiction check
+and the writes).
 
-12.2 Scan §4 (Patterns Created) for entries with `fold into <source>` recommendations
+12.2 **Contradiction check — runs BEFORE any writes.** A new entry that contradicts
+an existing one leaves both on disk, and the stale one keeps getting loaded every
+session. Closeout is the only step in the workflow that knows exactly what this
+scope changed, which is the only thing that makes this check cheap.
+
+12.2.1 Build a token set from the scope's own diff, **deletions and renames first**:
+deleted/renamed files · removed env vars, flags, feature toggles · deleted infra
+resources (Lambda, alarm, SSM param, queue, IAM role) · renamed tables/columns ·
+changed default values · retired branches · retired workflows.
+
+12.2.2 `grep` the memory dir for each token — `{memory-dir}/*.md`, **including
+`MEMORY.md` and `MEMORY-ARCHIVE.md`**.
+
+12.2.3 **Classify every hit before acting. This step is load-bearing.**
+- **INSTRUCTION** — tells a reader to use/read/restart/search the thing ("X is the
+  sole publisher", "search all three", "override via X") ⇒ **CONTRADICTED**.
+- **HISTORY** — records that it existed or caused something ("X was the root cause",
+  "authored on branch X") ⇒ **leave alone.**
+Grep hits alone cannot separate these. Measured false-positive rate when this
+classification is skipped: **~80%** (2026-08-10 sweep — 15 flagged, 3 real). Never
+batch-edit straight off grep output.
+
+12.2.4 For each CONTRADICTED entry, correct **in place**: prepend a dated
+`🔴 CORRECTION <YYYY-MM-DD>` line to the affected section saying what changed, what
+is now false, and what to do instead. **Do not silently rewrite or delete the stale
+claim** — leaving it visible beside the correction is what tells a future reader the
+correction is real, rather than the file appearing to have always said this.
+
+12.2.5 Two mechanical checks, one grep each, run unconditionally:
+- **Dead wikilinks** — any `[[name]]` in a touched memory with no matching file. A
+  missing target is a defect only if it's a *typo* (the file exists under a different
+  prefix); an unwritten target is a valid forward marker — leave it.
+- **Stale `file:line` citations** — any memory citing a path this scope deleted or
+  renamed.
+
+12.2.6 If the scope deleted something that an entry in `MEMORY-ARCHIVE.md` presents
+as live, correct it there too. **Archived entries are still read** — and they are
+where live open items go to die unnoticed.
+
+12.3 Scan §4 (Patterns Created) for entries with `fold into <source>` recommendations
 where the source is a different repo from the local repo. These are the
 "newly-discovered pattern source" findings worth remembering across sessions.
 
-12.3 Scan §11 (Risk Flags) for entries that look like recurring failure modes —
+12.4 Scan §11 (Risk Flags) for entries that look like recurring failure modes —
 indicators are: phrases like "discovered that X always fails when Y", "third time
 seeing this in <repo>", or risk flags that reference systemic issues (auth
 flakiness, deploy ordering, contract drift).
 
-12.4 For each cross-cutting finding, write a memory entry per the conventions in
+12.5 For each cross-cutting finding, write a memory entry per the conventions in
 the user's auto memory rules (see CLAUDE.md system reminder):
 - Type: `reference` (for pattern sources) or `feedback` (for recurring failure
   modes) — choose based on whether the finding is a pointer to a place or a rule
@@ -482,12 +523,18 @@ the user's auto memory rules (see CLAUDE.md system reminder):
   frontmatter, body lead with rule + **Why:** + **How to apply:** lines.
 - Update `MEMORY.md` index with a one-line pointer.
 
-12.5 Auto-write — no prompt. Per Issue 13B (plan v0.2), de-dup gap is accepted —
+12.6 Auto-write — no prompt. Per Issue 13B (plan v0.2), de-dup gap is accepted —
 observe in practice, don't pre-emptively engineer. If a duplicate memory is later
-flagged by the user, that's the signal to add de-dup logic.
+flagged by the user, that's the signal to add de-dup logic. (Note: 12.2 handles
+*contradiction*, which is a different problem from *duplication* — two entries can
+be non-duplicate and still disagree.)
 
-12.6 Log written memory entries in step 12's summary under "Memory writes" with
-paths so the user can audit.
+12.7 Log memory results in step 12's summary, **split three ways**, so that a
+recorded-but-unfixed contradiction cannot read as a fixed one:
+- `Memory writes` — new entries, with paths.
+- `Memory corrected` — entries given a dated correction, with paths and what changed.
+- `Memory contradictions NOT fixed` — each with the reason it was left (needs a live
+  query, ambiguous which side is right, owner decision). **Never leave this silent.**
 
 ## 13. Step 11 — Archive Scope via /plan §11 Code Path
 
@@ -588,7 +635,7 @@ skip the gate and note "archive gate not run (dry-run)."
   [✓] 7  ARCHITECTURE.md: {edits or "no drift"}
   [✓] 8  Trio sync: {N edits across CROSS-REPO/ARCH/CLAUDE} | no drift | SKIPPED
   [✓] 9  Coverage: {C} covered, {U} uncovered, {T} test-only
-  [✓] 10 Memory: {M} entries written
+  [✓] 10 Memory: {M} written · {C} corrected · {U} contradictions NOT fixed
   [✓] 11 Archived: {archive-path}
   [✓] 12 Summary (this)
 
@@ -644,6 +691,8 @@ state file. Re-running /closeout from the top is safe because:
 - Step 8 trio sync is idempotent (re-running /cross-repo-init on a healthy trio
   produces no diff).
 - Step 10 memory writes check for existing entry by file path before writing.
+- Step 10's contradiction check (12.2) is read-then-correct-in-place and idempotent:
+  a re-run finds the dated `🔴 CORRECTION` line already present and makes no edit.
 - Step 11 archive checks PLANS-INDEX status before mutating (skips if already Done).
 
 For genuinely long runs where re-running is wasteful, /closeout-extended (which

@@ -53,6 +53,7 @@ import hashlib
 import importlib.util
 import json
 import os
+import random
 import re
 import sys
 
@@ -232,6 +233,13 @@ def cmd_next(args):
     pending = [i for i in items if i["key"] not in done]
     if args.priority:
         pending.sort(key=lambda i: (i["priority"] is None, i["priority"] or 9))
+    elif args.random:
+        # Document order is NOT a neutral sample: sections are appended, so reading top-down
+        # is biased toward recent items, and `--priority` is biased the opposite way (the
+        # oldest audit items carry the P1s, and those are the ones most likely already
+        # fixed). Measuring a drift RATE needs neither bias. Seeded so a quoted rate can be
+        # re-drawn and checked by someone else -- an unreproducible sample is an anecdote.
+        random.Random(args.seed).shuffle(pending)
     batch = pending[: args.batch]
 
     out = []
@@ -540,6 +548,10 @@ def main():
     p.add_argument("plans_dir")
     p.add_argument("--batch", type=int, default=10)
     p.add_argument("--priority", action="store_true", help="most severe P first")
+    p.add_argument(
+        "--random", action="store_true", help="unbiased sample (for measuring a drift rate)"
+    )
+    p.add_argument("--seed", type=int, default=0, help="seed for --random, so it re-draws")
     p.set_defaults(fn=cmd_next)
 
     p = sub.add_parser("record", help="record one verdict (evidence enforced)")

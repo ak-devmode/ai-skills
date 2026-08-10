@@ -3,3 +3,7 @@
 
 # macOS
 .DS_Store
+
+# Python bytecode from scripts/ (plans-index.py, todo-stats.py, edit-guard.py)
+__pycache__/
+*.pyc

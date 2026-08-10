@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """todo-stats.py — count what is actually in a plans dir's TO-DO.md.
 
-Approach: TO-DO.md reached 473 open items across 133 sections without anyone
+Approach: TO-DO.md reached 471 open items across 133 sections without anyone
 noticing, because nothing measured it. `/plan` §11.1-11.2 appends deferred items
 automatically at plan completion; nothing removes one except a human deciding to.
 A one-way valve grows monotonically, so the fix is not discipline — it is a number
@@ -22,7 +22,7 @@ Deliberate non-goals, each load-bearing:
 
 Output shape (one line per plans dir that has a TO-DO.md):
 
-    kalpa TO-DO: 473 open (+12 since 2026-07-10) · 48 P1+ · 118 unverified >90d
+    kalpa TO-DO: 471 open (+14 since 2026-07-06) · 33 P1+ · 468 never verified · 32 closed-in-place
 
 WHY THE DELTA NEEDS STORED STATE, AND WHY IT IS NOT REWRITTEN EVERY RUN
 A count with no trend is the dashboard nobody reads. But rewriting the baseline on
@@ -63,7 +63,11 @@ KNOWN LIMITS, stated honestly:
     trend number; do not build a gate on it.
   - Closed-in-place `- [x]` items are counted and reported separately because
     TO-DO.md's own convention is to MOVE closed items to archive/TO-DO-archive.md.
-    A rising closed-in-place count is a second rot signal, not progress.
+    A rising closed-in-place count is a second rot signal, not progress. Items that
+    explicitly point at the archive are TOMBSTONES -- left deliberately so a future
+    "did we already do X?" grep still lands -- and are excluded from that count.
+    Getting this wrong in either direction makes the number untrustworthy, which is
+    the failure this script exists to prevent.
   - 46 of kalpa's 133 sections carry no date in their heading, so items under them
     are datable only if they date themselves. Those are excluded from the age count
     and surfaced by --verbose as `undatable`.
@@ -90,6 +94,7 @@ STALE_AFTER_DAYS = 90
 # their parent's block rather than counted, so one logical item is one count.
 ITEM = re.compile(r"^- \[([ xX])\]")
 HEADING = re.compile(r"^(#{1,6}) ")
+FENCE = re.compile(r"^\s*(```|~~~)")
 SECTION = re.compile(r"^## +(.*)$")
 ISO = re.compile(r"\b(20\d\d-\d\d-\d\d)\b")
 PRIORITY = re.compile(r"\bP([0-9])\b")
@@ -99,6 +104,12 @@ PRIORITY = re.compile(r"\bP([0-9])\b")
 # minting a competing one: he wrote it under real conditions, which is the strongest
 # available signal about what he will actually read.
 STAMP = re.compile(r"VERIFIED(?:\s+STILL\s+TRUE)?[:\s]+\**\s*(20\d\d-\d\d-\d\d)", re.I)
+
+# A closed item that explicitly points at the archive is a deliberate TOMBSTONE -- left
+# behind on purpose so a future "did we already do X?" grep still lands somewhere. It is
+# the convention working, not rot, so it must not be counted as drift. 7 of kalpa's 39
+# closed-in-place items are tombstones; the other 32 are strikethrough-and-forget.
+TOMBSTONE = re.compile(r"mov(?:ed|e) to|TO-DO-archive|→\s*archive", re.I)
 
 
 def _parse_date(text):
@@ -125,12 +136,29 @@ def parse_items(text):
     section = None
     section_date = None
     current = None
+    in_fence = False
 
     def flush():
         if current is not None:
             items.append(current)
 
     for line in text.splitlines():
+        # A `- [ ]` inside a fenced block is a documented EXAMPLE, not an item. This file
+        # documents its own conventions with worked examples (including the verification
+        # stamp), and counting those inflated every metric by one the moment the stamp
+        # convention was written down.
+        # `body` keeps fenced lines so the item still reads whole; `prose` excludes them so
+        # a stamp or priority quoted inside an example never counts as the item's own.
+        if FENCE.match(line):
+            in_fence = not in_fence
+            if current is not None:
+                current["body"].append(line)
+            continue
+        if in_fence:
+            if current is not None:
+                current["body"].append(line)
+            continue
+
         m_sec = SECTION.match(line)
         if m_sec:
             flush()
@@ -147,6 +175,7 @@ def parse_items(text):
                 "section": section,
                 "section_date": section_date,
                 "body": [line],
+                "prose": [line],
             }
             continue
 
@@ -158,12 +187,13 @@ def parse_items(text):
 
         if current is not None:
             current["body"].append(line)
+            current["prose"].append(line)
 
     flush()
 
     for it in items:
-        blob = "\n".join(it["body"])
-        it["text"] = blob
+        blob = "\n".join(it["prose"])
+        it["text"] = "\n".join(it["body"])
         # Newest stamp (last time anyone checked) but OLDEST plain date (when it was
         # raised) -- see the module docstring on why newest-date would flatter age.
         it["stamped"] = _newest(_parse_date(d) for d in STAMP.findall(blob))
@@ -197,10 +227,14 @@ def collect(todo_path, today):
         elif asof < cutoff:
             stale += 1
 
+    closed = [i for i in items if not i["open"]]
+    tombstones = [i for i in closed if TOMBSTONE.search(i["text"])]
+
     return {
         "path": todo_path,
         "open": len(open_items),
-        "closed_in_place": sum(1 for i in items if not i["open"]),
+        "closed_in_place": len(closed) - len(tombstones),
+        "tombstones": len(tombstones),
         "sections": len({i["section"] for i in items if i["section"]}),
         "p1plus": sum(
             1 for i in open_items if i["priority"] is not None and i["priority"] <= 1
@@ -321,7 +355,8 @@ def main():
             print(
                 f"    sections={stats['sections']} verified={stats['verified']} "
                 f"undatable={stats['undatable']} stale>{STALE_AFTER_DAYS}d="
-                f"{stats['stale']} path={stats['path']}"
+                f"{stats['stale']} tombstones={stats['tombstones']} "
+                f"path={stats['path']}"
             )
     return 0
 

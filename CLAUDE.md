@@ -195,6 +195,7 @@ scripts/README.md               — contracts + exit codes for the shared script
 scripts/resolve-plans-dir.sh    — plans-dir resolution (one owner, 5 callers)
 scripts/claim-scope-number.sh   — scope numbering, race-defensive across 4 sources
 scripts/plans-index.py          — PLANS-INDEX validate/add/move, schema-enforcing
+scripts/todo-stats.py           — TO-DO.md counts for the SessionStart hook (counts only)
 plans/PLANS-INDEX.md            — local plans tracking ai-skills development
 plans/<scope>/                  — active scope folders
 plans/archive/                  — completed scopes

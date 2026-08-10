@@ -129,9 +129,24 @@ def todo_file(plans_dir):
     return os.path.abspath(os.path.join(plans_dir, "TO-DO.md"))
 
 
+# A verification stamp is metadata ABOUT the claim, not part of it, so it must not change the
+# item's identity. Stripping it before hashing is what makes `apply` key-stable: without this,
+# stamping an item rewrites its lead line, changes its key, and orphans the very verdict just
+# applied -- which is how the first real run ended with `triaged: 0` and all 18 verdicts
+# reported as orphans (plan 114.3 T3, 2026-08-10). A REWRITE (bucket `reframe`) still re-keys
+# on purpose: that one genuinely changes the assertion and should be re-verified.
+KEY_STRIP = re.compile(r"^- \[[ xX]\]\s*\**\s*VERIFIED(?:\s+STILL\s+TRUE)?[^:]*:\**\s*", re.I)
+# A date added to a section heading is metadata about the SECTION, not a change to any item's
+# claim, so it must not re-key the items beneath it. Found the same way as the stamp problem:
+# dating 40 headings re-keyed every item under them (plan 114.3 T4 -> T3, 2026-08-10).
+SEC_STRIP = re.compile(r"\s*\((?:20\d\d-\d\d-\d\d)\)\s*$")
+
+
 def item_key(it):
     lead = " ".join(it["body"][0].split())
-    basis = f"{it.get('section') or ''}␟{lead}"
+    lead = KEY_STRIP.sub("- [ ] ", lead)
+    section = SEC_STRIP.sub("", it.get("section") or "")
+    basis = f"{section}␟{lead}"
     return hashlib.sha1(basis.encode("utf-8")).hexdigest()[:12]
 
 
@@ -351,15 +366,82 @@ def _tally(verdicts):
     return by_bucket, by_owner
 
 
+def cmd_rekey(args):
+    """Re-attach verdicts whose key changed, by matching on the recorded lead line.
+
+    Why this has to exist: the key is a hash of (section, lead), so ANY change to the key
+    function -- or to a heading, or a stamp -- detaches some subset of existing verdicts. That
+    happened twice in one session (a stamp re-keyed 11 items, then dating 40 headings re-keyed
+    the rest), and each time the verdicts were intact while the pointers were not. Losing
+    verified work to a hash change is exactly the dropped-bookkeeping failure this tool exists
+    to prevent, so recovery is a command rather than a manual JSON edit.
+
+    Matches on the recorded `lead`, normalised the same way item_key normalises, because that
+    is the one field that survives re-keying. Never guesses: an unmatched verdict is reported,
+    not deleted.
+    """
+    items = load_items(args.plans_dir)
+    # `record` stores `lead` truncated to 200 chars, so the comparison has to be made on the
+    # same prefix or every long item fails to match. Missing this made the first rekey run
+    # re-attach 1 of 14.
+    by_lead = {}
+    for it in items:
+        norm = KEY_STRIP.sub("- [ ] ", " ".join(it["body"][0].split()))
+        by_lead.setdefault(norm[:200], it["key"])
+
+    data = read_state()
+    path = todo_file(args.plans_dir)
+    verdicts = data.setdefault(path, {}).setdefault("verdicts", {})
+    live = {i["key"] for i in items}
+
+    moved, unmatched = [], []
+    for k in list(verdicts):
+        if k in live:
+            continue
+        v = verdicts[k]
+        norm = KEY_STRIP.sub("- [ ] ", " ".join((v.get("lead") or "").split()))
+        new = by_lead.get(norm[:200])
+        if new and new not in verdicts:
+            v["rekeyed_from"] = k
+            verdicts[new] = v
+            del verdicts[k]
+            moved.append((k, new))
+        else:
+            unmatched.append(k)
+
+    if moved and not args.dry_run:
+        write_state(data)
+    verb = "would re-attach" if args.dry_run else "re-attached"
+    print(f"{verb} {len(moved)} verdict(s):")
+    for old, new in moved:
+        print(f"  {old} -> {new}  {verdicts.get(new, {}).get('lead', '')[:62]}")
+    if unmatched:
+        print(
+            f"\n{len(unmatched)} verdict(s) could not be matched to a live open item. That is"
+            f"\nexpected for anything already archived or rewritten — mark those with"
+            f"\n`apply --write`, which records what it applied. Left untouched, never deleted:"
+        )
+        for k in unmatched:
+            print(f"  {k}  [{verdicts[k]['bucket']}] {verdicts[k]['lead'][:58]}")
+    return 0
+
+
 def cmd_status(args):
     items = load_items(args.plans_dir)
     keys = {i["key"] for i in items}
     entry = read_state().get(todo_file(args.plans_dir), {})
     verdicts = entry.get("verdicts", {})
-    orphans = [k for k in verdicts if k not in keys]
-    by_bucket, _ = _tally(verdicts)
+    # An orphan whose verdict was already APPLIED is history, not a loss: the item was
+    # archived or rewritten on purpose. Only an unapplied orphan means the file moved under
+    # the sweep. Reporting both as one number made a successful run look like a failure.
+    orphans = [k for k in verdicts if k not in keys and not verdicts[k].get("applied")]
+    applied_gone = [k for k in verdicts if k not in keys and verdicts[k].get("applied")]
+    # Tally only what is still live, or the removal rate divides by the wrong denominator and
+    # prints things like "7/4 (175%)".
+    live = {k: v for k, v in verdicts.items() if k in keys}
+    by_bucket, _ = _tally(live)
 
-    triaged = len([k for k in verdicts if k in keys])
+    triaged = len(live)
     print(f"open items:      {len(items)}")
     print(f"triaged:         {triaged}")
     print(f"remaining:       {len(items) - triaged}")
@@ -377,10 +459,15 @@ def cmd_status(args):
                 f"\n  work already solved (or rendered moot by doing something better) is the"
                 f"\n  deferral system paying off, not a backlog failure."
             )
+    if applied_gone:
+        print(
+            f"\napplied and retired: {len(applied_gone)} — archived or rewritten by an earlier"
+            f"\n  `apply` run. Expected, not a loss."
+        )
     if orphans:
         print(
-            f"\n⚠ {len(orphans)} recorded verdict(s) no longer match an open item — the file"
-            f"\n  changed under the sweep (edited, closed, or rewritten by someone else):"
+            f"\n⚠ {len(orphans)} recorded verdict(s) no longer match an open item AND were never"
+            f"\n  applied — the file changed under the sweep (edited or rewritten by someone else):"
         )
         for k in orphans[:10]:
             print(f"    {k}  was: {verdicts[k]['lead'][:70]}")
@@ -518,6 +605,16 @@ def cmd_apply(args):
         with open(path, "w", encoding="utf-8") as fh:
             fh.write(text)
         print(f"stamped {stamped} item(s) in {path}")
+
+    if args.write:
+        # Record WHAT was applied, so a later `status` can tell "retired on purpose" from
+        # "lost track of". Without this, a wholly successful apply reads as N orphans.
+        data = read_state()
+        entry_w = data.setdefault(path, {}).setdefault("verdicts", {})
+        for k in verdicts:
+            if k in entry_w:
+                entry_w[k]["applied"] = args.date
+        write_state(data)
     else:
         print("no stamps to apply")
 
@@ -563,6 +660,11 @@ def main():
     p.add_argument("--rewrite", default="", help="new item text, for bucket `reframe`")
     p.add_argument("--force", action="store_true")
     p.set_defaults(fn=cmd_record)
+
+    p = sub.add_parser("rekey", help="re-attach verdicts whose key changed")
+    p.add_argument("plans_dir")
+    p.add_argument("--dry-run", action="store_true")
+    p.set_defaults(fn=cmd_rekey)
 
     p = sub.add_parser("status", help="progress + bucket distribution")
     p.add_argument("plans_dir")

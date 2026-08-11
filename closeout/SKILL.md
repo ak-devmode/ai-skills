@@ -261,6 +261,13 @@ with workspace-relative paths to investigate. /closeout does NOT auto-fix these
   per plans-dir convention). If the named repo is not the local repo, surface in
   step 11 as **deferred to /closeout-extended**.
 
+  Carry a `Touches:` line, per /plan §11.2 — and here it costs nothing, because the §4
+  entry already carries `file:line` for the pattern and the repo name is in the
+  recommendation itself. This is closeout's **own** TO-DO writer; the archive path at
+  §13.1 inherits `Touches:` automatically by following /plan §11.2 verbatim, so it needs
+  no separate rule. Without the line, pattern TODOs — the ones most likely to be relevant
+  to a future scope in the same code — are the ones /scope Step 0.9 cannot match.
+
 7.3 Malformed §4 entries (missing `alternatives-considered` or `recommendation`)
 get flagged in step 11's summary under "Malformed §4 entries — /plan may have a
 bug or the entry was edited manually." Do not auto-fix.

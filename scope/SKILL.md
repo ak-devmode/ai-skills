@@ -288,6 +288,97 @@ artifact) so `/plan` and `/plan-eng-review` pick it up.
 
 ---
 
+## Step 0.9 — TO-DO Harvest (gated on a `TO-DO.md` in the plans dir)
+
+Accumulated items enter the TO-DO file automatically — `/plan` §11.1-11.2 appends every
+deferral — and leave it by hand. Scoping is the one moment where someone holds both the
+topic and the authority to decide an old item's fate, so this is where the question gets
+asked.
+
+**This step does not verify and it does not sweep.** Checking an item against the code is
+`/todo-sweep`, run periodically as its own activity, and it stays there. This step matches,
+recommends, and asks one question. It writes nothing to `TO-DO.md`.
+
+### 0.9.1 Match on shape, not words
+
+By this point you hold the repo graph (0.5), the contract-surface files (0.6), the matched
+ADRs (0.7), the endpoint map (0.8), and the paths in the branch and diff. Match `TO-DO.md`
+**sections and items** against those.
+
+**Read the `Touches:` line first where it exists** — `/plan` §11.2 and `/closeout` §7.2
+emit it precisely so this match is exact rather than inferential: repos, tables, ADRs,
+service names, directory paths. An item-level `Touches:` overrides its section's. Where it
+is absent — every item written before the convention existed — fall back to inference from
+the section heading (named by origin scope) and the item text. Say which mode a match came
+from if it changes your confidence.
+
+A keyword hit on item text alone is weak: a file of a few hundred items will always yield
+one, and a match nobody can act on trains the user to skip this question. Prefer a shared
+repo, table, ADR, service or file path over a shared word.
+
+Note what you *don't* have yet: the **table identity map is Step 4.5**, after the question
+rounds. Tables are the strongest signal available and they aren't computed here. That is
+accepted — this step has to precede Round 1 to shape the questions, and matching on repos,
+ADRs and paths is enough to surface the items that matter.
+
+Cap the list at ~6. If more than six match, the scope's topic is too broad for this
+question to be useful — say so, list none, and move on rather than pasting twenty rows.
+
+### 0.9.2 Do the mapping math before asking
+
+For each match, form a recommendation from **the scope's objective**, not from the item's
+priority marker. A P1 that belongs to a different door is still out; a P3 one-liner in a
+file this scope already edits is in. Three shapes recur:
+
+- **In** — it sits on the critical path of what's being built, or lands in a file set this
+  scope already touches. The marginal cost of doing it here is near zero.
+- **Out** — adjacent but a separate door: gated on something else, irreversible enough to
+  want its own rollback, or large enough to be its own scope.
+- **Looks already handled** — you read code during Steps 0.5–0.8 that appears to close it.
+  Say so and cite what you saw. This is an observation from the mapping, not a verification
+  pass — the user disposes, and `/todo-sweep` remains the thing that proves it.
+
+That third shape is not hypothetical: scope 109 inherited three TO-DO items of which two
+were already fixed, and scope 108.3 hit the same thing three times.
+
+### 0.9.3 Ask, answer by number — as its own message
+
+Fire this **separately from Round 1**, before it. Round 1 removes assumptions about the new
+work; this disposes of old work. Merging them makes both lists muddier, and the extra round
+is worth it — progress is the objective here, not economy of questions.
+
+> **Accumulated TO-DOs matching this scope** — 4 open items map to this work:
+>
+> 1. **Prove the new UBL path end to end** (Scope 87, P1) — phase 2 exercises exactly this
+>    path; the proof is a test you're writing anyway. **In.**
+> 2. **Drop retired `cashier_YYYY.ubl_*` tables** (Scope 87, P2) — one-way door, gated on a
+>    fresh census, no dependency on this work. **Out.**
+> 3. **`wellmed-cashier/CLAUDE.md` §8c documents the deleted dual-write** (Scope 87, P1) —
+>    this scope edits that repo; the doc fix is in the same file set. **In.**
+> 4. **ADR reconciliation, scope 87 U.10** (P2) — overlaps ADR-011, which Step 0.7 flagged.
+>    **In, but only the §2.4 clause** — the rest is its own scope.
+>
+> In, out, or tell me what I've got wrong. Answer by number.
+
+Carry the user's answers into Round 1: an item folded in can change which questions are
+worth asking, which is the whole reason this runs first.
+
+### 0.9.4 Record the disposition; write nothing to `TO-DO.md`
+
+Every match goes into scope.md's `## Inherited TO-DOs` table — **including the ones ruled
+out**, because that row is the durable record that the item was seen and deliberately
+excluded, which is what stops the next scope from re-litigating it. For each **in**, name
+the phase that absorbs it so Step 5.9 carries it into that phase's plan stub.
+
+`TO-DO.md` itself is untouched. An item folded in and shipped is found done — with the SHA
+that did it — by the next periodic `/todo-sweep` at near-zero cost, because the work is in
+the code by then. Marking it here would be asserting a completion that hasn't happened yet.
+
+If there is no `TO-DO.md`, or nothing matches: one line in synthesis ("No TO-DO matches for
+this scope's repos/ADRs/paths — harvest N/A"), no question asked.
+
+---
+
 ## Step 1 — Round 1: Assumption Removal
 
 Ask 5–15 open-ended questions in a **single response** as a numbered list. The user answers by number. **Never use multiple-choice or pre-framed answer options** — open-ended only. The user prefers many specific questions over a few broad ones.
@@ -301,6 +392,7 @@ Ask 5–15 open-ended questions in a **single response** as a numbered list. The
 - **If CROSS-REPO.md exists** (Step 0.5 ran): ALWAYS include a cross-repo coordination question that lists the Consumer repos by name and asks which are in-scope vs deferred. Don't ask abstractly ("any other repos?") — name them.
 - **If Step 0.6 detected contract changes:** lead with the cascade-confirmation framing, not a question — the default is that all Consumers update.
 - **If Step 0.7 surfaced ADRs:** confirm conform/extend/contradict before any other questions — premises first, design second.
+- **If Step 0.9 folded in TO-DO items:** treat them as part of the work when generating questions — a folded item can carry its own scope boundary, testing or coordination ambiguity. Do NOT re-ask whether it belongs; that was just answered.
 - Skip anything already clear from context — every question must move the design
 
 Cover where ambiguity actually exists — scope boundary, prod vs exploratory, UI
@@ -615,6 +707,12 @@ final phase uses the gate that best describes its exit.
 a table, its CHECKPOINT Review field must name the Step 4.5 deviations landing in that
 phase — an unapproved deviation is not eligible to ship. Crossing an owner boundary
 makes it gate A (or E if irreversible), never a roll-through B/C.
+
+**A phase that absorbed a TO-DO item carries it as a task.** Step 0.9.4 named the phase for
+each folded item; write it into that stub's task list with a pointer back to its `TO-DO.md`
+section, so the person executing the phase sees inherited work as work rather than as
+context. An item folded at scope time and absent from every stub is dropped work wearing a
+decision's clothes.
 
 **Sizing is a within-phase concern, never a phasing trigger.** Do not split a phase
 because you estimate it exceeds a context window; compaction plus intra-phase resume

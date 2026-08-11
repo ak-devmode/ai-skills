@@ -645,6 +645,29 @@ plan. Include brief context (e.g., "Add integration tests for gRPC endpoints —
 because staging DB not available"). The source path lets reviewers trace back to the
 full plan context.
 
+**Emit a `Touches:` line alongside `Source:`.** This is what lets `/scope` Step 0.9 match
+accumulated items against a new scope by *shape* — shared repo, table, ADR, service, path —
+rather than by keyword, which at a few hundred items matches everything and therefore
+nothing. You are the only party who cheaply knows this surface: you just did the work.
+
+```markdown
+## Cashier Settlement Reconciliation (Plan 39.2)
+Source: plans/archive/39.2-cashier-settlement/progress.md
+Touches: wellmed-cashier, wellmed-backbone · cashier_YYYY.settlements · ADR-011 · internal/domain/settlement/
+```
+
+Section-level is the unit — items in one section nearly always share a surface. Add an
+item-level `Touches:` only where a single item diverges from its section; it overrides
+rather than extends. Name what you actually touched (repos, tables, ADRs, service names,
+directory paths), not topics — "billing" matches nothing reliably, `cashier_YYYY.settlements`
+matches exactly. Omit the line rather than guessing: an absent `Touches:` falls back to
+inference from the section heading and item text, which is the pre-existing behaviour.
+
+This is a line annotation, deliberately not a table — `TO-DO.md` items are multi-paragraph
+prose that a table cannot hold, the file's grep-readability is load-bearing, and both
+`sweep.py` and `todo-stats.py` parse the `- [ ]` line shape. It follows the `Owner:` and
+`Source:` conventions those scripts already read.
+
 ### 11.3 Archive the plan
 
 11.3.0 **Child plans stay in place.** If the plan lives inside a scope folder

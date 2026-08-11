@@ -57,6 +57,19 @@ Collect **paths only**:
 3.1 The active scope folder or standalone plan folder (scope.md / *-PLAN.md,
 progress file, closeout-prep.md, artifacts/).
 
+🔴 **`scope.md` is supplied as CONTEXT ONLY — never as an audit target.** It is a
+design record written once, and its value is being **comparable** against the
+progress file when retracing why a decision was made. Auditing it for currency is
+actively harmful: the validator reports it stale, and the obvious fix is to edit it,
+which destroys the before/after contrast. That has happened (WellMed scope 87,
+2026-08-11 — a validator flagged scope.md's resume pointer and completion boxes; the
+calling context duly ticked them, erasing which premises evidence had overturned on a
+scope that was redesigned three times).
+
+The ONE thing that may be checked on scope.md is whether it carries an **additive**
+banner pointing at the live resume location. Its body being "out of date" is correct
+behaviour, not a finding.
+
 3.2 The list of repos plausibly touched this session. Union of:
 - repos named in closeout-prep.md §2 (Files Changed)
 - repos named in the scope.md Repo Graph (if present)
@@ -126,6 +139,11 @@ For each repo in scope:
   upstream exists) — /plan §8.5 requires push at phase end.
 
 ### 5.B Progress truth
+
+**Scope of this check: the progress file, PLANS-INDEX.md and TO-DO.md ONLY.**
+`scope.md` is excluded by §3.1 — do not report its contents as stale, and do not
+count it when looking for entry points that disagree. What matters is that the
+*status-bearing* documents agree with each other and with git.
 
 - Resume Context (scope-level AND active plan subsection) — do "Last action" /
   "Next action" match what git says just happened? A Resume Context pointing at a

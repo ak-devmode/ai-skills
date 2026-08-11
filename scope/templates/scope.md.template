@@ -54,9 +54,25 @@ ADR amendment is in-scope for this work.
  artifacts/schema-reference.md for a large one) + the deviation ledger. Omit with
  "No DB write/DDL surface — Step 4.5 N/A" otherwise.}
 
+## Inherited TO-DOs
+{Required if Step 0.9 ran and matched. Omit with "No TO-DO matches for this
+ scope's repos/ADRs/paths" otherwise.
+
+ EVERY match goes in the table, including the ones ruled out — an "out" row is
+ the durable record that the item was seen and deliberately excluded, which is
+ what stops the next scope re-litigating it. TO-DO.md itself is NOT edited;
+ folded items are found done-with-evidence by the next periodic /todo-sweep.}
+
+| TO-DO item | Origin section | In / Out | Phase | Why |
+|---|---|---|---|---|
+| Prove the new UBL path end to end | Scope 87 — deferred at code-complete | In | 2 | Phase 2 exercises this path already |
+| Drop retired `cashier_YYYY.ubl_*` tables | Scope 87 — deferred at code-complete | Out | — | One-way door, gated on a fresh census |
+
 ## NOT in Scope
 {Explicit exclusions to prevent scope creep. If Step 0.6 detected a contract
- cascade and some Consumers are deferred, list them here by name.}
+ cascade and some Consumers are deferred, list them here by name. TO-DO items
+ ruled out in Step 0.9 stay in the Inherited TO-DOs table — don't duplicate
+ them here.}
 
 ## Skill Sequence
 {Four tables grouped by phase — Plan Reviews, Implementation Support, Review & QA,

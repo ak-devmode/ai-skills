@@ -75,6 +75,26 @@ behaviour, not a finding.
 - repos named in the scope.md Repo Graph (if present)
 - the CWD repo
 
+🔴 **Stay in the lane: audit THIS scope's resumability, not the machine's.** One scope
+runs per context. The question is *"can a fresh session resume this scope, and does it
+know what to re-derive?"* — **not** *"is every branch in these repos tidy."*
+
+Out of lane, and therefore **not findings**:
+- other scopes' branches, commits, unpushed counts, or dirty files — including on the
+  same trunk this scope writes to
+- the trunk's push state generally (other sessions push it; any count you write down
+  is stale on arrival — and a stale count is the same defect this skill exists to catch)
+- work parked in the target repo by another session
+
+The **one** thing worth a line about other work: whether it physically blocks the
+resume — e.g. the target repo's tree is parked on another branch, so the resume must
+not assume a checkout. State that as a **navigation note in the resume reconstruction**,
+not as a numbered failure, and do not count its commits.
+
+In lane: this scope's folder, its plan/progress/index rows, its artifacts, its
+branches, and any file this scope changed. Git facts are in lane only where they
+carry this scope's work.
+
 3.3 The **claimed state**, as a single factual sentence with no narrative, e.g.:
 - "Claim: plan 96.2 tasks 1–4 complete, checkpoint at gate D reached."
 - "Claim: scope 92 fully complete and archived."
@@ -130,13 +150,23 @@ Do not summarize the session for the agent. Do not pre-answer any check.
 
 ### 5.A Git truth
 
-For each repo in scope:
-- `git status --porcelain` — uncommitted changes? Classify each file: plausibly
-  session work vs pre-existing.
-- `git log --oneline -10` + branch vs the plan's `**Branch:**` field — commits
-  present for the claimed completed tasks? Still on the right branch?
-- Unpushed commits at a phase boundary (`git rev-list @{u}..HEAD` where an
-  upstream exists) — /plan §8.5 requires push at phase end.
+Per §3.2, git is examined **only where it carries this scope's work**. Classify first,
+then check — a file or commit belonging to another scope is not a finding, and its
+counts are not this skill's business.
+
+- `git status --porcelain`, filtered to paths this scope touches — uncommitted work
+  that belongs to THIS scope?
+- `git log --oneline -10` + branch vs the plan's `**Branch:**` field — do commits exist
+  for the tasks the claim says are done? Is the named branch real and at the stated ref?
+- Unpushed commits **carrying this scope's work** at a phase boundary
+  (`git rev-list @{u}..HEAD`) — /plan §8.5 requires push at phase end.
+
+⚠ **Do not write a commit count, an ahead/behind number, or a dirty-file list into a
+finding as something to be recorded in the docs.** Shared trunks move under you; a
+number written to a progress file is stale before the fix commits, and you will have
+manufactured exactly the drift you are auditing for. When push state genuinely matters,
+the durable fix is an **instruction** ("verify with `git status -sb` before relying on
+another clone"), never a number.
 
 ### 5.B Progress truth
 

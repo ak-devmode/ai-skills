@@ -163,6 +163,31 @@ changed on disk but logged nowhere is presumptively dropped side-path work** —
 FAIL with the file list. This is the check that catches "I fixed something I
 found along the way and it never made it into the record."
 
+🔴 **This check is about WORK THAT HAPPENED, not about observations that could be
+made again.** Do not extend it into "this data exists only in the session context,
+therefore clearing destroys it, therefore write it down." Most measurement is
+**re-derivable** — a read-only survey, a query, a `df` sweep — and the correct
+durable record is **the method plus where to look**, not a snapshot.
+
+A copied-in snapshot is actively worse than a pointer, on two counts: it goes stale
+the moment the system moves (a fleet table captured at scoping is wrong by the time
+the scope executes, and a stale table in an artifacts folder gets *trusted*), and it
+teaches the next session to trust the copy instead of re-reading the source. Reading
+current state into context at execution time is the right call; duplicating it at
+scoping time is not.
+
+So, when a referenced artifact does not exist on disk, ask **which kind** it is:
+- **Re-derivable** (survey output, query result, a measurement) → NOT a failure.
+  The check is whether the scope records **how to re-derive it and where the source
+  of truth lives**. If it does, pass. If it doesn't, the fix is a pointer + method,
+  never a pasted result.
+- **Not re-derivable** (a decision and its rationale, a user's answer, an
+  irreversible action's before-state, something observed in a system that has since
+  changed) → FAIL as normal. This is what the check is for.
+
+Conclusions drawn from re-derivable data are themselves not re-derivable — those
+belong in the progress file's decision log, and that is where to check for them.
+
 ### 5.D Completion integrity (only when the claim says complete/archived)
 
 - TODOs extracted to TO-DO.md with a section for this plan (/plan §11.2).

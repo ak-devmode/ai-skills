@@ -184,9 +184,13 @@ Per partition, in this order (syntax authority: `herdr --skill`):
 ## 7. Supervision & coordination
 
 **7.1 herdr state layer (all seats)**
-- Wait on state, not scrollback: `herdr agent wait <pane> --until done` (and
-  `--until blocked` in parallel where the CLI allows one waiter per pane;
-  otherwise poll `herdr agent list`).
+- PRIMARY wait for every seat is the skill's own marker, not a state name:
+  `herdr pane wait-output <pane> --match "PARTITION-DONE" --timeout <ms>` —
+  deterministic across agents. State waits are secondary: codex maps
+  completion to `idle`, never `done` (learned 6.3 — an `agent wait --until
+  done` on a codex pane hangs forever after the work is finished); claude
+  panes do report `done`. Use `agent wait --until blocked` for
+  needs-attention alerts.
 - On `blocked`: `herdr notification show` naming pane label + last visible
   lines; do not answer another agent's permission prompts on its behalf.
 - Read output with `pane read --source detection` (or `visible`).

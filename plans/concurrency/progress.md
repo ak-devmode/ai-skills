@@ -69,3 +69,29 @@
   ui.window_title="{workspace} · herd", theme.auto_switch=true.
 - Worktrees left in place (§8); zero commits on either branch (read-only).
 - Next: 6.3 multi-model seats (codex + glm panes).
+
+## 2026-08-23 (night) — 6.3 DONE: multi-model seats, both passed
+- Run "91-seats", tab-per-run layout exercised (tab `91.0 seats` in the herd
+  workspace): codex/gpt-5.6-sol on the 91.2 rename map (wellmed-finance
+  worktree), GLM 5.2 via OpenRouter on the 91.6 citation check (gateway-go
+  worktree). OpenRouter key lives in macOS Keychain
+  (`openrouter-api-key`), resolved inline at spawn — never in transcripts,
+  herdr env state, or the dispatch log.
+- GLM seat: launch recipe debugged live (base `/api` not `/api/v1`;
+  bearer-only) → SKILL.md §2/§3. Result: 3/3 in-repo citations VERIFIED
+  (route routes.golden:358, JURNAL_FORWARD_URL env.go, commit 7092647
+  2026-03-02), 4 out-of-repo claims correctly refused as NOT-CHECKED.
+  **Gate bus WORKS under foreign auth** — GATE-PASSED arrived over the
+  native cross-session socket from a non-Anthropic model.
+- codex seat: complete rename map delivered — 5 textual edit sites
+  (handler.go:50-51; topology_integration_test.go:72-73;
+  handler_test.go:30), ~9 constant usage sites needing no edit, zero refs in
+  docs/config/migrations; verification rg + go test commands; skip-gate
+  removal via RABBITMQ_TEST_URL against a DISPOSABLE broker only (test
+  declares the real `wellmed.saga` exchange). New OPEN ITEMS beyond 91.2's
+  stub: old trigger/compensate bindings on finance.steps + DLQ must be
+  explicitly removed post-cutover, and in-flight postfinancejournal
+  messages need a drain/replay/dual-support decision.
+- Trap found: codex completion maps to herdr state `idle`, never `done` —
+  primary wait is now `pane wait-output --match "PARTITION-DONE"` (§7.1).
+- 6.4 (overnight profile) and 6.5 (register + dogfood proper) remain.

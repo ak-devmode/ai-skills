@@ -50,9 +50,22 @@ Design record: `plans/concurrency/scope.md` (ai-skills). Status lives in
 - [ ] Target repo identified, trunk known (`develop` for wellmed/pmg, `main`
       otherwise), `git fetch` run. Never dispatch from a dirty primary tree
       without surfacing it first.
-- [ ] For the GLM seat only: `OPENROUTER_API_KEY` present in the environment.
-      Absent ⇒ GLM rows in the plan are marked `seat-unavailable`, never
-      silently rerouted.
+- [ ] For the GLM seat only: the OpenRouter key resolves from Keychain
+      (`security find-generic-password -s openrouter-api-key -w` — check
+      LENGTH only, never print). Absent ⇒ GLM rows in the plan are marked
+      `seat-unavailable`, never silently rerouted. The key is looked up
+      inline in the launch command, never via herdr `--env` (which would
+      persist the literal in herdr session state) and never in this
+      supervisor's transcript.
+      GLM launch traps (cost a relaunch on 2026-08-23):
+      · base URL is `https://openrouter.ai/api` — NOT `/api/v1`; the SDK
+        appends `/v1/messages`, so `/api/v1` 404s and surfaces as
+        "model may not exist".
+      · bearer only (`ANTHROPIC_AUTH_TOKEN`); setting `ANTHROPIC_API_KEY`
+        triggers an interactive use-this-key dialog that blocks the pane.
+      · "model not found" with a 200-tested key+model = plumbing, not
+        OpenRouter permissions — curl both endpoint styles before touching
+        account settings.
 
 ## 3. Model routing table
 
@@ -63,7 +76,7 @@ machine 2026-08-23.
 |------|-------------------|----------|-------------|
 | `opus` | `claude` (global default model: opus) | Opus 4.8 default | judgment, design-adjacent implementation, anything touching prod-shaped decisions |
 | `codex` | `codex -m gpt-5.6-sol` (headless: `codex exec -m gpt-5.6-sol`) | codex-cli ≥0.149.0, id live-probed OK | secondary implementation, independent review passes |
-| `glm` | `claude --model z-ai/glm-5.2` with per-pane env `ANTHROPIC_BASE_URL=https://openrouter.ai/api/v1`, `ANTHROPIC_API_KEY=$OPENROUTER_API_KEY` | id confirmed on OpenRouter (1M ctx; `:free` variant exists for trials) | mechanical/bulk: migrations-by-pattern, test scaffolds, sweeps |
+| `glm` | `ANTHROPIC_BASE_URL=https://openrouter.ai/api ANTHROPIC_AUTH_TOKEN=$(security find-generic-password -s openrouter-api-key -w) ANTHROPIC_SMALL_FAST_MODEL=z-ai/glm-5-turbo claude --model z-ai/glm-5.2` | live-verified 2026-08-23 (provider DigitalOcean) | mechanical/bulk: migrations-by-pattern, test scaffolds, sweeps |
 
 Env-leak rule: provider overrides are injected ONLY via herdr `--env` at
 workspace/worktree creation for that seat's pane. Never `export` them in the

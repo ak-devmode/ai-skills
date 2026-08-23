@@ -32,9 +32,8 @@ Design record: `plans/concurrency/scope.md` (ai-skills). Status lives in
 
 - **Active tier** — the invoking session (one of Alex's 2–4 primaries)
   dispatches 1–N small panes it supervises. Default tier.
-- **Overnight tier** (`--overnight`, phase 6.4 — NOT YET IMPLEMENTED; refuse
-  with that statement) — a named persistent session (`herdr --session
-  overnight`) running one long task in auto mode.
+- **Overnight tier** (`--overnight`) — one long task in auto mode, unattended
+  overnight. Procedure in §11.
 
 ## 2. Preconditions — check ALL before anything else
 
@@ -255,3 +254,36 @@ appear in the supervisor's `ListAgents` and are reachable via `SendMessage`
   may not implement every capability ghostty terminfo advertises.
 - Pane content colors are NOT herdr theme tokens — theme.custom.* paints
   chrome only. Content color problems are TERM/terminfo problems.
+
+## 11. Overnight tier (`--overnight`)
+
+One overnight task per night. Same dispatch mechanics as §6 with these
+deltas:
+
+- Own worktree ALWAYS; workspace labeled `overnight <scope>.<task>`; the
+  agent runs in auto mode. The server is a brew service, so the run survives
+  the client window closing; morning reattach (any terminal, or phone over
+  SSH) is just `herdr`.
+- **Watcher pane** (split right, ratio 0.25, from the agent pane) runs both
+  alarms:
+  `herdr pane wait-output <agent-pane> --match "PARTITION-DONE"
+  --timeout 43200000 && herdr notification show "overnight done: <task>"
+  --sound done &`
+  `herdr agent wait <agent-pane> --until blocked && herdr notification show
+  "overnight blocked: <task>" --sound request &`
+- Notifications need `[ui.toast] delivery` ≠ "off" (set 2026-08-23). Toasts
+  suppress while the user is actively focused (`shown:false reason:busy`) —
+  correct for overnight: they fire unattended and are visible on reattach.
+- **No gate bus overnight** — the supervising session is likely gone by
+  morning, so overnight briefs OMIT SendMessage and rely on the marker, the
+  dispatch log, and committed work.
+- Overnight briefs MAY commit locally on the partition branch (overnight is
+  usually build work) — never push, never PR, never merge.
+- **Morning review checklist** (before any landing decision):
+  - [ ] watcher outcome + notification read
+  - [ ] `herdr pane read <agent-pane> --source recent-unwrapped --lines 200`
+  - [ ] `git -C <worktree> log --stat origin/<trunk>..HEAD` — every commit
+  - [ ] run the partition's stated tests yourself; the agent's claim of
+        green is a signal, not proof
+  - [ ] append the outcome to the dispatch log
+  - [ ] worktree removed only after land/abandon is decided

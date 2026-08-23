@@ -95,3 +95,20 @@
 - Trap found: codex completion maps to herdr state `idle`, never `done` —
   primary wait is now `pane wait-output --match "PARTITION-DONE"` (§7.1).
 - 6.4 (overnight profile) and 6.5 (register + dogfood proper) remain.
+
+## 2026-08-23 (late) — 6.4 DONE; run cleanup; 6.5 gated on Alex
+- Cleanup: all 4 run branches verified 0 commits vs base → panes closed,
+  worktrees removed, branches deleted (were at 1d86b2b / 4c44e73).
+- 6.4 overnight tier written (SKILL.md §11): dedicated workspace in the
+  default session (deviation from scope.md's named-session idea — one brew
+  service to keep alive, reattach shows everything), watcher pane with
+  marker-wait + blocked-wait → toasts, no gate bus overnight, morning-review
+  checklist. Verified live: `pane wait-output --match` chain works;
+  `[ui.toast] delivery="herdr"` added to herdr config (default was off →
+  reason:disabled; while user is focused it reports reason:busy by design).
+- 🔴 `herdr integration install claude|codex` exists (official state
+  reporting?) — install BLOCKED by permission classifier (edits
+  ~/.claude/settings.json). Handed to Alex; backups in scratchpad. If
+  installed, may fix codex idle-vs-done at the source — re-test then.
+- 6.5 remains: land feature/concurrency-skill → main (push gated on Alex),
+  re-run setup.sh, restart session, then scope-91 dogfood proper.

@@ -246,12 +246,17 @@ appear in the supervisor's `ListAgents` and are reachable via `SendMessage`
 - GLM seat is Claude Code with a foreign model: tool-use reliability varies;
   keep its briefs mechanical and explicit.
 - Radioactive-green prose in panes = default-fg text hitting Ghostty's
-  Homebrew foreground (#00ff00). Claude Code paints explicit truecolor prose
-  only under TERM=xterm-ghostty; herdr panes present xterm-256color. Fixed
-  globally by a guarded block in ~/.zshrc (HERDR_ENV=1 → TERM=xterm-ghostty
-  + TERMINFO=/Applications/Ghostty.app/Contents/Resources/terminfo). If a
-  TUI misbehaves inside a pane, suspect that block first — herdr's emulator
-  may not implement every capability ghostty terminfo advertises.
+  Homebrew foreground (#00ff00). Claude Code prose in herdr panes carries NO
+  color codes (verified via `pane read --format ansi`), so it always renders
+  in the window's default foreground — TERM makes no difference (proven
+  2026-08-23: TERM=xterm-ghostty confirmed in-pane, prose still green).
+  ACTUAL fix: run the herd window as its own Ghostty instance with a
+  per-window foreground override — the `herd` alias in ~/.zshrc
+  (`open -na Ghostty.app --args --foreground="#d8d8d8" --title=herd -e
+  herdr`). Main Ghostty windows keep the Homebrew look. The zshrc
+  HERDR_ENV→TERM/TERMINFO block remains for terminfo correctness (export
+  TERMINFO BEFORE TERM — zsh re-inits terminfo on the TERM assignment); if
+  a TUI misbehaves inside a pane, suspect that block first.
 - Pane content colors are NOT herdr theme tokens — theme.custom.* paints
   chrome only. Content color problems are TERM/terminfo problems.
 

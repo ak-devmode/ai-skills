@@ -77,10 +77,12 @@ machine 2026-08-23.
 | `codex` | `codex -m gpt-5.6-sol` (headless: `codex exec -m gpt-5.6-sol`) | codex-cli ≥0.149.0, id live-probed OK | secondary implementation, independent review passes |
 | `glm` | `ANTHROPIC_BASE_URL=https://openrouter.ai/api ANTHROPIC_AUTH_TOKEN=$(security find-generic-password -s openrouter-api-key -w) ANTHROPIC_SMALL_FAST_MODEL=z-ai/glm-5-turbo claude --model z-ai/glm-5.2` | live-verified 2026-08-23 (provider DigitalOcean) | mechanical/bulk: migrations-by-pattern, test scaffolds, sweeps |
 
-Env-leak rule: provider overrides are injected ONLY via herdr `--env` at
-workspace/worktree creation for that seat's pane. Never `export` them in the
-invoking session; never write them to any settings file. Provider swap
-(OpenRouter → Z.ai coding plan) edits this table's one row and nothing else.
+Env-leak rule: provider overrides live ONLY in the seat's launch command,
+inline, as the table shows — secrets resolve from Keychain at spawn (§2),
+never via herdr `--env` (persists literals in session state), never
+`export`ed in the invoking session, never written to any settings file.
+Provider swap (OpenRouter → Z.ai coding plan) edits this table's one row and
+nothing else.
 
 ## 4. Partition procedure — ONE responsibility
 

@@ -204,6 +204,15 @@ Per partition, in this order (syntax authority: `herdr --skill`):
 Dispatched claude/glm panes are full local Claude Code sessions, so they
 appear in the supervisor's `ListAgents` and are reachable via `SendMessage`
 (native cross-session messaging over the local socket).
+- **Bus addresses go stale (learned live 2026-08-23): session names change
+  on every restart or resume.** At dispatch time, read YOUR current
+  self-name from `ListAgents` ("This session is <name>") and embed THAT in
+  each brief — never a name copied from an example, a progress note, or an
+  earlier run (the first 91.2 worker reported to a long-renamed supervisor
+  because its brief inherited a recorded example address). If the
+  supervisor restarts while workers are out, re-handshake every live worker
+  with the new name before their gates fire; a worker whose GATE message
+  fails to deliver should print it in-pane and hold.
 - Every dispatched Claude brief includes: "When your gate criteria are met,
   SendMessage the supervising session exactly: `GATE-PASSED <task> —
   <one-line evidence>`. If you hit a human-only blocker, send

@@ -1,10 +1,12 @@
 ---
 name: concurrency
-version: 0.1.0
+version: 0.2.0
 description: |
-  Partition a scope's plan surface into non-overlapping, dependency-ordered
-  units and dispatch each to a visible, named herdr pane running the right
-  model seat (Opus / codex / GLM), then supervise by agent state. The single
+  ONE responsibility: map what can run in parallel and what cannot, against a
+  clear set of rules — re-derived from repo ground truth on every run, never
+  from a scope's dependency claims. Then dispatch each parallel unit to a
+  visible, named herdr pane running the right model seat (Opus / codex / GLM)
+  and supervise by agent state plus a Claude-to-Claude gate-broadcast bus. The single
   controlled home for no-human-in-the-loop agent trains. Use when asked to
   "/concurrency", "dispatch this scope concurrently", "run these phases in
   parallel", "start an agent train", or "herd this scope". Dry-run is the
@@ -68,26 +70,49 @@ workspace/worktree creation for that seat's pane. Never `export` them in the
 invoking session; never write them to any settings file. Provider swap
 (OpenRouter → Z.ai coding plan) edits this table's one row and nothing else.
 
-## 4. Partition procedure
+## 4. Partition procedure — ONE responsibility
 
-Input: a scope folder (plan stubs + PLANS-INDEX row) or an explicit task list.
+This skill maps what can run in parallel and what cannot, against the rules
+below. It does not plan, review, or execute the tasks themselves.
+
+Input: a scope folder (plan stubs + PLANS-INDEX row) or an explicit task list
+— treated as HYPOTHESES only.
+
+**4.0 Evidence rules — never take the scope's word for it.** Every
+classification is re-derived from ground truth on every run: no cached DAG,
+no trust in a prior run, no trust in stub prose.
+- Claimed "done" / "already exists" ⇒ content-grep `origin/<trunk>` after a
+  fetch (done means written). Claimed "missing" ⇒ same grep (landed ≠ absent).
+- Claimed touch-set ⇒ derive the real one by grepping the code the task names
+  (files, tables, protos, routing keys). The derived set wins on conflict.
+- Claimed blocker ⇒ verify it still blocks — a gate may have been passed
+  since the stub was written. Claimed independence ⇒ verify nothing landed
+  since that couples it.
+- External gates (vendor sandboxes, credentials, prod state) that cannot be
+  verified read-only from here: classify on recorded evidence (progress
+  files, git log since the claim date) and stamp the verdict
+  `UNVERIFIED-EXTERNAL` — visible in the output, never silently trusted.
+- All checks read-only and bounded; estimate a sweep's cost before running it
+  wide.
 
 **4.1 Classify every task** into exactly one of:
 - `HUMAN-GATED` — needs an action only Alex can take (credential/sandbox
-  renewal, prod decision, sign-off, Gate A "human" language in the stub).
-  Surfaced in the plan; NEVER dispatched, never attempted.
-- `BLOCKED` — depends on an incomplete task (see 4.2 edges).
-- `READY` — all edges satisfied, no human gate.
+  renewal, prod decision, sign-off), with the gate CONFIRMED still unmet per
+  4.0. Surfaced in the plan; NEVER dispatched, never attempted.
+- `BLOCKED` — a verified edge to an incomplete task (see 4.2).
+- `READY` — all edges verified satisfied, no human gate.
 
 **4.2 Build the dependency DAG.** Edges come from, in order of authority:
-1. Explicit dependency/blocked/precondition language in the stubs.
-2. File/service touch-set overlap: derive each task's expected touch-set
-   (repos, dirs, tables, proto files) from its stub; any overlap ⇒ same
-   partition (serialized), never parallel branches over shared files.
-3. Domain ordering rules (always edges, even if the stub is silent):
+1. Repo-derived touch-set overlap (per 4.0): any overlap ⇒ same partition
+   (serialized), never parallel branches over shared files.
+2. Domain ordering rules (always edges, even when every document is silent):
    emitter before consumer; schema leads code; gRPC implementer leads caller.
+3. Stub/index dependency claims — only those that SURVIVED 4.0 verification.
 4. **Uncertain ⇒ serialize.** Refuse-to-parallelize is the default verdict;
    a pair joins the parallel set only when disjointness is SHOWN.
+
+Every entry in the output carries its evidence (`evidence: <grep/commit/
+check, or UNVERIFIED-EXTERNAL>`) so the verdict is auditable.
 
 **4.3 The dispatch set** is the DAG's ready frontier, capped (§6). Everything
 else is listed with the edge or gate that excludes it — exclusions are part
@@ -120,11 +145,14 @@ Per partition, in this order (syntax authority: `herdr --skill`):
 3. First instruction in every dispatched prompt: run `/freeze <paths>` for its
    partition, then the task brief, then: commit locally when done; NEVER push,
    NEVER open a PR, NEVER merge; end by printing `PARTITION-DONE <task>`.
+   Claude seats additionally get the §7.2 gate-bus reporting instruction
+   (`GATE-PASSED` / `GATE-BLOCKED` via SendMessage to the supervisor).
 4. Append one JSON line to `~/.config/herdr/concurrency-log.jsonl`:
    `{ts, scope, task, seat, branch, worktree, pane_id, status:"dispatched"}`.
 
-## 7. Supervision
+## 7. Supervision & coordination
 
+**7.1 herdr state layer (all seats)**
 - Wait on state, not scrollback: `herdr agent wait <pane> --until done` (and
   `--until blocked` in parallel where the CLI allows one waiter per pane;
   otherwise poll `herdr agent list`).
@@ -135,6 +163,23 @@ Per partition, in this order (syntax authority: `herdr --skill`):
   attached, which is exactly this skill's headless condition.
 - Record every terminal state in the dispatch log (`status: done|blocked|
   failed`, plus the tail that proves it).
+
+**7.2 Claude-to-Claude gate bus (claude + glm seats)**
+Dispatched claude/glm panes are full local Claude Code sessions, so they
+appear in the supervisor's `ListAgents` and are reachable via `SendMessage`
+(native cross-session messaging over the local socket).
+- Every dispatched Claude brief includes: "When your gate criteria are met,
+  SendMessage the supervising session exactly: `GATE-PASSED <task> —
+  <one-line evidence>`. If you hit a human-only blocker, send
+  `GATE-BLOCKED <task> — <what Alex must do>`, then stop."
+- A `GATE-PASSED` is a SIGNAL, never proof: the supervisor re-verifies from
+  the consumer's vantage point (read the branch, run the gate check itself)
+  BEFORE recomputing the frontier and releasing downstream partitions.
+- On releasing new frontier tasks, the supervisor broadcasts a plain-text
+  note to each affected running peer so it knows its upstream landed.
+- The codex seat has no bus: herdr state + the `PARTITION-DONE` marker only.
+- Messages are plain text and carry pointers, not payloads — evidence lives
+  in the repo and the dispatch log.
 
 ## 8. Collection & teardown
 

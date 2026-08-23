@@ -141,12 +141,24 @@ Per partition, in this order (syntax authority: `herdr --skill`):
 1. `herdr worktree create --cwd <repo> --base origin/<trunk>
    --branch concurrency/<scope>-<task> --label "<scope>#<task>@<seat>"
    [--env KEY=VAL ...]` — env vars ONLY for the glm seat.
+1b. **Layout rule (Alex, 2026-08-23): one workspace per run, primaries
+   stacked.** The run's FIRST partition keeps its worktree workspace as the
+   run workspace. Every subsequent primary's root pane is moved into it:
+   `herdr pane move <pane> --tab <run-tab> --split down
+   --target-pane <prev-pane> --ratio 0.5 --no-focus`, then
+   `pane rename <pane> "<task>@<seat>"`. Moving a pane does not disturb its
+   running agent (verified live). Helper panes a worker opens go RIGHT of its
+   own pane at half size — the brief carries that instruction.
 2. Launch the seat's command (table §3) in the created pane via `pane run`.
 3. First instruction in every dispatched prompt: run `/freeze <paths>` for its
    partition, then the task brief, then: commit locally when done; NEVER push,
    NEVER open a PR, NEVER merge; end by printing `PARTITION-DONE <task>`.
    Claude seats additionally get the §7.2 gate-bus reporting instruction
-   (`GATE-PASSED` / `GATE-BLOCKED` via SendMessage to the supervisor).
+   (`GATE-PASSED` / `GATE-BLOCKED` via SendMessage to the supervisor), and
+   every brief includes: "If you need a helper terminal or sub-agent pane,
+   split your OWN pane right at half size:
+   `herdr pane split --current --direction right --ratio 0.5` — never a new
+   workspace, never split down (down is reserved for primaries)."
 4. Append one JSON line to `~/.config/herdr/concurrency-log.jsonl`:
    `{ts, scope, task, seat, branch, worktree, pane_id, status:"dispatched"}`.
 

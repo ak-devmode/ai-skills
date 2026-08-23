@@ -43,3 +43,29 @@
   — the evidence rules caught a real defect in the skill's own first output.
 - Next action: 6.2 live dispatch, claude-only, cap 2 (payload candidate:
   the two read-only 91-refresh checks).
+
+## 2026-08-23 (evening) — 6.2 DONE: first live dispatch, gate passed
+- Run "91-refresh" (renamed 91.0 by Alex): two read-only partitions
+  (stub-audit, drift-scan), Opus seats, herdr-cut worktrees of
+  wellmed-finance @ origin/develop, full pipeline exercised end-to-end.
+- BOTH signal paths worked per worker: `herdr agent wait --until done` fired
+  AND the §7.2 SendMessage gate bus delivered GATE-PASSED; supervisor
+  re-verified every claim independently before accepting (all held; one
+  claim — application.go:83-84 — the supervisor had itself missed earlier).
+- Findings (feed the 91.2 stub correction, wellmed side):
+  1. Rename touch-set is WIDER than the stub: handler.go:50-51 +
+     internal/app/application.go:83-84 + hardcoded literal at
+     topology_integration_test.go:72 (test 4 skip-gated; breaks silently on
+     rename unless :72 updated).
+  2. MISMATCH: integration.go / GetTenantIntegrationConfig exist NOWHERE in
+     wellmed-finance — stale cross-repo citation in the stub.
+  3. Stub's "Phase 1" heading (~line 24) = stale copied 91.1 content.
+  4. drift-scan: develop frozen at 1d86b2b (08-13); saga participant shell
+     commits are 91.2 substrate; 91.2 PREMISE HOLDS, work not started.
+- Layout rules added at Alex's direction (SKILL.md §6 1b): one workspace per
+  run, primaries stacked via pane move --split down 0.5 (verified safe on
+  running agents); helper panes split RIGHT 0.5 from the worker's own pane;
+  short pane names "<scope>.<phase> <task>". herdr config.toml created:
+  ui.window_title="{workspace} · herd", theme.auto_switch=true.
+- Worktrees left in place (§8); zero commits on either branch (read-only).
+- Next: 6.3 multi-model seats (codex + glm panes).

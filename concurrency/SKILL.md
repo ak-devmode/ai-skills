@@ -141,7 +141,7 @@ CONCURRENCY PLAN — <scope> @ <repo>          [DRY RUN — nothing dispatched]
 ready frontier (cap N):
   <task>  seat=<seat>  branch=concurrency/<scope>-<task>
           worktree=<path>  freeze=<paths>
-          pane label: <scope>#<task>@<seat>
+          pane label: <task> @<seat>
 excluded:
   <task>  HUMAN-GATED: <what Alex must do>
   <task>  BLOCKED by <task>: <edge reason>
@@ -153,8 +153,14 @@ Run again with --dispatch to execute.
 
 Per partition, in this order (syntax authority: `herdr --skill`):
 1. `herdr worktree create --cwd <repo> --base origin/<trunk>
-   --branch concurrency/<scope>-<task> --label "<scope>#<task>@<seat>"
+   --branch concurrency/<scope>-<task> --label "<task> @<seat>"
    [--env KEY=VAL ...]` — env vars ONLY for the glm seat.
+   ⚠ NAMING (learned live: a codex pane displayed "@opus"): the agents
+   sidebar shows the WORKSPACE label as every row's main header and the
+   pane's display-agent as the subheader — so a seat name at workspace
+   level lies about every other seat in the run. Workspace label = run
+   name only, NO seat (`<scope> run`); seat identity goes on the PANE:
+   `pane rename` + `pane report-metadata --display-agent "<task> @<seat>"`.
 1b. **Layout rule (Alex, 2026-08-23): tab per scope, primaries stacked,
    short names.** The FIRST run's worktree workspace becomes the herd
    workspace; its tab is the run's tab. Each additional CONCURRENT scope/run
@@ -163,12 +169,13 @@ Per partition, in this order (syntax authority: `herdr --skill`):
    moves into its run's tab: `herdr pane move <pane> --tab <run-tab>
    --split down --target-pane <prev-pane> --ratio 0.5 --no-focus`. Moving a
    pane does not disturb its running agent (verified live). Names: workspace
-   = run name (`91.0 refresh`), tab = scope (`91.0`), pane label AND agent
-   sidebar row = short task name — `pane rename <pane> "<scope>.<phase>
-   <task>"` plus `pane report-metadata <pane> --source concurrency
-   --display-agent "<task>"` (without the metadata the sidebar shows the
-   workspace label for every agent). Helper panes a worker opens go RIGHT of
-   its own pane at half size — the brief carries that instruction.
+   = run name only, NEVER a seat (`<scope> run`); tab = scope (`91.0`);
+   pane label AND agent sidebar row = task + seat — `pane rename <pane>
+   "<task> @<seat>"` plus `pane report-metadata <pane> --source concurrency
+   --display-agent "<task> @<seat>"` (without the metadata the sidebar
+   shows the workspace label for every agent — a seat name there lies
+   about every other seat in the run). Helper panes a worker opens go RIGHT
+   of its own pane at half size — the brief carries that instruction.
 2. Launch the seat's command (table §3) in the created pane via `pane run`.
 3. First instruction in every dispatched prompt: run `/freeze <paths>` for its
    partition, then the task brief, then: commit locally when done; NEVER push,
@@ -258,6 +265,13 @@ appear in the supervisor's `ListAgents` and are reachable via `SendMessage`
   model id is wrong.
 - GLM seat is Claude Code with a foreign model: tool-use reliability varies;
   keep its briefs mechanical and explicit.
+- codex seat + git worktree: a worktree's git metadata lives in the PARENT
+  repo's `.git/worktrees/…`, outside codex's writable sandbox (cwd), so
+  `git commit` from a codex pane needs an approval or a sandbox config that
+  includes the parent `.git` path (observed live: 91-docs worker stalled on
+  "approval-backed commit pending"). Plan for it: either pre-approve, widen
+  the codex sandbox for that path, or have the SUPERVISOR commit the codex
+  seat's work after review.
 - Radioactive-green prose in panes = default-fg text hitting Ghostty's
   Homebrew foreground (#00ff00). Claude Code prose in herdr panes carries NO
   color codes (verified via `pane read --format ansi`), so it always renders

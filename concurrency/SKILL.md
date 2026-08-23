@@ -141,14 +141,20 @@ Per partition, in this order (syntax authority: `herdr --skill`):
 1. `herdr worktree create --cwd <repo> --base origin/<trunk>
    --branch concurrency/<scope>-<task> --label "<scope>#<task>@<seat>"
    [--env KEY=VAL ...]` — env vars ONLY for the glm seat.
-1b. **Layout rule (Alex, 2026-08-23): one workspace per run, primaries
-   stacked.** The run's FIRST partition keeps its worktree workspace as the
-   run workspace. Every subsequent primary's root pane is moved into it:
-   `herdr pane move <pane> --tab <run-tab> --split down
-   --target-pane <prev-pane> --ratio 0.5 --no-focus`, then
-   `pane rename <pane> "<task>@<seat>"`. Moving a pane does not disturb its
-   running agent (verified live). Helper panes a worker opens go RIGHT of its
-   own pane at half size — the brief carries that instruction.
+1b. **Layout rule (Alex, 2026-08-23): tab per scope, primaries stacked,
+   short names.** The FIRST run's worktree workspace becomes the herd
+   workspace; its tab is the run's tab. Each additional CONCURRENT scope/run
+   gets its own TAB in that same workspace (tab label = scope number, e.g.
+   `91.0`), never a new workspace. Every subsequent primary's root pane
+   moves into its run's tab: `herdr pane move <pane> --tab <run-tab>
+   --split down --target-pane <prev-pane> --ratio 0.5 --no-focus`. Moving a
+   pane does not disturb its running agent (verified live). Names: workspace
+   = run name (`91.0 refresh`), tab = scope (`91.0`), pane label AND agent
+   sidebar row = short task name — `pane rename <pane> "<scope>.<phase>
+   <task>"` plus `pane report-metadata <pane> --source concurrency
+   --display-agent "<task>"` (without the metadata the sidebar shows the
+   workspace label for every agent). Helper panes a worker opens go RIGHT of
+   its own pane at half size — the brief carries that instruction.
 2. Launch the seat's command (table §3) in the created pane via `pane run`.
 3. First instruction in every dispatched prompt: run `/freeze <paths>` for its
    partition, then the task brief, then: commit locally when done; NEVER push,

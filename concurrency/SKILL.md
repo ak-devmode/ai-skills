@@ -208,8 +208,10 @@ appear in the supervisor's `ListAgents` and are reachable via `SendMessage`
   on every restart or resume.** At dispatch time, read YOUR current
   self-name from `ListAgents` ("This session is <name>") and embed THAT in
   each brief — never a name copied from an example, a progress note, or an
-  earlier run (the first 91.2 worker reported to a long-renamed supervisor
-  because its brief inherited a recorded example address). If the
+  earlier run, and never a raw session-id: an id looks stable but the
+  worker's runtime resolves it to a herdr name at send time, so across a
+  restart it delivers to a stale address (both failure modes occurred live
+  in the first 91.2 dispatch). If the
   supervisor restarts while workers are out, re-handshake every live worker
   with the new name before their gates fire; a worker whose GATE message
   fails to deliver should print it in-pane and hold.

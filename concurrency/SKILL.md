@@ -268,6 +268,11 @@ zero-cost-basis silent defeat that build/test/disjointness passes all missed).
   is the ORCHESTRATOR's to remove, and only after land/abandon (above). Losing
   an unlanded worktree loses work. Default: agents report and go idle; the
   orchestrator tidies panes and worktrees once it has verified and landed.
+- Progress log is the DRIVER's job, ALWAYS (Alex, 2026-08-24): the orchestrator
+  updates the scope's `progress.md` — landed shas, review-artifact paths, what
+  remains — never a spawned agent. A worker or review pane sees only its own
+  partition and lacks the cross-partition + landing visibility a progress
+  update needs, so a progress write it made would be partial and wrong.
 
 ## 9. Hard rails (restated so they can be quoted back)
 

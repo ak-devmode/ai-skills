@@ -112,7 +112,16 @@ no trust in a prior run, no trust in stub prose.
 **4.1 Classify every task** into exactly one of:
 - `HUMAN-GATED` — needs an action only Alex can take (credential/sandbox
   renewal, prod decision, sign-off), with the gate CONFIRMED still unmet per
-  4.0. Surfaced in the plan; NEVER dispatched, never attempted.
+  4.0. **NEVER dispatched to a worker pane — run it IN THE DRIVER** (the
+  session Alex is actively monitoring; §6.1b tab 1). The driver is the sole
+  human-in-the-loop surface: a human-gated task's credential-free parts
+  (inventories, config drafts, read-only probes) execute there, and the gate
+  itself surfaces to Alex there. Parking a human-gated task in a worker pane
+  just blocks invisibly — the whole point of a worker is autonomy. Canonical
+  case: infra-proof / cutover phases (a Phase-0 "prove the serving chain",
+  a "confirm SSM / DNS / cert" task). Such a phase is often mostly done by
+  the driver, with only the true gate (a prod write behind creds, a sign-off)
+  left for the human.
 - `BLOCKED` — a verified edge to an incomplete task (see 4.2).
 - `READY` — all edges verified satisfied, no human gate.
 
@@ -161,21 +170,28 @@ Per partition, in this order (syntax authority: `herdr --skill`):
    level lies about every other seat in the run. Workspace label = run
    name only, NO seat (`<scope> run`); seat identity goes on the PANE:
    `pane rename` + `pane report-metadata --display-agent "<task> @<seat>"`.
-1b. **Layout rule (Alex, 2026-08-23): tab per scope, primaries stacked,
-   short names.** The FIRST run's worktree workspace becomes the herd
-   workspace; its tab is the run's tab. Each additional CONCURRENT scope/run
-   gets its own TAB in that same workspace (tab label = scope number, e.g.
-   `91.0`), never a new workspace. Every subsequent primary's root pane
-   moves into its run's tab: `herdr pane move <pane> --tab <run-tab>
-   --split down --target-pane <prev-pane> --ratio 0.5 --no-focus`. Moving a
-   pane does not disturb its running agent (verified live). Names: workspace
-   = run name only, NEVER a seat (`<scope> run`); tab = scope (`91.0`);
-   pane label AND agent sidebar row = task + seat — `pane rename <pane>
-   "<task> @<seat>"` plus `pane report-metadata <pane> --source concurrency
-   --display-agent "<task> @<seat>"` (without the metadata the sidebar
-   shows the workspace label for every agent — a seat name there lies
-   about every other seat in the run). Helper panes a worker opens go RIGHT
-   of its own pane at half size — the brief carries that instruction.
+1b. **Layout rule (Alex, 2026-08-24 — supersedes the 2026-08-23 "primaries
+   stacked" model): the DRIVER owns tab 1; autonomous WORKERS live in tab 2.**
+   Each scope gets ONE herd space. The driver — the human-in-the-loop
+   orchestrator session, where `/plan` and all HUMAN-GATED work run (§4.1) —
+   sits in **tab 1** of that space. Every autonomous worker goes into a second
+   tab, **`<scope> workers`**, as its OWN pane/window on its OWN worktree, so
+   the driver is never visually tangled with the workers and concurrent scopes
+   never overlap (each scope is its own space). Mechanics: `herdr worktree
+   create …` makes the worktree (in a transient space); move its pane into the
+   driver space's workers tab —
+   · FIRST worker: `herdr pane move <pane> --new-tab --workspace <driver-ws>
+     --label "<scope> workers" --no-focus`
+   · SUBSEQUENT workers: `herdr pane move <pane> --tab <workers-tab>
+     --split down --target-pane <prev> --ratio 0.5 --no-focus`
+   then close the now-empty transient space. Moving a pane does not disturb its
+   running agent (verified live). Names (unchanged lesson): workspace label =
+   the scope/run, NEVER a seat; pane label AND agent-sidebar row = task + seat
+   — `pane rename <pane> "<task> @<seat>"` plus `pane report-metadata <pane>
+   --source concurrency --display-agent "<task> @<seat>"` (without the metadata
+   the sidebar shows the workspace label for every agent — a seat name there
+   lies about every other seat in the run). Helper panes a worker opens go
+   RIGHT of its own pane at half size — the brief carries that instruction.
 2. Launch the seat's command (table §3) in the created pane via `pane run`.
 3. First instruction in every dispatched prompt: run `/freeze <paths>` for its
    partition, then the task brief, then: commit locally when done; NEVER push,
@@ -275,7 +291,8 @@ zero-cost-basis silent defeat that build/test/disjointness passes all missed).
 2. Refuse-to-parallelize default; uncertainty serializes.
 3. Pane cap 2 until the 6.3 gate raises it.
 4. Dispatched agents never push, never open PRs, never merge.
-5. HUMAN-GATED tasks are surfaced, never attempted.
+5. HUMAN-GATED tasks run in the DRIVER (tab 1), never a worker pane; the
+   gate itself is surfaced to the human, never auto-attempted (§4.1).
 6. Every dispatch and every outcome lands in the JSONL log.
 7. Provider env overrides are per-pane only (§3 env-leak rule).
 

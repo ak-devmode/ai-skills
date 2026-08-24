@@ -200,8 +200,11 @@ Per partition, in this order (syntax authority: `herdr --skill`):
    pane at half size — the brief carries that instruction.
 2. Launch the seat's command (table §3) in the created pane via `pane run`.
 3. First instruction in every dispatched prompt: run `/freeze <paths>` for its
-   partition, then the task brief, then: commit locally when done; NEVER push,
-   NEVER open a PR, NEVER merge; end by printing `PARTITION-DONE <task>`.
+   partition (best-effort ONLY — freeze state is machine-global and races across
+   workers, §10; the real guard is the separate worktree + writing only absolute
+   paths inside it, which every brief must state), then the task brief, then:
+   commit locally when done; NEVER push, NEVER open a PR, NEVER merge; end by
+   printing `PARTITION-DONE <task>`.
    Claude seats additionally get the §7.2 gate-bus reporting instruction
    (`GATE-PASSED` / `GATE-BLOCKED` via SendMessage to the supervisor), and
    every brief includes: "If you need a helper terminal or sub-agent pane,
@@ -311,11 +314,17 @@ zero-cost-basis silent defeat that build/test/disjointness passes all missed).
   later its fix writer). A READ-ONLY agent (a `/review` pane, §7.3) is the
   exception — it rides the worktree of the partition it reviews rather than
   taking its own. The rule is who MUTATES, not how many agents touch the tree.
-- `/freeze` is per-REPO, not per-worktree (learned live 2026-08-24): two
-  same-repo worktree partitions overwrite each other's freeze boundary and
-  mutually block. Do NOT rely on `/freeze` for cross-partition isolation — the
-  real guard is disjoint touch-sets (§4.2) + a separate worktree per writer.
-  `/freeze` is at most a within-partition nicety.
+- `/freeze` state is MACHINE-GLOBAL — not per-worktree, not even per-repo
+  (corrected 2026-08-24 from an earlier "per-repo" reading, on live cross-repo
+  evidence): a single state file races across EVERY concurrent worker on the
+  box, spanning different repos. A `wellmed-finance` worker twice overwrote a
+  `kalpa-web` worker's freeze boundary to point at its OWN worktree, silently
+  blocking the kalpa-web worker's legitimate writes with a `[freeze]` error.
+  So `/freeze` gives NO real isolation under concurrency and can actively
+  cross-block unrelated workers. The real guards are: disjoint touch-sets
+  (§4.2) + a separate worktree per writer + workers writing ONLY absolute paths
+  inside their own worktree. Treat `/freeze` as best-effort; a worker that hits
+  a spurious `[freeze]` block resets it to its own worktree and continues.
 - `agent wait` on a pane whose process died may hang: guard waits with a
   timeout and re-check `herdr agent list`.
 - codex model cache staleness: a 400 "requires a newer version of Codex"

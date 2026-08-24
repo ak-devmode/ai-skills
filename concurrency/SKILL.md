@@ -184,14 +184,20 @@ Per partition, in this order (syntax authority: `herdr --skill`):
      --label "<scope> workers" --no-focus`
    · SUBSEQUENT workers: `herdr pane move <pane> --tab <workers-tab>
      --split down --target-pane <prev> --ratio 0.5 --no-focus`
-   then close the now-empty transient space. Moving a pane does not disturb its
-   running agent (verified live). Names (unchanged lesson): workspace label =
-   the scope/run, NEVER a seat; pane label AND agent-sidebar row = task + seat
-   — `pane rename <pane> "<task> @<seat>"` plus `pane report-metadata <pane>
-   --source concurrency --display-agent "<task> @<seat>"` (without the metadata
-   the sidebar shows the workspace label for every agent — a seat name there
-   lies about every other seat in the run). Helper panes a worker opens go
-   RIGHT of its own pane at half size — the brief carries that instruction.
+   then close the now-empty transient space — AND the base-repo space that
+   `herdr worktree create --cwd <repo>` leaves behind (an idle `<repo> (main)`
+   shell; verified live 2026-08-24, it doesn't get consumed by the pane move).
+   Moving a pane does not disturb its running agent (verified live).
+   Names (lesson, now incl. the DRIVER): the agents panel sorts by SPACE, so the
+   space label = the scope/run NUMBER ONLY (`128`), NEVER a seat OR a role. A
+   space named for a role (`128 driver`) makes EVERY pane in it — the driver AND
+   any worker later dropped in its tab — read under that role, i.e. a phantom
+   "second driver" (hit live 2026-08-24). Roles live on PANES: the driver pane
+   carries `report-metadata --display-agent driver`; each worker pane
+   `pane rename <pane> "<task> @<seat>"` + `report-metadata --source concurrency
+   --display-agent "<task> @<seat>"` (without pane metadata the sidebar shows the
+   space label for every agent). Helper panes a worker opens go RIGHT of its own
+   pane at half size — the brief carries that instruction.
 2. Launch the seat's command (table §3) in the created pane via `pane run`.
 3. First instruction in every dispatched prompt: run `/freeze <paths>` for its
    partition, then the task brief, then: commit locally when done; NEVER push,

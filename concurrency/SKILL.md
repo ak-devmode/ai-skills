@@ -235,6 +235,27 @@ appear in the supervisor's `ListAgents` and are reachable via `SendMessage`
 - Messages are plain text and carry pointers, not payloads — evidence lives
   in the repo and the dispatch log.
 
+**7.3 Per-partition review gate — a fresh, VISIBLE pane, before close**
+Every partition's work runs through `/review` BEFORE it is accepted or landed —
+the cheapest defense against drift (learned live 2026-08-24: on 91.4 the review
+caught a DB-password-in-logs leak, a NOT_SERVING deploy outage, and a §4.9
+zero-cost-basis silent defeat that build/test/disjointness passes all missed).
+- The review is its OWN named herdr pane (e.g. `<scope>#<task>-review@<seat>`),
+  NOT a hidden background subagent — a subagent buries the verdict in a
+  transcript file and defeats the fresh-context-and-visible property that makes
+  the gate honest (corrected live 2026-08-24). It reports its verdict on the
+  bus / marker like any seat.
+- It is READ-ONLY (`/review` never commits), so it rides the SAME worktree as
+  the partition it reviews — that is where the branch/diff lives — and never
+  needs its own worktree. It runs AFTER that partition's writer is done, so a
+  reader and a writer are never live in one tree at once.
+- The WORKER does not self-review; the fresh pane does. The supervisor still
+  re-verifies from the branch (§7.2) before landing — the review verdict is a
+  signal, not the land decision.
+- Findings feed the fix→re-review loop: dispatch a fix writer into the
+  partition's worktree (one writer at a time), then re-review in a fresh pane,
+  then land.
+
 ## 8. Collection & teardown
 
 - Report per partition: branch, commit shas, `PARTITION-DONE` seen or not,
@@ -242,6 +263,11 @@ appear in the supervisor's `ListAgents` and are reachable via `SendMessage`
 - Landing is MANUAL and Alex's: hand him per-branch merge commands, bare.
 - `herdr worktree remove` only after Alex confirms the branch is landed or
   abandoned — worktrees with unmerged commits are never removed automatically.
+- Teardown boundary (who tidies): an atomic-unit agent may close its OWN pane
+  when done, but NEVER removes its worktree — a worktree with unmerged commits
+  is the ORCHESTRATOR's to remove, and only after land/abandon (above). Losing
+  an unlanded worktree loses work. Default: agents report and go idle; the
+  orchestrator tidies panes and worktrees once it has verified and landed.
 
 ## 9. Hard rails (restated so they can be quoted back)
 
@@ -256,8 +282,17 @@ appear in the supervisor's `ListAgents` and are reachable via `SendMessage`
 ## 10. Known traps
 
 - `pane read --source recent` empty headless (§7).
-- One git index per checkout: partitions get worktrees, ALWAYS — two agents
-  in one tree is the failure this skill exists to prevent.
+- One git index per checkout: every WRITER partition gets its OWN worktree,
+  ALWAYS — two writers in one tree corrupt the shared index, the failure this
+  skill exists to prevent. One writer at a time per worktree (the worker, then
+  later its fix writer). A READ-ONLY agent (a `/review` pane, §7.3) is the
+  exception — it rides the worktree of the partition it reviews rather than
+  taking its own. The rule is who MUTATES, not how many agents touch the tree.
+- `/freeze` is per-REPO, not per-worktree (learned live 2026-08-24): two
+  same-repo worktree partitions overwrite each other's freeze boundary and
+  mutually block. Do NOT rely on `/freeze` for cross-partition isolation — the
+  real guard is disjoint touch-sets (§4.2) + a separate worktree per writer.
+  `/freeze` is at most a within-partition nicety.
 - `agent wait` on a pane whose process died may hang: guard waits with a
   timeout and re-check `herdr agent list`.
 - codex model cache staleness: a 400 "requires a newer version of Codex"

@@ -46,6 +46,15 @@ start to understand which skills exist and how they fit together.
   merged-vs-live so merged work isn't re-flagged as drift. Templates live
   in `cross-repo-init/templates/`.
 
+- `concurrency/` — herdr-backed multi-agent dispatch. v0.3.0: partitions a
+  scope's plan surface into a dependency DAG, dispatches the ready frontier to
+  visible named herdr panes (one worktree + /freeze per lane), gated by a single
+  inline `[y/N]` (no `--dispatch` flag). Consumes /scope + /plan output.
+- `herdr/` — the herdr WORKFLOW layer. v0.1.0: naming, model-B worktree-per-
+  scope lifecycle, worker launch + trust/bypass, default concurrency pane layout,
+  model routing, gotchas. Referenced by /concurrency, /plan, /closeout;
+  `herdr --skill` owns the raw CLI vocabulary.
+
 ### 1.2 Document-style skills
 
 - `markdown-style/` — Format rules for structured .md documents (PRDs,

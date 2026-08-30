@@ -8,10 +8,10 @@
 
 ## Resume Context
 **Scope:** ~/Projects/ai-skills/plans/4-herdr-agent-workflow/scope.md
-**Last action:** Scope created (2026-08-30)
-**Next action:** `/plan-ceo-review` (or `/autoplan`) on `scope.md`, then execute Phase 1 (`4.1`)
-**Open blockers:** Phase 2 has a soft wait on the friend's herdr tool (bars + diff), arriving ~2026-08-30 night.
-**Key files changed:** None yet
+**Last action:** Phase 1 (Plan 4.1) executed — `/concurrency` dispatch ceremony collapsed to one inline gate; worker naming confirmed already-correct; scope #3 amended (dispatch rail + green-prose trap).
+**Next action:** Gate A — Alex dogfoods one `/concurrency` dispatch to confirm entry is clean. Then Phase 2 (Plan 4.2).
+**Open blockers:** Phase 1 checkpoint is a human gate (dogfood). Friend's bars/diff tool is a Phase-2 follow-up, not a blocker.
+**Key files changed:** `concurrency/SKILL.md` (dispatch flow §5/§6, rail §9, green-prose §10, v0.3.0); `plans/concurrency/scope.md` (dispatch rail amended)
 
 ---
 
@@ -30,6 +30,7 @@
 | Date | Skill/Action | Status | Notes |
 |------|--------------|--------|-------|
 | 2026-08-30 | /scope | Done | Scope #4 created — 2 phases (concurrency one-flow + naming; worktree lifecycle + CLAUDE.md) |
+| 2026-08-30 | /plan 4.1 | Done (pending gate) | `/concurrency` dispatch → single inline gate (§5/§6/§9, v0.3.0); worker naming already correct; scope #3 amended. Awaiting gate-A dogfood. |
 
 ---
 
@@ -46,8 +47,22 @@
 
 | # | Plan File | Phase | Status | Notes |
 |---|-----------|-------|--------|-------|
-| 4.1 | 4.1-herdr-agent-workflow-PLAN.md | Phase 1 — /concurrency one-flow + worker naming + amend #3 | Draft | Gate A (dogfood) |
+| 4.1 | 4.1-herdr-agent-workflow-PLAN.md | Phase 1 — /concurrency one-flow + worker naming + amend #3 | Done (pending gate-A dogfood) | Skill edits landed |
 | 4.2 | 4.2-herdr-agent-workflow-PLAN.md | Phase 2 — worktree lifecycle + driver naming + CLAUDE.md | Draft | Gate C; soft wait on friend's tool |
+
+---
+
+## Plan 4.1: /concurrency one-flow + worker naming + amend #3
+
+### Resume Context (Plan 4.1)
+Skill edits complete; awaiting the gate-A dogfood (Alex runs one `/concurrency` dispatch and confirms entry is clean). No code blockers.
+
+### Session: 2026-08-30
+- **Task 1.1 — collapse the dispatch ceremony** ✅ `concurrency/SKILL.md`: frontmatter description; §5 reworked to "Evaluate, present, ask once" (5.0 bail-to-`/plan` when parallelism isn't worth it + 5.1 inline `[y/N]`); §6 header → "Dispatch — on `y`"; §9 rail 1; version 0.2.0→0.3.0. Removed dry-run-default + `--dispatch` re-run; kept refuse-to-parallelize, pane cap, and the human veto.
+- **Task 1.2 — worker naming** ✅ No change needed — #3 already names workers at the pane level (`pane report-metadata --display-agent "<task> @<seat>"`, §6). Confirmed correct.
+- **Task 1.3 — amend scope #3** ✅ `plans/concurrency/scope.md` §5 dispatch rail rewritten to the inline-gate flow (notes scope #4 supersession); `concurrency/SKILL.md` §10 green-prose trap updated — `_herdr_attach` (OSC 10 on host window) supersedes the removed `herd()` alias.
+
+🔲 **CHECKPOINT (Gate A — human):** Alex dogfoods one `/concurrency` dispatch and confirms entry is finally clean (one inline confirm; a sequential scope gets told to use `/plan`; workers named by lane). Not yet done.
 
 ---
 

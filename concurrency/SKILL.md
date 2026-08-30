@@ -1,6 +1,6 @@
 ---
 name: concurrency
-version: 0.2.0
+version: 0.3.0
 description: |
   ONE responsibility: map what can run in parallel and what cannot, against a
   clear set of rules — re-derived from repo ground truth on every run, never
@@ -9,8 +9,10 @@ description: |
   and supervise by agent state plus a Claude-to-Claude gate-broadcast bus. The single
   controlled home for no-human-in-the-loop agent trains. Use when asked to
   "/concurrency", "dispatch this scope concurrently", "run these phases in
-  parallel", "start an agent train", or "herd this scope". Dry-run is the
-  default — nothing is dispatched without --dispatch. Do NOT use for
+  parallel", "start an agent train", or "herd this scope". It first judges
+  whether parallelism is worth it (recommends plain /plan if not), shows the
+  dispatch plan, and asks once inline before dispatching — no separate flag,
+  refuse-to-parallelize by default. Do NOT use for
   single-task work or as a substitute for /plan; this skill consumes /scope
   and /plan output, it does not replace them.
 allowed-tools:
@@ -132,12 +134,24 @@ check, or UNVERIFIED-EXTERNAL>`) so the verdict is auditable.
 else is listed with the edge or gate that excludes it — exclusions are part
 of the output, not silent.
 
-## 5. Dry-run output (the DEFAULT — no flag dispatches anything)
+## 5. Evaluate, present the plan, then ask once (no flag)
 
-Print exactly this shape and stop:
+**5.0 Is concurrency even worth it?** Before presenting anything, judge the ready
+frontier (§4.3). If it is empty or holds a single unit — everything else
+serialized, human-gated, or blocked — parallelism buys nothing here. Say so and
+bail to sequential; do NOT ask, do NOT dispatch:
 
 ```
-CONCURRENCY PLAN — <scope> @ <repo>          [DRY RUN — nothing dispatched]
+CONCURRENCY — <scope> @ <repo>
+Not worth parallelizing: <one-line reason, e.g. "only 91.2 is ready; 91.1 human-gated, rest serialized on shared touch-set">.
+Recommend: run this with /plan sequentially.
+```
+
+**5.1 Otherwise, present the plan and ask once, inline.** Print this shape and
+wait for a single confirmation — there is NO separate flag and NO re-invocation:
+
+```
+CONCURRENCY PLAN — <scope> @ <repo>
 ready frontier (cap N):
   <task>  seat=<seat>  branch=concurrency/<scope>-<task>
           worktree=<path>  freeze=<paths>
@@ -146,10 +160,18 @@ excluded:
   <task>  HUMAN-GATED: <what Alex must do>
   <task>  BLOCKED by <task>: <edge reason>
   <task>  SERIALIZED with <task>: <shared touch-set>
-Run again with --dispatch to execute.
+
+Proceed? [y/N]
 ```
 
-## 6. --dispatch (phase 6.2+; claude-only and pane cap 2 until the 6.3 gate)
+Refuse-to-parallelize (§4, rule 4) still governs what reaches the frontier — the
+inline `[y/N]` replaces the old two-step ceremony (dry-run, then a separate
+`--dispatch` re-run), it does not remove the human veto. Invoking `/concurrency`
+is itself the authorization to dispatch (per CLAUDE.md, a skill with `Agent` in
+allowed-tools *is* a dispatch request); the prompt is the last look, not a second
+opt-in. On anything but an explicit `y`, stop without dispatching.
+
+## 6. Dispatch — on `y` from §5.1 (claude-only, pane cap 2 until the 6.3 gate)
 
 Per partition, in this order (syntax authority: `herdr --skill`):
 1. `herdr worktree create --cwd <repo> --base origin/<trunk>
@@ -276,7 +298,7 @@ zero-cost-basis silent defeat that build/test/disjointness passes all missed).
 
 ## 9. Hard rails (restated so they can be quoted back)
 
-1. Dry-run default; `--dispatch` is the only path to execution.
+1. Evaluate first — bail to `/plan` if parallelism isn't worth it; else present the plan and dispatch on one inline `[y/N]`. No `--dispatch` flag.
 2. Refuse-to-parallelize default; uncertainty serializes.
 3. Pane cap 2 until the 6.3 gate raises it.
 4. Dispatched agents never push, never open PRs, never merge.
@@ -317,13 +339,18 @@ zero-cost-basis silent defeat that build/test/disjointness passes all missed).
   color codes (verified via `pane read --format ansi`), so it always renders
   in the window's default foreground — TERM makes no difference (proven
   2026-08-23: TERM=xterm-ghostty confirmed in-pane, prose still green).
-  ACTUAL fix: run the herd window as its own Ghostty instance with a
-  per-window foreground override — the `herd` alias in ~/.zshrc
-  (`open -na Ghostty.app --args --foreground="#d8d8d8" --title=herd -e
-  herdr`). Main Ghostty windows keep the Homebrew look. The zshrc
-  HERDR_ENV→TERM/TERMINFO block remains for terminfo correctness (export
-  TERMINFO BEFORE TERM — zsh re-inits terminfo on the TERM assignment); if
-  a TUI misbehaves inside a pane, suspect that block first.
+  ACTUAL fix (2026-08-30 — supersedes the old `herd` alias): the
+  `_herdr_attach` function in ~/.zshrc emits OSC 10 `#d8d8d8` on the host
+  Ghostty window right before `herdr` attaches. herdr forwards the host
+  window's default fg to every pane, so pane prose renders neutral instead of
+  Homebrew green; fg resets on detach, and it's tty-guarded so it never fires
+  on `herdr <subcommand>` API calls. NO separate Ghostty instance needed — the
+  old fix launched `open -na Ghostty.app --args --foreground=…` via a `herd()`
+  wrapper that was buggy and has since been removed. herdr has no config knob
+  for pane fg; it only forwards the host's (verified against config-reference
+  v0.8.2). The zshrc HERDR_ENV→TERM/TERMINFO block remains for terminfo
+  correctness (export TERMINFO BEFORE TERM); if a TUI misbehaves in a pane,
+  suspect that block first.
 - Pane content colors are NOT herdr theme tokens — theme.custom.* paints
   chrome only. Content color problems are TERM/terminfo problems.
 

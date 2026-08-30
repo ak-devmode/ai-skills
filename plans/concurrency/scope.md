@@ -87,9 +87,12 @@ Rules:
 
 ## 5. Safety rails (the "controlled and debugged before running wild" clause)
 
-- **Dry-run is the default.** `/concurrency` with no flag prints the DAG and
-  the dispatch plan (pane names, models, worktrees, freeze paths) and
-  dispatches nothing. `--dispatch` executes.
+- **Evaluate, then one inline gate.** `/concurrency` judges whether parallelism
+  is worth it (bails to `/plan` if not), prints the DAG + dispatch plan (pane
+  names, models, worktrees, freeze paths), and dispatches on a single inline
+  `[y/N]`. (Superseded scope #3's original dry-run + `--dispatch` two-step — see
+  ai-skills scope #4 (2026-08-30). The human veto stays; the flag + re-run
+  ceremony is gone.)
 - **Refuse-to-parallelize is the default verdict.** A task pair joins the
   parallel set only when disjointness is *shown* (paths + dependency edges);
   anything uncertain serializes.

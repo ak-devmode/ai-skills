@@ -272,3 +272,22 @@ Surfaced during the PMG-side assessment-pass redo + ai-skills bootstrap
 
 Source: `closeout-skills/closeout-skills-PROGRESS.md` §8.5 (PMG-side
 assessment + ai-skills leaf)
+
+## Herdr Agent Workflow (Plan 4)
+Source: plans/4-herdr-agent-workflow/progress.md
+Touches: ai-skills · concurrency/SKILL.md · herdr/SKILL.md · scope + plan + closeout SKILL.md · ~/.claude/CLAUDE.md
+
+- [ ] **Dedup the `/concurrency` §3 routing table.** Canonical copy now lives in
+      the `herdr` skill §6; the `/concurrency` §3 table is a duplicate. The dedup
+      edit was classifier-blocked (the GLM launch line contains a
+      `security find-generic-password` keychain call). Re-do with approval or an
+      Edit permission on `concurrency/SKILL.md`.
+- [ ] **Ratify the CLAUDE.md wording.** "Execution parallelism goes to visible
+      herdr panes, not background agents" was added to `~/.claude/CLAUDE.md`;
+      Alex to confirm/tune the phrasing.
+- [ ] **Dogfood the new `/concurrency` flow (Phase 1 gate A).** One real dispatch:
+      one inline confirm, a sequential scope told to use `/plan`, workers
+      lane-named. Confirms the ceremony is finally gone.
+- [ ] **Integrate the friend's bars/diff tool** (follow-up scope). Attach points
+      in `plans/4-herdr-agent-workflow/artifacts/friend-tool-seams.md`. Do NOT
+      build bars / model-token / space-level-limit before his repo lands.

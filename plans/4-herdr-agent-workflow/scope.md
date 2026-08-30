@@ -23,8 +23,11 @@ Collapse the dispatch ceremony and fix naming, in the skill that owns them.
 - **Amend scope #3** (`concurrency/`): update its scope.md/progress to record that the `--dispatch` gate is superseded by the inline flow, and that tonight's `_herdr_attach` (OSC 10 on the host Ghostty window) supersedes its old `herd`-alias green-prose fix (that alias was the buggy wrapper, since removed).
 - **Gate A (human):** dogfood the new flow on one real dispatch — Alex confirms entering concurrency is now clean before Phase 2 builds on it.
 
-### Phase 2 — Worktree lifecycle + driver naming + CLAUDE.md rule
-The cross-skill lifecycle (model B: isolated git worktrees), spanning `/scope` → `/plan` → `/closeout`.
+### Phase 2 — Shared `herdr` skill + worktree lifecycle + driver naming + CLAUDE.md rule
+Build a shared `herdr` skill as the single home for Alex's herdr **workflow layer**, then have the planning skills reference it (thin hooks, not re-encoded rules). This kills the naming/command drift scope #3 kept re-fixing. Model B (isolated git worktrees), spanning `/scope` → `/plan` → `/closeout`.
+- **New shared `herdr` skill** owns: naming conventions, the worktree-per-scope lifecycle commands, **worker launch (`--dangerously-skip-permissions`) + pre-trust handling**, the **default concurrency pane layout** (below), model routing, and herdr gotchas. `herdr --skill` keeps owning the raw CLI vocabulary — the shared skill owns the *workflow* layer, not a duplicate. Don't over-abstract: stable cross-skill rules go here; skill-specific logic (the DAG partitioner, the dispatch gate) stays in its skill.
+- **Default concurrency pane layout (Alex, 2026-08-30 — replaces the old tab-per-scope rule):** driver in a **full-height LEFT pane**; workers fill **half-height panes on the RIGHT**, seeded with 2 placeholders (top-right + bottom-right); each further worker adds another half-height pane growing **rightward**, until Alex manually reorganizes. **`/concurrency` does NOT manage tabs** — Alex owns tabs.
+- **Worker launch:** dispatched workers run `--dangerously-skip-permissions` (workers only, never the driver) — the trust-dialog + tool-prompt fix; safe because workers are sandboxed (isolated worktree + `/freeze` + no-push).
 - **`/scope`:** record the scope's **primary repo + intended branch** (new scope.md field), so `/plan` knows what to create.
 - **`/plan`:** on invocation inside a herdr pane (`$HERDR_PANE_ID` set), (a) auto-name its own agent **`driver`**; (b) create+bind an isolated worktree — `herdr worktree create --cwd <primary-repo> --branch <b> --base <trunk>` — where the scope's space **is** the worktree-workspace. **Required** when `/concurrency` will run (lane isolation); **optional** for a solo single-driver `/plan`.
 - **`/closeout`:** on scope completion, `herdr worktree remove` + prune the branch. (`/repo-cleanup` already does `git worktree prune`.)
@@ -54,4 +57,7 @@ The cross-skill lifecycle (model B: isolated git worktrees), spanning `/scope` �
 - **Agent naming:** `/plan`'s agent → `driver`; `/concurrency` workers → lane/task names.
 - **`_herdr_attach` supersedes scope #3's `herd`-alias** green-prose fix — record, don't run both.
 - **One new scope** owns this; it **amends** scope #3 in two spots rather than reopening it as the home.
-- **Friend's bars/diff tool** lands tonight — leave seams, don't pre-build what it (or a fork) will provide.
+- **Friend's bars/diff tool** — leave seams, don't pre-build what it (or a fork) will provide; a follow-up, not a blocker.
+- **Shared `herdr` skill is Phase 2's foundation** (2026-08-30) — one home for naming, worktree lifecycle, worker launch/trust, layout, routing, gotchas; the planning skills reference it rather than re-encoding herdr rules.
+- **Workers launch `--dangerously-skip-permissions`** (workers only) — fixes the fresh-worktree trust dialog + internal tool prompts; safe because workers are sandboxed (isolated worktree + `/freeze` + no-push). Surfaced live during the Phase 1 dogfood.
+- **`/concurrency` does NOT manage tabs; new default pane shape** = driver full-height LEFT, workers half-height filling RIGHTWARD (2 seeded placeholders). Alex owns tabs + manual reorg.

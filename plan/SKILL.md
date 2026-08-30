@@ -390,6 +390,19 @@ Loaded During Planning)` alongside the CLAUDE/ARCH/CROSS-REPO entries.
 - **Never execute tasks on `main` or `master`** UNLESS the repo's recent commit history shows main is the active development branch (e.g., solo-dev repos where all features land directly on main). When uncertain, halt and ask. Per the user's `feedback_branch_workflow.md`, working on the user's current branch is preferred over creating new ones.
 - Log the branch name in the progress file under Phase 0.
 
+5.8.1 **herdr worktree + driver naming (when running inside a herdr pane)** — if
+`$HERDR_PANE_ID` is set (this `/plan` runs in a herdr pane) AND the parent
+scope's **Primary repo (worktree)** field is not "none":
+- Name this session's agent: `herdr agent rename "$HERDR_PANE_ID" driver`.
+- Create the scope's isolated worktree-workspace per the **`herdr` skill** (model
+  B, §3): `herdr worktree create --cwd <primary-repo> --base origin/<trunk>
+  --branch <scope-branch>` — the scope's space IS the worktree-workspace; work
+  happens in the checkout under `~/.herdr/worktrees/`, and branch/commit status
+  renders in the sidebar. **Required** when `/concurrency` will run this scope;
+  **optional** for a solo driver (honor a scope note, else ask once).
+- Outside a herdr pane, or Primary repo "none": skip this — the plain branch
+  checkout (§5.8) stands.
+
 5.9 **Read agent-load-bearing context files** — at session start, read whichever of these exist in the repo root:
 - `CLAUDE.md` — project-specific Claude instructions (always read if present)
 - `ARCHITECTURE.md` — per-repo architecture snapshot (load-bearing per /markdown-style §11 + the closeout-skills framework)

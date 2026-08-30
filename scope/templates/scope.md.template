@@ -5,6 +5,7 @@
 **Created by:** {derived — see below}
 **Scope folder:** {plans_dir}/{N}-{slug}/
 **Source repo(s):** {absolute paths to repos this task touches}
+**Primary repo (worktree):** {the ONE repo + intended branch the work lands in — /plan creates an isolated herdr worktree here per the `herdr` skill (model B); write "none — docs-only / multi-repo" if N/A}
 
 ## Context
 {1–3 sentences: what this is, why it's being done, what triggered it}

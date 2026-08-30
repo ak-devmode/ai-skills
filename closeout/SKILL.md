@@ -598,6 +598,18 @@ don't move files.
 version, /closeout follows automatically. The point of factoring archive logic
 into /plan §11 is exactly to avoid two skills having drifting implementations.
 
+13.6 **herdr worktree teardown (when the scope had one).** If this scope's work
+ran in an isolated herdr worktree-workspace (model B — created by `/plan` §5.8.1
+per the `herdr` skill), tear it down once the branch has merged and the scope is
+archived, so nothing dangles:
+- `herdr worktree remove --workspace <id>` (find it via `herdr workspace list`);
+- then `git -C <primary-repo> branch -D <scope-branch>` and
+  `git -C <primary-repo> worktree prune`.
+**Guard:** only after the branch is merged — never remove a worktree holding
+unmerged commits. If the scope used no worktree (docs-only, or Primary repo
+"none"), skip. Under `--dry-run`, log the teardown commands without running them.
+Full lifecycle: `herdr` skill §3.
+
 ## 14. Step 12 — Summary
 
 14.0 **RUN THE ARCHIVE GATE FIRST — before printing anything.** Prose cannot enforce

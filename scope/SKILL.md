@@ -605,6 +605,11 @@ source repo and a bare filename is ambiguous about which repo it means.
 Write from `templates/scope.md.template`. Section conventions are `/markdown-style`
 §11; omit a Required-if section with a one-line reason rather than leaving it empty.
 
+Fill **Primary repo (worktree)** with the one repo + intended branch the work
+lands in — `/plan` reads it to create the isolated herdr worktree-workspace (see
+the `herdr` skill, model B). A docs-only or genuinely multi-repo scope writes
+"none" and `/plan` skips worktree creation.
+
 **`Created by` is DERIVED, never hardcoded** — read the name off git config at run
 time (`git config user.name`, falling back to `--global`). If nothing is configured
 anywhere, write `TBD` and say so. Never substitute a name from an example, this file,

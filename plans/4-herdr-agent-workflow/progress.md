@@ -8,10 +8,10 @@
 
 ## Resume Context
 **Scope:** ~/Projects/ai-skills/plans/4-herdr-agent-workflow/scope.md
-**Last action:** Phase 1 (Plan 4.1) executed — `/concurrency` dispatch ceremony collapsed to one inline gate; worker naming confirmed already-correct; scope #3 amended (dispatch rail + green-prose trap).
-**Next action:** Gate A — Alex dogfoods one `/concurrency` dispatch to confirm entry is clean. Then Phase 2 (Plan 4.2).
-**Open blockers:** Phase 1 checkpoint is a human gate (dogfood). Friend's bars/diff tool is a Phase-2 follow-up, not a blocker.
-**Key files changed:** `concurrency/SKILL.md` (dispatch flow §5/§6, rail §9, green-prose §10, v0.3.0); `plans/concurrency/scope.md` (dispatch rail amended)
+**Last action:** Phase 2 Task 2.0 done — created shared `herdr/SKILL.md` (registered), pointed `/concurrency` at it (precondition/naming/layout/worker-bypass), captured the new pane layout + `--dangerously-skip-permissions` worker launch. §3 routing-table dedup classifier-blocked (table left in both — cleanup pending).
+**Next action:** Phase 2 remaining — 2.1 /scope primary-repo field · 2.2 /plan worktree+driver naming · 2.3 /closeout teardown · 2.4 CLAUDE.md rule · 2.5 seams note.
+**Open blockers:** Gate A (Phase 1 dogfood) still open. §3 dedup needs classifier approval.
+**Key files changed:** `herdr/SKILL.md` (new, registered); `concurrency/SKILL.md` (§2/§3/§6 reference the herdr skill; tab-per-scope layout removed; worker bypass)
 
 ---
 
@@ -31,6 +31,7 @@
 |------|--------------|--------|-------|
 | 2026-08-30 | /scope | Done | Scope #4 created — 2 phases (concurrency one-flow + naming; worktree lifecycle + CLAUDE.md) |
 | 2026-08-30 | /plan 4.1 | Done (pending gate) | `/concurrency` dispatch → single inline gate (§5/§6/§9, v0.3.0); worker naming already correct; scope #3 amended. Awaiting gate-A dogfood. |
+| 2026-08-30 | /plan 4.2 (Task 2.0) | Done | Created shared `herdr/SKILL.md` (registered); `/concurrency` references it; tab-per-scope layout removed; new pane layout + `--dangerously-skip-permissions` workers. §3 dedup classifier-blocked. |
 
 ---
 
@@ -48,7 +49,7 @@
 | # | Plan File | Phase | Status | Notes |
 |---|-----------|-------|--------|-------|
 | 4.1 | 4.1-herdr-agent-workflow-PLAN.md | Phase 1 — /concurrency one-flow + worker naming + amend #3 | Done (pending gate-A dogfood) | Skill edits landed |
-| 4.2 | 4.2-herdr-agent-workflow-PLAN.md | Phase 2 — worktree lifecycle + driver naming + CLAUDE.md | Draft | Gate C; soft wait on friend's tool |
+| 4.2 | 4.2-herdr-agent-workflow-PLAN.md | Phase 2 — shared herdr skill + worktree lifecycle + naming + CLAUDE.md | In progress (2.0 done) | Gate C; friend's tool = follow-up |
 
 ---
 
@@ -63,6 +64,16 @@ Skill edits complete; awaiting the gate-A dogfood (Alex runs one `/concurrency` 
 - **Task 1.3 — amend scope #3** ✅ `plans/concurrency/scope.md` §5 dispatch rail rewritten to the inline-gate flow (notes scope #4 supersession); `concurrency/SKILL.md` §10 green-prose trap updated — `_herdr_attach` (OSC 10 on host window) supersedes the removed `herd()` alias.
 
 🔲 **CHECKPOINT (Gate A — human):** Alex dogfoods one `/concurrency` dispatch and confirms entry is finally clean (one inline confirm; a sequential scope gets told to use `/plan`; workers named by lane). Not yet done.
+
+---
+
+## Plan 4.2: Shared herdr skill + worktree lifecycle + driver naming + CLAUDE.md
+
+### Resume Context (Plan 4.2)
+Task 2.0 (shared herdr skill) done + registered. Remaining: 2.1 `/scope` primary-repo field · 2.2 `/plan` (worktree create + driver naming, optional-for-solo) · 2.3 `/closeout` (worktree remove + prune) · 2.4 CLAUDE.md execution-parallelism rule · 2.5 seams note. §3 routing dedup needs classifier approval.
+
+### Session: 2026-08-30
+- **Task 2.0 — shared `herdr` skill** ✅ Created `herdr/SKILL.md` v0.1.0: preconditions, naming, model-B worktree lifecycle, worker launch + trust/bypass, default pane layout (driver full-height LEFT, workers half-height rightward, no tabs), model routing, gotchas, supervision. Registered via `setup.sh` (symlink live, no collision). Pointed `/concurrency` at it — §2 precondition loads the herdr skill; §6 1b layout → reference (tab-per-scope removed); §6 step 1 naming → reference; §6 step 2 workers append `--dangerously-skip-permissions`. ⚠ §3 routing-table dedup **classifier-blocked** (secret-looking GLM launch line) — table duplicated in `/concurrency` §3 + `herdr` §6; cleanup pending approval.
 
 ---
 

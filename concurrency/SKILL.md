@@ -45,9 +45,10 @@ Design record: `plans/concurrency/scope.md` (ai-skills). Status lives in
       say so and ask before proceeding — the socket works from outside, but
       pane-context is absent and herdr's own guidance is to control only from
       within.
-- [ ] Load herdr's control-surface instructions: run `herdr --skill` and
-      follow it for ALL pane/workspace/worktree mechanics. This skill defines
-      WHAT to dispatch; `herdr --skill` defines HOW to drive herdr.
+- [ ] Load the `herdr` skill (workflow layer: naming, worktree lifecycle, worker
+      launch/trust, layout, routing) AND run `herdr --skill` (raw CLI mechanics).
+      This skill = WHAT to dispatch; the `herdr` skill = the workflow; `herdr
+      --skill` = the raw CLI.
 - [ ] Target repo identified, trunk known (`develop` for wellmed/pmg, `main`
       otherwise), `git fetch` run. Never dispatch from a dirty primary tree
       without surfacing it first.
@@ -175,30 +176,20 @@ opt-in. On anything but an explicit `y`, stop without dispatching.
 
 Per partition, in this order (syntax authority: `herdr --skill`):
 1. `herdr worktree create --cwd <repo> --base origin/<trunk>
-   --branch concurrency/<scope>-<task> --label "<task> @<seat>"
-   [--env KEY=VAL ...]` — env vars ONLY for the glm seat.
-   ⚠ NAMING (learned live: a codex pane displayed "@opus"): the agents
-   sidebar shows the WORKSPACE label as every row's main header and the
-   pane's display-agent as the subheader — so a seat name at workspace
-   level lies about every other seat in the run. Workspace label = run
-   name only, NO seat (`<scope> run`); seat identity goes on the PANE:
-   `pane rename` + `pane report-metadata --display-agent "<task> @<seat>"`.
-1b. **Layout rule (Alex, 2026-08-23): tab per scope, primaries stacked,
-   short names.** The FIRST run's worktree workspace becomes the herd
-   workspace; its tab is the run's tab. Each additional CONCURRENT scope/run
-   gets its own TAB in that same workspace (tab label = scope number, e.g.
-   `91.0`), never a new workspace. Every subsequent primary's root pane
-   moves into its run's tab: `herdr pane move <pane> --tab <run-tab>
-   --split down --target-pane <prev-pane> --ratio 0.5 --no-focus`. Moving a
-   pane does not disturb its running agent (verified live). Names: workspace
-   = run name only, NEVER a seat (`<scope> run`); tab = scope (`91.0`);
-   pane label AND agent sidebar row = task + seat — `pane rename <pane>
-   "<task> @<seat>"` plus `pane report-metadata <pane> --source concurrency
-   --display-agent "<task> @<seat>"` (without the metadata the sidebar
-   shows the workspace label for every agent — a seat name there lies
-   about every other seat in the run). Helper panes a worker opens go RIGHT
-   of its own pane at half size — the brief carries that instruction.
-2. Launch the seat's command (table §3) in the created pane via `pane run`.
+   --branch concurrency/<scope>-<task> [--env KEY=VAL ...]` — env vars ONLY for
+   the glm seat. Workspace label = run name only (`<scope> run`); seat identity
+   goes on the PANE per the `herdr` skill §2 (naming).
+1b. **Layout + naming — see the `herdr` skill (§5 layout, §2 naming).** Driver
+   full-height LEFT, workers half-height filling RIGHTWARD; **NO tabs — Alex
+   owns tabs and manual reorg.** Pane identity = `<task> @<seat>` via `pane
+   rename` + `pane report-metadata --source concurrency --display-agent`
+   (without the metadata the sidebar shows the workspace label for every agent).
+   Helper panes a worker opens split its OWN pane right at half size — never the
+   herd layout, never a tab.
+2. Launch the seat's command (§3) in the created pane via `pane run` — claude/glm
+   workers append `--dangerously-skip-permissions` (`herdr` skill §4: clears the
+   fresh-worktree trust dialog + tool prompts; safe via worktree + /freeze +
+   no-push isolation). Never on the driver.
 3. First instruction in every dispatched prompt: run `/freeze <paths>` for its
    partition, then the task brief, then: commit locally when done; NEVER push,
    NEVER open a PR, NEVER merge; end by printing `PARTITION-DONE <task>`.

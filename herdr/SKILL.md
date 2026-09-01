@@ -109,7 +109,12 @@ permission prompt (the auto-mode classifier blocks it, correctly). Fix it at
 
 ## 5. Default concurrency pane layout
 
-Alex, 2026-08-30 (replaces the old tab-per-scope rule). **NO tabs** — Alex owns tabs.
+Alex, 2026-08-30 (replaces the old tab-per-scope rule). **NO tabs** — Alex owns
+tabs. Since 2026-09-01 his `herdr-new-space` helper (dev-workbench, bound to
+prefix+shift+n) pre-builds every manually-created space with tab "work" (this
+exact seed layout, driver pane already named `driver`) + tab "shell". Skills
+still never create/name tabs — but on dispatch, **check for and REUSE the
+seeded standby panes** in the "work" tab before splitting new ones.
 
 ```
 +-------------+------+------+---

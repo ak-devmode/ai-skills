@@ -155,7 +155,7 @@ wait for a single confirmation — there is NO separate flag and NO re-invocatio
 CONCURRENCY PLAN — <scope> @ <repo>
 ready frontier (cap N):
   <task>  seat=<seat>  branch=concurrency/<scope>-<task>
-          worktree=<path>  freeze=<paths>
+          worktree=<path>
           pane label: <task> @<seat>
 excluded:
   <task>  HUMAN-GATED: <what Alex must do>
@@ -188,10 +188,9 @@ Per partition, in this order (syntax authority: `herdr --skill`):
    herd layout, never a tab.
 2. Launch the seat's command (§3) in the created pane via `pane run` — claude/glm
    workers append `--dangerously-skip-permissions` (`herdr` skill §4: clears the
-   fresh-worktree trust dialog + tool prompts; safe via worktree + /freeze +
+   fresh-worktree trust dialog + tool prompts; safe via worktree +
    no-push isolation). Never on the driver.
-3. First instruction in every dispatched prompt: run `/freeze <paths>` for its
-   partition, then the task brief, then: commit locally when done; NEVER push,
+3. First instruction in every dispatched prompt: the task brief, then: commit locally when done; NEVER push,
    NEVER open a PR, NEVER merge; end by printing `PARTITION-DONE <task>`.
    Claude seats additionally get the §7.2 gate-bus reporting instruction
    (`GATE-PASSED` / `GATE-BLOCKED` via SendMessage to the supervisor), and
@@ -306,11 +305,13 @@ zero-cost-basis silent defeat that build/test/disjointness passes all missed).
   later its fix writer). A READ-ONLY agent (a `/review` pane, §7.3) is the
   exception — it rides the worktree of the partition it reviews rather than
   taking its own. The rule is who MUTATES, not how many agents touch the tree.
-- `/freeze` is per-REPO, not per-worktree (learned live 2026-08-24): two
-  same-repo worktree partitions overwrite each other's freeze boundary and
-  mutually block. Do NOT rely on `/freeze` for cross-partition isolation — the
-  real guard is disjoint touch-sets (§4.2) + a separate worktree per writer.
-  `/freeze` is at most a within-partition nicety.
+- `/freeze` is REMOVED from concurrent dispatch (2026-09-02): its state is ONE
+  GLOBAL file (`~/.gstack/freeze-dir.txt`), so concurrent lanes overwrite each
+  other's boundary mid-run — a no-op at best, misleading at worst, and it does
+  not govern `Bash` edits anyway. Do NOT put `/freeze` in dispatched briefs. The
+  ONLY cross-partition isolation is disjoint touch-sets (§4.2) + a separate
+  worktree per writer (§10, one git index per checkout). (A future skill rewrite
+  may reintroduce a per-worktree freeze; until then, don't use it.)
 - `agent wait` on a pane whose process died may hang: guard waits with a
   timeout and re-check `herdr agent list`.
 - codex model cache staleness: a 400 "requires a newer version of Codex"

@@ -642,6 +642,18 @@ execution (noted in checkpoint reviews or task notes).
 
 Collect these into a list of actionable TODO items.
 
+🔴 **Then verify each one against `origin/<trunk>` before writing it down.** Grep the
+trunk for the thing the item says does not exist — the symbol, route, file, RPC, table,
+component — across every repo that would carry it. Found ⇒ the item is DONE: correct the
+progress entry with where it actually lives, and do NOT extract it. One grep per item.
+
+The progress file records what a session *believed*; the trunk is what is *true*. An
+item can be stale **the day it is written** — WellMed scope 91 carried an "AP tab
+remaining" note authored 2026-09-01 against a feature that shipped 2026-07-29, and it
+survived into four documents plus a closeout summary before a cold-context validator
+caught it. Copying an unverified residual forward is how `TO-DO.md` accumulates its
+measured ~61% drift, and extraction is the cheapest moment to stop it.
+
 ### 11.2 Append to TO-DO.md
 
 Resolve the plans directory via `scripts/resolve-plans-dir.sh` (§2); `TO-DO.md` sits

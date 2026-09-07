@@ -567,6 +567,42 @@ the run owned archival. Both sat "active" in PLANS-INDEX for days after completi
 and in both cases a stale index row meant later hygiene passes read them as live
 work and left them alone.
 
+13.0a **VERIFY EVERY RESIDUAL AGAINST `origin/<trunk>` BEFORE EXTRACTING IT.**
+Run this before §13.1's TODO extraction, not after.
+
+For each item the progress file lists as remaining, deferred, blocked or unbuilt,
+**grep the trunk for the thing it says does not exist** — the symbol, route, file,
+RPC, table, component — across every repo that would carry it. A one-line grep per
+item, and it decides:
+
+- **Found on trunk** → the item is DONE. Do not copy it into `TO-DO.md`. Correct the
+  progress entry with the SHAs and where it actually lives, and drop it from the
+  index row's remaining list.
+- **Not found** → extract it as normal.
+
+**Never carry forward a "remaining" claim you have not re-verified.** The progress
+file is the record of what a session *believed*; the trunk is what is *true*. Where
+they disagree, the trunk wins, and closeout is the last checkpoint that can catch it.
+
+> **Why this is a gate and not a nicety.** WellMed scope 91 listed an "AP tab" as
+> remaining work in four places — progress §1, the closeout summary, the PLANS-INDEX
+> row, and the closeout commit message naming it as a reason the archive gate refused.
+> It had shipped **six weeks earlier** in scope 102.6: cashier service + gRPC + proto,
+> gateway RPCs, and the Nuxt pages. The scope note asserting it unbuilt was written
+> 2026-09-01 against code that landed 2026-07-29 — **stale the day it was written**.
+> A cold-context validator caught it only at the clear gate; without that, the next
+> session would have opened a fresh context to rebuild shipped code.
+>
+> This also explains a number people keep re-discovering: measured drift on unswept
+> `TO-DO.md` items runs ~61%. Closeout is a **producer** of that drift every time it
+> copies an unverified residual forward. Verifying at extraction is where the cost is
+> lowest — you already have the repo list from ledger §2, and the alternative is
+> `/todo-sweep` re-deriving it months later with no context.
+
+⚠ **Grep the trunk, not the working tree, and not the ledger.** A feature that landed
+from another scope is invisible in both. `git -C <repo> grep -l '<symbol>' origin/<trunk>`
+— and per the merged-state trap, content-grep rather than trusting a PR's merge status.
+
 13.1 **Do NOT duplicate /plan's archive logic.** Read /plan/SKILL.md §11 (Plan
 Completion & Archive) and follow that procedure verbatim:
 - §11.1 Extract deferred TODOs
@@ -655,7 +691,7 @@ skip the gate and note "archive gate not run (dry-run)."
   [✓] 8  Trio sync: {N edits across CROSS-REPO/ARCH/CLAUDE} | no drift | SKIPPED
   [✓] 9  Coverage: {C} covered, {U} uncovered, {T} test-only
   [✓] 10 Memory: {M} written · {C} corrected · {U} contradictions NOT fixed
-  [✓] 11 Archived: {archive-path}
+  [✓] 11 Archived: {archive-path} — residuals verified vs trunk: {V} checked, {D} already-shipped dropped
   [✓] 12 Summary (this)
 
 📝 Edits in working tree (review before commit):

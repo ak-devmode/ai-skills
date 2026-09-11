@@ -183,6 +183,7 @@ intentional copy divergence. Do not resurrect it.
 - [ ] Workbench repo layout: `dev-workbench` currently holds only `config/` + `install.sh`; the CLI needs its own top-level home and a plans graph or a pointer here.
 - [ ] Go single binary vs thin bash/Node for verbs. Lean: Go for wire verbs (table tests), bash wrappers around `/browse` for UI.
 - [ ] CI-shallow: which rung-4 verbs are cheap + binary enough to hard-block on.
+- [ ] Does the *Faithful-port verification gate* wording (§3.1 B) become a rule in `~/.claude/CLAUDE.md`, or stay encoded only in `/verify`'s class-B check? (Alex's call — it is not on disk today; see §9.)
 
 ## 7. Constraints
 
@@ -208,4 +209,8 @@ suite for WellMed · Control Tower / Padma go-live work · any codebase-wide err
 - Scopes: `pmg-docs/plans/64-padmacare-web-astro/` · `kalpa-docs/plans/archive/128-kalpa-web-astro/`
 - Existing proto-levers to reuse, not rebuild: `wellmed-infrastructure/operations/check-grafana-drift.sh`
   + `grafana-expected-state.py` · `pmg-integrations/operations/audit-*.js` · `pmg-web/scripts/transform-boards.py`
-- Global rule already written for class B: `~/.claude/CLAUDE.md` → *Faithful-port verification gate*
+- Class B gate text: Alex drafted a *"Faithful-port verification gate"* rule (read source → produce →
+  read back from destination → diff per unit → done only on empty diff or approved exceptions) and pasted
+  it into the 2026-09-11 conversation. **It is NOT in `~/.claude/CLAUDE.md` or anywhere on disk** — the
+  wording survives only as §3.1 B above and in pmg memory `feedback_port_from_source_artifact`. Whether it
+  becomes a global CLAUDE.md rule is Alex's call at scope time (open item for §6).

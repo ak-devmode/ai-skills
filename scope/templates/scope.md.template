@@ -6,6 +6,7 @@
 **Scope folder:** {plans_dir}/{N}-{slug}/
 **Source repo(s):** {absolute paths to repos this task touches}
 **Primary repo (worktree):** {the ONE repo + intended branch the work lands in — /plan creates an isolated herdr worktree here per the `herdr` skill (model B); write "none — docs-only / multi-repo" if N/A}
+**Backlog:** {kalpa-orchestra/projects/<client>/BACKLOG.md#B-NNN if this scope executes a Kalpa Orchestra backlog item — read that item + the client's CHARTER.md before scoping; else "none"}
 
 ## Context
 {1–3 sentences: what this is, why it's being done, what triggered it}

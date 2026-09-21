@@ -1,0 +1,8 @@
+# Runtime-generated, not source. The committed corpus is artifacts/september-alarms.json.
+__pycache__/
+*.pyc
+handled_store.json
+heartbeat.log
+# day-pull outputs from fetch.sh (yesterday.json etc.); the Sept corpus lives one dir up
+*.json
+!known_issues.json

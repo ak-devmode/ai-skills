@@ -1,0 +1,19 @@
+{
+  "_comment": "Dedup / known-issues ledger for the classify gate. An alarm whose alertName contains `match` short-circuits to its route (dedup). Reopen semantics (severity/recurrence/deploy-SHA change) are applied by the caller, not here. Seeded from scope 146 Phase 1.",
+  "known": [
+    {
+      "match": "HPACK panic",
+      "class": "code-defect/not-autonomously-fixable",
+      "route": "PROPOSE",
+      "note": "Upstream x/net hpack bug (golang/go#72940 not-planned). Fix is infra (HeaderTableSize(0)+nginx L4) + auth-forwarding lever (gateway grpc.go:20-21, human-gated). NEVER emit a dep-bump PR. See flagship-hpack-panic-investigation.md.",
+      "reopen_on": ["prod env", "new untreated hop"]
+    },
+    {
+      "match": "Saga DLQ",
+      "class": "known-accepted",
+      "route": "DROP",
+      "note": "Known accepted SATU SEHAT bundle_rejected backlog; awaiting a product decision. Reopen if depth crosses a new threshold.",
+      "reopen_on": ["depth threshold"]
+    }
+  ]
+}

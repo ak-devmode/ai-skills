@@ -91,13 +91,20 @@ def classify(inc):
     # 6) default: surface, don't drop
     return ("unclassified", "PROPOSE", "no rule matched; surface for a human")
 
-def main(path):
+def route_all(path):
+    """Deterministic front-end: annotations file -> routed incidents (list of dicts).
+    Shared by the human table (main) and the machine-readable --json mode the cloud
+    routine parses."""
     anns = json.loads(Path(path).read_text())
-    incidents = collapse_to_incidents(anns)
     routed = []
-    for inc in incidents:
+    for inc in collapse_to_incidents(anns):
         cls, route, why = classify(inc)
         routed.append({**inc, "class": cls, "route": route, "why": why})
+    return anns, routed
+
+
+def main(path):
+    anns, routed = route_all(path)
 
     by_route = defaultdict(int)
     for r in routed:
@@ -113,6 +120,12 @@ def main(path):
     return routed
 
 if __name__ == "__main__":
-    src = sys.argv[1] if len(sys.argv) > 1 else str(
-        Path(__file__).parents[1] / "september-alarms.json")
-    main(src)
+    args = [a for a in sys.argv[1:] if a != "--json"]
+    src = args[0] if args else str(Path(__file__).parents[1] / "september-alarms.json")
+    if "--json" in sys.argv:
+        # Machine-readable routed incidents for the cloud routine session to consume.
+        _, routed = route_all(src)
+        print(json.dumps([{k: r[k] for k in ("alertName", "class", "route", "why",
+              "firings", "labels")} for r in routed], ensure_ascii=False))
+    else:
+        main(src)

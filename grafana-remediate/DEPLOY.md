@@ -1,56 +1,63 @@
-# grafana-remediate — deploy (Phase 4, Gate D) · path B (Gmail MCP, creds-free)
+# grafana-remediate — deploy (LIVE, path B: CC cloud routine + Gmail MCP)
 
-The workflow runs as a **CC cloud routine** (`/schedule`) at 05:00 WITA. The cloud
-sandbox is a Claude session with a git checkout + MCP connectors — **not** a general box:
-there is **no OIDC provider** for it and **no secret-injection field** in the routine API,
-so it cannot assume an AWS role or be handed secrets programmatically. Path B therefore
-uses **no AWS in the sandbox**: egress via the **Gmail MCP connector**, and the Grafana
-token as a single **environment variable** on the cloud environment.
+**Status: LIVE as of 2026-09-22.** Routine `trig_01CPn57nuDtajuxb2YgsxbVx`
+(`grafana-remediate-nightly`), cron `0 21 * * *` UTC (= 05:00 WITA), enabled.
+Manage at https://claude.ai/code/routines .
 
-## 1. Schedule + shape
-- **05:00 WITA = 21:00 UTC prior day.** Cron (UTC): `0 21 * * *`.
-- The routine runs the prompt in `workflow/cloud-routine.md`: `fetch.py` → `classify.py --json`
-  → the session root-causes + composes an ES email per actionable incident → `phi_scrub.py`
-  gate → **send via Gmail connector** → one run-summary email (the heartbeat).
-- Egress is Gmail (from the connected account), **not** SES — a deliberate substrate
-  deviation from the scope's "SES not Gmail MCP" line, which assumed a compute cron.
-- **Scope:** classify + PROPOSE/INVESTIGATE only. PIPELINE is emailed as a proposal; the
-  auto-PR path is **not** enabled in the cloud routine (it needs a gateway-go checkout +
-  Go + `gh` in the sandbox — a later promotion).
+This is the as-built record. The cloud sandbox is a Claude Code session with a git
+checkout + MCP connectors — **not** a general compute box: no OIDC provider exists for it
+and the routine API has no secret field, so there is **no AWS in the sandbox**. Egress is
+the **Gmail MCP connector**; the Grafana token is a cloud-environment **env var**. (The
+original OIDC/SES/CloudWatch plan was abandoned once that substrate was verified — it only
+applies to the local/dev path below.)
 
-## 2. The ONE manual step (Alex — only you can do it)
-Set the Grafana read-only token as an env var on the cloud environment
-(`env_013Pof1Kao9aEawkJPoJ2K3T`) via claude.ai:
+## 1. The environment — `cloud-agents` (NOT Default)
 
-- `GRAFANA_TOKEN` = the value of SSM `/wellmed/prod/grafana/ro-token`
-  (read it once with `aws ssm get-parameter --name /wellmed/prod/grafana/ro-token --with-decryption --query Parameter.Value --output text`).
+The routine runs on a **dedicated** environment: **`cloud-agents`**
+(`env_01F8iRkkm17w77iTbZWLPJ9q`, kind anthropic_cloud). The shared **Default** env
+(`env_013Pof…`) could NOT hold custom env vars — that was the multi-hour red herring.
+Three things must be configured on the `cloud-agents` environment (claude.ai/code → open
+the environment's **Update cloud environment** dialog):
 
-Nothing else — no AWS keys, no IAM role, no SSM-in-sandbox. If you would rather not put
-the token in the environment, it can instead be pasted into the routine prompt, but the
-env var keeps it out of the routine definition.
+1. **Environment variable** — `GRAFANA_TOKEN=<glsa_… value>` (from SSM
+   `/wellmed/prod/grafana/ro-token`), `.env` format, no quotes. Read by `fetch.py` as
+   `os.environ["GRAFANA_TOKEN"]`. **Confirm the routine's environment is `cloud-agents`,
+   not Default** — a mismatch here is why it silently read UNSET.
+2. **Network access → allowed domain** — `dashboard.kalpahealth.com` (no scheme/port).
+   The sandbox egress proxy 403-denies any host not on the allowlist; without this the
+   fetch fails `Tunnel connection failed: 403 Forbidden`.
+3. **Gmail connector with SEND scope** — the routine's Gmail MCP connection must expose
+   `send_message` (org + personal send enabled at claude.ai/customize/connectors). With
+   only compose scope it can `create_draft` but not send.
 
-## 3. Connector
-The routine attaches the **Gmail** claude.ai connector
-(`connector_uuid 78e49e8c-20d5-4690-b0ef-5707ad1016e0`). It must stay connected at
-https://claude.ai/customize/connectors.
+No setup script is needed — the workflow is **stdlib Python only** (no pip).
 
-## 4. Heartbeat / dead-cron guard
-The routine always sends a **run-summary email** (step 6 of the prompt), even on a
-zero-actionable night. Its **absence** is the dead-cron signal. (A metric-based
-absence-detector was the compute-cron design; on this substrate the daily email is the
-v1 dead-man's switch — upgrade later if warranted.)
+## 2. What runs
+The routine prompt tells the session to read `workflow/cloud-routine.md` and follow it:
+`fetch.py` (env-token pull) → `classify.py --json` → the session root-causes each
+PROPOSE/INVESTIGATE incident, composes an ES email (problem+solution in the first two
+sentences), runs `phi_scrub.py` on the body, and **sends via Gmail `send_message`** →
+then a run-summary email + a `PushNotification` (the heartbeat — its absence = dead cron).
+Hard floor: only ever emails; never merges/deploys/silences/PRs. PIPELINE (code-defect)
+incidents are emailed as proposals — the auto-PR path is **not** enabled in the cloud
+routine (it would need a gateway-go checkout + Go + `gh` in the environment; local path
+only for now).
 
-## 5. Go-live checklist
-- [ ] **[Alex]** set `GRAFANA_TOKEN` env var on `env_013Pof…` (§2).
-- [ ] Routine created via `/schedule` (`RemoteTrigger create`) — cron `0 21 * * *`, repo
-      `ai-skills`, Gmail connector attached, prompt = `workflow/cloud-routine.md`. Created
-      **disabled** until the token is set.
-- [ ] Enable it; `RemoteTrigger run` once to test; confirm: emails land via Gmail, the
-      run-summary arrives, nothing merged/deployed.
-- [ ] (Later) promote auto-PR: add a gateway-go-scoped `gh` token + gateway-go checkout
-      to the environment and switch the routine to the full pipeline.
+## 3. Verified end-to-end (2026-09-22)
+A manual `RemoteTrigger run` fetched 24 real Sept-21 annotations, classified 1 PROPOSE
+incident ("Deploy rolled back or failed", dev/fe), root-caused it, passed the PHI gate,
+and sent the proposal + summary via Gmail. Egress, token, allowlist, PHI, fail-closed and
+heartbeat all confirmed.
+
+## 4. Operate
+- Pause: disable the routine (claude.ai/code/routines) or `RemoteTrigger update {enabled:false}`.
+- Test now: `RemoteTrigger run`, then `list_runs` → `get_run_log`.
+- Rotate the token: mint a new Grafana SA token, update BOTH SSM (local path) and the
+  `cloud-agents` `GRAFANA_TOKEN` env var (cloud path).
+- Promote auto-PR later: add a gateway-go checkout + gateway-go-scoped `gh` to the env and
+  switch the routine to the full pipeline (`--allow-pr`).
 
 ## Local / dev path (unchanged)
-Local runs still use `fetch.sh` (SSM token) + `remediate.py` (SES egress, `claude -p`
-stages). See `workflow/README.md`. That path keeps SES/CloudWatch; only the CLOUD routine
-uses Gmail MCP.
+Local runs use `fetch.sh` (SSM token) + `remediate.py` (SES egress, `claude -p` stages,
+real worktree/PR). See `workflow/README.md`. SES/worktree/PR are the local substrate; the
+cloud routine deliberately uses none of them.

@@ -10,7 +10,7 @@
 ## Resume Context
 **Scope:** ~/Projects/ai-skills/plans/6-research-lanes/scope.md
 **Last action:** Scope created (2026-09-23)
-**Next action:** /plan-ceo-review on `6-research-lanes/scope.md`
+**Next action:** `/plan` 6.1 (CEO review skipped by Alex, 2026-09-23)
 **Open blockers:** None. First live run waits on Alex's next real research question.
 **Key files changed:** None yet
 
@@ -22,6 +22,7 @@
 - (2026-09-23) Fresh tab per run in the current workspace; panes left open; no pane cap; no dispatch log.
 - (2026-09-23) Lane failure detected by state, never a fixed timeout; 15-min stall only flags.
 - (2026-09-23) Output + report in the driver's scratchpad.
+- (2026-09-23) /plan-ceo-review skipped (Alex): small skill change, premises settled in scoping.
 
 ---
 
@@ -30,6 +31,7 @@
 | Date | Skill/Action | Status | Notes |
 |------|--------------|--------|-------|
 | 2026-09-23 | /scope | Done | Atomic scope, one plan (6.1), exit gate A |
+| 2026-09-23 | /plan-ceo-review | Skipped | Alex's call |
 
 ---
 

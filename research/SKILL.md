@@ -20,9 +20,14 @@ memory and do NOT fan out a bare Agent swarm — route through the tuned workflo
 2. If it is underspecified (missing budget / region / timeframe / use-case /
    comparison set), ask 2–3 clarifying questions **inline as plain text** (Alex
    prefers text over the structured selector). Fold the answers into the question.
-3. Deep research fans out across many agents and web calls and costs real money —
-   **confirm the scoped question with the user before running.** One line: the
-   final scoped question + "run it?".
+3. **Set the verify cap with the user.** `verifyCap` is required — the number of
+   extracted claims that get 3-vote adversarial verification (~3 Haiku calls
+   each; the dominant cost). It is split evenly across the 5 search angles, so
+   size it to the question: ~25 for one focused area, ~50 for a multi-area brief
+   (~10 per angle). Propose a number with that arithmetic; don't pick silently.
+4. Deep research fans out across many agents and web calls and costs real money —
+   **confirm before running.** One line: the final scoped question + the
+   verifyCap + "run it?".
 
 ## 2. Run the tuned workflow
 
@@ -31,7 +36,10 @@ Once confirmed, invoke:
 ```
 Workflow({
   name: "deep-research-lean",
-  args: "<the final scoped question, with clarifications woven in>"
+  args: {
+    question: "<the final scoped question, with clarifications woven in>",
+    verifyCap: <the number agreed in §1.3>
+  }
 })
 ```
 
@@ -46,6 +54,12 @@ do not re-invoke or poll it; relay the report when it lands. It returns
 disk, write it yourself from the result, and keep file-path/format instructions
 out of `args` (they reach only the agents, which can't honour them).
 
+The result carries `coverage` (verified / extracted per angle) and
+`unverified` (claims extracted with a quote but never checked because the cap
+was spent). An under-sampled angle is **not** refuted: report its `unverified`
+claims as a separately labelled tier, never as findings and never as "nothing
+survived". If an angle matters and came back thin, offer a targeted re-run.
+
 ## 3. Architecture (for reference)
 
 `Scope (Sonnet) → Search (Haiku, 5 angles) → Fetch (Sonnet, ≤15 sources) →
@@ -57,5 +71,5 @@ Synthesize (Opus, merge dupes, rank by confidence, cite sources)`.
 Edit the `MODEL_*` constants at the top of
 `~/.claude/workflows/deep-research-lean.js`:
 `MODEL_SCOPE`, `MODEL_SEARCH`, `MODEL_FETCH`, `MODEL_VERIFY`, `MODEL_SYNTH`
-(plus `VOTES_PER_CLAIM`, `MAX_FETCH`, `MAX_VERIFY_CLAIMS`). Only Synthesize
+(plus `VOTES_PER_CLAIM`, `MAX_FETCH`; the verify cap is a per-run argument). Only Synthesize
 genuinely benefits from Opus; push the rest cheaper for faster/cheaper runs.

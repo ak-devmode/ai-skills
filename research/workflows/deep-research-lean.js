@@ -22,7 +22,7 @@ export const meta = {
 // Tune the dial below. The only step that benefits from Opus-grade reasoning is Synthesize;
 // Verify stays a 3-independent-voter panel, just with Haiku voters, so it still kills bad claims.
 //
-// Question is passed via Workflow({name: 'deep-research-lean', args: '<question>'}).
+// Invoked as Workflow({name: 'deep-research-lean', args: {question: '<question>', verifyCap: <n>}}).
 
 // ─── Model tiering (edit to taste) ───
 const MODEL_SCOPE  = "sonnet"
@@ -34,7 +34,8 @@ const MODEL_SYNTH  = "opus"
 const VOTES_PER_CLAIM = 3
 const REFUTATIONS_REQUIRED = 2
 const MAX_FETCH = 15
-const MAX_VERIFY_CLAIMS = 25
+// MAX_VERIFY_CLAIMS is a required run argument (args.verifyCap), not a constant: a fixed
+// global cap let the first angles consume every verify slot and starve the rest.
 
 // ─── Schemas ───
 const SCOPE_SCHEMA = {
@@ -111,9 +112,16 @@ const REPORT_SCHEMA = {
 
 // ─── Phase 0: Scope — decompose question into search angles ───
 phase("Scope")
-const QUESTION = (typeof args === "string" && args.trim()) || ""
+// args = { question: string, verifyCap: number }. verifyCap is required and is split evenly
+// across search angles (round-robin), so every angle gets verified claims.
+const USAGE = "Pass args as an object: Workflow({name: 'deep-research-lean', args: {question: '<question>', verifyCap: <claims to verify, e.g. 25-50>}})."
+const QUESTION = (args && typeof args.question === "string" && args.question.trim()) || ""
+const MAX_VERIFY_CLAIMS = args && Number.isInteger(args.verifyCap) && args.verifyCap > 0 ? args.verifyCap : 0
 if (!QUESTION) {
-  return { error: "No research question provided. Pass it as args: Workflow({name: 'deep-research-lean', args: '<question>'})." }
+  return { error: "No research question provided. " + USAGE }
+}
+if (!MAX_VERIFY_CLAIMS) {
+  return { error: "verifyCap is required (positive integer); cost scales ~" + VOTES_PER_CLAIM + " agent calls per claim. " + USAGE }
 }
 const scope = await agent(
   "Decompose this research question into complementary search angles.\n\n" +
@@ -234,7 +242,7 @@ const searchResults = await pipeline(
           return {
             url: source.url, title: source.title, angle: searchResult.angle,
             sourceQuality: ext.sourceQuality, publishDate: ext.publishDate,
-            claims: ext.claims.map(c => ({ ...c, sourceUrl: source.url, sourceQuality: ext.sourceQuality })),
+            claims: ext.claims.map(c => ({ ...c, sourceUrl: source.url, sourceQuality: ext.sourceQuality, angle: searchResult.angle })),
           }
         }).catch(e => {
           log("fetch failed: " + source.url + " — " + (e.message || e))
@@ -250,11 +258,26 @@ const allClaims = allSources.flatMap(s => s.claims)
 const impRank = { central: 0, supporting: 1, tangential: 2 }
 const qualRank = { primary: 0, secondary: 1, blog: 2, forum: 3, unreliable: 4 }
 
-const rankedClaims = [...allClaims]
-  .sort((a, b) => (impRank[a.importance] - impRank[b.importance]) || (qualRank[a.sourceQuality] - qualRank[b.sourceQuality]))
-  .slice(0, MAX_VERIFY_CLAIMS)
+// Rank within each angle, then take round-robin across angles until the cap is spent,
+// so an angle with many strong claims cannot starve the others.
+const claimRank = (a, b) => (impRank[a.importance] - impRank[b.importance]) || (qualRank[a.sourceQuality] - qualRank[b.sourceQuality])
+const byAngle = new Map()
+for (const c of allClaims) {
+  if (!byAngle.has(c.angle)) byAngle.set(c.angle, [])
+  byAngle.get(c.angle).push(c)
+}
+const queues = [...byAngle.values()].map(q => [...q].sort(claimRank))  // copy: draining must not shrink byAngle counts
+const rankedClaims = []
+while (rankedClaims.length < MAX_VERIFY_CLAIMS && queues.some(q => q.length)) {
+  for (const q of queues) {
+    if (q.length && rankedClaims.length < MAX_VERIFY_CLAIMS) rankedClaims.push(q.shift())
+  }
+}
+const unverified = queues.flat()
+const perAngle = [...byAngle.keys()].map(a => a + ": " + rankedClaims.filter(c => c.angle === a).length + " verified / " + byAngle.get(a).length + " extracted")
 
-log("Fetched " + allSources.length + " sources → " + allClaims.length + " claims → verifying top " + rankedClaims.length)
+log("Fetched " + allSources.length + " sources → " + allClaims.length + " claims → verifying " + rankedClaims.length + " (cap " + MAX_VERIFY_CLAIMS + ", split across " + byAngle.size + " angles)")
+perAngle.forEach(line => log("  " + line))
 
 if (rankedClaims.length === 0) {
   return {
@@ -303,6 +326,7 @@ if (confirmed.length === 0) {
   return {
     question: QUESTION,
     summary: "All " + voted.length + " claims refuted by adversarial verification. Research inconclusive — sources may be low-quality or claims overstated.",
+    coverage: perAngle,
     findings: [],
     refuted: killed.map(c => ({ claim: c.claim, vote: (c.verdicts.length - c.refutedVotes) + "-" + c.refutedVotes, source: c.sourceUrl })),
     sources: allSources.map(s => ({ url: s.url, quality: s.sourceQuality, claimCount: s.claims.length })),
@@ -329,6 +353,8 @@ const report = await agent(
   "## Synthesis: research report\n\n" +
   "**Question:** " + QUESTION + "\n\n" +
   confirmed.length + " claims survived " + VOTES_PER_CLAIM + "-vote adversarial verification. Merge semantic duplicates and synthesize.\n\n" +
+  "## Verification coverage per angle\n" + perAngle.join("\n") + "\n" +
+  "An angle with few or zero verified claims is UNDER-SAMPLED, not refuted — say so in caveats; never report it as 'nothing survived'.\n\n" +
   "## Confirmed claims\n" + block + "\n" + killedBlock + "\n\n" +
   "## Instructions\n" +
   "1. Identify claims that say the same thing — merge them, combine their sources.\n" +
@@ -347,6 +373,7 @@ if (!report) {
   return {
     question: QUESTION,
     summary: "Synthesis step was skipped or failed — returning " + confirmed.length + " verified claims unmerged.",
+    coverage: perAngle,
     findings: [],
     confirmed: confirmed.map(c => ({ claim: c.claim, source: c.sourceUrl, quote: c.quote, vote: (c.verdicts.length - c.refutedVotes) + "-" + c.refutedVotes })),
     refuted: killed.map(c => ({ claim: c.claim, vote: (c.verdicts.length - c.refutedVotes) + "-" + c.refutedVotes, source: c.sourceUrl })),
@@ -358,6 +385,9 @@ if (!report) {
 return {
   question: QUESTION,
   ...report,
+  coverage: perAngle,
+  // Extracted but not adversarially checked (cap spent). Report these as an unverified tier, never as findings.
+  unverified: unverified.map(c => ({ angle: c.angle, claim: c.claim, quote: c.quote, source: c.sourceUrl, quality: c.sourceQuality, importance: c.importance })),
   refuted: killed.map(c => ({ claim: c.claim, vote: (c.verdicts.length - c.refutedVotes) + "-" + c.refutedVotes, source: c.sourceUrl })),
   sources: allSources.map(s => ({ url: s.url, quality: s.sourceQuality, angle: s.angle, claimCount: s.claims.length })),
   stats: {

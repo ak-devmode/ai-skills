@@ -241,3 +241,7 @@ Resumed/restarted phases append a SECOND block:
 §11 Risk Flags
 - Pane mode not yet run live end to end (Task 1.4 pending).
 - Single independent verifier replaces the 3-vote panel; documented as a caveat.
+
+- 🔴 CORRECTION 2026-09-23: dev-workbench `config/claude-code/CLAUDE.md` is committed
+  (e4c4074, with the herdr v9 hook as a85d76b) and pushed on `feature/1password-migration`
+  — no longer uncommitted.

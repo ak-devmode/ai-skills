@@ -143,3 +143,6 @@
   rail 5); the idle base-repo space left by `worktree create`, and the
   role-in-workspace-label phantom (`herdr` §7, v0.1.1). Branch can be deleted.
 - Archived to `archive/3-concurrency/`; archive gate PASS.
+- 🔴 CORRECTION 2026-09-23 (later): the Agent-call hook "follow-up" above was dropped as
+  a misdiagnosis (8ad8305) — the case was read-only research, which the rule allows. The
+  follow-through became ai-skills scope 6 (visible /research lanes).

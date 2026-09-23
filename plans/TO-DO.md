@@ -278,7 +278,7 @@ Source: plans/4-herdr-agent-workflow/progress.md
 Touches: ai-skills · concurrency/SKILL.md · herdr/SKILL.md · scope + plan + closeout SKILL.md · ~/.claude/CLAUDE.md
 
 - [x] **Dedup the `/concurrency` §3 routing table.** Done 2026-09-23 (v0.3.1) — §3 is now a pointer to `herdr` §6.
-- [x] **Ratify the CLAUDE.md wording.** Kept as written (Alex, 2026-09-23) — but see the enforcement item below: the rule is not yet holding.
+- [x] **Ratify the CLAUDE.md wording.** Kept as written (Alex, 2026-09-23) — the enforcement-hook item filed alongside it was dropped as a misdiagnosis (8ad8305); the rule's research carve-out landed in scope 6.
 - [x] **Dogfood the new `/concurrency` flow (Phase 1 gate A).** Met 2026-09-23 by the 137.2 / 137.2w2 runs (09-07) in the dispatch log.
 - [ ] **Re-test codex idle-vs-done after the herdr v9 hook.** `/concurrency`
       §10 has codex completion mapping to `idle`, never `done`. Once Alex runs

@@ -49,7 +49,7 @@
 
 | # | Plan File | Phase | Status | Notes |
 |---|-----------|-------|--------|-------|
-| 6.1 | 6.1-research-lanes-PLAN.md | Phase 1 — /research pane mode | Draft | |
+| 6.1 | 6.1-research-lanes-PLAN.md | Phase 1 — /research pane mode | In progress — 1.0–1.3 ✅, 1.4 pending | |
 
 ---
 
@@ -62,8 +62,8 @@
 
 ### Resume Context (Plan 6.1)
 **Last action:** Tasks 1.0–1.3 done (2026-09-23)
-**Next action:** Task 1.4 — first live run. Blocked on two human steps: trust
-`~/.cache/research-lanes` once, and pick a real research question.
+**Next action:** Task 1.4 — first live run. Lane-home trust is done; only
+blocker is Alex running `/research <real question>` in a herdr pane.
 
 ### Session: 2026-09-23
 - Phase 0 ✅ — inputs resolve; main == origin/main; inside herdr (w14:pD);

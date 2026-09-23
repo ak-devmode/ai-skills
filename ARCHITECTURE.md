@@ -55,6 +55,11 @@ start to understand which skills exist and how they fit together.
   scope lifecycle, worker launch + trust/bypass, default concurrency pane layout,
   model routing, gotchas. Referenced by /concurrency, /plan, /closeout;
   `herdr --skill` owns the raw CLI vocabulary.
+- `research/` — cost-tuned deep research. v0.2.0: pane mode (default inside
+  herdr) runs one Sonnet lane per angle plus an independent verify lane in a
+  fresh tab, driven by `research/scripts/lanes.py`, with Opus synthesis in the
+  invoking session; Workflow mode runs `research/workflows/deep-research-lean.js`
+  (symlinked into `~/.claude/workflows/`) in the background.
 
 ### 1.2 Document-style skills
 

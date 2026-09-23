@@ -222,3 +222,22 @@ Resumed/restarted phases append a SECOND block:
 ## Phase 0: Bootstrap (started 2026-09-23T03:44:08Z)
 
 §6 Docs loaded: ai-skills CLAUDE.md, ARCHITECTURE.md, CROSS-REPO.md (standalone leaf); scope.md; progress.md. No sibling plans.
+
+## Phase 1: /research pane mode (started 2026-09-23)
+
+§2 Files Changed — ai-skills
+- doc: `research/SKILL.md` — v0.2.0, mode choice + pane-mode procedure
+- code: `research/scripts/lanes.py` — lane open/launch/claims/wait
+- doc: `herdr/SKILL.md` — §2 research-tab carve-out; §4 trust correction (unplanned)
+- doc: `README.md`, `ARCHITECTURE.md` — /research rows
+§2 Files Changed — dev-workbench (uncommitted, branch feature/1password-migration)
+- doc: `config/claude-code/CLAUDE.md` — research carve-out; stale /freeze dropped (unplanned)
+§3 Patterns Followed
+- `cmd_claims` in research/scripts/lanes.py ← research/workflows/deep-research-lean.js:292-307 (round-robin ranking)
+- lane launch in research/scripts/lanes.py ← herdr/SKILL.md §4 (bypass launch) — deviation: pre-trusted LANE_HOME cwd
+- state supervision ← concurrency/SKILL.md §7.1 — deviation: file + agent state instead of pane wait-output marker
+§8 Assumptions
+- herdr agent `revision` advances on pane output (used for stall detection); observed, not documented.
+§11 Risk Flags
+- Pane mode not yet run live end to end (Task 1.4 pending).
+- Single independent verifier replaces the 3-vote panel; documented as a caveat.

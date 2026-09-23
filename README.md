@@ -12,6 +12,7 @@ Custom Claude Code skills for the PMG/Kalpa team. Includes our own skills plus a
 | `/scope-review` | Review a team scope/PRD/plan at the right altitude, in Alex's voice |
 | `/plan` | Single-session execution from a plan file |
 | `/concurrency` | herdr-backed multi-agent dispatch — partition a scope, dispatch lanes to named herdr panes |
+| `/research` | Cost-tuned deep research — visible herdr lanes per angle (default) or the background `deep-research-lean` workflow |
 | `/herdr` | herdr workflow layer — naming, worktree lifecycle, worker launch, pane layout (referenced by `/concurrency`, `/plan`, `/closeout`) |
 | `/prd` | Product Requirements Document generator |
 | `/markdown-style` | Structured markdown document creation |

@@ -1,6 +1,6 @@
 ---
 name: herdr
-version: 0.1.1
+version: 0.1.2
 description: |
   Alex's herdr WORKFLOW layer — the single source of truth for how we drive
   herdr (terminal workspace manager for AI agents) for agent work: naming, the
@@ -57,7 +57,9 @@ codex pane displayed `@opus`). So:
 
 - **Workspace** = the run / scope, never a seat (e.g. `57.3 run`).
 - **Tab** = Alex's. This skill and `/concurrency` do **NOT** create or name tabs.
-  Alex owns tab organization and manual reorg.
+  Alex owns tab organization and manual reorg. **One exception:** a `/research`
+  pane-mode run opens its own tab (`research <slug> r<k>`, a fresh one per run)
+  in the caller's workspace and never closes it; Alex closes it by hand.
 - **Pane** = task + seat, set on the PANE:
   `herdr pane rename <pane> "<task> @<seat>"` **plus**
   `herdr pane report-metadata <pane> --source <skill> --display-agent "<task> @<seat>"`
@@ -95,8 +97,12 @@ permission prompt (the auto-mode classifier blocks it, correctly). Fix it at
 **launch**, not with keystrokes:
 
 - **Dispatched workers launch `claude --dangerously-skip-permissions`** — skips
-  the trust dialog *and* per-tool prompts, so the worker is non-interactive from
-  the first token. **WORKERS ONLY, never the driver.**
+  per-tool prompts, so the worker is non-interactive from the first token.
+  🔴 CORRECTION 2026-09-23: it does **not** skip the folder-trust dialog. Under
+  Claude Code 2.1.280 a lane launched in an untrusted scratch folder blocked on
+  it. Worktree checkouts under `~/.herdr/worktrees/` were all already trusted
+  (7/7), so `/concurrency` has not hit it; a new untrusted cwd will. Start
+  agents in a pre-trusted folder, as `/research` does with `~/.cache/research-lanes`. **WORKERS ONLY, never the driver.**
 - Safe here *specifically* because each worker is sandboxed: isolated worktree,
   `/freeze`d file scope, never pushes/PRs/merges. That is the "no human in the
   loop" threat model; bypass mode matches it. Do not use it for the driver or

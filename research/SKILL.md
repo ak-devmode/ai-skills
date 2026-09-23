@@ -28,6 +28,12 @@ memory and do NOT fan out a bare Agent swarm — route through the tuned workflo
    `angles` is optional (3-8): omit it and the scope agent defaults to 5, going
    higher only when the question names more distinct sub-areas. Pass it
    explicitly when the brief already enumerates its areas — one angle each.
+   **Fit the run to the session's web-search budget.** WebSearch is capped per
+   session (`CLAUDE_CODE_MAX_WEB_SEARCHES_PER_SESSION`, default 200; Alex's is
+   set to 500). A run spends roughly `angles + 3 × verifyCap` searches — the
+   verify voters dominate — so a cap of 40 costs ~125. Subtract earlier runs in
+   the same session; if the next run won't fit, say so and suggest a fresh
+   session rather than launching into a silent empty result.
 4. Deep research fans out across many agents and web calls and costs real money —
    **confirm before running.** One line: the final scoped question + the
    verifyCap + "run it?".
@@ -63,6 +69,10 @@ The result carries `coverage` (verified / extracted per angle) and
 was spent). An under-sampled angle is **not** refuted: report its `unverified`
 claims as a separately labelled tier, never as findings and never as "nothing
 survived". If an angle matters and came back thin, offer a targeted re-run.
+
+If the result carries `error` (every searcher empty) or non-empty
+`searchErrors`, that is a tool failure — report it as one, never as "no
+literature found".
 
 ## 3. Architecture (for reference)
 

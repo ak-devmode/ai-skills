@@ -56,6 +56,7 @@ const SCOPE_SCHEMA = {
 const SEARCH_SCHEMA = {
   type: "object", required: ["results"],
   properties: {
+    error: { type: "string" },
     results: { type: "array", maxItems: 6, items: {
       type: "object", required: ["url", "title", "relevance"],
       properties: {
@@ -146,6 +147,9 @@ const scope = await agent(
 if (!scope) {
   return { error: "Scope agent returned no result — cannot decompose the research question." }
 }
+// The prompt asks for exactly ANGLES, but a prompt is not enforcement (a 3-angle request came
+// back with 5) — trim here so the caller's number is what actually runs.
+if (ANGLES && scope.angles.length > ANGLES) scope.angles = scope.angles.slice(0, ANGLES)
 log("Q: " + QUESTION.slice(0, 80) + (QUESTION.length > 80 ? "…" : ""))
 log("Decomposed into " + scope.angles.length + " angles: " + scope.angles.map(a => a.label).join(", "))
 
@@ -159,6 +163,7 @@ const normURL = u => {
 const seen = new Map()
 const dupes = []
 const budgetDropped = []
+const searchErrors = []
 const relRank = { high: 0, medium: 1, low: 2 }
 let fetchSlots = MAX_FETCH
 
@@ -170,7 +175,8 @@ const SEARCH_PROMPT = (angle) =>
   "Search query: `" + angle.query + "`\n\n" +
   "## Task\nUse WebSearch with the query above (or a refined version). Return the top 4-6 most relevant results.\n" +
   "Rank by relevance to the ORIGINAL question, not just the search query. Skip obvious SEO spam/content farms.\n" +
-  "Include a short snippet capturing why each result is relevant.\n\nStructured output only."
+  "Include a short snippet capturing why each result is relevant.\n" +
+  "If WebSearch itself fails or refuses (e.g. a session search budget is exhausted), return results: [] and put the tool's message verbatim in `error`.\n\nStructured output only."
 
 const FETCH_PROMPT = (source, angle) =>
   "## Source Extractor\n\n" +
@@ -212,6 +218,7 @@ const searchResults = await pipeline(
   }).then(r => {
     if (!r) return null
     log(angle.label + ": " + r.results.length + " results")
+    if (r.error) searchErrors.push(angle.label + ": " + r.error)
     return { angle: angle.label, results: r.results }
   }),
 
@@ -262,6 +269,17 @@ const searchResults = await pipeline(
 )
 
 const allSources = searchResults.flat().filter(Boolean)
+if (seen.size === 0) {
+  // Every searcher came back empty: a tool failure, not a research result. Most often the
+  // per-session WebSearch budget (CLAUDE_CODE_MAX_WEB_SEARCHES_PER_SESSION, default 200).
+  return {
+    error: "Search phase returned no results for any angle — treat as a tool failure, not an empty literature. " +
+      (searchErrors.length ? "Searcher errors: " + searchErrors.join(" | ") : "No searcher reported an error; likely cause is the session WebSearch budget.") +
+      " Fix: start a fresh session or raise CLAUDE_CODE_MAX_WEB_SEARCHES_PER_SESSION, then re-run.",
+    stats: { angles: scope.angles.length, sources: 0 },
+  }
+}
+if (searchErrors.length) log("Searcher errors: " + searchErrors.join(" | "))
 const allClaims = allSources.flatMap(s => s.claims)
 const impRank = { central: 0, supporting: 1, tangential: 2 }
 const qualRank = { primary: 0, secondary: 1, blog: 2, forum: 3, unreliable: 4 }
@@ -394,6 +412,7 @@ return {
   question: QUESTION,
   ...report,
   coverage: perAngle,
+  searchErrors,
   // Extracted but not adversarially checked (cap spent). Report these as an unverified tier, never as findings.
   unverified: unverified.map(c => ({ angle: c.angle, claim: c.claim, quote: c.quote, source: c.sourceUrl, quality: c.sourceQuality, importance: c.importance })),
   refuted: killed.map(c => ({ claim: c.claim, vote: (c.verdicts.length - c.refutedVotes) + "-" + c.refutedVotes, source: c.sourceUrl })),

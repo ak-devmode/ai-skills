@@ -16,6 +16,8 @@ on `scope.md`, then execute 2.1 (loop harness) in a fresh 5.5 context.**
 - 2026-09-23 — Reframe: scope = an iterative dogfooded skill-eval/improvement loop, not a cleanup pass. (Alex, Q2/Q3/Q4)
 - 2026-09-23 — Model target = Opus 5.5, fixed up front (not an output). 4.8→5.5 with the conciseness floor as the verbosity harness. (Alex)
 - 2026-09-23 — Linter built in-scope; no `/feedback` to Anthropic. `plugin.json` restructure out.
+- 2026-09-23 (ceo-review) — Split: **accretion linter builds now** (spine); **`plugin eval` harness deferred** to second-sighting regression. Mode = HOLD SCOPE. (Alex)
+- 2026-09-23 (ceo-review) — Scope 2 (skills) and scope 5 (verify-lever, code/output/product) stay **separate — do not conflate**. (Alex)
 
 ## Progress Log (append-only)
 - 2026-09-23 — Scope authored (scope.md, progress.md, stubs 2.1–2.3). Conciseness floor added to global CLAUDE.md.

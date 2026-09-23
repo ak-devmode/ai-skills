@@ -19,10 +19,12 @@ judgment layer). This scope builds the loop that applies that cure continuously.
 
 ## 2. The three collapsed threads
 
-1. **Eval loop = the spine.** `claude plugin eval` (behavior regression, `--json` CI,
-   ≥ v2.1.210) where it fits; a **custom accretion/quality linter** for what eval can't
-   see — SKILL.md dilution, live contradictions, determinism-as-prose. Dogfooded: the
-   skills eval the skills.
+1. **Accretion linter = the spine (build now).** A custom linter catching AUDIT.md §1's
+   defect classes — SKILL.md dilution/oversize, live contradictions, determinism-as-prose.
+   High-value, cheap, holds the line forever. Dogfooded: the skills lint the skills.
+   `claude plugin eval` (behavior regression, `--json` CI, ≥ v2.1.210) is **deferred** —
+   authoring a suite per skill is expensive and speculative; build it on the *second
+   sighting* of an actual skill regression, not up front (YAGNI, mirrors scope-5's lever rule).
 2. **Model era = Opus 5.5.** Bump seats/pins `claude-opus-4-8` → `claude-opus-5-5`
    (locus: `herdr` §6 seat launch commands + any pins across skills/config). 5.0/5.5 were
    too verbose → rolled back to 4.8; the **conciseness floor** now in global
@@ -35,13 +37,19 @@ judgment layer). This scope builds the loop that applies that cure continuously.
 
 Resuming the old remediation checklist mechanically · `/feedback` to Anthropic (build it
 ourselves) · `plugin.json` monorepo restructure so `plugin validate` runs (weak
-structure-checker, not worth it).
+structure-checker, not worth it) · `plugin eval` suite authoring (deferred to second-sighting
+regression, §2.1).
+
+**Do NOT conflate with scope 5 (verify-lever).** They look similar (both "verify against a
+source") but are different machines: **this scope verifies *skills* against their own quality
+bar; scope 5 verifies *code/output/product* against its design source.** Kept separate by
+decision — do not merge.
 
 ## 4. Phases
 
 | # | Phase | Gate | Ends with |
 |---|-------|------|-----------|
-| 2.1 | **Loop harness** — accretion/quality linter (targets AUDIT.md §1 defects) + `plugin eval` scaffold; dogfood on one skill first (`/concurrency`, fresh + small) | C | linter + one eval suite green, reviewable PR |
+| 2.1 | **Accretion linter** (targets AUDIT.md §1 defects); dogfood on one skill first (`/concurrency`, fresh + small). Eval harness deferred. | C | linter flags/clears `/concurrency`, reviewable PR |
 | 2.2 | **Model migration to 5.5** — bump seats/pins `→ claude-opus-5-5`; conciseness floor applied; loop measures obedience per skill | C | fleet on 5.5, verbosity within floor |
 | 2.3 | **Apply the loop** to core skills — slim + model-tuned per the loop's verdicts | C | core skills re-passed through the loop, PR |
 
@@ -68,6 +76,6 @@ are not code consumers of this work — N/A to walk.
 
 ## 7. Open items for execution
 
-- [ ] `plugin eval` case authoring cost per skill — start with `/concurrency`, measure before fanning out.
 - [ ] Linter form: standalone script in `scripts/` (matches AUDIT.md "determinism into scripts") vs a skill; decide in 2.1.
+- [ ] Mode: HOLD SCOPE (ceo-review 2026-09-23) — rigor on the linter, resist boiling the eval-harness ocean.
 - [ ] Does 5.5 + conciseness floor actually clear the verbosity that forced the 4.8 rollback — the measured gate of 2.2.

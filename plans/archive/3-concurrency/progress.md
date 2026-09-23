@@ -131,3 +131,15 @@
   panes" rule isn't holding — agents still spawn in-process background agents
   for write work as of this morning. Filed as a follow-up (a hook that runs
   before each Agent call).
+
+## 2026-09-23 — /closeout (ledger-less)
+- No `closeout-prep.md` was ever written for this scope; closeout ran
+  ledger-less (doc fixes + archive only). Ledger steps (pattern spot-check,
+  pattern triage, coverage map, risk flags) skipped: NO LEDGER.
+- Unmerged branch `fix/concurrency-trap-docs` (3 commits, 2026-08-24, pushed)
+  checked against main. Superseded: the tab1/tab2 layout (replaced by the
+  08-30 no-tabs layout) and /freeze-as-best-effort (/freeze removed 09-02).
+  Ported to main: human-gated work runs in the driver (`concurrency` §4.1 +
+  rail 5); the idle base-repo space left by `worktree create`, and the
+  role-in-workspace-label phantom (`herdr` §7, v0.1.1). Branch can be deleted.
+- Archived to `archive/3-concurrency/`; archive gate PASS.

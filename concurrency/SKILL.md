@@ -104,7 +104,11 @@ no trust in a prior run, no trust in stub prose.
 **4.1 Classify every task** into exactly one of:
 - `HUMAN-GATED` — needs an action only Alex can take (credential/sandbox
   renewal, prod decision, sign-off), with the gate CONFIRMED still unmet per
-  4.0. Surfaced in the plan; NEVER dispatched, never attempted.
+  4.0. Surfaced in the plan; NEVER dispatched to a worker pane. The DRIVER
+  runs its credential-free parts (inventories, config drafts, read-only
+  probes) and surfaces only the true gate to Alex. A worker cannot ask
+  anyone, so a human-gated task parked in a worker pane just blocks where
+  nobody sees it.
 - `BLOCKED` — a verified edge to an incomplete task (see 4.2).
 - `READY` — all edges verified satisfied, no human gate.
 
@@ -281,7 +285,7 @@ zero-cost-basis silent defeat that build/test/disjointness passes all missed).
 2. Refuse-to-parallelize default; uncertainty serializes.
 3. Pane cap 5 per tab. More partitions than that queue for the next frontier.
 4. Dispatched agents never push, never open PRs, never merge.
-5. HUMAN-GATED tasks are surfaced, never attempted.
+5. HUMAN-GATED tasks never go to a worker pane; the driver does their credential-free parts and surfaces the gate (§4.1).
 6. Every dispatch and every outcome lands in the JSONL log.
 7. Provider env overrides are per-pane only (`herdr` skill §6 env-leak rule).
 

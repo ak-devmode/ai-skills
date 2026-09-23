@@ -1,6 +1,6 @@
 ---
 name: herdr
-version: 0.1.0
+version: 0.1.1
 description: |
   Alex's herdr WORKFLOW layer — the single source of truth for how we drive
   herdr (terminal workspace manager for AI agents) for agent work: naming, the
@@ -175,6 +175,13 @@ curl both endpoint styles before touching account settings.
   chrome (sidebar/borders/status) only. Content color = host-fg / terminfo.
 - **herdr is a brew service** (`homebrew.mxcl.herdr`) — survives logout; attach
   by typing `herdr`. Never restart it mid-skill on Alex's behalf.
+- **`herdr worktree create --cwd <repo>` leaves an idle base-repo space behind**
+  (a `<repo> (main)` shell) that a later pane move does not consume. Close it
+  after the move (verified live 2026-08-24).
+- **A role in the workspace label makes a phantom agent.** Name the workspace for
+  the run/scope number only, never a role: a space named `128 driver` shows every
+  pane in it, workers included, as a second "driver" (hit live 2026-08-24).
+  Roles belong on panes (§2).
 
 ## 8. Supervision primitives (for reference; owned by the dispatching skill)
 

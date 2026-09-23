@@ -1,6 +1,6 @@
 ---
 name: concurrency
-version: 0.3.0
+version: 0.3.1
 description: |
   ONE responsibility: map what can run in parallel and what cannot, against a
   clear set of rules — re-derived from repo ground truth on every run, never
@@ -71,21 +71,10 @@ Design record: `plans/concurrency/scope.md` (ai-skills). Status lives in
 
 ## 3. Model routing table
 
-THE single source of routing truth. New seats are new rows. Verified on this
-machine 2026-08-23.
-
-| Seat | Launch inside pane | Verified | Route to it |
-|------|-------------------|----------|-------------|
-| `opus` | `claude` (global default model: opus) | Opus 4.8 default | judgment, design-adjacent implementation, anything touching prod-shaped decisions |
-| `codex` | `codex -m gpt-5.6-sol` (headless: `codex exec -m gpt-5.6-sol`) | codex-cli ≥0.149.0, id live-probed OK | secondary implementation, independent review passes |
-| `glm` | `ANTHROPIC_BASE_URL=https://openrouter.ai/api ANTHROPIC_AUTH_TOKEN=$(security find-generic-password -s openrouter-api-key -w) ANTHROPIC_SMALL_FAST_MODEL=z-ai/glm-5-turbo claude --model z-ai/glm-5.2` | live-verified 2026-08-23 (provider DigitalOcean) | mechanical/bulk: migrations-by-pattern, test scaffolds, sweeps |
-
-Env-leak rule: provider overrides live ONLY in the seat's launch command,
-inline, as the table shows — secrets resolve from Keychain at spawn (§2),
-never via herdr `--env` (persists literals in session state), never
-`export`ed in the invoking session, never written to any settings file.
-Provider swap (OpenRouter → Z.ai coding plan) edits this table's one row and
-nothing else.
+**Lives in the `herdr` skill §6 — the single source.** Seats: `opus`, `codex`,
+`glm`; launch commands, route-to guidance, the env-leak rule, and the GLM launch
+traps are all there. Never copy the table back here — a second copy drifts, and
+both copies calling themselves canonical is how it did.
 
 ## 4. Partition procedure — ONE responsibility
 
@@ -172,12 +161,12 @@ is itself the authorization to dispatch (per CLAUDE.md, a skill with `Agent` in
 allowed-tools *is* a dispatch request); the prompt is the last look, not a second
 opt-in. On anything but an explicit `y`, stop without dispatching.
 
-## 6. Dispatch — on `y` from §5.1 (claude-only, pane cap 2 until the 6.3 gate)
+## 6. Dispatch — on `y` from §5.1 (pane cap 5 per tab)
 
 Per partition, in this order (syntax authority: `herdr --skill`):
 1. `herdr worktree create --cwd <repo> --base origin/<trunk>
-   --branch concurrency/<scope>-<task> [--env KEY=VAL ...]` — env vars ONLY for
-   the glm seat. Workspace label = run name only (`<scope> run`); seat identity
+   --branch concurrency/<scope>-<task>` — no `--env`, for any seat (the glm
+   override is inline in its launch command; `herdr` skill §6). Workspace label = run name only (`<scope> run`); seat identity
    goes on the PANE per the `herdr` skill §2 (naming).
 1b. **Layout + naming — see the `herdr` skill (§5 layout, §2 naming).** Driver
    full-height LEFT, workers half-height filling RIGHTWARD; **NO tabs — Alex
@@ -290,11 +279,11 @@ zero-cost-basis silent defeat that build/test/disjointness passes all missed).
 
 1. Evaluate first — bail to `/plan` if parallelism isn't worth it; else present the plan and dispatch on one inline `[y/N]`. No `--dispatch` flag.
 2. Refuse-to-parallelize default; uncertainty serializes.
-3. Pane cap 2 until the 6.3 gate raises it.
+3. Pane cap 5 per tab. More partitions than that queue for the next frontier.
 4. Dispatched agents never push, never open PRs, never merge.
 5. HUMAN-GATED tasks are surfaced, never attempted.
 6. Every dispatch and every outcome lands in the JSONL log.
-7. Provider env overrides are per-pane only (§3 env-leak rule).
+7. Provider env overrides are per-pane only (`herdr` skill §6 env-leak rule).
 
 ## 10. Known traps
 

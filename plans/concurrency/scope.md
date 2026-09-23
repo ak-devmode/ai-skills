@@ -106,20 +106,20 @@ Rules:
 
 ## 6. Phases
 
-- [ ] **6.1 Skeleton + dry-run partitioner** — skill file, routing table
+- [x] **6.1 Skeleton + dry-run partitioner** — skill file, routing table
   (pin codex 5.6-sol id, wire GLM/OpenRouter env block), DAG builder, plan
   printer. **Gate: partitioner run over wellmed scope 91 must produce the
   known-correct answer** — dispatch 91.2 only; 91.1 flagged human-gated
   (Jurnal sandbox renewal); 91.3–91.7 refused as dependency-blocked. A
   partitioner that parallelizes 91.4 fails the gate.
-- [ ] **6.2 Live dispatch, claude-only, cap 2** — worktree + pane + freeze +
+- [x] **6.2 Live dispatch, claude-only, cap 2** — worktree + pane + freeze +
   supervision loop + notification + dispatch log. Gate: one real 2-pane run,
   outcomes read back correctly, log complete.
-- [ ] **6.3 Multi-model seats** — codex + GLM panes live; raise cap. Gate:
+- [x] **6.3 Multi-model seats** — codex + GLM panes live; raise cap. Gate:
   each seat completes a real task in its pane and its output is collected.
-- [ ] **6.4 Overnight profile** — `herdr --session overnight`, auto-mode agent
+- [x] **6.4 Overnight profile** — `herdr --session overnight`, auto-mode agent
   in own worktree, notification on done/blocked, morning-review checklist.
-- [ ] **6.5 Register + dogfood on scope 91** — merge, re-run
+- [x] **6.5 Register + dogfood on scope 91** — merge, re-run
   `bash ~/Projects/ai-skills/setup.sh`, restart session. Dogfood precondition:
   **refresh pass over scope 91 first** (untouched ~2 weeks; re-validate phase
   surface against develop — 118.1's dispense-sign fold-in and the 91.2

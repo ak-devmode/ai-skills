@@ -277,17 +277,21 @@ assessment + ai-skills leaf)
 Source: plans/4-herdr-agent-workflow/progress.md
 Touches: ai-skills · concurrency/SKILL.md · herdr/SKILL.md · scope + plan + closeout SKILL.md · ~/.claude/CLAUDE.md
 
-- [ ] **Dedup the `/concurrency` §3 routing table.** Canonical copy now lives in
-      the `herdr` skill §6; the `/concurrency` §3 table is a duplicate. The dedup
-      edit was classifier-blocked (the GLM launch line contains a
-      `security find-generic-password` keychain call). Re-do with approval or an
-      Edit permission on `concurrency/SKILL.md`.
-- [ ] **Ratify the CLAUDE.md wording.** "Execution parallelism goes to visible
-      herdr panes, not background agents" was added to `~/.claude/CLAUDE.md`;
-      Alex to confirm/tune the phrasing.
-- [ ] **Dogfood the new `/concurrency` flow (Phase 1 gate A).** One real dispatch:
-      one inline confirm, a sequential scope told to use `/plan`, workers
-      lane-named. Confirms the ceremony is finally gone.
+- [x] **Dedup the `/concurrency` §3 routing table.** Done 2026-09-23 (v0.3.1) — §3 is now a pointer to `herdr` §6.
+- [x] **Ratify the CLAUDE.md wording.** Kept as written (Alex, 2026-09-23) — but see the enforcement item below: the rule is not yet holding.
+- [x] **Dogfood the new `/concurrency` flow (Phase 1 gate A).** Met 2026-09-23 by the 137.2 / 137.2w2 runs (09-07) in the dispatch log.
+- [ ] **Enforce "execution parallelism → herdr panes" with a hook.** The
+      CLAUDE.md rule is advice and loses to the Agent tool whenever a session
+      fans out. As recently as 2026-09-23, agents were still spawning in-process
+      background agents instead of panes. Fix per CLAUDE.md §3.6.1: a hook that
+      runs before each Agent call and blocks agent types that can write files,
+      pointing to `/concurrency`, while allowing read-only types (Explore, Plan,
+      claude-code-guide) and the `/ready-to-clear` validator. Needs a /plan.
+- [ ] **Re-test codex idle-vs-done after the herdr v9 hook.** `/concurrency`
+      §10 has codex completion mapping to `idle`, never `done`. Once Alex runs
+      `herdr integration install claude` (v8 → v9; codex already current),
+      check whether `agent wait --until done` fires for codex. If it does,
+      simplify the §7.1 marker-wait.
 - [ ] **Integrate the friend's bars/diff tool** (follow-up scope). Attach points
       in `plans/4-herdr-agent-workflow/artifacts/friend-tool-seams.md`. Do NOT
       build bars / model-token / space-level-limit before his repo lands.

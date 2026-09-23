@@ -112,3 +112,22 @@
   installed, may fix codex idle-vs-done at the source — re-test then.
 - 6.5 remains: land feature/concurrency-skill → main (push gated on Alex),
   re-run setup.sh, restart session, then scope-91 dogfood proper.
+
+## 2026-09-23 — 6.5 DONE (met by production use); scope closed
+- 6.5 as written was moot: wellmed scope 91 closed out 2026-09-07. The dogfood
+  gate is met by two weeks of real use instead (Alex, 2026-09-23). The
+  dispatch log `~/.config/herdr/concurrency-log.jsonl` shows runs on 91
+  (08-23/24; 91.5 on 09-02), 128, 57.3, 137.2, and a 5-lane `137.2w2` on 09-07.
+  The 137.2 runs postdate scope #4's one-flow rewrite, which also closes that
+  scope's "dogfood the new flow" TO-DO.
+- Registration: merged to main, loads in the skill list.
+- SKILL.md v0.3.1: pane cap 2 → **5 per tab** (Alex); §3 routing table
+  replaced by a pointer to `herdr` skill §6 (dedup TO-DO); §6 step 1 no longer
+  offers `--env` for glm (contradicted the env-leak rule).
+- herdr now 0.9.0; `herdr integration status`: claude hook **outdated (v8 <
+  v9)**, codex current. Upgrade handed to Alex (`herdr integration install
+  claude`). Codex idle-vs-done re-test carried to TO-DO.
+- Open, NOT this scope: the CLAUDE.md "execution parallelism → visible herdr
+  panes" rule isn't holding — agents still spawn in-process background agents
+  for write work as of this morning. Filed as a follow-up (a hook that runs
+  before each Agent call).

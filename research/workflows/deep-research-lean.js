@@ -16,7 +16,7 @@ export const meta = {
 //   Scope     → Sonnet  (1 call · sets the run's direction; cheap to keep capable)
 //   Search    → Haiku   (~5 calls · run a query, rank 4-6 URLs)
 //   Fetch     → Sonnet  (≤15 calls · WebFetch a page, pull 2-5 quoted claims; Sonnet for quote fidelity)
-//   Verify    → Haiku   (≤75 calls · read ONE claim + ONE quote, skeptic web-check, refuted true/false)
+//   Verify    → Haiku   (3 × verifyCap calls · ONE claim + ONE quote, skeptic web-check, supported/refuted/unconfirmed)
 //   Synthesize→ Opus    (1 call · merge dupes, group findings, score confidence, write the report)
 //
 // Tune the dial below. The only step that benefits from Opus-grade reasoning is Synthesize;
@@ -83,10 +83,13 @@ const EXTRACT_SCHEMA = {
     }},
   },
 }
+// Three-way verdict. The old boolean with "default to refuted if uncertain" killed true claims
+// the voter merely couldn't corroborate (WHO's 2021 CAD-for-TB guidance went 0-3). Absence of
+// evidence is now its own outcome, reported as an unconfirmed tier rather than as refuted.
 const VERDICT_SCHEMA = {
-  type: "object", required: ["refuted", "evidence", "confidence"],
+  type: "object", required: ["verdict", "evidence", "confidence"],
   properties: {
-    refuted: { type: "boolean" },
+    verdict: { enum: ["supported", "refuted", "unconfirmed"] },
     evidence: { type: "string" },
     confidence: { enum: ["high", "medium", "low"] },
     counterSource: { type: "string" },
@@ -194,7 +197,7 @@ const FETCH_PROMPT = (source, angle) =>
 
 const VERIFY_PROMPT = (claim, v) =>
   "## Adversarial Claim Verifier (voter " + (v + 1) + "/" + VOTES_PER_CLAIM + ")\n\n" +
-  "Be SKEPTICAL. Try to REFUTE this claim. ≥" + REFUTATIONS_REQUIRED + "/" + VOTES_PER_CLAIM + " refutations kill it.\n\n" +
+  "Be SKEPTICAL: try to refute this claim, but judge only on what you actually find. ≥" + REFUTATIONS_REQUIRED + "/" + VOTES_PER_CLAIM + " refutations kill it; ≥" + REFUTATIONS_REQUIRED + " supports confirm it; anything else is reported as unconfirmed.\n\n" +
   "## Research question\n" + QUESTION + "\n\n" +
   "## Claim under review\n\"" + claim.claim + "\"\n\n" +
   "**Source:** " + claim.sourceUrl + " (" + claim.sourceQuality + ")\n" +
@@ -205,9 +208,11 @@ const VERIFY_PROMPT = (claim, v) =>
   "3. Is the source quality sufficient for the claim's strength? (extraordinary claims need primary sources)\n" +
   "4. Is the claim outdated? (check dates — old claims about fast-moving fields are suspect)\n" +
   "5. Is this a marketing claim / press release / cherry-picked benchmark / forum speculation?\n\n" +
-  "**refuted=true** if: unsupported by quote / contradicted / low-quality source for strong claim / outdated / marketing fluff.\n" +
-  "**refuted=false** ONLY if: claim is well-supported, current, and source quality matches claim strength.\n" +
-  "Default to refuted=true if uncertain.\n\nStructured output only. Evidence MUST be specific."
+  "## Verdict — pick exactly one\n" +
+  "**refuted** — you have a POSITIVE reason: the quote does not say what the claim says / a credible source contradicts it (name it in counterSource) / it is superseded by newer evidence / it is a vendor or marketing claim stated as independent fact.\n" +
+  "**supported** — the quote supports the claim, it is current, and source quality matches its strength (a primary source stating its own result counts; independent corroboration strengthens it).\n" +
+  "**unconfirmed** — you could neither corroborate nor contradict it: search found nothing, the source was unreachable or paywalled, or the evidence is mixed.\n" +
+  "Failing to find corroboration is **unconfirmed, never refuted**. Refuted requires a specific reason you can state.\n\nStructured output only. Evidence MUST be specific."
 
 // ─── Pipeline: search → dedup → fetch+extract (no barrier) ───
 const searchResults = await pipeline(
@@ -331,32 +336,41 @@ const voted = (await parallel(
     ).then(verdicts => {
       // A vote can be null (user-skip or agent error) — treat as abstain.
       const valid = verdicts.filter(Boolean)
-      const refuted = valid.filter(v => v.refuted).length
-      // Survive only if the claim was actually adjudicated: a quorum of
-      // valid votes AND fewer than REFUTATIONS_REQUIRED refuting. Too many
-      // abstentions = unverified, which must NOT pass into the report
-      // (otherwise all-abstain → refuted=0 → false survive).
+      const supportedVotes = valid.filter(v => v.verdict === "supported").length
+      const refutedVotes = valid.filter(v => v.verdict === "refuted").length
+      const unconfirmedVotes = valid.filter(v => v.verdict === "unconfirmed").length
+      // Outcome: ≥REFUTATIONS_REQUIRED refutes → refuted; ≥REFUTATIONS_REQUIRED supports →
+      // confirmed; otherwise (incl. too many abstentions) → unconfirmed. Only confirmed claims
+      // become findings; an all-abstain claim can never pass as confirmed.
       const abstained = VOTES_PER_CLAIM - valid.length
-      const survives = valid.length >= REFUTATIONS_REQUIRED && refuted < REFUTATIONS_REQUIRED
-      log("\"" + claim.claim.slice(0, 50) + "…\": " + (valid.length - refuted) + "-" + refuted + (abstained > 0 ? " (" + abstained + " abstain)" : "") + " " + (survives ? "✓" : "✗"))
-      return { ...claim, verdicts: valid, refutedVotes: refuted, survives }
+      const outcome = refutedVotes >= REFUTATIONS_REQUIRED ? "refuted"
+        : supportedVotes >= REFUTATIONS_REQUIRED ? "confirmed" : "unconfirmed"
+      const vote = supportedVotes + "S-" + refutedVotes + "R-" + unconfirmedVotes + "U"
+      log("\"" + claim.claim.slice(0, 50) + "…\": " + vote + (abstained > 0 ? " (" + abstained + " abstain)" : "") + " → " + outcome)
+      return { ...claim, verdicts: valid, supportedVotes, refutedVotes, vote, outcome }
     })
   )
 )).filter(Boolean)
 
-const confirmed = voted.filter(c => c.survives)
-const killed = voted.filter(c => !c.survives)
-log("Verify done: " + voted.length + " claims → " + confirmed.length + " confirmed, " + killed.length + " killed")
+const confirmed = voted.filter(c => c.outcome === "confirmed")
+const killed = voted.filter(c => c.outcome === "refuted")
+const unconfirmed = voted.filter(c => c.outcome === "unconfirmed")
+log("Verify done: " + voted.length + " claims → " + confirmed.length + " confirmed, " + killed.length + " refuted, " + unconfirmed.length + " unconfirmed")
+const refutedOut = () => killed.map(c => ({ claim: c.claim, vote: c.vote, source: c.sourceUrl,
+  reasons: c.verdicts.filter(v => v.verdict === "refuted").map(v => v.evidence + (v.counterSource ? " [" + v.counterSource + "]" : "")) }))
+// Checked but neither confirmed nor refuted — a lead with a quote, not a finding and not a falsehood.
+const unconfirmedOut = () => unconfirmed.map(c => ({ angle: c.angle, claim: c.claim, quote: c.quote, source: c.sourceUrl, vote: c.vote }))
 
 if (confirmed.length === 0) {
   return {
     question: QUESTION,
-    summary: "All " + voted.length + " claims refuted by adversarial verification. Research inconclusive — sources may be low-quality or claims overstated.",
+    summary: "No claim confirmed: " + killed.length + " refuted (with stated reasons), " + unconfirmed.length + " unconfirmed (could not corroborate). Unconfirmed is not false — see the unconfirmed tier.",
     coverage: perAngle,
     findings: [],
-    refuted: killed.map(c => ({ claim: c.claim, vote: (c.verdicts.length - c.refutedVotes) + "-" + c.refutedVotes, source: c.sourceUrl })),
+    refuted: refutedOut(),
+    unconfirmed: unconfirmedOut(),
     sources: allSources.map(s => ({ url: s.url, quality: s.sourceQuality, claimCount: s.claims.length })),
-    stats: { angles: scope.angles.length, sources: allSources.length, claims: allClaims.length, verified: voted.length, confirmed: 0, killed: killed.length },
+    stats: { angles: scope.angles.length, sources: allSources.length, claims: allClaims.length, verified: voted.length, confirmed: 0, refuted: killed.length, unconfirmed: unconfirmed.length },
   }
 }
 
@@ -364,16 +378,19 @@ if (confirmed.length === 0) {
 phase("Synthesize")
 const confRank = { high: 0, medium: 1, low: 2 }
 const block = confirmed.map((c, i) => {
-  const best = c.verdicts.filter(v => !v.refuted).sort((a, b) => confRank[a.confidence] - confRank[b.confidence])[0]
+  const best = c.verdicts.filter(v => v.verdict === "supported").sort((a, b) => confRank[a.confidence] - confRank[b.confidence])[0]
   return "### [" + i + "] " + c.claim + "\n" +
-    "Vote: " + (c.verdicts.length - c.refutedVotes) + "-" + c.refutedVotes + " · Source: " + c.sourceUrl + " (" + c.sourceQuality + ")\n" +
+    "Vote: " + c.vote + " · Source: " + c.sourceUrl + " (" + c.sourceQuality + ")\n" +
     "Quote: \"" + c.quote + "\"\nVerifier evidence (" + best.confidence + "): " + best.evidence + "\n"
 }).join("\n")
 
-const killedBlock = killed.length > 0
-  ? "\n## Refuted claims (for transparency)\n" +
-    killed.map(c => "- \"" + c.claim + "\" (" + c.sourceUrl + ", vote " + (c.verdicts.length - c.refutedVotes) + "-" + c.refutedVotes + ")").join("\n")
-  : ""
+const killedBlock = (killed.length > 0
+  ? "\n## Refuted claims — positive counter-evidence (for transparency)\n" +
+    killed.map(c => "- \"" + c.claim + "\" (" + c.sourceUrl + ", vote " + c.vote + ")").join("\n")
+  : "") + (unconfirmed.length > 0
+  ? "\n\n## Unconfirmed claims — voters could neither corroborate nor contradict\n" +
+    unconfirmed.map(c => "- \"" + c.claim + "\" (" + c.sourceUrl + ", vote " + c.vote + ")").join("\n")
+  : "")
 
 const report = await agent(
   "## Synthesis: research report\n\n" +
@@ -389,6 +406,7 @@ const report = await agent(
   "4. Write a 3-5 sentence executive summary answering the research question.\n" +
   "5. Note caveats: what's uncertain, what sources were weak, what time-sensitivity applies.\n" +
   "6. List 2-4 open questions that emerged but weren't answered.\n" +
+  "   Never build findings from unconfirmed claims, and never describe them as false. If an unconfirmed claim bears on the question, name it in caveats as unconfirmed.\n" +
   "7. CRITICAL: your StructuredOutput call MUST include every required property — summary (string), findings (array of {claim, confidence, sources, evidence}; use [] only if truly nothing survived), caveats (string). Even a thin or inconclusive result goes in this exact shape; never omit findings or caveats.\n\nStructured output only.",
   { label: "synthesize", schema: REPORT_SCHEMA, model: MODEL_SYNTH }
 )
@@ -398,13 +416,14 @@ if (!report) {
   // than throwing on report.findings and discarding the whole run.
   return {
     question: QUESTION,
-    summary: "Synthesis step was skipped or failed — returning " + confirmed.length + " verified claims unmerged.",
+    summary: "Synthesis step was skipped or failed — returning " + confirmed.length + " confirmed claims unmerged.",
     coverage: perAngle,
     findings: [],
-    confirmed: confirmed.map(c => ({ claim: c.claim, source: c.sourceUrl, quote: c.quote, vote: (c.verdicts.length - c.refutedVotes) + "-" + c.refutedVotes })),
-    refuted: killed.map(c => ({ claim: c.claim, vote: (c.verdicts.length - c.refutedVotes) + "-" + c.refutedVotes, source: c.sourceUrl })),
+    confirmed: confirmed.map(c => ({ claim: c.claim, source: c.sourceUrl, quote: c.quote, vote: c.vote })),
+    refuted: refutedOut(),
+    unconfirmed: unconfirmedOut(),
     sources: allSources.map(s => ({ url: s.url, quality: s.sourceQuality, claimCount: s.claims.length })),
-    stats: { angles: scope.angles.length, sources: allSources.length, claims: allClaims.length, verified: voted.length, confirmed: confirmed.length, killed: killed.length, afterSynthesis: 0 },
+    stats: { angles: scope.angles.length, sources: allSources.length, claims: allClaims.length, verified: voted.length, confirmed: confirmed.length, refuted: killed.length, unconfirmed: unconfirmed.length, afterSynthesis: 0 },
   }
 }
 
@@ -415,7 +434,8 @@ return {
   searchErrors,
   // Extracted but not adversarially checked (cap spent). Report these as an unverified tier, never as findings.
   unverified: unverified.map(c => ({ angle: c.angle, claim: c.claim, quote: c.quote, source: c.sourceUrl, quality: c.sourceQuality, importance: c.importance })),
-  refuted: killed.map(c => ({ claim: c.claim, vote: (c.verdicts.length - c.refutedVotes) + "-" + c.refutedVotes, source: c.sourceUrl })),
+  refuted: refutedOut(),
+  unconfirmed: unconfirmedOut(),
   sources: allSources.map(s => ({ url: s.url, quality: s.sourceQuality, angle: s.angle, claimCount: s.claims.length })),
   stats: {
     angles: scope.angles.length,
@@ -423,7 +443,8 @@ return {
     claimsExtracted: allClaims.length,
     claimsVerified: voted.length,
     confirmed: confirmed.length,
-    killed: killed.length,
+    refuted: killed.length,
+    unconfirmed: unconfirmed.length,
     afterSynthesis: report.findings.length,
     urlDupes: dupes.length,
     budgetDropped: budgetDropped.length,

@@ -70,6 +70,13 @@ was spent). An under-sampled angle is **not** refuted: report its `unverified`
 claims as a separately labelled tier, never as findings and never as "nothing
 survived". If an angle matters and came back thin, offer a targeted re-run.
 
+Every checked claim lands in one of three tiers. **confirmed** → findings.
+**refuted** → needs a stated counter-reason (carried in `reasons`); report as
+contradicted. **unconfirmed** → voters could neither corroborate nor
+contradict; report as *could not confirm*, never as false. Absence of
+corroboration is not refutation — collapsing the two killed a well-documented
+WHO guideline 0-3 under the old "default to refuted" verifier.
+
 If the result carries `error` (every searcher empty) or non-empty
 `searchErrors`, that is a tool failure — report it as one, never as "no
 literature found".
@@ -77,7 +84,7 @@ literature found".
 ## 3. Architecture (for reference)
 
 `Scope (Sonnet) → Search (Haiku, default 5 angles) → Fetch (Sonnet, ≤15 sources) →
-Verify (Haiku, 3-vote adversarial, 2/3 refutes to kill a claim) →
+Verify (Haiku, 3 votes: supported / refuted / unconfirmed; 2 refutes kill, 2 supports confirm) →
 Synthesize (Opus, merge dupes, rank by confidence, cite sources)`.
 
 ## 4. Tuning the cost/quality dial

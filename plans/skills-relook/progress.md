@@ -7,10 +7,11 @@
 4. Cadence: task → commit → next; checkpoint ~30–40 min.
 
 ## Resume Context (overwritable — reflects current state)
-Scope authored 2026-09-23 (revisit). Phase-1 `AUDIT.md` done; early remediation (deterministic
-scripts, 8 defects) already landed per PLANS-INDEX. Global conciseness floor dropped into
-`~/.claude/CLAUDE.md` (via dev-workbench symlink target) 2026-09-23. **Next: `/plan-ceo-review`
-on `scope.md`, then execute 2.1 (loop harness) in a fresh 5.5 context.**
+Scope authored + ceo-reviewed 2026-09-23 (revisit). Phase-1 `AUDIT.md` done; early remediation
+already landed per PLANS-INDEX. Global conciseness floor committed (`dev-workbench` `e4c4074`).
+ceo-review decisions logged below (linter now / eval deferred; scope 2 ≠ scope 5; HOLD SCOPE).
+**Next: execute 2.1 — `/plan` on `2.1-skills-relook-PLAN.md`: build the accretion linter under
+`ai-skills/scripts/`, dogfood on `/concurrency`. Run in a fresh Opus 5.5 context.**
 
 ## Decisions Log (append-only)
 - 2026-09-23 — Reframe: scope = an iterative dogfooded skill-eval/improvement loop, not a cleanup pass. (Alex, Q2/Q3/Q4)

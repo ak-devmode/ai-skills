@@ -76,8 +76,13 @@
 
 ### §9 Deferred Items (additional)
 - Slim `/concurrency` (347→<250 body lines): move §10 traps + §7 supervision lore to `references/`. Routed to plan **2.3** (its explicit "apply the loop … + /concurrency" task). True-positive oversize flag; deferred, not dropped.
-- `prd` duplicate section numbers (`3.1/3.2/3.3` collide across `## Step 3` and `## 3. Requirements`). NEW finding, not in AUDIT §5.5. → 2.3 / prd pass.
+- ~~`prd` duplicate section numbers~~ — **RETRACTED.** `/review` proved this a false positive: the colliding `3.1/3.2/3.3` are inside `prd`'s fenced ```` ```markdown ```` template example (L164–280), not real sections. The linter's fence-aware fix now suppresses it correctly. No prd dup-number defect exists.
 - `ready-to-clear` marginally oversize (258 vs 250). Trim in a later pass; do not raise threshold to mask it.
+
+### §2 Files Changed (additional — /review hardening)
+- `scripts/lint-skill.py` — hardened after `/review`: 8 fail-open/false-positive fixes (unclosed-frontmatter fail-open, UTF-8 crash, BOM, quoted/commented name, zero-indent allowed-tools, fenced-example headings, exit-2 on unresolved, 4-digit-year dup). 483→545 lines.
+- `plans/skills-relook/artifacts/review-2.1-lint-skill.md` — the /review report (new).
+- `plans/skills-relook/artifacts/lint-baseline-2026-09-23.{md,txt,json}` — regenerated (fleet 16→13 ISSUE after the prd false-positive fix).
 
 ### §11 Risk Flags (additional)
 - Semantic live-contradiction detection (AUDIT §5.3 class) is NOT implemented — it needs an LLM/eval pass, deferred per scope §2.1. The shipped NOTE-tier supersession scan surfaces *where* such contradictions hide, but a human/eval must confirm. This is a known, deliberate coverage boundary, stated in the linter docstring and README.

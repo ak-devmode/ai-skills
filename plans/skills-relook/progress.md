@@ -10,10 +10,11 @@
 Scope authored + ceo-reviewed 2026-09-23 (revisit). Phase-1 `AUDIT.md` done; early remediation
 already landed per PLANS-INDEX. Global conciseness floor committed (`dev-workbench` `e4c4074`).
 ceo-review decisions logged below (linter now / eval deferred; scope 2 ≠ scope 5; HOLD SCOPE).
-**2.1 DONE (2026-09-23):** accretion linter `scripts/lint-skill.py` built + dogfooded on `/concurrency`
-(1 ISSUE oversize + 1 NOTE cleared); fleet baseline captured to `artifacts/`. At **Gate C** — awaiting
-`/plan-eng-review` + PR. **Next: 2.2** (model migration to Opus 5.5). Open blockers: none.
-Branch `feature/skills-relook-opus5` has NO remote yet — push on Alex's say-so.
+**2.1 DONE + REVIEWED (2026-09-23):** accretion linter `scripts/lint-skill.py` built + dogfooded on
+`/concurrency` (1 ISSUE oversize + 1 NOTE cleared); fleet baseline in `artifacts/`. `/review` ran
+(Claude adversarial + critical pass; codex DEGRADED), found + fixed 8 fail-open/false-positive bugs,
+verdict SHIP (`artifacts/review-2.1-lint-skill.md`). Gate C met. **Next: 2.2** (model migration to
+Opus 5.5). Open blockers: none. Branch `feature/skills-relook-opus5` has NO remote yet — push on Alex's say-so.
 
 ## Decisions Log (append-only)
 - 2026-09-23 — Reframe: scope = an iterative dogfooded skill-eval/improvement loop, not a cleanup pass. (Alex, Q2/Q3/Q4)
@@ -25,6 +26,7 @@ Branch `feature/skills-relook-opus5` has NO remote yet — push on Alex's say-so
 ## Progress Log (append-only)
 - 2026-09-23 — Scope authored (scope.md, progress.md, stubs 2.1–2.3). Conciseness floor added to global CLAUDE.md.
 - 2026-09-23 — /plan | 2.1 complete — `scripts/lint-skill.py` built, dogfooded on `/concurrency`, fleet baseline captured; CLAUDE.md/README wired. At Gate C (review + PR pending). Executed by Alex / Claude.
+- 2026-09-23 — /review | Gate C — Claude adversarial subagent + critical pass (codex DEGRADED: timed out). Found 8 fail-open/false-positive bugs, ALL fixed in-band + regression-tested. Fleet 16→13 ISSUE (prd dup was a false positive — fenced template example; retracted). Report: `artifacts/review-2.1-lint-skill.md`. Verdict SHIP.
 
 ## Plan 2.1: Accretion linter (loop harness)
 
@@ -46,4 +48,5 @@ Nothing left in 2.1. Next scope action is 2.2. Dispositions + fleet worklist in
 | Step | Status |
 |---|---|
 | Clear + reload in Opus 5.5 with updated global prompt, then execute 2.1 | [x] Done (ran under 4.8; 5.5 seat is 2.2's concern) |
-| Review 2.1 (`/plan-eng-review` on `2.1-…-PLAN.md`) + open PR | [ ] Pending |
+| Review 2.1 — `/review` done (SHIP, 8 bugs fixed in-band) | [x] Done |
+| Open PR for `feature/skills-relook-opus5` (first push — no remote yet) | [ ] Pending (gated on Alex) |

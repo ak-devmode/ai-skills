@@ -98,13 +98,18 @@ SUPERSESSION_RE = re.compile(
 )
 
 HEADING_RE = re.compile(r"^(#{2,6})\s+(.*)$")
+FENCE_RE = re.compile(r"^```")
 # Leading section token on a heading. Captures the FULL dotted/lettered label so
 # sub-sections stay distinct: "5" vs "5.A" vs "5.1", and "3.1a"/"8.7a" (glued
 # letter) and "14.3" all keep their identity. A too-greedy `\d+(?:\.\d+)*` would
 # collapse "5.A"→"5" and cry wolf on lettered subsections (found via dogfood
 # against ready-to-clear, 2026-09-23). A trailing "." (as in "5. The Checks") is
 # not alnum, so the token stops at "5" — parent and children never collide.
-SECTION_NUM_RE = re.compile(r"^\s*(\d+(?:\.[0-9A-Za-z]+)*)")
+# The leading integer is capped at 3 digits with a no-more-digits guard so a
+# heading that opens with a 4-digit year ("## 2024 Roadmap") is NOT read as a
+# section number and does not collide with another such heading (adversarial
+# review, 2026-09-23); real section numbers are all <= 3 digits.
+SECTION_NUM_RE = re.compile(r"^\s*(\d{1,3}(?!\d)(?:\.[0-9A-Za-z]+)*)")
 
 
 # ---------------------------------------------------------------------------
@@ -149,21 +154,44 @@ class Finding:
 
 
 def split_frontmatter(text):
-    """Return (frontmatter_lines, body_lines, body_start_lineno).
+    """Return (frontmatter_lines, body_lines, body_start_lineno, status).
 
     Frontmatter is a leading `---` … `---` block. body_start_lineno is 1-indexed
     (the line number in the file where the body's first line sits), so `where`
-    references point at real file lines. No frontmatter -> ([], all-lines, 1).
+    references point at real file lines. status is:
+      "none"     — no opening `---`; body is the whole file.
+      "closed"   — a proper `---` … `---` block.
+      "unclosed" — opened but never closed (malformed).
+
+    On "unclosed" the content after the opener is returned as BODY, not swallowed
+    as frontmatter, so the size/number checks still run and an unterminated block
+    cannot fail-open past the oversize gate (found via dogfood 2026-09-23: an
+    unclosed block hid a 303-line body and the linter reported clean). The
+    frontmatter lines are dropped because the block's structure is not
+    trustworthy — the unclosed ISSUE is the actionable finding.
     """
     lines = text.splitlines()
     if not lines or lines[0].strip() != "---":
-        return [], lines, 1
+        return [], lines, 1, "none"
     for i in range(1, len(lines)):
         if lines[i].strip() == "---":
-            return lines[1:i], lines[i + 1 :], i + 2
-    # Opened but never closed — malformed; treat the whole thing as body so the
-    # frontmatter check can report the missing close.
-    return lines[1:], [], 2
+            return lines[1:i], lines[i + 1 :], i + 2, "closed"
+    return [], lines[1:], 2, "unclosed"
+
+
+def _scalar(val):
+    """Normalize a YAML-ish scalar: drop a matching quote pair and an unquoted
+    trailing `# comment`, so `name: "foo"` and `name: foo  # bar` both yield
+    `foo` (adversarial review, 2026-09-23 — either form false-flagged name!=dir)."""
+    val = val.strip()
+    if len(val) >= 2 and val[0] in "\"'" and val[-1] == val[0]:
+        return val[1:-1]
+    hashpos = val.find(" #")
+    if hashpos != -1:
+        val = val[:hashpos].strip()
+    if len(val) >= 2 and val[0] in "\"'" and val[-1] == val[0]:
+        return val[1:-1]
+    return val
 
 
 def parse_frontmatter_keys(fm_lines):
@@ -184,23 +212,27 @@ def parse_frontmatter_keys(fm_lines):
         key, val = m.group(1), m.group(2).strip()
         keys.add(key)
         if key == "name" and val:
-            name_value = val
+            name_value = _scalar(val)
         if key == "allowed-tools":
-            # Valid either inline (`allowed-tools: [Bash, Read]`) or as a block
-            # list on following `  - ` lines.
+            # Valid inline (`allowed-tools: [Bash, Read]`) or as a block list on
+            # following `- ` lines, at ANY indent — YAML permits list items at the
+            # key's own (zero) indent, and rejecting that form cried wolf
+            # (adversarial review, 2026-09-23).
             if val.startswith("[") and val.endswith("]"):
                 allowed_tools_ok = bool(val.strip("[]").strip())
             elif val == "":
                 j = i + 1
                 items = 0
-                while j < n and (fm_lines[j].startswith(" ") or fm_lines[j].startswith("\t")):
-                    if re.match(r"^\s*-\s+\S", fm_lines[j]):
+                while j < n:
+                    nxt = fm_lines[j]
+                    if nxt.strip() == "":
+                        j += 1
+                        continue
+                    if re.match(r"^\s*-\s+\S", nxt):
                         items += 1
-                    elif fm_lines[j].strip() == "":
-                        pass
-                    else:
-                        break
-                    j += 1
+                        j += 1
+                        continue
+                    break  # next key, or a non-list line — the list has ended
                 allowed_tools_ok = items > 0
             else:
                 # A scalar value for a list key — malformed.
@@ -214,14 +246,24 @@ def parse_frontmatter_keys(fm_lines):
 # ---------------------------------------------------------------------------
 
 
-def check_frontmatter(fm_lines, had_frontmatter, skill_dirname, findings):
-    if not had_frontmatter:
+def check_frontmatter(fm_lines, fm_status, skill_dirname, findings):
+    if fm_status == "none":
         findings.append(Finding(
             "ISSUE", "frontmatter",
             "a `---` frontmatter block with name + description",
-            "no frontmatter block (or it never closes)",
+            "no frontmatter block",
             "top of file",
             "add `---`-delimited frontmatter with `name:` and `description:`",
+        ))
+        return
+    if fm_status == "unclosed":
+        findings.append(Finding(
+            "ISSUE", "frontmatter",
+            "the `---` frontmatter block is closed with a matching `---`",
+            "frontmatter opened but never closed",
+            "top of file",
+            "add the closing `---` — an unterminated block swallows the body and "
+            "would hide every other defect below it",
         ))
         return
 
@@ -269,17 +311,31 @@ def check_oversize(body_lines, max_body_lines, findings):
         ))
 
 
+def iter_headings(body_lines, body_start):
+    """Yield (file_lineno, heading_text) for markdown headings OUTSIDE fenced
+    code blocks. A `## 1. Foo` shown inside a ```` ```markdown ```` example is
+    illustration, not a section, and counting it cried wolf on duplicate numbers
+    (adversarial review, 2026-09-23)."""
+    in_fence = False
+    for idx, line in enumerate(body_lines):
+        if FENCE_RE.match(line):
+            in_fence = not in_fence
+            continue
+        if in_fence:
+            continue
+        m = HEADING_RE.match(line)
+        if m:
+            yield body_start + idx, m.group(2)
+
+
 def check_duplicate_section_numbers(body_lines, body_start, findings):
     seen = {}  # number -> list of (lineno, heading_text)
-    for idx, line in enumerate(body_lines):
-        m = HEADING_RE.match(line)
-        if not m:
-            continue
-        num_m = SECTION_NUM_RE.match(m.group(2))
+    for lineno, heading_text in iter_headings(body_lines, body_start):
+        num_m = SECTION_NUM_RE.match(heading_text)
         if not num_m:
             continue
         num = num_m.group(1)
-        seen.setdefault(num, []).append((body_start + idx, m.group(2).strip()))
+        seen.setdefault(num, []).append((lineno, heading_text.strip()))
     for num, occurrences in sorted(seen.items()):
         if len(occurrences) > 1:
             locs = ", ".join(f"L{ln} “{txt}”" for ln, txt in occurrences)
@@ -383,21 +439,30 @@ def resolve_skill_path(path):
 
 
 def lint_file(skill_path, max_body_lines):
-    with open(skill_path, "r", encoding="utf-8") as fh:
-        text = fh.read()
+    """Returns (findings, body_len, read_error). read_error is None on success,
+    or a message when the file is not decodable — a parse error the driver maps
+    to exit 2, without crashing the whole run or aborting sibling files
+    (adversarial review, 2026-09-23)."""
+    try:
+        with open(skill_path, "r", encoding="utf-8") as fh:
+            text = fh.read()
+    except (UnicodeDecodeError, OSError) as exc:
+        return [], 0, f"could not read as UTF-8 text: {exc}"
 
-    fm_lines, body_lines, body_start = split_frontmatter(text)
-    had_frontmatter = bool(fm_lines) or text.splitlines()[:1] == ["---"]
+    if text.startswith("﻿"):  # strip a leading BOM before the `---` test
+        text = text[1:]
+
+    fm_lines, body_lines, body_start, fm_status = split_frontmatter(text)
     skill_dirname = os.path.basename(os.path.dirname(os.path.abspath(skill_path)))
 
     findings = []
-    check_frontmatter(fm_lines, had_frontmatter, skill_dirname, findings)
+    check_frontmatter(fm_lines, fm_status, skill_dirname, findings)
     check_oversize(body_lines, max_body_lines, findings)
     check_duplicate_section_numbers(body_lines, body_start, findings)
     check_stale_skill_names(body_lines, body_start, findings)
     check_determinism_as_prose(body_lines, body_start, findings)
     check_supersession_sites(body_lines, body_start, findings)
-    return findings, len(body_lines)
+    return findings, len(body_lines), None
 
 
 def main(argv):
@@ -417,13 +482,17 @@ def main(argv):
     total_issues = 0
     total_notes = 0
     unresolved = []
+    parse_errors = []  # (path, message) — not decodable; exit 2, never crash
 
     for path in args.paths:
         skill_path = resolve_skill_path(path)
         if skill_path is None:
             unresolved.append(path)
             continue
-        findings, body_len = lint_file(skill_path, args.max_body_lines)
+        findings, body_len, read_error = lint_file(skill_path, args.max_body_lines)
+        if read_error is not None:
+            parse_errors.append((skill_path, read_error))
+            continue
         issues = [f for f in findings if f.tier == "ISSUE"]
         notes = [f for f in findings if f.tier == "NOTE"]
         total_issues += len(issues)
@@ -435,14 +504,17 @@ def main(argv):
             "notes": notes,
         })
 
-    if unresolved:
-        if not args.quiet and not args.as_json:
-            for p in unresolved:
-                sys.stderr.write(f"error: no SKILL.md found at {p}\n")
-        if not reports:
-            if args.as_json:
-                print(json.dumps({"error": "no SKILL.md found", "paths": unresolved}))
-            return 2
+    # A path that did not resolve or did not decode is a usage/parse error (exit
+    # 2) and must take precedence over a clean exit — a typo'd or unreadable skill
+    # must never be silently counted as passing, even when other files linted OK
+    # (adversarial review, 2026-09-23).
+    usage_error = bool(unresolved or parse_errors)
+
+    if not args.quiet and not args.as_json:
+        for p in unresolved:
+            sys.stderr.write(f"error: no SKILL.md found at {p}\n")
+        for p, msg in parse_errors:
+            sys.stderr.write(f"error: {p}: {msg}\n")
 
     if args.as_json:
         out = {
@@ -457,9 +529,10 @@ def main(argv):
                 for r in reports
             ],
             "unresolved": unresolved,
+            "parse_errors": [{"path": p, "error": m} for p, m in parse_errors],
         }
         print(json.dumps(out, indent=2))
-        return 1 if total_issues else 0
+        return 2 if usage_error else (1 if total_issues else 0)
 
     if not args.quiet:
         show_notes = not args.no_notes
@@ -474,9 +547,10 @@ def main(argv):
         print(
             f"\nsummary: {total_issues} ISSUE(s), {total_notes} NOTE(s) "
             f"across {len(reports)} skill(s) (threshold {args.max_body_lines} body lines)"
+            + (f"; {len(unresolved) + len(parse_errors)} path(s) not linted" if usage_error else "")
         )
 
-    return 1 if total_issues else 0
+    return 2 if usage_error else (1 if total_issues else 0)
 
 
 if __name__ == "__main__":

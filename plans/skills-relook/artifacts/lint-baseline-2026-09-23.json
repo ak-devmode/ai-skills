@@ -1,6 +1,6 @@
 {
   "summary": {
-    "issues": 16,
+    "issues": 13,
     "notes": 14,
     "skills": 26,
     "max_body_lines": 250
@@ -261,30 +261,6 @@
           "found": "306 body lines (56 over)",
           "where": "whole SKILL.md body",
           "next": "move institutional facts/postmortems to references/, templates to templates/, deterministic steps to scripts/ (AUDIT \u00a76.4 progressive disclosure)"
-        },
-        {
-          "tier": "ISSUE",
-          "check": "duplicate-section-number",
-          "expected": "section number 3.1 used once (markdown-style \u00a73.3.2)",
-          "found": "2 headings share 3.1",
-          "where": "L140 \u201c3.1 Plans directory resolution\u201d, L202 \u201c3.1 Must Have\u201d",
-          "next": "renumber the duplicates; run the numbering audit across the body"
-        },
-        {
-          "tier": "ISSUE",
-          "check": "duplicate-section-number",
-          "expected": "section number 3.2 used once (markdown-style \u00a73.3.2)",
-          "found": "2 headings share 3.2",
-          "where": "L150 \u201c3.2 Slug and file path\u201d, L208 \u201c3.2 Should Have\u201d",
-          "next": "renumber the duplicates; run the numbering audit across the body"
-        },
-        {
-          "tier": "ISSUE",
-          "check": "duplicate-section-number",
-          "expected": "section number 3.3 used once (markdown-style \u00a73.3.2)",
-          "found": "2 headings share 3.3",
-          "where": "L159 \u201c3.3 Document format\u201d, L213 \u201c3.3 Won't Have (this version)\u201d",
-          "next": "renumber the duplicates; run the numbering audit across the body"
         }
       ]
     },
@@ -391,5 +367,6 @@
       ]
     }
   ],
-  "unresolved": []
+  "unresolved": [],
+  "parse_errors": []
 }

@@ -144,21 +144,6 @@ prd/SKILL.md  —  306 body lines  —  ISSUES
       found    · 306 body lines (56 over)
       where    · whole SKILL.md body
       next     · move institutional facts/postmortems to references/, templates to templates/, deterministic steps to scripts/ (AUDIT §6.4 progressive disclosure)
-  [ISSUE] duplicate-section-number
-      expected · section number 3.1 used once (markdown-style §3.3.2)
-      found    · 2 headings share 3.1
-      where    · L140 “3.1 Plans directory resolution”, L202 “3.1 Must Have”
-      next     · renumber the duplicates; run the numbering audit across the body
-  [ISSUE] duplicate-section-number
-      expected · section number 3.2 used once (markdown-style §3.3.2)
-      found    · 2 headings share 3.2
-      where    · L150 “3.2 Slug and file path”, L208 “3.2 Should Have”
-      next     · renumber the duplicates; run the numbering audit across the body
-  [ISSUE] duplicate-section-number
-      expected · section number 3.3 used once (markdown-style §3.3.2)
-      found    · 2 headings share 3.3
-      where    · L159 “3.3 Document format”, L213 “3.3 Won't Have (this version)”
-      next     · renumber the duplicates; run the numbering audit across the body
 
 ready-to-clear/SKILL.md  —  258 body lines  —  ISSUES
   [ISSUE] oversize
@@ -213,4 +198,4 @@ todo-sweep/SKILL.md  —  191 body lines  —  clean (notes)
       where    · L139
       next     · confirm the superseded directive was deleted, not left living beside its replacement (AUDIT §5.3 class); deep semantic check is the eval pass (deferred)
 
-summary: 16 ISSUE(s), 14 NOTE(s) across 26 skill(s) (threshold 250 body lines)
+summary: 13 ISSUE(s), 14 NOTE(s) across 26 skill(s) (threshold 250 body lines)

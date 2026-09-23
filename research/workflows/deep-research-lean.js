@@ -2,7 +2,7 @@ export const meta = {
   name: 'deep-research-lean',
   description: 'Cost-tuned deep research harness — same fan-out/verify/synthesize architecture as the built-in deep-research, but each phase runs on the right-sized model (grunt work on Haiku/Sonnet, synthesis on Opus). ~70% cheaper per run.',
   whenToUse: 'When the user wants a deep, multi-source, fact-checked research report on any topic. BEFORE invoking, check if the question is specific enough to research directly — if underspecified (e.g., "what car to buy" without budget/use-case/region), ask 2-3 clarifying questions to narrow scope. Then pass the refined question as args, weaving the answers in.',
-  phases: [{"title":"Scope","detail":"Decompose question (from args) into 5 search angles · Sonnet"},{"title":"Search","detail":"5 parallel WebSearch agents, one per angle · Haiku"},{"title":"Fetch","detail":"URL-dedup, fetch top 15 sources, extract falsifiable claims · Sonnet"},{"title":"Verify","detail":"3-vote adversarial verification per claim (need 2/3 refutes to kill) · Haiku"},{"title":"Synthesize","detail":"Merge semantic dupes, rank by confidence, cite sources · Opus"}],
+  phases: [{"title":"Scope","detail":"Decompose question (from args) into search angles (default 5, 3-8) · Sonnet"},{"title":"Search","detail":"One parallel WebSearch agent per angle · Haiku"},{"title":"Fetch","detail":"URL-dedup, fetch top 15 sources, extract falsifiable claims · Sonnet"},{"title":"Verify","detail":"3-vote adversarial verification per claim (need 2/3 refutes to kill) · Haiku"},{"title":"Synthesize","detail":"Merge semantic dupes, rank by confidence, cite sources · Opus"}],
 }
 
 // deep-research-lean: Scope → pipeline(Search → URL-dedup → Fetch+Extract) → 3-vote Verify → Synthesize
@@ -43,7 +43,7 @@ const SCOPE_SCHEMA = {
   properties: {
     question: { type: "string" },
     summary: { type: "string" },
-    angles: { type: "array", minItems: 3, maxItems: 6, items: {
+    angles: { type: "array", minItems: 3, maxItems: 8, items: {
       type: "object", required: ["label", "query"],
       properties: {
         label: { type: "string" },
@@ -114,12 +114,20 @@ const REPORT_SCHEMA = {
 phase("Scope")
 // args = { question: string, verifyCap: number }. verifyCap is required and is split evenly
 // across search angles (round-robin), so every angle gets verified claims.
-const USAGE = "Pass args as an object: Workflow({name: 'deep-research-lean', args: {question: '<question>', verifyCap: <claims to verify, e.g. 25-50>}})."
+const USAGE = "Pass args as an object: Workflow({name: 'deep-research-lean', args: {question: '<question>', verifyCap: <claims to verify, e.g. 25-50>, angles?: <3-8>}})."
 const QUESTION = (args && typeof args.question === "string" && args.question.trim()) || ""
 const MAX_VERIFY_CLAIMS = args && Number.isInteger(args.verifyCap) && args.verifyCap > 0 ? args.verifyCap : 0
 if (!QUESTION) {
   return { error: "No research question provided. " + USAGE }
 }
+// angles is optional. Given: used exactly. Omitted: scope agent chooses, defaulting to 5.
+const ANGLES = args && Number.isInteger(args.angles) ? args.angles : 0
+if (ANGLES && (ANGLES < 3 || ANGLES > 8)) {
+  return { error: "angles must be an integer 3-8 (or omitted to let scope choose, default 5). " + USAGE }
+}
+const ANGLE_RULE = ANGLES
+  ? "Generate exactly " + ANGLES + " distinct web search queries"
+  : "Generate 5 distinct web search queries by default. Use fewer (min 3) only if the question is genuinely narrow, or more (max 8) only if it names more than 5 distinct sub-areas that each need their own search; state the reason in the summary"
 if (!MAX_VERIFY_CLAIMS) {
   return { error: "verifyCap is required (positive integer); cost scales ~" + VOTES_PER_CLAIM + " agent calls per claim. " + USAGE }
 }
@@ -127,7 +135,7 @@ const scope = await agent(
   "Decompose this research question into complementary search angles.\n\n" +
   "## Question\n" + QUESTION + "\n\n" +
   "## Task\n" +
-  "Generate 5 distinct web search queries that together cover the question from different angles. Pick angles that suit the question's domain. Examples:\n" +
+  ANGLE_RULE + " that together cover the question from different angles. Pick angles that suit the question's domain. Examples:\n" +
   "- broad/primary  · academic/technical  · recent news  · contrarian/skeptical  · practitioner/implementation\n" +
   "- For medical: anatomy · common causes · serious differentials · authoritative refs · red flags\n" +
   "- For tech: state-of-art · benchmarks · limitations · industry adoption · cost/tradeoffs\n\n" +

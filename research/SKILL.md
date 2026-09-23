@@ -22,9 +22,12 @@ memory and do NOT fan out a bare Agent swarm — route through the tuned workflo
    prefers text over the structured selector). Fold the answers into the question.
 3. **Set the verify cap with the user.** `verifyCap` is required — the number of
    extracted claims that get 3-vote adversarial verification (~3 Haiku calls
-   each; the dominant cost). It is split evenly across the 5 search angles, so
+   each; the dominant cost). It is split evenly across the search angles, so
    size it to the question: ~25 for one focused area, ~50 for a multi-area brief
    (~10 per angle). Propose a number with that arithmetic; don't pick silently.
+   `angles` is optional (3-8): omit it and the scope agent defaults to 5, going
+   higher only when the question names more distinct sub-areas. Pass it
+   explicitly when the brief already enumerates its areas — one angle each.
 4. Deep research fans out across many agents and web calls and costs real money —
    **confirm before running.** One line: the final scoped question + the
    verifyCap + "run it?".
@@ -38,7 +41,8 @@ Workflow({
   name: "deep-research-lean",
   args: {
     question: "<the final scoped question, with clarifications woven in>",
-    verifyCap: <the number agreed in §1.3>
+    verifyCap: <the number agreed in §1.3>,
+    angles: <optional, 3-8; omit for the default of 5>
   }
 })
 ```
@@ -62,7 +66,7 @@ survived". If an angle matters and came back thin, offer a targeted re-run.
 
 ## 3. Architecture (for reference)
 
-`Scope (Sonnet) → Search (Haiku, 5 angles) → Fetch (Sonnet, ≤15 sources) →
+`Scope (Sonnet) → Search (Haiku, default 5 angles) → Fetch (Sonnet, ≤15 sources) →
 Verify (Haiku, 3-vote adversarial, 2/3 refutes to kill a claim) →
 Synthesize (Opus, merge dupes, rank by confidence, cite sources)`.
 

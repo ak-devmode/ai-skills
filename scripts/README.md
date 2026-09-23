@@ -16,6 +16,7 @@ already caused real data loss. Prose cannot enforce itself — the same reasonin
 | `plans-index.py` | "append a row" with no header written — **leaked 40 untabled rows** | /scope §5.8, /plan §11.4, /closeout §13, /repo-cleanup §6 |
 | `repo-graph-snapshot.sh` | /scope §0.5.2's serial per-repo walk | /scope §0.5.2 |
 | `edit-guard.py` | `python3 - <<PY` string-replaces that **no-op silently** | any scripted multi-file edit |
+| `lint-skill.py` | eyeballing SKILL.md quality — CLAUDE.md §6 said "no linter currently" while the skills accreted past obey-able size | any skill edit; `/scope`, `/plan`, `/closeout` bodies |
 
 ## Contracts
 
@@ -32,6 +33,18 @@ already caused real data loss. Prose cannot enforce itself — the same reasonin
     plans-index.py next-number <index>    stdout: highest whole scope number + 1
     plans-index.py add  <index> --num --status --folder --desc [--creator] [--dry-run]
     plans-index.py move <index> --num --to {active,archived} [--folder] [--status] [--dry-run]
+
+    lint-skill.py <skill-dir|SKILL.md>... [--max-body-lines N] [--json] [--no-notes] [--quiet]
+      exit: 0 no ISSUES (NOTES allowed) · 1 ISSUES found · 2 usage/parse error
+      Reads only. Each finding is `expected · found · where · next`.
+      ISSUES (fail the run, deterministic): oversize body (>N lines, default 250),
+      duplicate section numbers, malformed frontmatter (missing name/description,
+      empty allowed-tools, name≠dir), dead renamed-skill references.
+      NOTES (advisory, never fail): determinism-as-prose (filesystem-mutation verbs
+      in a fenced shell block), supersession sites (where a live contradiction may
+      hide). The ISSUE/NOTE split IS the design — fuzzy checks are NOTES so the
+      linter never cries wolf. Semantic contradiction detection is deferred to an
+      eval pass (scope 2 §2.1). Bump the threshold only with a recorded reason.
 
 `add` and `move` refuse to write against a non-canonical header rather than
 silently appending a mismatched row. **Nothing is ever truncated** — the

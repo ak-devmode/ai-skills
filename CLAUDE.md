@@ -196,6 +196,7 @@ scripts/resolve-plans-dir.sh    — plans-dir resolution (one owner, 5 callers)
 scripts/claim-scope-number.sh   — scope numbering, race-defensive across 4 sources
 scripts/plans-index.py          — PLANS-INDEX validate/add/move, schema-enforcing
 scripts/todo-stats.py           — TO-DO.md counts for the SessionStart hook (counts only)
+scripts/lint-skill.py           — accretion linter for SKILL.md (oversize/dup-number/frontmatter/stale-name; fail-loud)
 plans/PLANS-INDEX.md            — local plans tracking ai-skills development
 plans/<scope>/                  — active scope folders
 plans/archive/                  — completed scopes
@@ -227,7 +228,13 @@ Claude Code invocation:
   behavior. For multi-step skills (`/plan`, `/scope`, `/closeout`),
   follow the verification recipes under `<skill>/tests/` when present.
 - **Markdown style of skill bodies** — eyeball + `/markdown-style`
-  conventions. No linter currently.
+  conventions, backed by `scripts/lint-skill.py` (the accretion linter):
+  `./scripts/lint-skill.py <skill-dir|SKILL.md>…`. It fails (exit 1) on
+  deterministic defects — oversize body (>250 lines, §6.4), duplicate section
+  numbers, malformed frontmatter, dead renamed-skill references — and emits
+  advisory NOTES for fuzzy smells (determinism-as-prose, supersession sites)
+  without failing. Run it on any SKILL.md you touch; `--json` for CI. Semantic
+  contradiction detection (AUDIT §5.3 class) is deferred to an eval pass.
 
 ---
 

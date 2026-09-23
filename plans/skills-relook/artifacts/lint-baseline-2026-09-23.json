@@ -1,0 +1,395 @@
+{
+  "summary": {
+    "issues": 16,
+    "notes": 14,
+    "skills": 26,
+    "max_body_lines": 250
+  },
+  "reports": [
+    {
+      "skill": "closeout-extended/SKILL.md",
+      "body_lines": 644,
+      "findings": [
+        {
+          "tier": "ISSUE",
+          "check": "oversize",
+          "expected": "body <= 250 lines (AUDIT \u00a76.4; ready-to-clear=176 is the model)",
+          "found": "644 body lines (394 over)",
+          "where": "whole SKILL.md body",
+          "next": "move institutional facts/postmortems to references/, templates to templates/, deterministic steps to scripts/ (AUDIT \u00a76.4 progressive disclosure)"
+        },
+        {
+          "tier": "NOTE",
+          "check": "determinism-as-prose",
+          "expected": "deterministic file mutation lives in scripts/, not prose (\u00a73.6.1)",
+          "found": "shell block mutates the filesystem (touch)",
+          "where": "fenced block at L340",
+          "next": "if this is a fixed procedure, move it to scripts/ and call it; if it is illustrative, leave it \u2014 this is advisory"
+        },
+        {
+          "tier": "NOTE",
+          "check": "supersession-site",
+          "expected": "a supersession fully replaces the old text, leaving no live contradiction",
+          "found": "3 supersession marker(s)",
+          "where": "L201, L448, L476",
+          "next": "confirm the superseded directive was deleted, not left living beside its replacement (AUDIT \u00a75.3 class); deep semantic check is the eval pass (deferred)"
+        }
+      ]
+    },
+    {
+      "skill": "closeout/SKILL.md",
+      "body_lines": 842,
+      "findings": [
+        {
+          "tier": "ISSUE",
+          "check": "oversize",
+          "expected": "body <= 250 lines (AUDIT \u00a76.4; ready-to-clear=176 is the model)",
+          "found": "842 body lines (592 over)",
+          "where": "whole SKILL.md body",
+          "next": "move institutional facts/postmortems to references/, templates to templates/, deterministic steps to scripts/ (AUDIT \u00a76.4 progressive disclosure)"
+        },
+        {
+          "tier": "NOTE",
+          "check": "supersession-site",
+          "expected": "a supersession fully replaces the old text, leaving no live contradiction",
+          "found": "1 supersession marker(s)",
+          "where": "L288",
+          "next": "confirm the superseded directive was deleted, not left living beside its replacement (AUDIT \u00a75.3 class); deep semantic check is the eval pass (deferred)"
+        }
+      ]
+    },
+    {
+      "skill": "concurrency/SKILL.md",
+      "body_lines": 347,
+      "findings": [
+        {
+          "tier": "ISSUE",
+          "check": "oversize",
+          "expected": "body <= 250 lines (AUDIT \u00a76.4; ready-to-clear=176 is the model)",
+          "found": "347 body lines (97 over)",
+          "where": "whole SKILL.md body",
+          "next": "move institutional facts/postmortems to references/, templates to templates/, deterministic steps to scripts/ (AUDIT \u00a76.4 progressive disclosure)"
+        },
+        {
+          "tier": "NOTE",
+          "check": "supersession-site",
+          "expected": "a supersession fully replaces the old text, leaving no live contradiction",
+          "found": "1 supersession marker(s)",
+          "where": "L301",
+          "next": "confirm the superseded directive was deleted, not left living beside its replacement (AUDIT \u00a75.3 class); deep semantic check is the eval pass (deferred)"
+        }
+      ]
+    },
+    {
+      "skill": "cross-repo-init/SKILL.md",
+      "body_lines": 705,
+      "findings": [
+        {
+          "tier": "ISSUE",
+          "check": "oversize",
+          "expected": "body <= 250 lines (AUDIT \u00a76.4; ready-to-clear=176 is the model)",
+          "found": "705 body lines (455 over)",
+          "where": "whole SKILL.md body",
+          "next": "move institutional facts/postmortems to references/, templates to templates/, deterministic steps to scripts/ (AUDIT \u00a76.4 progressive disclosure)"
+        },
+        {
+          "tier": "NOTE",
+          "check": "supersession-site",
+          "expected": "a supersession fully replaces the old text, leaving no live contradiction",
+          "found": "1 supersession marker(s)",
+          "where": "L551",
+          "next": "confirm the superseded directive was deleted, not left living beside its replacement (AUDIT \u00a75.3 class); deep semantic check is the eval pass (deferred)"
+        }
+      ]
+    },
+    {
+      "skill": "grafana-remediate/SKILL.md",
+      "body_lines": 49,
+      "findings": []
+    },
+    {
+      "skill": "herdr/SKILL.md",
+      "body_lines": 175,
+      "findings": []
+    },
+    {
+      "skill": "kalpa-coding-standards/SKILL.md",
+      "body_lines": 280,
+      "findings": [
+        {
+          "tier": "ISSUE",
+          "check": "oversize",
+          "expected": "body <= 250 lines (AUDIT \u00a76.4; ready-to-clear=176 is the model)",
+          "found": "280 body lines (30 over)",
+          "where": "whole SKILL.md body",
+          "next": "move institutional facts/postmortems to references/, templates to templates/, deterministic steps to scripts/ (AUDIT \u00a76.4 progressive disclosure)"
+        }
+      ]
+    },
+    {
+      "skill": "kalpa-context/SKILL.md",
+      "body_lines": 37,
+      "findings": []
+    },
+    {
+      "skill": "kalpa-generate-api/SKILL.md",
+      "body_lines": 88,
+      "findings": []
+    },
+    {
+      "skill": "kalpa-migrate/SKILL.md",
+      "body_lines": 83,
+      "findings": []
+    },
+    {
+      "skill": "kalpa-satu-sehat-fhir/SKILL.md",
+      "body_lines": 118,
+      "findings": []
+    },
+    {
+      "skill": "markdown-style/SKILL.md",
+      "body_lines": 619,
+      "findings": [
+        {
+          "tier": "ISSUE",
+          "check": "oversize",
+          "expected": "body <= 250 lines (AUDIT \u00a76.4; ready-to-clear=176 is the model)",
+          "found": "619 body lines (369 over)",
+          "where": "whole SKILL.md body",
+          "next": "move institutional facts/postmortems to references/, templates to templates/, deterministic steps to scripts/ (AUDIT \u00a76.4 progressive disclosure)"
+        }
+      ]
+    },
+    {
+      "skill": "md2docx/SKILL.md",
+      "body_lines": 89,
+      "findings": []
+    },
+    {
+      "skill": "member-record-amend/SKILL.md",
+      "body_lines": 152,
+      "findings": []
+    },
+    {
+      "skill": "nano-banana/SKILL.md",
+      "body_lines": 79,
+      "findings": []
+    },
+    {
+      "skill": "pha-console/SKILL.md",
+      "body_lines": 247,
+      "findings": []
+    },
+    {
+      "skill": "plan/SKILL.md",
+      "body_lines": 852,
+      "findings": [
+        {
+          "tier": "ISSUE",
+          "check": "oversize",
+          "expected": "body <= 250 lines (AUDIT \u00a76.4; ready-to-clear=176 is the model)",
+          "found": "852 body lines (602 over)",
+          "where": "whole SKILL.md body",
+          "next": "move institutional facts/postmortems to references/, templates to templates/, deterministic steps to scripts/ (AUDIT \u00a76.4 progressive disclosure)"
+        },
+        {
+          "tier": "NOTE",
+          "check": "determinism-as-prose",
+          "expected": "deterministic file mutation lives in scripts/, not prose (\u00a73.6.1)",
+          "found": "shell block mutates the filesystem (mkdir)",
+          "where": "fenced block at L179",
+          "next": "if this is a fixed procedure, move it to scripts/ and call it; if it is illustrative, leave it \u2014 this is advisory"
+        },
+        {
+          "tier": "NOTE",
+          "check": "determinism-as-prose",
+          "expected": "deterministic file mutation lives in scripts/, not prose (\u00a73.6.1)",
+          "found": "shell block mutates the filesystem (mv)",
+          "where": "fenced block at L184",
+          "next": "if this is a fixed procedure, move it to scripts/ and call it; if it is illustrative, leave it \u2014 this is advisory"
+        },
+        {
+          "tier": "NOTE",
+          "check": "determinism-as-prose",
+          "expected": "deterministic file mutation lives in scripts/, not prose (\u00a73.6.1)",
+          "found": "shell block mutates the filesystem (mv)",
+          "where": "fenced block at L189",
+          "next": "if this is a fixed procedure, move it to scripts/ and call it; if it is illustrative, leave it \u2014 this is advisory"
+        },
+        {
+          "tier": "NOTE",
+          "check": "determinism-as-prose",
+          "expected": "deterministic file mutation lives in scripts/, not prose (\u00a73.6.1)",
+          "found": "shell block mutates the filesystem (mv)",
+          "where": "fenced block at L195",
+          "next": "if this is a fixed procedure, move it to scripts/ and call it; if it is illustrative, leave it \u2014 this is advisory"
+        },
+        {
+          "tier": "NOTE",
+          "check": "determinism-as-prose",
+          "expected": "deterministic file mutation lives in scripts/, not prose (\u00a73.6.1)",
+          "found": "shell block mutates the filesystem (mv)",
+          "where": "fenced block at L720",
+          "next": "if this is a fixed procedure, move it to scripts/ and call it; if it is illustrative, leave it \u2014 this is advisory"
+        },
+        {
+          "tier": "NOTE",
+          "check": "determinism-as-prose",
+          "expected": "deterministic file mutation lives in scripts/, not prose (\u00a73.6.1)",
+          "found": "shell block mutates the filesystem (mkdir, mv)",
+          "where": "fenced block at L726",
+          "next": "if this is a fixed procedure, move it to scripts/ and call it; if it is illustrative, leave it \u2014 this is advisory"
+        },
+        {
+          "tier": "NOTE",
+          "check": "supersession-site",
+          "expected": "a supersession fully replaces the old text, leaving no live contradiction",
+          "found": "2 supersession marker(s)",
+          "where": "L51, L324",
+          "next": "confirm the superseded directive was deleted, not left living beside its replacement (AUDIT \u00a75.3 class); deep semantic check is the eval pass (deferred)"
+        }
+      ]
+    },
+    {
+      "skill": "prd/SKILL.md",
+      "body_lines": 306,
+      "findings": [
+        {
+          "tier": "ISSUE",
+          "check": "oversize",
+          "expected": "body <= 250 lines (AUDIT \u00a76.4; ready-to-clear=176 is the model)",
+          "found": "306 body lines (56 over)",
+          "where": "whole SKILL.md body",
+          "next": "move institutional facts/postmortems to references/, templates to templates/, deterministic steps to scripts/ (AUDIT \u00a76.4 progressive disclosure)"
+        },
+        {
+          "tier": "ISSUE",
+          "check": "duplicate-section-number",
+          "expected": "section number 3.1 used once (markdown-style \u00a73.3.2)",
+          "found": "2 headings share 3.1",
+          "where": "L140 \u201c3.1 Plans directory resolution\u201d, L202 \u201c3.1 Must Have\u201d",
+          "next": "renumber the duplicates; run the numbering audit across the body"
+        },
+        {
+          "tier": "ISSUE",
+          "check": "duplicate-section-number",
+          "expected": "section number 3.2 used once (markdown-style \u00a73.3.2)",
+          "found": "2 headings share 3.2",
+          "where": "L150 \u201c3.2 Slug and file path\u201d, L208 \u201c3.2 Should Have\u201d",
+          "next": "renumber the duplicates; run the numbering audit across the body"
+        },
+        {
+          "tier": "ISSUE",
+          "check": "duplicate-section-number",
+          "expected": "section number 3.3 used once (markdown-style \u00a73.3.2)",
+          "found": "2 headings share 3.3",
+          "where": "L159 \u201c3.3 Document format\u201d, L213 \u201c3.3 Won't Have (this version)\u201d",
+          "next": "renumber the duplicates; run the numbering audit across the body"
+        }
+      ]
+    },
+    {
+      "skill": "ready-to-clear/SKILL.md",
+      "body_lines": 258,
+      "findings": [
+        {
+          "tier": "ISSUE",
+          "check": "oversize",
+          "expected": "body <= 250 lines (AUDIT \u00a76.4; ready-to-clear=176 is the model)",
+          "found": "258 body lines (8 over)",
+          "where": "whole SKILL.md body",
+          "next": "move institutional facts/postmortems to references/, templates to templates/, deterministic steps to scripts/ (AUDIT \u00a76.4 progressive disclosure)"
+        }
+      ]
+    },
+    {
+      "skill": "repo-cleanup-all/SKILL.md",
+      "body_lines": 16,
+      "findings": []
+    },
+    {
+      "skill": "repo-cleanup/SKILL.md",
+      "body_lines": 418,
+      "findings": [
+        {
+          "tier": "ISSUE",
+          "check": "oversize",
+          "expected": "body <= 250 lines (AUDIT \u00a76.4; ready-to-clear=176 is the model)",
+          "found": "418 body lines (168 over)",
+          "where": "whole SKILL.md body",
+          "next": "move institutional facts/postmortems to references/, templates to templates/, deterministic steps to scripts/ (AUDIT \u00a76.4 progressive disclosure)"
+        }
+      ]
+    },
+    {
+      "skill": "research/SKILL.md",
+      "body_lines": 234,
+      "findings": []
+    },
+    {
+      "skill": "review/SKILL.md",
+      "body_lines": 296,
+      "findings": [
+        {
+          "tier": "ISSUE",
+          "check": "oversize",
+          "expected": "body <= 250 lines (AUDIT \u00a76.4; ready-to-clear=176 is the model)",
+          "found": "296 body lines (46 over)",
+          "where": "whole SKILL.md body",
+          "next": "move institutional facts/postmortems to references/, templates to templates/, deterministic steps to scripts/ (AUDIT \u00a76.4 progressive disclosure)"
+        }
+      ]
+    },
+    {
+      "skill": "scope-review/SKILL.md",
+      "body_lines": 338,
+      "findings": [
+        {
+          "tier": "ISSUE",
+          "check": "oversize",
+          "expected": "body <= 250 lines (AUDIT \u00a76.4; ready-to-clear=176 is the model)",
+          "found": "338 body lines (88 over)",
+          "where": "whole SKILL.md body",
+          "next": "move institutional facts/postmortems to references/, templates to templates/, deterministic steps to scripts/ (AUDIT \u00a76.4 progressive disclosure)"
+        }
+      ]
+    },
+    {
+      "skill": "scope/SKILL.md",
+      "body_lines": 826,
+      "findings": [
+        {
+          "tier": "ISSUE",
+          "check": "oversize",
+          "expected": "body <= 250 lines (AUDIT \u00a76.4; ready-to-clear=176 is the model)",
+          "found": "826 body lines (576 over)",
+          "where": "whole SKILL.md body",
+          "next": "move institutional facts/postmortems to references/, templates to templates/, deterministic steps to scripts/ (AUDIT \u00a76.4 progressive disclosure)"
+        },
+        {
+          "tier": "NOTE",
+          "check": "determinism-as-prose",
+          "expected": "deterministic file mutation lives in scripts/, not prose (\u00a73.6.1)",
+          "found": "shell block mutates the filesystem (mv)",
+          "where": "fenced block at L644",
+          "next": "if this is a fixed procedure, move it to scripts/ and call it; if it is illustrative, leave it \u2014 this is advisory"
+        }
+      ]
+    },
+    {
+      "skill": "todo-sweep/SKILL.md",
+      "body_lines": 191,
+      "findings": [
+        {
+          "tier": "NOTE",
+          "check": "supersession-site",
+          "expected": "a supersession fully replaces the old text, leaving no live contradiction",
+          "found": "1 supersession marker(s)",
+          "where": "L139",
+          "next": "confirm the superseded directive was deleted, not left living beside its replacement (AUDIT \u00a75.3 class); deep semantic check is the eval pass (deferred)"
+        }
+      ]
+    }
+  ],
+  "unresolved": []
+}

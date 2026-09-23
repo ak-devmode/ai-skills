@@ -1,0 +1,216 @@
+
+closeout-extended/SKILL.md  —  644 body lines  —  ISSUES
+  [ISSUE] oversize
+      expected · body <= 250 lines (AUDIT §6.4; ready-to-clear=176 is the model)
+      found    · 644 body lines (394 over)
+      where    · whole SKILL.md body
+      next     · move institutional facts/postmortems to references/, templates to templates/, deterministic steps to scripts/ (AUDIT §6.4 progressive disclosure)
+  [NOTE] determinism-as-prose
+      expected · deterministic file mutation lives in scripts/, not prose (§3.6.1)
+      found    · shell block mutates the filesystem (touch)
+      where    · fenced block at L340
+      next     · if this is a fixed procedure, move it to scripts/ and call it; if it is illustrative, leave it — this is advisory
+  [NOTE] supersession-site
+      expected · a supersession fully replaces the old text, leaving no live contradiction
+      found    · 3 supersession marker(s)
+      where    · L201, L448, L476
+      next     · confirm the superseded directive was deleted, not left living beside its replacement (AUDIT §5.3 class); deep semantic check is the eval pass (deferred)
+
+closeout/SKILL.md  —  842 body lines  —  ISSUES
+  [ISSUE] oversize
+      expected · body <= 250 lines (AUDIT §6.4; ready-to-clear=176 is the model)
+      found    · 842 body lines (592 over)
+      where    · whole SKILL.md body
+      next     · move institutional facts/postmortems to references/, templates to templates/, deterministic steps to scripts/ (AUDIT §6.4 progressive disclosure)
+  [NOTE] supersession-site
+      expected · a supersession fully replaces the old text, leaving no live contradiction
+      found    · 1 supersession marker(s)
+      where    · L288
+      next     · confirm the superseded directive was deleted, not left living beside its replacement (AUDIT §5.3 class); deep semantic check is the eval pass (deferred)
+
+concurrency/SKILL.md  —  347 body lines  —  ISSUES
+  [ISSUE] oversize
+      expected · body <= 250 lines (AUDIT §6.4; ready-to-clear=176 is the model)
+      found    · 347 body lines (97 over)
+      where    · whole SKILL.md body
+      next     · move institutional facts/postmortems to references/, templates to templates/, deterministic steps to scripts/ (AUDIT §6.4 progressive disclosure)
+  [NOTE] supersession-site
+      expected · a supersession fully replaces the old text, leaving no live contradiction
+      found    · 1 supersession marker(s)
+      where    · L301
+      next     · confirm the superseded directive was deleted, not left living beside its replacement (AUDIT §5.3 class); deep semantic check is the eval pass (deferred)
+
+cross-repo-init/SKILL.md  —  705 body lines  —  ISSUES
+  [ISSUE] oversize
+      expected · body <= 250 lines (AUDIT §6.4; ready-to-clear=176 is the model)
+      found    · 705 body lines (455 over)
+      where    · whole SKILL.md body
+      next     · move institutional facts/postmortems to references/, templates to templates/, deterministic steps to scripts/ (AUDIT §6.4 progressive disclosure)
+  [NOTE] supersession-site
+      expected · a supersession fully replaces the old text, leaving no live contradiction
+      found    · 1 supersession marker(s)
+      where    · L551
+      next     · confirm the superseded directive was deleted, not left living beside its replacement (AUDIT §5.3 class); deep semantic check is the eval pass (deferred)
+
+grafana-remediate/SKILL.md  —  49 body lines  —  clean
+  ok
+
+herdr/SKILL.md  —  175 body lines  —  clean
+  ok
+
+kalpa-coding-standards/SKILL.md  —  280 body lines  —  ISSUES
+  [ISSUE] oversize
+      expected · body <= 250 lines (AUDIT §6.4; ready-to-clear=176 is the model)
+      found    · 280 body lines (30 over)
+      where    · whole SKILL.md body
+      next     · move institutional facts/postmortems to references/, templates to templates/, deterministic steps to scripts/ (AUDIT §6.4 progressive disclosure)
+
+kalpa-context/SKILL.md  —  37 body lines  —  clean
+  ok
+
+kalpa-generate-api/SKILL.md  —  88 body lines  —  clean
+  ok
+
+kalpa-migrate/SKILL.md  —  83 body lines  —  clean
+  ok
+
+kalpa-satu-sehat-fhir/SKILL.md  —  118 body lines  —  clean
+  ok
+
+markdown-style/SKILL.md  —  619 body lines  —  ISSUES
+  [ISSUE] oversize
+      expected · body <= 250 lines (AUDIT §6.4; ready-to-clear=176 is the model)
+      found    · 619 body lines (369 over)
+      where    · whole SKILL.md body
+      next     · move institutional facts/postmortems to references/, templates to templates/, deterministic steps to scripts/ (AUDIT §6.4 progressive disclosure)
+
+md2docx/SKILL.md  —  89 body lines  —  clean
+  ok
+
+member-record-amend/SKILL.md  —  152 body lines  —  clean
+  ok
+
+nano-banana/SKILL.md  —  79 body lines  —  clean
+  ok
+
+pha-console/SKILL.md  —  247 body lines  —  clean
+  ok
+
+plan/SKILL.md  —  852 body lines  —  ISSUES
+  [ISSUE] oversize
+      expected · body <= 250 lines (AUDIT §6.4; ready-to-clear=176 is the model)
+      found    · 852 body lines (602 over)
+      where    · whole SKILL.md body
+      next     · move institutional facts/postmortems to references/, templates to templates/, deterministic steps to scripts/ (AUDIT §6.4 progressive disclosure)
+  [NOTE] determinism-as-prose
+      expected · deterministic file mutation lives in scripts/, not prose (§3.6.1)
+      found    · shell block mutates the filesystem (mkdir)
+      where    · fenced block at L179
+      next     · if this is a fixed procedure, move it to scripts/ and call it; if it is illustrative, leave it — this is advisory
+  [NOTE] determinism-as-prose
+      expected · deterministic file mutation lives in scripts/, not prose (§3.6.1)
+      found    · shell block mutates the filesystem (mv)
+      where    · fenced block at L184
+      next     · if this is a fixed procedure, move it to scripts/ and call it; if it is illustrative, leave it — this is advisory
+  [NOTE] determinism-as-prose
+      expected · deterministic file mutation lives in scripts/, not prose (§3.6.1)
+      found    · shell block mutates the filesystem (mv)
+      where    · fenced block at L189
+      next     · if this is a fixed procedure, move it to scripts/ and call it; if it is illustrative, leave it — this is advisory
+  [NOTE] determinism-as-prose
+      expected · deterministic file mutation lives in scripts/, not prose (§3.6.1)
+      found    · shell block mutates the filesystem (mv)
+      where    · fenced block at L195
+      next     · if this is a fixed procedure, move it to scripts/ and call it; if it is illustrative, leave it — this is advisory
+  [NOTE] determinism-as-prose
+      expected · deterministic file mutation lives in scripts/, not prose (§3.6.1)
+      found    · shell block mutates the filesystem (mv)
+      where    · fenced block at L720
+      next     · if this is a fixed procedure, move it to scripts/ and call it; if it is illustrative, leave it — this is advisory
+  [NOTE] determinism-as-prose
+      expected · deterministic file mutation lives in scripts/, not prose (§3.6.1)
+      found    · shell block mutates the filesystem (mkdir, mv)
+      where    · fenced block at L726
+      next     · if this is a fixed procedure, move it to scripts/ and call it; if it is illustrative, leave it — this is advisory
+  [NOTE] supersession-site
+      expected · a supersession fully replaces the old text, leaving no live contradiction
+      found    · 2 supersession marker(s)
+      where    · L51, L324
+      next     · confirm the superseded directive was deleted, not left living beside its replacement (AUDIT §5.3 class); deep semantic check is the eval pass (deferred)
+
+prd/SKILL.md  —  306 body lines  —  ISSUES
+  [ISSUE] oversize
+      expected · body <= 250 lines (AUDIT §6.4; ready-to-clear=176 is the model)
+      found    · 306 body lines (56 over)
+      where    · whole SKILL.md body
+      next     · move institutional facts/postmortems to references/, templates to templates/, deterministic steps to scripts/ (AUDIT §6.4 progressive disclosure)
+  [ISSUE] duplicate-section-number
+      expected · section number 3.1 used once (markdown-style §3.3.2)
+      found    · 2 headings share 3.1
+      where    · L140 “3.1 Plans directory resolution”, L202 “3.1 Must Have”
+      next     · renumber the duplicates; run the numbering audit across the body
+  [ISSUE] duplicate-section-number
+      expected · section number 3.2 used once (markdown-style §3.3.2)
+      found    · 2 headings share 3.2
+      where    · L150 “3.2 Slug and file path”, L208 “3.2 Should Have”
+      next     · renumber the duplicates; run the numbering audit across the body
+  [ISSUE] duplicate-section-number
+      expected · section number 3.3 used once (markdown-style §3.3.2)
+      found    · 2 headings share 3.3
+      where    · L159 “3.3 Document format”, L213 “3.3 Won't Have (this version)”
+      next     · renumber the duplicates; run the numbering audit across the body
+
+ready-to-clear/SKILL.md  —  258 body lines  —  ISSUES
+  [ISSUE] oversize
+      expected · body <= 250 lines (AUDIT §6.4; ready-to-clear=176 is the model)
+      found    · 258 body lines (8 over)
+      where    · whole SKILL.md body
+      next     · move institutional facts/postmortems to references/, templates to templates/, deterministic steps to scripts/ (AUDIT §6.4 progressive disclosure)
+
+repo-cleanup-all/SKILL.md  —  16 body lines  —  clean
+  ok
+
+repo-cleanup/SKILL.md  —  418 body lines  —  ISSUES
+  [ISSUE] oversize
+      expected · body <= 250 lines (AUDIT §6.4; ready-to-clear=176 is the model)
+      found    · 418 body lines (168 over)
+      where    · whole SKILL.md body
+      next     · move institutional facts/postmortems to references/, templates to templates/, deterministic steps to scripts/ (AUDIT §6.4 progressive disclosure)
+
+research/SKILL.md  —  234 body lines  —  clean
+  ok
+
+review/SKILL.md  —  296 body lines  —  ISSUES
+  [ISSUE] oversize
+      expected · body <= 250 lines (AUDIT §6.4; ready-to-clear=176 is the model)
+      found    · 296 body lines (46 over)
+      where    · whole SKILL.md body
+      next     · move institutional facts/postmortems to references/, templates to templates/, deterministic steps to scripts/ (AUDIT §6.4 progressive disclosure)
+
+scope-review/SKILL.md  —  338 body lines  —  ISSUES
+  [ISSUE] oversize
+      expected · body <= 250 lines (AUDIT §6.4; ready-to-clear=176 is the model)
+      found    · 338 body lines (88 over)
+      where    · whole SKILL.md body
+      next     · move institutional facts/postmortems to references/, templates to templates/, deterministic steps to scripts/ (AUDIT §6.4 progressive disclosure)
+
+scope/SKILL.md  —  826 body lines  —  ISSUES
+  [ISSUE] oversize
+      expected · body <= 250 lines (AUDIT §6.4; ready-to-clear=176 is the model)
+      found    · 826 body lines (576 over)
+      where    · whole SKILL.md body
+      next     · move institutional facts/postmortems to references/, templates to templates/, deterministic steps to scripts/ (AUDIT §6.4 progressive disclosure)
+  [NOTE] determinism-as-prose
+      expected · deterministic file mutation lives in scripts/, not prose (§3.6.1)
+      found    · shell block mutates the filesystem (mv)
+      where    · fenced block at L644
+      next     · if this is a fixed procedure, move it to scripts/ and call it; if it is illustrative, leave it — this is advisory
+
+todo-sweep/SKILL.md  —  191 body lines  —  clean (notes)
+  [NOTE] supersession-site
+      expected · a supersession fully replaces the old text, leaving no live contradiction
+      found    · 1 supersession marker(s)
+      where    · L139
+      next     · confirm the superseded directive was deleted, not left living beside its replacement (AUDIT §5.3 class); deep semantic check is the eval pass (deferred)
+
+summary: 16 ISSUE(s), 14 NOTE(s) across 26 skill(s) (threshold 250 body lines)

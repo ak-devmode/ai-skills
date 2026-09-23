@@ -22,7 +22,7 @@ export const meta = {
 // Tune the dial below. The only step that benefits from Opus-grade reasoning is Synthesize;
 // Verify stays a 3-independent-voter panel, just with Haiku voters, so it still kills bad claims.
 //
-// Question is passed via Workflow({scriptPath: '~/.claude/workflows/deep-research-lean.js', args: '<question>'}).
+// Question is passed via Workflow({name: 'deep-research-lean', args: '<question>'}).
 
 // ─── Model tiering (edit to taste) ───
 const MODEL_SCOPE  = "sonnet"
@@ -113,7 +113,7 @@ const REPORT_SCHEMA = {
 phase("Scope")
 const QUESTION = (typeof args === "string" && args.trim()) || ""
 if (!QUESTION) {
-  return { error: "No research question provided. Pass it as args: Workflow({scriptPath: '~/.claude/workflows/deep-research-lean.js', args: '<question>'})." }
+  return { error: "No research question provided. Pass it as args: Workflow({name: 'deep-research-lean', args: '<question>'})." }
 }
 const scope = await agent(
   "Decompose this research question into complementary search angles.\n\n" +

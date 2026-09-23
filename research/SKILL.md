@@ -30,13 +30,21 @@ Once confirmed, invoke:
 
 ```
 Workflow({
-  scriptPath: "~/.claude/workflows/deep-research-lean.js",
+  name: "deep-research-lean",
   args: "<the final scoped question, with clarifications woven in>"
 })
 ```
 
+Invoke **by `name`**, not `scriptPath`. The tool does not expand `~`, and it
+rejects an absolute `scriptPath` outside the working directory unless that file
+was read first this session. The name resolves via the
+`~/.claude/workflows/deep-research-lean.js` symlink.
+
 The workflow runs in the background and returns a task notification when done —
-do not re-invoke or poll it; relay the report when it lands.
+do not re-invoke or poll it; relay the report when it lands. It returns
+**structured output only and writes no file** — if the user wants the report on
+disk, write it yourself from the result, and keep file-path/format instructions
+out of `args` (they reach only the agents, which can't honour them).
 
 ## 3. Architecture (for reference)
 

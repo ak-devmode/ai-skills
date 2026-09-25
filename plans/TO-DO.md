@@ -300,3 +300,13 @@ Touches: cross-repo-init/templates/CLAUDE.md.template · 13 repo CLAUDE.md files
       wellmed-supply-chain, wellmed-hq-fe, wellmed-gateway-go, wellmed-pharmacy},
       pmg/{pmg-docs, pmg-chatwoot, pmg-integrations}. Inline any rule a pointer carried before
       deleting it. Next `/closeout` trio sync per repo will propose it, or do a sweep.
+
+## skills-relook — toolkit + follow-ups (Scope 2, Plan 2.3)
+Source: plans/skills-relook/progress.md (Plan 2.3 + "Toolkit candidates" table)
+Touches: scripts/ · plan/SKILL.md · scope/SKILL.md · prd/SKILL.md · herdr/SKILL.md · concurrency/SKILL.md · cross-repo-init/SKILL.md
+- [ ] **Scope the deterministic toolkit** — 8 CLI candidates logged in the progress table (herdr pane
+      identity/layout; plan/scope folder create+sweep; session context gather; `Executed by` stamp; Repo
+      Graph freshness classify; closeout-prep bootstrap; dispatch-log append; repo branch survey). Two
+      are already duplicated across skills (lint `cross-skill-duplicate` NOTEs) — script those first.
+- [ ] **Paraphrased cross-skill duplicates** are invisible to the linter (e.g. GLM traps /concurrency vs
+      herdr were found by reading). Second sighting of a drift from one → build the deferred eval pass.

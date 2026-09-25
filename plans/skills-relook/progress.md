@@ -15,9 +15,10 @@ ceo-review decisions logged below (linter now / eval deferred; scope 2 ≠ scope
 (Claude adversarial + critical pass; codex DEGRADED), found + fixed 8 fail-open/false-positive bugs,
 verdict SHIP (`artifacts/review-2.1-lint-skill.md`). Gate C met; no PR (Alex, 2026-09-25 — push only).
 **2.2 DONE (2026-09-25):** fleet on 5.5 (live + tracked config); verbosity measurement folded into 2.3.
-**2.3 IN PROGRESS (2026-09-25):** linter reframed (size advisory; growth + cross-skill-duplicate NOTEs).
-**Next:** `/concurrency` pilot — remove copies of `herdr` content (§2 preconditions + GLM traps, §10 Ghostty
-fix), then the core five. Log floor breaches + toolkit candidates as found. Open blockers: none.
+**2.3 DONE (2026-09-25) — all three plans complete.** Core skills re-passed through the reframed loop
+(no splits; contradictions, dead refs, harness-owned and duplicated text cut); linter gained growth,
+cross-skill-duplicate and memory-citation checks. Follow-ups → `plans/TO-DO.md` (toolkit scope, fleet
+CLAUDE.md memory paths, paraphrase-dup eval trigger). **Next: `/closeout` for scope 2.** Open blockers: none.
 
 ## Decisions Log (append-only)
 - 2026-09-23 — Reframe: scope = an iterative dogfooded skill-eval/improvement loop, not a cleanup pass. (Alex, Q2/Q3/Q4)
@@ -28,6 +29,7 @@ fix), then the core five. Log floor breaches + toolkit candidates as found. Open
 - 2026-09-25 — 2.2.3/2.2.4 (measure 5.5 verbosity, tune floor) **folded into 2.3**: 2.3 runs entirely on 5.5 and IS the measurement; log each floor breach per skill; a second sighting of the same breach triggers the deferred eval harness. Avoids building the harness ceo-review deferred. (Alex)
 - 2026-09-25 — Stay on Opus 5.5 (5.0/5.1 disliked; 5.5 good so far). Tracked `dev-workbench` settings aligned to live `opus[1m]`, not symlinked. (Alex)
 - 2026-09-25 — **250-line cap dropped as a bar.** Size is a symptom; splitting mandatory rules into `references/` makes them less likely to be followed. Linter: size ISSUE → NOTE; new NOTE checks `growth` (git history, deleted/added < 20% over last 10 modifying commits — git chosen over a snapshot baseline: nothing to go stale, same metric as AUDIT §1) and `cross-skill-duplicate` (word 5-gram containment ≥ 0.3; fleet: all hits real, zero noise; misses paraphrase). 2.3 now cuts superseded / harness-owned / contradictory / duplicated text; `references/` only for rare-branch content. (Alex)
+- 2026-09-25 — 2.3 complete. Per-skill eval suites: none earned (no behavioural regression sighted), per the lazy rule. (Alex/Claude)
 - 2026-09-25 — **Standing lens for 2.3: toolkit candidates.** Deterministic, CLI-executable steps written as prose get logged in *Toolkit candidates* below as found (pulled back from scope 5's verify intent; model = `resolve-plans-dir.sh`, the ADR/scope resolvers). (Alex)
 
 ## Progress Log (append-only)
@@ -79,11 +81,11 @@ pushed, merge pending). Verbosity measurement lives in 2.3 now.
 
 ## Plan 2.3: Apply the loop to the core skills
 
-**Status:** 🔨 In progress.
+**Status:** ✅ Done — reframed tasks complete (2026-09-25).
 
 ### Resume Context (Plan 2.3)
-Linter reframed + fleet baseline `artifacts/lint-baseline-2026-09-25.json` (0 ISSUE / 45 NOTE, 26 skills).
-Next: `/concurrency` pilot, then `/closeout`, `/cross-repo-init`, `/markdown-style` (growth NOTEs), `/plan`, `/scope`.
+Plan complete. Six core skills + /prd, /herdr, /closeout-extended passed; fleet lint 0 ISSUE / 38 NOTE
+(from 13 ISSUE at the 2026-09-23 baseline, 45 NOTE after the reframe). TODOs extracted to `plans/TO-DO.md`.
 
 ### Session: 2026-09-25 (Opus 5.5)
 - **Phase 0** ✅ DONE. Plan stub reframed by decision (log 2026-09-25) — the 250-line target and

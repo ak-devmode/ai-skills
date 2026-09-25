@@ -1,6 +1,6 @@
 ---
 name: closeout
-version: 1.2.0
+version: 1.3.0
 description: |
   Local repo self-heal after a /plan run. Consumes closeout-prep.md and leaves the
   repo healthier than /plan found it: re-runs tests, spot-checks pattern references,
@@ -31,11 +31,8 @@ self-heal the local repo: verify pattern references still resolve, apply documen
 drift fixes, run tests, archive the scope.
 
 For cross-repo self-heal (Pattern Sources and Consumers from CROSS-REPO.md),
-/closeout-extended wraps this skill — same 11-step engine, applied per repo across
+/closeout-extended wraps this skill — same engine, applied per repo across
 the graph.
-
-The skill **never uses AskUserQuestion** — all user interaction is open-ended numbered
-inline questions answered by number.
 
 ---
 
@@ -123,9 +120,7 @@ template (used for schema reference) lives at `~/Projects/ai-skills/templates/cl
 
 3.3 Compare the ledger's schema version against the **template's**, read at run time
 from `~/Projects/ai-skills/templates/closeout-prep.md.template` — never against a
-version restated in this file. A number written in two places drifts; this paragraph
-used to say "currently `1.0`" while its own example said the skill expects `1.1`, so
-neither reader could tell which was authoritative.
+version restated in this file (a number written in two places drifts).
 
 ```bash
 grep -m1 '^\*\*Schema version:\*\*' ~/Projects/ai-skills/templates/closeout-prep.md.template
@@ -171,8 +166,7 @@ followed, K patterns created, T cross-repo touchpoints, D docs likely affected."
   Answer by number.
   ```
 - **On main/master:** present the same prompt with option 1 default-highlighted as
-  recommended. Per `feedback_branch_workflow.md`, do not silently switch — confirm
-  with the user.
+  recommended. Do not silently switch — confirm with the user.
 
 4.4 If git is not initialized, log "no git — branch step skipped" and proceed.
 
@@ -229,15 +223,9 @@ with workspace-relative paths to investigate. /closeout does NOT auto-fix these
 
 ## 7. Step 5 — §4 Triage
 
-7.1 Read §4 (Patterns Created) entries from the ledger. Each entry has the form:
-```
-- method-name  file:line
-  alternatives-considered:
-    - source-A: file:line — rejected: reason
-    - source-B: file:line — rejected: reason
-    - (none found in: <places searched>) — when truly novel
-  recommendation: extend <source> / accept as new / fold into <doc> / write TODO in <repo>'s TO-DO.md
-```
+7.1 Read §4 (Patterns Created) entries from the ledger. Entry format is owned by
+/plan §7.7 (example in the ledger template): method + `file:line`,
+`alternatives-considered`, `recommendation`.
 
 7.2 For each entry, route on `recommendation:` field:
 
@@ -424,8 +412,7 @@ and surfaces a proposal. Per /cross-repo-init's contract, scaffolds require user
 confirmation before write. /closeout does not halt on a missing CROSS-REPO.md —
 it lets /cross-repo-init handle the on-ramp.
 
-10.4 **Idempotency:** if the trio is healthy, /cross-repo-init produces no diff
-(`cross-repo-init/SKILL.md:9` — "re-running on a healthy repo produces no diff").
+10.4 **Idempotency:** if the trio is healthy, /cross-repo-init produces no diff.
 Cost on healthy repos is one read pass.
 
 10.5 **Coordination with Steps 6 and 7:** /cross-repo-init runs AFTER the doc-drift
@@ -438,8 +425,8 @@ Step 6/7's narrative-drift fixes are already in the working tree, and
 per flag — CROSS-REPO.md drift not validated this run" in §1 of the summary.
 
 10.7 If `--dry-run` was passed, skip the /cross-repo-init invocation and log
-"would invoke /cross-repo-init for trio sync." /cross-repo-init v1.1 does not
-have its own --dry-run flag; rather than partially honoring dry-run inside it,
+"would invoke /cross-repo-init for trio sync." /cross-repo-init has no
+--dry-run flag of its own; rather than partially honoring dry-run inside it,
 /closeout opts to skip the invocation entirely under --dry-run.
 
 10.8 Log to the summary's Step 8 line: `Trio sync: {N} edits proposed across
@@ -521,20 +508,13 @@ indicators are: phrases like "discovered that X always fails when Y", "third tim
 seeing this in <repo>", or risk flags that reference systemic issues (auth
 flakiness, deploy ordering, contract drift).
 
-12.5 For each cross-cutting finding, write a memory entry per the conventions in
-the user's auto memory rules (see CLAUDE.md system reminder):
-- Type: `reference` (for pattern sources) or `feedback` (for recurring failure
-  modes) — choose based on whether the finding is a pointer to a place or a rule
-  to apply.
-- Path: `{memory-dir}/{type}_{slug}.md` with `name`, `description`, `type`
-  frontmatter, body lead with rule + **Why:** + **How to apply:** lines.
-- Update `MEMORY.md` index with a one-line pointer.
+12.5 For each cross-cutting finding, write a memory entry per the harness's memory
+conventions — `reference` for a pointer to a place, `feedback` for a rule to apply —
+and add its one-line pointer to `MEMORY.md`.
 
-12.6 Auto-write — no prompt. Per Issue 13B (plan v0.2), de-dup gap is accepted —
-observe in practice, don't pre-emptively engineer. If a duplicate memory is later
-flagged by the user, that's the signal to add de-dup logic. (Note: 12.2 handles
-*contradiction*, which is a different problem from *duplication* — two entries can
-be non-duplicate and still disagree.)
+12.6 Auto-write — no prompt. Check for an existing entry that already covers the
+finding and update it rather than adding a duplicate. (12.2 handles *contradiction*,
+a different problem: two entries can be non-duplicate and still disagree.)
 
 12.7 Log memory results in step 12's summary, **split three ways**, so that a
 recorded-but-unfixed contradiction cannot read as a fixed one:
@@ -567,41 +547,11 @@ the run owned archival. Both sat "active" in PLANS-INDEX for days after completi
 and in both cases a stale index row meant later hygiene passes read them as live
 work and left them alone.
 
-13.0a **VERIFY EVERY RESIDUAL AGAINST `origin/<trunk>` BEFORE EXTRACTING IT.**
-Run this before §13.1's TODO extraction, not after.
-
-For each item the progress file lists as remaining, deferred, blocked or unbuilt,
-**grep the trunk for the thing it says does not exist** — the symbol, route, file,
-RPC, table, component — across every repo that would carry it. A one-line grep per
-item, and it decides:
-
-- **Found on trunk** → the item is DONE. Do not copy it into `TO-DO.md`. Correct the
-  progress entry with the SHAs and where it actually lives, and drop it from the
-  index row's remaining list.
-- **Not found** → extract it as normal.
-
-**Never carry forward a "remaining" claim you have not re-verified.** The progress
-file is the record of what a session *believed*; the trunk is what is *true*. Where
-they disagree, the trunk wins, and closeout is the last checkpoint that can catch it.
-
-> **Why this is a gate and not a nicety.** WellMed scope 91 listed an "AP tab" as
-> remaining work in four places — progress §1, the closeout summary, the PLANS-INDEX
-> row, and the closeout commit message naming it as a reason the archive gate refused.
-> It had shipped **six weeks earlier** in scope 102.6: cashier service + gRPC + proto,
-> gateway RPCs, and the Nuxt pages. The scope note asserting it unbuilt was written
-> 2026-09-01 against code that landed 2026-07-29 — **stale the day it was written**.
-> A cold-context validator caught it only at the clear gate; without that, the next
-> session would have opened a fresh context to rebuild shipped code.
->
-> This also explains a number people keep re-discovering: measured drift on unswept
-> `TO-DO.md` items runs ~61%. Closeout is a **producer** of that drift every time it
-> copies an unverified residual forward. Verifying at extraction is where the cost is
-> lowest — you already have the repo list from ledger §2, and the alternative is
-> `/todo-sweep` re-deriving it months later with no context.
-
-⚠ **Grep the trunk, not the working tree, and not the ledger.** A feature that landed
-from another scope is invisible in both. `git -C <repo> grep -l '<symbol>' origin/<trunk>`
-— and per the merged-state trap, content-grep rather than trusting a PR's merge status.
+13.0a **VERIFY EVERY RESIDUAL AGAINST `origin/<trunk>` BEFORE EXTRACTING IT** — /plan
+§11.1 owns the procedure; run it before §13.1's extraction, never after. The progress
+file records what a session *believed*; the trunk is what is *true*. Closeout is the
+last checkpoint that can catch the difference, and every unverified residual it copies
+forward feeds the ~61% measured drift in unswept `TO-DO.md` items.
 
 13.1 **Do NOT duplicate /plan's archive logic.** Read /plan/SKILL.md §11 (Plan
 Completion & Archive) and follow that procedure verbatim:
@@ -672,6 +622,8 @@ as a warning. If the gate cannot pass — e.g. a plan is genuinely still
 `WAITING_HUMAN` so §13.0 forbids archiving — say so explicitly in the header:
 "NOT ARCHIVED — {reason}", and state what has to happen first. Under `--dry-run`,
 skip the gate and note "archive gate not run (dry-run)."
+
+14.1 Then print:
 
 ```
 ✅ /closeout complete — {repo-name}
@@ -760,14 +712,6 @@ For a single repo, just re-run /closeout from the top.
 (§3.1a) and still reach Step 11. Announce the degradation, skip the ledger-driven
 steps as `NO LEDGER`, and title the summary "HEALED (ledger-less)".
 
-> **This section used to say "halt with clear message at Step 1."** That is the
-> exact bug §3.1a exists to prevent: halting at Step 1 means Step 11 never runs, so
-> the scope stays indistinguishable from active work. Scope 99 sat "active" in
-> PLANS-INDEX for days after four phases landed in a day, because the fast run wrote
-> no ledger. The fix landed in §3.1a and this paragraph was never updated, so the
-> skill documented both behaviours at once — and §18 still had a *test* asserting
-> the halt. Corrected 2026-08-09.
-
 16.2 **Ledger schema mismatch:** halt at **Step 1** (§3.3 — the schema gate lives
 in Step 1, not Step 3). Only a major-version or unknown mismatch halts; an older
 minor proceeds with a warning. User options: upgrade /plan and re-run, or run
@@ -830,8 +774,7 @@ moments use numbered options answered by number.
 
 ## 18. Recipe — First Run
 
-Manual verification recipe for confirming /closeout works end-to-end on a real
-scope. To be exercised in plan Phase 5 §8.6.
+Manual end-to-end verification on a real scope.
 
 1. cd into a repo that has a completed /plan with populated closeout-prep.md.
 2. `/closeout`
@@ -856,8 +799,7 @@ Failure modes to test:
 - Delete closeout-prep.md and re-run — expect **LEDGER-LESS MODE**, not a halt:
   the announcement in §3.1a, ledger-driven steps marked `NO LEDGER`, Step 11
   archive **still runs**, and the summary header reads "HEALED (ledger-less)".
-  (This test previously asserted "expect halt at Step 1" — the scope-99 bug. If a
-  run ever halts here again, that is the regression.)
+  (A halt here is the scope-99 regression.)
 - Edit the ledger to set schema version `99.0` — expect halt at Step 1 (major
   mismatch). Set it to one minor behind — expect a warning and a completed run.
 - Break a §3 pattern source reference (move the source file) — expect flag in

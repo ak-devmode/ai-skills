@@ -99,6 +99,16 @@ Next: `/concurrency` pilot, then `/closeout`, `/cross-repo-init`, `/markdown-sty
   contradiction with `/concurrency` §10) and §8 named `agent wait --until done` as the primary wait (hangs
   on codex). Kept the TERMINFO note in `herdr` §7 (was only in `/concurrency`). Lint: dup + supersession
   NOTEs cleared; only `size` remains. Files: `concurrency/SKILL.md` (0.4.0), `herdr/SKILL.md` (0.1.4).
+- **`/plan` + `/closeout`** ✅ DONE. plan 852→818, closeout 842→784 body lines, no splits. Defects fixed:
+  plan cited `§4.2`/`§4.3` (don't exist); §3.1 stamps the plan file while §8.1 said never modify it
+  (contradiction → explicit exception); §3.1 missed stubs with no `Executed by` line (hit live this scope);
+  §8.10 sat between 8.4 and 8.5 (moved, number kept). Both cited a memory file (`CLAUDE.md` §9.3 bans it).
+  closeout §12.5–12.6 restated a memory format + "de-dup gap accepted" that contradict the harness's memory
+  rules; "11-step engine" vs twelve steps; `SKILL.md:9` line citation; "v1.1" dry-run claim; missing 14.1
+  label. Cut: plan changelog banner, ralph-loop + migration history, stale "/closeout not installed"
+  fallback, closeout "used to say" blockquotes. De-duplicated: §4 entry format (owner /plan §7.7 +
+  template) and residual-vs-trunk verification (owner /plan §11.1, absorbed closeout's grep-the-trunk detail).
+  Lint: both plan↔closeout duplicate NOTEs cleared. Remaining plan↔scope dup = toolkit candidate #2.
 - **5.5 conciseness-floor log:** no breach observed in this session so far (2.2 + 2.3 start).
 
 ## Toolkit candidates (append as found — deterministic steps still written as prose)

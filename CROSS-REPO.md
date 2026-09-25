@@ -27,7 +27,7 @@ skills from this repo via symlinks), not contract-based.
 ## Trunk branch
 
 - **main** — solo-dev repo (ak-devmode/ai-skills). Commits go direct to
-  main per `feedback_branch_workflow.md`. No PR workflow.
+  main (CLAUDE.md §2). No PR workflow.
 
 ## Pattern Sources
 
@@ -75,4 +75,4 @@ skills from this repo via symlinks), not contract-based.
 
 ---
 
-<!-- Last scaffolded/audited by /cross-repo-init: 2026-05-11 -->
+<!-- Last scaffolded/audited by /cross-repo-init: 2026-09-25 (via /closeout, scope 2) -->

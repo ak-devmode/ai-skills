@@ -11,7 +11,7 @@ Optimized for agent consumption: Claude Code reads this file at session
 start to understand which skills exist and how they fit together.
 -->
 
-**Last refreshed:** 2026-06-01 (manual consistency pass — gate-phasing + closeout trio-sync)
+**Last refreshed:** 2026-09-25 (/closeout, scope 2 skills-relook — toolkit scripts, kalpa flatten, catalog)
 **Maintained by:** manual edits + /closeout when invoked by plans rooted here
 
 ---
@@ -24,75 +24,59 @@ start to understand which skills exist and how they fit together.
 
 ### 1.1 Planning + execution skills
 
-- `prd/` — Product Requirements Document generator. Translates a business
-  need into a structured PRD.
-- `scope/` — Task scoping, skill router, and progress tracker. Reads
-  current context, eliminates assumptions via numbered inline questions,
-  outputs a phased scope with skill checklist. v3.3.0: phases defined by
-  work gates (A–F), not context-window size.
-- `plan/` — Task Execution Engine. Executes tasks from a *-PLAN.md
-  document with progress logging and human checkpoints. v3.4.0: a plan is
-  one phase bounded by a gate (not a context window); /clear suggested only
-  at human/deploy/irreversible gate boundaries.
-- `closeout/` — Local repo self-heal after a /plan run. v1.0.0. Consumes
-  `templates/closeout-prep.md.template`. Step 8 runs trio sync via
-  /cross-repo-init; Step 11 invokes /plan §11 archive logic.
-- `closeout-extended/` — Recursive cross-repo self-heal across the
-  CROSS-REPO.md graph. v1.0.0. Works in ephemeral git worktrees; never
-  commits or pushes. Inherits the trio sync from /closeout (no separate pass).
-- `cross-repo-init/` — Bootstrap AND ongoing maintenance of the trio
-  (CROSS-REPO.md, ARCHITECTURE.md, CLAUDE.md) for a repo. v1.2.0; invoked
-  by /closeout as its Step 8. Branch survey classifies feature branches
-  merged-vs-live so merged work isn't re-flagged as drift. Templates live
-  in `cross-repo-init/templates/`.
-
-- `concurrency/` — herdr-backed multi-agent dispatch. v0.3.1: partitions a
-  scope's plan surface into a dependency DAG, dispatches the ready frontier to
-  visible named herdr panes (one worktree per lane; no /freeze — its state is
-  machine-global), pane cap 5 per tab, gated by a single inline `[y/N]` (no
-  `--dispatch` flag). Consumes /scope + /plan output.
-- `herdr/` — the herdr WORKFLOW layer. v0.1.1: naming, model-B worktree-per-
-  scope lifecycle, worker launch + trust/bypass, default concurrency pane layout,
-  model routing, gotchas. Referenced by /concurrency, /plan, /closeout;
-  `herdr --skill` owns the raw CLI vocabulary.
-- `research/` — cost-tuned deep research. v0.2.0: pane mode (default inside
-  herdr) runs one Sonnet lane per angle plus an independent verify lane in a
-  fresh tab, driven by `research/scripts/lanes.py`, with Opus synthesis in the
-  invoking session; Workflow mode runs `research/workflows/deep-research-lean.js`
-  (symlinked into `~/.claude/workflows/`) in the background.
+- `prd/` — PRD generator: business need → structured PRD.
+- `scope/` — scoping, skill router, progress tracker. Phases are bounded by work
+  gates (A–F), never by context-window size.
+- `plan/` — execution engine for `*-PLAN.md`: progress logging, ledger, human
+  checkpoints; `/clear` suggested only at human/deploy/irreversible gates.
+- `closeout/` — local self-heal + mandatory archive (Step 11 → /plan §11, gated by
+  `closeout/scripts/verify-archive.sh`). Step 8 runs trio sync via /cross-repo-init.
+- `closeout-extended/` — /closeout per CROSS-REPO.md neighbour, in ephemeral
+  worktrees; never commits or pushes.
+- `cross-repo-init/` — bootstrap + maintenance of the trio (CROSS-REPO.md,
+  ARCHITECTURE.md, CLAUDE.md); templates in `cross-repo-init/templates/`.
+- `ready-to-clear/` — fresh-subagent clear-readiness gate (disk truth vs git truth).
+- `review/` — gstack engine + Kalpa/PMG domain pass.
+- `scope-review/` — altitude-ordered review of a team member's scope.
+- `concurrency/` — partition a scope into a verified DAG, dispatch the ready
+  frontier to named herdr panes (worktree per writer), supervise.
+- `herdr/` — herdr workflow layer: naming, worktree lifecycle, worker launch,
+  layout, model routing. `herdr --skill` owns raw CLI syntax.
+- `research/` — deep research: visible pane lanes (`research/scripts/lanes.py`) or
+  the background `deep-research-lean` workflow.
+- `repo-cleanup/`, `repo-cleanup-all/` — branch hygiene (+ plans hygiene in docs repos).
+- `todo-sweep/` — verify TO-DO.md items against trunk.
+- `grafana-remediate/` — nightly WellMed alarm remediation workflow.
 
 ### 1.2 Document-style skills
 
-- `markdown-style/` — Format rules for structured .md documents (PRDs,
-  plans, playbooks). Numbered headings, checkbox TODOs, ASCII-only diagrams.
+- `markdown-style/` — format rules for structured .md (numbered headings, checkbox
+  TODOs, ASCII-only diagrams); owns plan/progress/scope/PLANS-INDEX conventions.
+- `md2docx/` — markdown → branded .docx.
 
 ### 1.3 Project-specific skills
 
-- `kalpa/` — WellMed/Kalpa-project-specific skills (`/coding-standards`,
-  `/generate-api`, `/kalpa-context`, `/migrate`, `/review`,
-  `/satu-sehat-fhir`). Subdirectory grouping — each skill is symlinked
-  individually into `~/.claude/skills/`.
-- `member-record-amend/` — PMG Padma Care skill: edit a member's Notion
-  record with PHA-supplied free-text instructions. Append-only on Medical
-  sections.
+- `kalpa-*` — WellMed/Kalpa skills (`kalpa-coding-standards`, `kalpa-context`,
+  `kalpa-generate-api`, `kalpa-migrate`, `kalpa-satu-sehat-fhir`). Flat top-level
+  dirs, namespaced — a container dir registered only 2 of 6 (CLAUDE.md §3.8).
+- `member-record-amend/`, `pha-console/` — PMG Padma Care skills.
+- `nano-banana/` — image generation helper.
 
 ### 1.4 Shared resources
 
-- `templates/` — Templates shared across skills. Currently:
-  `closeout-prep.md.template` (read by /plan to write the ledger, read by
-  /closeout to consume it). Moved here from `plan/templates/` during Task
-  6.1 to make ownership-free templates discoverable.
+- `templates/` — templates shared across skills (`closeout-prep.md.template`:
+  written by /plan, read by /closeout).
+- `scripts/` — deterministic steps the skills call instead of describing them in
+  prose (CLAUDE.md §3.6.1). Plans dir, scope numbering, PLANS-INDEX writes,
+  folder sweep, context gather, `Executed by` stamp, Repo Graph snapshot +
+  freshness gate, ledger bootstrap, dispatch log, herdr pane identity, branch
+  survey, guarded edits, and the accretion linter (`lint-skill.py`). Contracts
+  and exit codes: `scripts/README.md`.
 
 ### 1.5 Repo-local planning state
 
-- `plans/` — Plans tracking ai-skills's own development work (not
-  consumed by the skills it publishes). Layout follows the same
-  convention as `pmg-docs/plans/` and `kalpa-docs/plans/`:
-  - `plans/PLANS-INDEX.md` — registry of plans/scopes/PRDs for ai-skills work
-  - `plans/TO-DO.md` — accumulated TODOs
-  - `plans/<N>-<slug>/` — active scope folders (currently
-    `plans/closeout-skills/`)
-  - `plans/archive/` — completed scopes
+- `plans/` — ai-skills's own development work (not consumed by the skills):
+  `PLANS-INDEX.md`, `TO-DO.md`, `<N>-<slug>/` active scopes, `archive/`.
 
 ---
 
@@ -122,6 +106,7 @@ start to understand which skills exist and how they fit together.
         ─ reads CLAUDE.md, ARCHITECTURE.md, CROSS-REPO.md
           of TARGET repo (not this one)
         ─ may read templates/ files
+        ─ runs scripts/ for deterministic steps
         ─ may invoke other skills via Skill tool
         │
         ▼
@@ -149,13 +134,11 @@ register the skill; the body is read on invocation. Changing the
 frontmatter shape requires updating every skill in lockstep.
 
 3.2 **Numbered inline questions, never AskUserQuestion.** Per Alex's
-preference (`feedback_no_askuserquestion.md`,
-`feedback_numbered_questions.md`), skills authored here use numbered
+preference, skills authored here use numbered
 inline-text questions (`1. ... 2. ... 3. ...`), not the AskUserQuestion
 tool. Skills that need disambiguation halt and ask in plain text.
 
-3.3 **Numbered hierarchical headings.** Per `feedback_style.md` and
-`/markdown-style`, all skill bodies use `1`, `1.1`, `1.1.1` heading
+3.3 **Numbered hierarchical headings.** Per `/markdown-style`, all skill bodies use `1`, `1.1`, `1.1.1` heading
 hierarchy so feedback can reference sections.
 
 3.4 **ASCII diagrams only.** Mermaid is banned (unreadable in
@@ -169,9 +152,9 @@ copy. Per-skill templates that are private to a single skill may live
 under that skill's directory (e.g. `cross-repo-init/templates/` holds
 the trio templates because they are only consumed by /cross-repo-init).
 
-3.6 **Solo-dev repo, direct commits to main.** No PR workflow. Per-feature
-work goes on main; in-progress work that spans sessions is tracked in
-`plans/<scope>/<scope>-PROGRESS.md`.
+3.6 **Solo-dev repo, direct commits to main.** No PR workflow. Multi-session
+work is tracked in `plans/<N>-<slug>/progress.md` (child plans as sections
+inside it).
 
 3.7 **Skills are symlinked into Claude Code, not copied.** Edits land
 in `~/.claude/skills/<name>` immediately because that path is a symlink
@@ -182,6 +165,15 @@ archive logic directly (does not duplicate). /closeout-extended invokes
 /closeout per neighbor (does not duplicate self-heal logic). When a
 common pattern emerges, factor it into one skill's section and have
 others reference it by section number.
+
+3.9 **Deterministic work goes in `scripts/`, and every writer reads back.** A
+step with one correct answer is code, not prose; a script that writes verifies
+the destination before reporting success (CLAUDE.md §3.6.1–3.6.2).
+
+3.10 **Size is advisory, not a cap.** The accretion linter fails only on
+mechanical defects; size, growth-without-deletion and cross-skill duplication are
+NOTEs. Never split a mandatory rule into `references/` to hit a line count
+(scope 2 decision, 2026-09-25).
 
 ---
 
@@ -217,47 +209,36 @@ graphs.
      in §1. Plus: contracts (frontmatter, conventions) that have evolved
      past what older skills follow. -->
 
-### 6.1 Skill catalog status (2026-06-01)
+### 6.1 Skill catalog status (2026-09-25)
 
-| Skill | Status | Notes |
+| Skill | Version | Notes |
 |---|---|---|
-| `markdown-style` | v1.1.0 | CHECKPOINT format carries the **Gate** field. |
-| `prd` | v1.0.0 | |
-| `scope` | v3.3.0 | Gate-driven phasing — phases defined by work gates (A–F), not token size. |
-| `plan` | v3.4.0 | Plan = one phase bounded by a gate; /clear only at human/deploy/irreversible gates. |
-| `closeout` | v1.2.0 | Step 8 trio-sync via /cross-repo-init; Step 11 /plan §11 archive. Dogfooded. |
-| `closeout-extended` | v1.0.0 | Inherits /closeout trio sync per neighbor; worktree-isolated. |
-| `cross-repo-init` | v1.2.0 | Bootstrap + ongoing maintenance; invoked by /closeout Step 8. Branch survey now classifies merged-vs-live branches. |
-| `kalpa/` | Stable | Six WellMed-project skills. |
-| `member-record-amend` | Stable | |
+| `plan` | 3.8.0 | Scripts for folder, stamp, Repo Graph gate, ledger. |
+| `scope` | 3.8.0 | Step 0 = `context-gather.sh`; stub index rows via `plans-index.py`. |
+| `closeout` | 1.3.0 | Memory steps follow harness conventions; residual verify owned by /plan §11.1. |
+| `closeout-extended` | 1.0.1 | |
+| `cross-repo-init` | 1.5.0 | Branch survey = `repo-survey.sh`; CLAUDE template no longer writes memory paths. |
+| `markdown-style` | 1.3.0 | Child plans have no own progress file; Draft→Ready is the go signal. |
+| `prd` | 1.1.0 | Step 0 = `context-gather.sh`. |
+| `concurrency` | 0.5.0 | Dedup'd against herdr; pane naming + dispatch log via scripts. |
+| `herdr` | 0.1.5 | Opus seat = 5.5 (`opus[1m]`). |
+| `review` | 2.2.0 | |
+| `ready-to-clear` | 1.1.0 | |
+| `kalpa-*` | unversioned | Flattened 2026-08-09. |
 
 ### 6.2 Active scope
 
-- `plans/closeout-skills/` — **complete.** Shipped and dogfooded /closeout,
-  /closeout-extended, /cross-repo-init plus the /plan Phase 0 + Pattern-First
-  extensions across the PMG and WellMed fleets.
-- Most recent direct-to-main work (2026-06-01): gate-driven phasing across
-  /scope, /plan, /markdown-style, plus /closeout Step 8 trio-sync via
-  /cross-repo-init. No dedicated scope folder — shipped under the repo's
-  small-fix direct-commit convention.
+- None after scope 2 (skills-relook) closed 2026-09-25 — see
+  `plans/archive/2-skills-relook/`. Active: scopes 5 (verify-lever) and 6
+  (research-lanes) per `plans/PLANS-INDEX.md`.
 
-### 6.3 Open items deferred to v1.1 of closeout-skills
+### 6.3 Known gaps
 
-`plans/TO-DO.md` accumulates calibration findings:
-
-- Pattern-grep candidate pool vs contract-traversal graph (split in
-  CROSS-REPO.md v1.1 — `grep-only: true` flag per Pattern Source).
-- Auto-generate-diagrams: relax for unambiguous-happy-path hubs.
-- ADR numbering collision audit during /cross-repo-init.
-- `.claude/CLAUDE.md` reconciliation prompt during /cross-repo-init Step 2
-  (the trigger that surfaced the assess-first lesson — already partly
-  baked into v1.1, refine further).
-- ~~Feature-branch heuristic: note "merged into trunk" status inline rather
-  than treating matched-name branches as live drift.~~ **DONE** (cross-repo-init
-  v1.2.0, 2026-06-01 — merged-vs-live classification in §2.2).
-- Branch-aware code surveying cascade (already in v1.1; mark verified).
-- Standard ARCHITECTURE.md §6 Drift section template (already in v1.1; mark verified).
+- Paraphrased cross-skill duplicates are invisible to `lint-skill.py`; the
+  semantic eval pass is deferred to a second sighting of drift (`plans/TO-DO.md`).
+- 13 repos' CLAUDE.md files still carry the pmg memory path the old trio template
+  wrote (`plans/TO-DO.md`).
 
 ---
 
-<!-- Last scaffolded by /cross-repo-init: 2026-05-11; manual consistency pass: 2026-06-01 -->
+<!-- Last scaffolded by /cross-repo-init: 2026-05-11; /closeout refresh: 2026-09-25 -->

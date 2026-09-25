@@ -290,7 +290,7 @@ Touches: ai-skills · concurrency/SKILL.md · herdr/SKILL.md · scope + plan + c
       build bars / model-token / space-level-limit before his repo lands.
 
 ## skills-relook — fleet CLAUDE.md memory pointers (Scope 2, Plan 2.3)
-Source: plans/skills-relook/progress.md (Plan 2.3)
+Source: plans/archive/2-skills-relook/progress.md (Plan 2.3)
 Touches: cross-repo-init/templates/CLAUDE.md.template · 13 repo CLAUDE.md files (§8.2 + §9 "Plans and memory")
 - [ ] **Strip the pmg memory path from 13 repos' CLAUDE.md** — the trio template wrote
       `~/.claude/projects/-Users-alexknecht-Projects-pmg/memory/` (+ `memory/…` citations) into
@@ -302,7 +302,7 @@ Touches: cross-repo-init/templates/CLAUDE.md.template · 13 repo CLAUDE.md files
       deleting it. Next `/closeout` trio sync per repo will propose it, or do a sweep.
 
 ## skills-relook — follow-ups (Scope 2, Plan 2.3)
-Source: plans/skills-relook/progress.md (Plan 2.3 + "Toolkit candidates" table)
+Source: plans/archive/2-skills-relook/progress.md (Plan 2.3)
 Touches: scripts/lint-skill.py · all SKILL.md
 - [ ] **Paraphrased cross-skill duplicates** are invisible to the linter (e.g. GLM traps /concurrency vs
       herdr were found by reading). Second sighting of a drift from one → build the deferred eval pass.

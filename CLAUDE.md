@@ -84,14 +84,13 @@ not delivery. On each merge to `main`:
 - `allowed-tools` — explicit tool whitelist. Skills that ban
   AskUserQuestion list every tool BUT AskUserQuestion.
 
-3.2 **Numbered inline questions, never AskUserQuestion.** Per
-`feedback_no_askuserquestion.md` and `feedback_numbered_questions.md`.
-Skills authored here halt and present numbered options in plain text
+3.2 **Numbered inline questions, never AskUserQuestion.** Alex's standing
+preference. Skills authored here halt and present numbered options in plain text
 when they need disambiguation. Voice the question naturally; do not
 emit a tool call.
 
 3.3 **Numbered hierarchical headings throughout skill bodies.** `1`,
-`1.1`, `1.1.1` per `feedback_style.md` and `/markdown-style`. Lets the
+`1.1`, `1.1.1` per `/markdown-style`. Lets the
 user reference a section by number when reviewing.
 
 3.4 **ASCII diagrams only, never Mermaid.** Box-drawing characters
@@ -288,14 +287,14 @@ both graphs.
 9.1 **ai-skills's own plans** live in `~/Projects/ai-skills/plans/`. This
 is distinct from `~/Projects/pmg/pmg-docs/plans/` and
 `~/Projects/wellmed/kalpa-docs/plans/` (which track work in those
-projects). Per `reference_ai_skills_plans_dir.md`, `/scope` and `/plan`
-recognize this dir.
+projects). `scripts/resolve-plans-dir.sh` resolves it for `/scope` and `/plan`.
 
-9.2 **Recent work:** `plans/closeout-skills/` (complete) shipped /closeout,
-/closeout-extended, /cross-repo-init plus the /plan Phase 0 + Pattern-First
-extensions across the PMG and WellMed fleets. Most recent direct-to-main
-work (2026-06-01): gate-driven phasing across /scope, /plan, /markdown-style,
-and /closeout Step 8 trio-sync via /cross-repo-init.
+9.2 **Recent work:** `plans/archive/2-skills-relook/` (closed 2026-09-25) — the
+accretion linter (`scripts/lint-skill.py`), the fleet move to Opus 5.5, a
+defect pass over the core skills (contradictions, dead refs, harness-owned and
+duplicated text — no splitting to hit a line count), and eight toolkit scripts
+that replaced prose steps. Before that: `plans/closeout-skills/` (complete)
+shipped /closeout, /closeout-extended and /cross-repo-init.
 
 9.3 **Agent memory is scoped by working directory — it does NOT follow you
 across projects.** Each project gets its own store at

@@ -9,7 +9,7 @@ fail the run (exit 1); NOTES never do.
 
 This exists because CLAUDE.md §6 said "No linter currently" while the skills
 accreted past the size a model can obey — the diagnosis in
-`plans/skills-relook/AUDIT.md`. Eyeballing does not hold a line across eight
+`plans/archive/2-skills-relook/AUDIT.md`. Eyeballing does not hold a line across eight
 skills and years of incident lore; a script does. Same reasoning `/closeout`
 §14.0 applies to its archive gate and §3.6.1 applies to the other scripts here:
 prose (and eyeballing) cannot enforce itself.

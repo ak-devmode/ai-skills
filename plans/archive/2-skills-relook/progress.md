@@ -15,10 +15,11 @@ ceo-review decisions logged below (linter now / eval deferred; scope 2 ≠ scope
 (Claude adversarial + critical pass; codex DEGRADED), found + fixed 8 fail-open/false-positive bugs,
 verdict SHIP (`artifacts/review-2.1-lint-skill.md`). Gate C met; no PR (Alex, 2026-09-25 — push only).
 **2.2 DONE (2026-09-25):** fleet on 5.5 (live + tracked config); verbosity measurement folded into 2.3.
-**2.3 DONE (2026-09-25) — all three plans complete.** Core skills re-passed through the reframed loop
-(no splits; contradictions, dead refs, harness-owned and duplicated text cut); linter gained growth,
-cross-skill-duplicate and memory-citation checks. Follow-ups → `plans/TO-DO.md` (toolkit scope, fleet
-CLAUDE.md memory paths, paraphrase-dup eval trigger). **Next: `/closeout` for scope 2.** Open blockers: none.
+**SCOPE CLOSED (2026-09-25) — /closeout run, archived to `plans/archive/2-skills-relook/`.** Plans 2.1–2.4
+done. Closeout healed ARCHITECTURE.md (stale kalpa/ container, no scripts/ layer, catalog, active scope),
+CLAUDE.md (§9.2 recent work; its own memory citations in §3.2/§3.3/§9.1), CROSS-REPO.md (memory cite,
+audit stamp). Residuals in `plans/TO-DO.md` re-verified: fleet CLAUDE.md memory paths still present in 13
+repos (grep, 2026-09-25). Deferred "ready-to-clear oversize" dropped — size is advisory now.
 
 ## Decisions Log (append-only)
 - 2026-09-23 — Reframe: scope = an iterative dogfooded skill-eval/improvement loop, not a cleanup pass. (Alex, Q2/Q3/Q4)
@@ -30,6 +31,7 @@ CLAUDE.md memory paths, paraphrase-dup eval trigger). **Next: `/closeout` for sc
 - 2026-09-25 — Stay on Opus 5.5 (5.0/5.1 disliked; 5.5 good so far). Tracked `dev-workbench` settings aligned to live `opus[1m]`, not symlinked. (Alex)
 - 2026-09-25 — **250-line cap dropped as a bar.** Size is a symptom; splitting mandatory rules into `references/` makes them less likely to be followed. Linter: size ISSUE → NOTE; new NOTE checks `growth` (git history, deleted/added < 20% over last 10 modifying commits — git chosen over a snapshot baseline: nothing to go stale, same metric as AUDIT §1) and `cross-skill-duplicate` (word 5-gram containment ≥ 0.3; fleet: all hits real, zero noise; misses paraphrase). 2.3 now cuts superseded / harness-owned / contradictory / duplicated text; `references/` only for rare-branch content. (Alex)
 - 2026-09-25 — 2.3 complete. Per-skill eval suites: none earned (no behavioural regression sighted), per the lazy rule. (Alex/Claude)
+- 2026-09-25 — Scope closed via /closeout; no PR (Alex). Branch merge to `main` pending Alex's go.
 - 2026-09-25 — **Standing lens for 2.3: toolkit candidates.** Deterministic, CLI-executable steps written as prose get logged in *Toolkit candidates* below as found (pulled back from scope 5's verify intent; model = `resolve-plans-dir.sh`, the ADR/scope resolvers). (Alex)
 
 ## Progress Log (append-only)

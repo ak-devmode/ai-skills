@@ -102,3 +102,11 @@
 
 ### §11 Risk Flags
 - `~/.claude/settings.json` is a plain file, not a symlink to dev-workbench — live/tracked drift is structural, will recur.
+- (resolved 2026-09-25) `dev-workbench` tracked settings aligned on `fix/opus-5-5-default` (`227b0c2`, pushed; merge pending).
+
+### §2 Files Changed (additional)
+**dev-workbench — config (unplanned):**
+- `config/claude-code/settings.json` — `model` → `opus[1m]`; `modelSettings.claude-opus-5-5.effortLevel: high`. Branch `fix/opus-5-5-default`.
+
+### §9 Deferred Items
+- 2.2.3 measure 5.5 verbosity + 2.2.4 tune floor → folded into **2.3** (log floor breaches per skill; 2nd sighting → eval harness).

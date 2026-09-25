@@ -14,9 +14,9 @@ ceo-review decisions logged below (linter now / eval deferred; scope 2 ≠ scope
 `/concurrency` (1 ISSUE oversize + 1 NOTE cleared); fleet baseline in `artifacts/`. `/review` ran
 (Claude adversarial + critical pass; codex DEGRADED), found + fixed 8 fail-open/false-positive bugs,
 verdict SHIP (`artifacts/review-2.1-lint-skill.md`). Gate C met; no PR (Alex, 2026-09-25 — push only).
-**2.2 IN PROGRESS (2026-09-25):** 2.2.1 + 2.2.2 done — live fleet was already on 5.5; only doc + tracked-config
-drift remained. **Next: 2.2.3** (measure 5.5 obedience) — blocked on a sequencing question (see Plan 2.2 Resume
-Context). Branch pushed, tracks `origin/feature/skills-relook-opus5`.
+**2.2 DONE (2026-09-25):** fleet on 5.5 (live + tracked config); verbosity measurement folded into 2.3.
+**Next: 2.3** — apply the loop to core skills, logging every conciseness-floor breach observed under 5.5.
+Open blockers: none. Pending human step: merge `dev-workbench` `fix/opus-5-5-default`.
 
 ## Decisions Log (append-only)
 - 2026-09-23 — Reframe: scope = an iterative dogfooded skill-eval/improvement loop, not a cleanup pass. (Alex, Q2/Q3/Q4)
@@ -24,6 +24,8 @@ Context). Branch pushed, tracks `origin/feature/skills-relook-opus5`.
 - 2026-09-23 — Linter built in-scope; no `/feedback` to Anthropic. `plugin.json` restructure out.
 - 2026-09-23 (ceo-review) — Split: **accretion linter builds now** (spine); **`plugin eval` harness deferred** to second-sighting regression. Mode = HOLD SCOPE. (Alex)
 - 2026-09-23 (ceo-review) — Scope 2 (skills) and scope 5 (verify-lever, code/output/product) stay **separate — do not conflate**. (Alex)
+- 2026-09-25 — 2.2.3/2.2.4 (measure 5.5 verbosity, tune floor) **folded into 2.3**: 2.3 runs entirely on 5.5 and IS the measurement; log each floor breach per skill; a second sighting of the same breach triggers the deferred eval harness. Avoids building the harness ceo-review deferred. (Alex)
+- 2026-09-25 — Stay on Opus 5.5 (5.0/5.1 disliked; 5.5 good so far). Tracked `dev-workbench` settings aligned to live `opus[1m]`, not symlinked. (Alex)
 
 ## Progress Log (append-only)
 - 2026-09-23 — Scope authored (scope.md, progress.md, stubs 2.1–2.3). Conciseness floor added to global CLAUDE.md.
@@ -48,15 +50,11 @@ Nothing left in 2.1. Next scope action is 2.2. Dispositions + fleet worklist in
 
 ## Plan 2.2: Model migration to Opus 5.5
 
-**Status:** 🔨 In progress — 2/4 tasks done.
+**Status:** ✅ Done — 2 tasks done, 2 folded into 2.3 (Alex, 2026-09-25).
 
 ### Resume Context (Plan 2.2)
-Seat migration is effectively done on this machine. Open: (a) `dev-workbench`'s tracked
-`config/claude-code/settings.json` still pins `claude-opus-4-8` and lacks the `claude-opus-5-5`
-effort entry — a reinstall from it would roll the fleet back; that repo is on an unrelated branch
-(`feature/1password-migration`), so not touched without Alex's say-so. (b) 2.2.3 says "run the loop on
-2–3 **slimmed** skills", but slimming is 2.3's work — needs a call: measure now on unslimmed skills
-(baseline) or fold measurement into 2.3.
+Plan complete. Fleet on 5.5 live and in tracked config (`dev-workbench` `fix/opus-5-5-default`,
+pushed, merge pending). Verbosity measurement lives in 2.3 now.
 
 ### Session: 2026-09-25 (Opus 5.5)
 - **Phase 0** ✅ DONE. Plan stub has no `Status`/`Executed by` fields (same as 2.1, which ran). Branch
@@ -69,10 +67,17 @@ effort entry — a reinstall from it would roll the fleet back; that repo is on 
   - Found, not fixed: `dev-workbench/config/claude-code/settings.json:191` pins `claude-opus-4-8` (other repo).
 - **Task 2.2.2 — conciseness floor active** ✅ DONE. `~/.claude/CLAUDE.md` symlinks to
   `dev-workbench/config/claude-code/CLAUDE.md`; "Conciseness floor" bullet present and loaded this session.
+- **Task 2.2.3 — measure loop under 5.5** ⏭️ FOLDED into 2.3 (decision log 2026-09-25).
+- **Task 2.2.4 — tune floor if breached** ⏭️ FOLDED into 2.3 (same).
+#### Unplanned: align `dev-workbench` tracked settings to live
+- **Files modified:** `dev-workbench/config/claude-code/settings.json` (`model` → `opus[1m]`; add
+  `modelSettings.claude-opus-5-5.effortLevel: high`). Branch `fix/opus-5-5-default` off `origin/main`
+  via a temp worktree (1password branch untouched); commit `227b0c2`, pushed. Why: reinstall would roll back to 4.8.
 
 ## Human Steps
 | Step | Status |
 |---|---|
 | Clear + reload in Opus 5.5 with updated global prompt, then execute 2.1 | [x] Done (ran under 4.8; 5.5 seat is 2.2's concern) |
 | Review 2.1 — `/review` done (SHIP, 8 bugs fixed in-band) | [x] Done |
-| Open PR for `feature/skills-relook-opus5` (first push — no remote yet) | [ ] Pending (gated on Alex) |
+| Open PR for `feature/skills-relook-opus5` | [x] N/A — Alex: no PR, push only (2026-09-25) |
+| Merge `dev-workbench` `fix/opus-5-5-default` → `main` | [ ] Pending |

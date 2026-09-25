@@ -58,12 +58,11 @@ not delivery. On each merge to `main`:
 - [ ] Announce it to the team so they `git pull` their ai-skills clone. A
       teammate on a stale clone runs a stale skill and produces documents that
       silently violate the convention just changed.
-- [ ] Check for **vendored copies** of these skills in other repos and refresh or
-      delete them. Known copy: `kalpa-docs/claude-skills/` — four flat `.md`
-      files hand-copied in March 2026, still frozen there, 305 lines against
-      markdown-style's 548, missing §10 and §11 entirely and missing `/scope`
-      altogether. A stale duplicate is worse than no copy: an agent working in
-      that repo reads it and follows superseded rules.
+- [ ] Check for **vendored copies** of these skills in other repos and delete
+      them (`find ~/Projects -maxdepth 3 -type d -name claude-skills`). Both known
+      copies are gone — `kalpa-docs/claude-skills/` (`b21194a`) and
+      `pmg-docs/claude-skills/` (2026-09-25, still shipping `task-runner`). A stale
+      duplicate is worse than no copy: an agent in that repo follows superseded rules.
 
 > **Why this is a checklist item and not a habit.** The March copy was made once,
 > for team onboarding, and never touched again — nothing in any skill told anyone

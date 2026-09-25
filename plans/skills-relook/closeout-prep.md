@@ -88,3 +88,17 @@
 - Semantic live-contradiction detection (AUDIT §5.3 class) is NOT implemented — it needs an LLM/eval pass, deferred per scope §2.1. The shipped NOTE-tier supersession scan surfaces *where* such contradictions hide, but a human/eval must confirm. This is a known, deliberate coverage boundary, stated in the linter docstring and README.
 
 ---
+
+---
+
+## Phase 2: 2.2 Model migration to Opus 5.5 (started 2026-09-25)
+
+### §2 Files Changed
+**ai-skills — doc:**
+- `herdr/SKILL.md` — §6 opus seat row: "Opus 4.8" → `opus[1m]` → Opus 5.5; re-verified date; version 0.1.3.
+
+### §5 Cross-Repo Touchpoints
+- `dev-workbench/config/claude-code/settings.json:191` — tracked copy pins `claude-opus-4-8`; live `~/.claude/settings.json` (not symlinked) is `opus[1m]` + `modelSettings.claude-opus-5-5`. Reinstall from tracked would roll back to 4.8. Not edited (repo on `feature/1password-migration`).
+
+### §11 Risk Flags
+- `~/.claude/settings.json` is a plain file, not a symlink to dev-workbench — live/tracked drift is structural, will recur.

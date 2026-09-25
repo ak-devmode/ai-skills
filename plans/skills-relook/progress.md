@@ -13,8 +13,10 @@ ceo-review decisions logged below (linter now / eval deferred; scope 2 ≠ scope
 **2.1 DONE + REVIEWED (2026-09-23):** accretion linter `scripts/lint-skill.py` built + dogfooded on
 `/concurrency` (1 ISSUE oversize + 1 NOTE cleared); fleet baseline in `artifacts/`. `/review` ran
 (Claude adversarial + critical pass; codex DEGRADED), found + fixed 8 fail-open/false-positive bugs,
-verdict SHIP (`artifacts/review-2.1-lint-skill.md`). Gate C met. **Next: 2.2** (model migration to
-Opus 5.5). Open blockers: none. Branch `feature/skills-relook-opus5` has NO remote yet — push on Alex's say-so.
+verdict SHIP (`artifacts/review-2.1-lint-skill.md`). Gate C met; no PR (Alex, 2026-09-25 — push only).
+**2.2 IN PROGRESS (2026-09-25):** 2.2.1 + 2.2.2 done — live fleet was already on 5.5; only doc + tracked-config
+drift remained. **Next: 2.2.3** (measure 5.5 obedience) — blocked on a sequencing question (see Plan 2.2 Resume
+Context). Branch pushed, tracks `origin/feature/skills-relook-opus5`.
 
 ## Decisions Log (append-only)
 - 2026-09-23 — Reframe: scope = an iterative dogfooded skill-eval/improvement loop, not a cleanup pass. (Alex, Q2/Q3/Q4)
@@ -43,6 +45,30 @@ Nothing left in 2.1. Next scope action is 2.2. Dispositions + fleet worklist in
   - Dogfooding caught + fixed two cry-wolf bugs (lettered-subsection collapse; benign "removed"). Negative-control fixture proved all four ISSUE checks fire (exit 1).
 - **Task 2.1.2 — dogfood `/concurrency` + baseline** ✅ DONE. Verdict logged above; fleet baseline (26 skills: 16 ISSUE / 14 NOTE) → `artifacts/lint-baseline-2026-09-23.{md,txt,json}`. Acted on flags: oversize routed to 2.3, NOTE cleared, new `prd` dup-number finding recorded.
 - **Task 2.1.3 — dogfood entrypoint** ✅ DONE. The `scripts/` script IS the entrypoint skills run against themselves; wired into `CLAUDE.md` §6 + §4 and `scripts/README.md` (table + contract).
+
+## Plan 2.2: Model migration to Opus 5.5
+
+**Status:** 🔨 In progress — 2/4 tasks done.
+
+### Resume Context (Plan 2.2)
+Seat migration is effectively done on this machine. Open: (a) `dev-workbench`'s tracked
+`config/claude-code/settings.json` still pins `claude-opus-4-8` and lacks the `claude-opus-5-5`
+effort entry — a reinstall from it would roll the fleet back; that repo is on an unrelated branch
+(`feature/1password-migration`), so not touched without Alex's say-so. (b) 2.2.3 says "run the loop on
+2–3 **slimmed** skills", but slimming is 2.3's work — needs a call: measure now on unslimmed skills
+(baseline) or fold measurement into 2.3.
+
+### Session: 2026-09-25 (Opus 5.5)
+- **Phase 0** ✅ DONE. Plan stub has no `Status`/`Executed by` fields (same as 2.1, which ran). Branch
+  confirmed `feature/skills-relook-opus5`. Sibling plans + scope re-read. Ledger found, appending phase header.
+- **Task 2.2.1 — bump `claude-opus-4-8` → `claude-opus-5-5`** ✅ DONE. Grep across ai-skills (excl. plans):
+  no literal pins. Seats use the global default. Live `~/.claude/settings.json` = `"model": "opus[1m]"`
+  (alias → 5.5; this session runs `claude-opus-5-5`) with `modelSettings.claude-opus-5-5.effortLevel: high`.
+  Only drift in-repo: `herdr` §6 seat table said "Opus 4.8" — fixed.
+  - Files: `herdr/SKILL.md` (seat row + re-verified date; 0.1.2 → 0.1.3; lint clean).
+  - Found, not fixed: `dev-workbench/config/claude-code/settings.json:191` pins `claude-opus-4-8` (other repo).
+- **Task 2.2.2 — conciseness floor active** ✅ DONE. `~/.claude/CLAUDE.md` symlinks to
+  `dev-workbench/config/claude-code/CLAUDE.md`; "Conciseness floor" bullet present and loaded this session.
 
 ## Human Steps
 | Step | Status |

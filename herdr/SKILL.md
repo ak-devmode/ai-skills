@@ -1,6 +1,6 @@
 ---
 name: herdr
-version: 0.1.2
+version: 0.1.3
 description: |
   Alex's herdr WORKFLOW layer — the single source of truth for how we drive
   herdr (terminal workspace manager for AI agents) for agent work: naming, the
@@ -145,12 +145,12 @@ seeded standby panes** in the "work" tab before splitting new ones.
 
 ## 6. Model routing table
 
-THE single source of routing truth (verified on this machine 2026-08-23). New
+THE single source of routing truth (verified on this machine 2026-08-23; opus seat re-verified 2026-09-25). New
 seats are new rows.
 
 | Seat | Launch inside pane | Route to it |
 |------|-------------------|-------------|
-| `opus` | `claude` (global default: Opus 4.8) | judgment, design-adjacent implementation, prod-shaped decisions |
+| `opus` | `claude` (global default `opus[1m]` → Opus 5.5, `claude-opus-5-5`) | judgment, design-adjacent implementation, prod-shaped decisions |
 | `codex` | `codex -m gpt-5.6-sol` (headless: `codex exec -m gpt-5.6-sol`) | secondary implementation, independent review passes |
 | `glm` | `ANTHROPIC_BASE_URL=https://openrouter.ai/api ANTHROPIC_AUTH_TOKEN=$(security find-generic-password -s openrouter-api-key -w) ANTHROPIC_SMALL_FAST_MODEL=z-ai/glm-5-turbo claude --model z-ai/glm-5.2` | mechanical/bulk: migrations-by-pattern, test scaffolds, sweeps |
 

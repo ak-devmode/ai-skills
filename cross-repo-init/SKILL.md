@@ -1,6 +1,6 @@
 ---
 name: cross-repo-init
-version: 1.4.0
+version: 1.5.0
 description: |
   Bootstrap **and ongoing maintenance** of the trio — CROSS-REPO.md, ARCHITECTURE.md,
   and CLAUDE.md — for a repo so /plan and /closeout-extended have the metadata they
@@ -76,24 +76,15 @@ broken paths) then LLM-judge on the candidates.
 
 ## 2. Step 0 — Detect Current Repo
 
-### 2.1 Identify repo + default branch
+### 2.1 Identify repo + survey branch
 
 ```bash
-git rev-parse --show-toplevel 2>/dev/null || { echo "ERROR: not a git repo"; exit 1; }
-REPO_ROOT=$(git rev-parse --show-toplevel)
-REPO_NAME=$(basename "$REPO_ROOT")
-REMOTE_URL=$(git remote get-url origin 2>/dev/null || echo "(no remote)")
-DEFAULT_BRANCH=$(git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null)
-DEFAULT_BRANCH="${DEFAULT_BRANCH#origin/}"; DEFAULT_BRANCH="${DEFAULT_BRANCH:-main}"  # `x | sed || echo` never fell back
-CURRENT_BRANCH=$(git -C "$REPO_ROOT" branch --show-current)
-echo "REPO_NAME=$REPO_NAME"
-echo "REPO_ROOT=$REPO_ROOT"
-echo "REMOTE_URL=$REMOTE_URL"
-echo "DEFAULT_BRANCH=$DEFAULT_BRANCH"
-echo "CURRENT_BRANCH=$CURRENT_BRANCH"
+~/Projects/ai-skills/scripts/repo-survey.sh "$PWD"     # exit 1 = not a git repo: halt with a clear error
 ```
 
-Halt with a clear error if not in a git repo.
+It prints `REPO`, `REPO_ROOT`, `REMOTE_URL`, `DEFAULT_BRANCH` (falls back to `main`
+when `origin/HEAD` is unset), `CURRENT_BRANCH`, `SURVEY_BRANCH` + `SURVEY_REASON`, then
+every remote branch classified vs the survey trunk. Read-only; never checks out.
 
 ### 2.2 Branch survey — CRITICAL FOR AUTO-DETECTION ACCURACY
 
@@ -103,40 +94,14 @@ stable release/snapshot branch while real current-state code lives on
 look at the branch that holds current work — not just whatever happens to
 be checked out.
 
-```bash
-# Enumerate non-stale remote branches and classify each vs trunk, so a branch
-# already integrated into trunk is NOT mistaken for live drift (same merged-vs-
-# unmerged test the SessionStart git-hygiene hook uses: rev-list count of commits
-# the branch holds that trunk does not).
-git -C "$REPO_ROOT" fetch --prune origin 2>/dev/null  # best-effort refresh
-TRUNK="origin/$DEFAULT_BRANCH"   # swap to origin/develop once the cascade below selects it
-for ref in $(git -C "$REPO_ROOT" for-each-ref --format='%(refname:short)' refs/remotes/origin \
-              | grep -vE '/(HEAD|gh-pages)$'); do
-  [ "$ref" = "$TRUNK" ] && continue
-  ahead=$(git -C "$REPO_ROOT" rev-list --count "$TRUNK..$ref" 2>/dev/null)
-  when=$(git -C "$REPO_ROOT" log -1 --format='%cs' "$ref" 2>/dev/null)
-  if [ "${ahead:-0}" = "0" ]; then
-    echo "MERGED  $ref  ($when)"          # fully contained in trunk — NOT drift
-  else
-    echo "LIVE    $ref  ($when, +$ahead)" # unmerged commits — a real candidate
-  fi
-done
-git -C "$REPO_ROOT" rev-list --left-right --count "origin/$DEFAULT_BRANCH...origin/develop" 2>/dev/null || true
-```
+`repo-survey.sh` (§2.1) applies the cascade and the classification — the rules, so
+its output can be checked:
 
-A branch that reads `+N ahead` but was **squash-merged** is also already in
-trunk by content; ancestry can't see that. Confirm the ambiguous ones with
-`git -C "$REPO_ROOT" cherry "$TRUNK" "$ref"` — if every line is prefixed `-`
-(all commits already applied upstream), treat it as MERGED.
-
-**Pick the survey branch** (the one auto-detection scans against), using
-this cascade:
-
-1. If `CROSS-REPO.md` already exists with a populated `trunk-branch:` field, use that.
-2. Else if `origin/develop` exists AND is non-trivially ahead of
-   `origin/$DEFAULT_BRANCH` (≥5 commits ahead OR has files the default branch
-   doesn't), use `develop`.
-3. Else use `$DEFAULT_BRANCH`.
+- **Survey branch:** CROSS-REPO.md `trunk-branch:` if set → else `origin/develop` if
+  it is ≥5 commits ahead of default OR adds files default lacks → else default.
+- **MERGED** — no commits trunk lacks. **SQUASHED** — ahead by ancestry, but
+  `git cherry` shows every patch already upstream (in trunk by content). **LIVE** —
+  real unmerged work. Only LIVE is ever drift.
 
 Surface the choice to the user in the Step 0 report, even when no
 ambiguity exists:

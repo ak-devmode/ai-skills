@@ -1,6 +1,6 @@
 ---
 name: concurrency
-version: 0.4.0
+version: 0.5.0
 description: |
   ONE responsibility: map what can run in parallel and what cannot, against a
   clear set of rules — re-derived from repo ground truth on every run, never
@@ -155,8 +155,8 @@ Per partition, in this order (syntax authority: `herdr --skill`):
    --branch concurrency/<scope>-<task>` — no `--env`, for any seat (the glm
    override is inline in its launch command; `herdr` skill §6). Workspace label = run name only (`<scope> run`); seat identity
    goes on the PANE per the `herdr` skill §2 (naming).
-1b. **Layout + naming: `herdr` §5 and §2** — no tabs; pane identity
-   `<task> @<seat>` with `--source concurrency`.
+1b. **Layout + naming: `herdr` §5 and §2** — no tabs. Pane identity in one call
+   (rename + sidebar metadata, read back): `~/Projects/ai-skills/scripts/herdr-pane.sh name <pane> <task> <seat>`.
 2. Launch the seat's command (§3) in the created pane via `pane run` — claude/glm
    workers append `--dangerously-skip-permissions` (`herdr` skill §4: clears the
    fresh-worktree trust dialog + tool prompts; safe via worktree +
@@ -166,11 +166,12 @@ Per partition, in this order (syntax authority: `herdr --skill`):
    Claude seats additionally get the §7.2 gate-bus reporting instruction
    (`GATE-PASSED` / `GATE-BLOCKED` via SendMessage to the supervisor), and
    every brief includes: "If you need a helper terminal or sub-agent pane,
-   split your OWN pane right at half size:
-   `herdr pane split --current --direction right --ratio 0.5` — never a new
-   workspace, never split down (down is reserved for primaries)."
-4. Append one JSON line to `~/.config/herdr/concurrency-log.jsonl`:
-   `{ts, scope, task, seat, branch, worktree, pane_id, status:"dispatched"}`.
+   run `~/Projects/ai-skills/scripts/herdr-pane.sh helper` (splits your OWN pane right at half
+   size, prints its id) — never a new workspace, never split down (down is
+   reserved for primaries)."
+4. Log it — `~/Projects/ai-skills/scripts/dispatch-log.py --scope <scope> --task <task> --seat <seat>
+   --branch <b> --worktree <w> --pane <id> --status dispatched` (appends to
+   `~/.config/herdr/concurrency-log.jsonl` and reads the line back).
 
 ## 7. Supervision & coordination
 
@@ -186,8 +187,8 @@ Per partition, in this order (syntax authority: `herdr --skill`):
   lines; do not answer another agent's permission prompts on its behalf.
 - Read output with `pane read --source detection` (or `visible`) — never
   `recent` (`herdr` §7).
-- Record every terminal state in the dispatch log (`status: done|blocked|
-  failed`, plus the tail that proves it).
+- Record every terminal state with `dispatch-log.py … --status done|blocked|failed
+  --tail "<lines that prove it>"`.
 
 **7.2 Claude-to-Claude gate bus (claude + glm seats)**
 Dispatched claude/glm panes are full local Claude Code sessions, so they

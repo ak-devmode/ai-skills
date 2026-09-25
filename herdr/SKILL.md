@@ -1,6 +1,6 @@
 ---
 name: herdr
-version: 0.1.4
+version: 0.1.5
 description: |
   Alex's herdr WORKFLOW layer — the single source of truth for how we drive
   herdr (terminal workspace manager for AI agents) for agent work: naming, the
@@ -64,6 +64,7 @@ codex pane displayed `@opus`). So:
   `herdr pane rename <pane> "<task> @<seat>"` **plus**
   `herdr pane report-metadata <pane> --source <skill> --display-agent "<task> @<seat>"`
   (without the metadata the sidebar shows the workspace label for every agent).
+  Both in one call, read back: `~/Projects/ai-skills/scripts/herdr-pane.sh name <pane> <task> <seat> --source <skill>`.
 - **Driver** (a `/plan` session's own agent): `herdr agent rename $HERDR_PANE_ID driver`.
 - Auto-name from context when inside a pane via `$HERDR_PANE_ID` / `$HERDR_WORKSPACE_ID`.
 
@@ -141,8 +142,8 @@ seeded standby panes** in the "work" tab before splitting new ones.
   worker splits the driver **right**; the second splits that pane **down** (half
   height); later workers add columns to the right, each split **down** into two.
   `--no-focus` on every split so the driver keeps focus. A helper pane a worker
-  opens splits its OWN pane **right** at half size — never the herd layout, never
-  a new workspace or tab.
+  opens splits its OWN pane **right** at half size (`~/Projects/ai-skills/scripts/herdr-pane.sh helper`)
+  — never the herd layout, never a new workspace or tab.
 
 ## 6. Model routing table
 

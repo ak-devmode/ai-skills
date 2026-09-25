@@ -196,6 +196,14 @@ scripts/resolve-plans-dir.sh    — plans-dir resolution (one owner, 5 callers)
 scripts/claim-scope-number.sh   — scope numbering, race-defensive across 4 sources
 scripts/plans-index.py          — PLANS-INDEX validate/add/move, schema-enforcing
 scripts/todo-stats.py           — TO-DO.md counts for the SessionStart hook (counts only)
+scripts/plans-folder.sh         — plan/scope folder create + related-file sweep (no clobber)
+scripts/context-gather.sh       — /scope + /prd Step-0 context (greps the index, skips CLAUDE.md)
+scripts/stamp-executed-by.sh    — /plan §3.1 `Executed by` stamp from git config
+scripts/repo-graph-check.py     — /plan §5.6.1 Repo Graph freshness gate (exit-coded)
+scripts/ledger-init.sh          — /plan §5.13 closeout-prep.md bootstrap / phase header
+scripts/dispatch-log.py         — /concurrency JSONL dispatch log, read-back verified
+scripts/herdr-pane.sh           — herdr pane identity (rename + metadata) + helper split
+scripts/repo-survey.sh          — /cross-repo-init default/survey branch + MERGED/SQUASHED/LIVE
 scripts/lint-skill.py           — accretion linter for SKILL.md (dup-number/frontmatter/stale-name fail; growth/duplicate/size advise)
 plans/PLANS-INDEX.md            — local plans tracking ai-skills development
 plans/<scope>/                  — active scope folders

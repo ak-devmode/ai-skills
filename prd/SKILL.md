@@ -1,6 +1,6 @@
 ---
 name: prd
-version: 1.0.1
+version: 1.1.0
 description: |
   Product Requirements Document generator. Translates a business need, user problem,
   or feature request into a structured PRD through iterative assumption reduction and
@@ -58,22 +58,7 @@ Gather context before asking any questions. Never ask about something already
 determinable from the environment.
 
 ```bash
-# Detect project identity
-git remote -v 2>/dev/null | head -4
-echo "---PWD---"
-pwd
-```
-
-```bash
-# Check for existing PRDs and plans
-find ~/Projects/pmg/pmg-docs/development/prds/ -name "*.md" 2>/dev/null || echo "no PMG PRDs"
-find ~/Projects/wellmed/kalpa-docs/ -name "*PRD*" -o -name "*prd*" 2>/dev/null || echo "no WellMed PRDs"
-```
-
-```bash
-# Related work: GREP the index, never cat it — ~31k tokens in WellMed (/plan §1.1)
-PLANS_DIR="$(~/Projects/ai-skills/scripts/resolve-plans-dir.sh)" || true
-grep -nE '^\| *[0-9]+ .*(Ready to execute|In progress|Active|Draft)' "$PLANS_DIR/PLANS-INDEX.md" 2>/dev/null | head -20
+~/Projects/ai-skills/scripts/context-gather.sh   # identity, plans dir, live index rows, existing PRDs across the docs repo
 ```
 
 After running the above, synthesize:

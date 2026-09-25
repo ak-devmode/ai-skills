@@ -1,6 +1,6 @@
 ---
 name: plan
-version: 3.7.0
+version: 3.8.0
 description: |
   Execute tasks from a structured plan document step by step, logging progress and
   stopping at human checkpoints. Plan files follow the naming convention *-PLAN.md
@@ -144,35 +144,13 @@ hierarchy.
 
 **If the plan is a raw file directly in `plans/` (not in any subdirectory):**
 
-2.5.1 Derive the folder name from the plan stem (filename without `-PLAN.md`):
-- `ci-hardening-PLAN.md` → `{plans_dir}/ci-hardening/`
-- `39-auth-refresh-PLAN.md` → `{plans_dir}/39-auth-refresh/`
-
-2.5.2 Create the folder with the standard hierarchy:
+2.5.1 Create the folder and sweep related files into it — one call, never a hand-run
+`mkdir`/`mv`. The folder name is the plan stem (filename minus `-PLAN.md`):
 ```bash
-mkdir -p {plans_dir}/{plan-stem}/artifacts
+~/Projects/ai-skills/scripts/plans-folder.sh "$PLANS_DIR" "{plan-stem}" --move "$PLANS_DIR/{plan-stem}-PLAN.md"
 ```
-
-2.5.3 Move the plan file into the folder:
-```bash
-mv {plans_dir}/{plan-stem}-PLAN.md {plans_dir}/{plan-stem}/
-```
-
-2.5.4 If a progress file already exists, move it too:
-```bash
-mv {plans_dir}/{plan-stem}-PROGRESS.md {plans_dir}/{plan-stem}/ 2>/dev/null
-```
-
-2.5.5 Sweep related files — check for PRDs, concepting docs, or other working files
-with a matching slug and move them into the plan folder:
-```bash
-# Find related files (PRDs, concept docs, notes)
-ls {plans_dir}/*{slug}* 2>/dev/null | grep -v "{plan-stem}/"
-mv {plans_dir}/prd-{slug}*.md {plans_dir}/{plan-stem}/ 2>/dev/null
-mv {plans_dir}/*{slug}*.md {plans_dir}/{plan-stem}/ 2>/dev/null
-```
-
-Exclude `PLANS-INDEX.md`, `TO-DO.md`, and files already inside subdirectories.
+Contract in `scripts/README.md`; `--dry-run` first if the slug is short enough to
+over-match.
 
 2.5.6 Update `PLANS-INDEX.md` to reflect the new folder path (change `Folder/File`
 column from the raw filename to `{plan-stem}/`).
@@ -199,17 +177,16 @@ The three fields this skill *acts* on:
 
 The first time this skill executes a task in a plan whose `Executed by` reads
 `TBD` — or whose header has no `Executed by` line (add one) — stamp it before
-running the task. Derive both halves, never prompt:
+running the task. One call — it derives the name from git config and never prompts:
 
 ```bash
-git -C "$REPO" config --get user.name || git -C "$REPO" config --global --get user.name
+~/Projects/ai-skills/scripts/stamp-executed-by.sh "$PLAN_FILE"
 ```
 
-Write `**Executed by:** {derived name} / Claude` — the human accountable for the
-phase plus the agent that ran it. That compound is what teams already converged on
-by hand (`Hamzah / Claude` on scope 98, `Fajri + Claude` on scope 83) before the
-schema had a slot for it. If git config yields nothing, write `TBD / Claude` and
-surface it at the next checkpoint rather than guessing.
+It writes `{name} / Claude` (the human accountable plus the agent that ran it),
+appends `, then {name} / Claude` when someone else started the plan, and is a no-op
+when the name is already there. Exit 3 means no git `user.name` anywhere: write
+`TBD / Claude` and surface it at the next checkpoint rather than guessing.
 
 Re-stamp per plan file, not per scope: sibling plans of one scope routinely run in
 different hands, which is the whole reason this is separate from `Created by`.
@@ -267,52 +244,32 @@ current repo state before executing any tasks.
 If validation surfaces drift the user wants resolved with new research, route back
 to `/scope` — do not extend Phase 0 into a second scoping pass.
 
-Procedure:
-
-1. Parse the Repo Graph table from `scope.md`. For each row, extract:
-   - Repo path
-   - Recorded HEAD SHA
-   - Recorded current branch (if listed)
-   - SDK pin (if listed)
-
-2. For each repo, compare against current state:
+Procedure — the classification is pure git, so it is a script:
 
 ```bash
-REPO=~/Projects/wellmed/wellmed-consultation  # example, from scope row
-CURRENT_SHA=$(git -C "$REPO" rev-parse --short HEAD 2>/dev/null)
-CURRENT_BRANCH=$(git -C "$REPO" branch --show-current 2>/dev/null)
-# Count commits since the recorded SHA
-git -C "$REPO" rev-list --count "${RECORDED_SHA}..HEAD" 2>/dev/null
+~/Projects/ai-skills/scripts/repo-graph-check.py "$SCOPE_DIR/scope.md"
 ```
 
-3. **Classify each repo:**
-   - **Unchanged** — current SHA matches recorded SHA. Log silently, proceed.
-   - **Advanced on same branch** — current SHA differs but is a descendant of
-     recorded SHA, on the same branch. Surface: "scope recorded X, current is Y,
-     N commits since. Most likely safe — confirm or call out specific files of
-     concern."
-   - **Diverged** — current branch differs, OR current SHA is not a descendant of
-     recorded SHA, OR the repo has uncommitted changes that weren't there at
-     scope time. Surface as drift: "scope recorded X on branch B1, current is Y
-     on branch B2. This may invalidate scope assumptions."
-   - **Missing** — recorded repo path no longer exists. Surface as drift.
+It prints one line per repo — `unchanged` / `advanced` (recorded SHA is an ancestor,
+same branch) / `diverged` (branch moved, not an ancestor, or newly dirty) /
+`missing` — and the exit code is the gate:
 
-4. **Decide the gate:**
-   - If all repos are **Unchanged**: log "✅ Repo Graph snapshot matches current
-     state" and proceed.
-   - If any repo is **Advanced on same branch** (no diverged repos): present the
-     list and ask user to confirm "proceed" or call out files of concern. Default
-     is proceed.
-   - If any repo is **Diverged** or **Missing**: STOP. Present the drift report
-     and ask: "Re-scope, override (acknowledge drift and continue), or abort?"
-     Do not proceed without explicit user direction.
+- **0** — log "✅ Repo Graph snapshot matches current state" and proceed.
+- **1** (advanced only) — present the list; ask the user to confirm "proceed" or name
+  files of concern. Default is proceed.
+- **3** (diverged or missing) — STOP. Present the report and ask: "Re-scope, override
+  (acknowledge drift and continue), or abort?" Do not proceed without direction.
+- **4** — no `## Repo Graph` section: skip, and note "Parent scope predates Repo Graph
+  contract — freshness validation skipped."
 
-5. **SDK-pin asymmetry check** — if the Repo Graph table has SDK Pin entries,
+Also:
+
+- **SDK-pin asymmetry check** — if the Repo Graph table has SDK Pin entries,
    verify each repo's current pin matches what was recorded. Asymmetry across
    consumer repos (e.g., consultation on go-sdk v1.4.2 but cashier on v1.4.0)
    is a flag, not a hard stop — surface it once and let the user direct.
 
-6. **Log the validation result** in `closeout-prep.md §11 (Risk Flags)` even on
+- **Log the validation result** in `closeout-prep.md §11 (Risk Flags)` even on
    pass — future closeout-extended uses this audit trail.
 
 **What this step does NOT do:**
@@ -321,9 +278,6 @@ git -C "$REPO" rev-list --count "${RECORDED_SHA}..HEAD" 2>/dev/null
 - Build a new Repo Graph
 - Modify the parent scope's `scope.md` (that's user-directed, via /scope)
 
-If the parent scope has no `## Repo Graph` section (older scope, or single-repo
-work), skip this step and note in Phase 0 log: "Parent scope predates Repo Graph
-contract — freshness validation skipped."
 
 5.6.2 **Read all sibling plan files in the scope folder** — for child plans,
 read every other `*-PLAN.md` file in the same scope folder, in numeric order
@@ -397,11 +351,18 @@ These files inform pattern decisions throughout the session and should be cached
 5.12 **Hold the Pattern Sources and their sub-paths in working memory** for §7's
 two-source grep. Re-derived per session; nothing is cached to disk.
 
-5.13 **Bootstrap closeout-prep.md** — before executing Task 1.1, check whether `{scope-folder}/closeout-prep.md` already exists (for child plans, the scope folder is the parent; for standalone plans, it is the plan folder itself).
-- If it does not exist: create it from the template at `~/Projects/ai-skills/templates/closeout-prep.md.template`. Write the phase header `## Phase 0: Bootstrap (started {ISO-timestamp})`. Populate §6 (Docs Loaded During Planning) with the files read in §5.9.
-- If it already exists (resumed session or sibling plan): append a new phase header `## Phase {P}: {name} (started {ISO-timestamp})` — do not overwrite.
-- **This is a hard step, not optional.** The ledger must exist before any task touches files. If the template is missing, halt with: "closeout-prep.md template not found at `~/Projects/ai-skills/templates/closeout-prep.md.template`. Cannot bootstrap ledger — check ai-skills installation."
-- Log "ledger initialized at `{path}`" (or "ledger found at `{path}`, appending phase header") in the session status summary printed in §6.7.
+5.13 **Bootstrap closeout-prep.md — a hard step, before Task 1.1 touches any file.** The
+ledger lives in the scope folder (child plan) or the plan folder (standalone):
+
+```bash
+~/Projects/ai-skills/scripts/ledger-init.sh "$LEDGER_DIR" --plan "$PLAN_FILE" --phase "{P}: {name}"   # --resumed after compaction
+```
+
+It creates the ledger from the shared template if absent, otherwise appends a
+timestamped phase header — never overwrites — and reads the result back. Exit 4 means
+the template is missing: halt, the ai-skills install is broken. Then populate §6 (Docs
+Loaded During Planning) with the files read in §5.9, and log the script's
+`created:`/`found:` line in the §6.7 status summary.
 
 ## 6. Execution Rules
 

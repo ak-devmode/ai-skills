@@ -1,6 +1,6 @@
 ---
 name: scope
-version: 3.7.0
+version: 3.8.0
 description: |
   Task scoping, skill router, and progress tracker. Reads current context (git diff,
   branch, CLAUDE.md, open files), eliminates assumptions via two rounds of open-ended
@@ -68,39 +68,18 @@ pause-and-clear (A/D/E — you're stopping anyway) or roll straight through (B/C
 
 ---
 
-## Step 0 — Gather Context (run all bash blocks below, then synthesize)
+## Step 0 — Gather Context (one script, then synthesize)
 
 Gather context before asking any questions. Never ask about something already
 determinable from the environment.
 
 ```bash
-# Detect project identity and branch
-git remote -v 2>/dev/null | head -4
-echo "---BRANCH---"
-git branch --show-current 2>/dev/null || echo "unknown"
-echo "---PWD---"
-pwd
+~/Projects/ai-skills/scripts/context-gather.sh            # identity, recent activity, plans dir, live index rows, PRDs
+PLANS_DIR="$(~/Projects/ai-skills/scripts/resolve-plans-dir.sh)" || exit   # 3 = unknown project (ask) · 4 = docs repo not cloned (stop)
 ```
 
-```bash
-# Recent git activity (what changed, what's in flight)
-git log --oneline -10 2>/dev/null || echo "no git history"
-echo "---DIFF STAT---"
-git diff --stat HEAD 2>/dev/null | head -30
-git diff --staged --stat 2>/dev/null | head -20
-```
-
-```bash
-# Plans dir comes from the script — one owner, five callers (scripts/README.md).
-# Exit 3 = unrecognized project (ask the user); exit 4 = docs repo not cloned.
-PLANS_DIR="$(~/Projects/ai-skills/scripts/resolve-plans-dir.sh)" || exit
-echo "PLANS_DIR=$PLANS_DIR"
-ls -d "$PLANS_DIR"/[0-9]*-*/ 2>/dev/null || echo "no active scopes"
-# GREP the index, never cat it — it is ~31k tokens in WellMed (/plan §1.1).
-grep -n '^## ' "$PLANS_DIR/PLANS-INDEX.md" 2>/dev/null
-grep -nE '^\| *[0-9]+ .*(Ready to execute|In progress|Active)' "$PLANS_DIR/PLANS-INDEX.md" 2>/dev/null | head -20
-~/Projects/ai-skills/scripts/plans-index.py validate "$PLANS_DIR/PLANS-INDEX.md" 2>&1 | tail -5
-```
+The index is grepped, never cat'ed (~31k tokens in WellMed; /plan §1.1), and CLAUDE.md
+is not re-read — the harness already loaded it.
 
 After running the above, synthesize what you know:
 - Project (WellMed, PMG, other — from remote URL or PWD)
@@ -613,22 +592,15 @@ overwritable section in the file; everything else is append-only.
 
 ### 5.7 Sweep related files into scope folder
 
-Check `{plans_dir}/` for files related to this scope's slug — PRDs, concepting docs,
-or any other working files created before the scope folder:
+PRDs, concept docs and other working files created before the scope folder travel
+with it — one call, never a hand-run `mv`:
 
 ```bash
-ls {plans_dir}/*{slug}* 2>/dev/null | grep -v "{N}-{slug}"
+~/Projects/ai-skills/scripts/plans-folder.sh "$PLANS_DIR" "$N-{slug}"      # creates artifacts/ too (§5.6)
 ```
 
-Move matching files into the scope folder so all task-related documents travel together:
-```bash
-mv {plans_dir}/prd-{slug}*.md {plans_dir}/{N}-{slug}/ 2>/dev/null
-mv {plans_dir}/*{slug}*.md {plans_dir}/{N}-{slug}/ 2>/dev/null
-```
-
-Exclude `PLANS-INDEX.md`, `TO-DO.md`, and any files already inside subdirectories.
-After this step, only the scope folder remains in `plans/` for this task — no orphaned
-working files at the top level.
+Contract in `scripts/README.md`. After it, nothing for this task is orphaned at the
+`plans/` top level.
 
 ### 5.8 Update PLANS-INDEX.md — via the script, never by hand
 

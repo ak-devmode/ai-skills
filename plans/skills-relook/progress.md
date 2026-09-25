@@ -141,6 +141,25 @@ Plan complete. Six core skills + /prd, /herdr, /closeout-extended passed; fleet 
   within the floor for multi-item reports, but the longest candidate for tightening. No lever needed.
 - **5.5 conciseness-floor log:** see entry above.
 
+## Plan 2.4: Deterministic toolkit (added 2026-09-25 by Alex — "don't TO-DO the scripts, write them")
+
+**Status:** ✅ Done.
+
+### Session: 2026-09-25 (Opus 5.5)
+- All 8 candidates built in `scripts/`, each with a header comment, usage + exit contract, and a read-back
+  of every write: `plans-folder.sh`, `context-gather.sh`, `stamp-executed-by.sh`, `repo-graph-check.py`,
+  `ledger-init.sh`, `dispatch-log.py`, `herdr-pane.sh`, `repo-survey.sh`.
+- Tested on fixtures incl. failure paths: no-clobber (exit 1), dry-run touches nothing, stamp
+  TBD/absent/handoff/idempotent, ledger create/append/--resumed, graph-check all four tiers (0/1/3/4),
+  JSONL escaping + read-back, survey cascade incl. "develop adds files" rule. `herdr-pane.sh` live-tested on
+  a scratch pane (label + display_agent read back, pane closed).
+- Bugs caught by testing, fixed before wiring: dry-run printed "moved"; `--move` loop IFS-split output;
+  template's seeded `## Phase 1: {{PHASE_NAME}}` left unfilled; graph-check called a branch change
+  "unchanged" when the SHA matched.
+- Wired into /plan §2.5 §3.1 §5.6.1 §5.13, /scope Step 0 + §5.7, /prd Step 0, /concurrency §6 §7.1,
+  herdr §2 §5, /cross-repo-init §2.1–2.2; `scripts/README.md` table + contracts; `CLAUDE.md` §4.
+  Toolkit TO-DO removed from `plans/TO-DO.md`.
+
 ## Toolkit candidates (append as found — deterministic steps still written as prose)
 | # | Candidate | Where it lives as prose now | Why deterministic |
 |---|---|---|---|

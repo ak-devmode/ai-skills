@@ -17,8 +17,8 @@ prose (and eyeballing) cannot enforce itself.
 Two tiers, and the split is the whole design:
 
   ISSUE  — deterministic, zero false positives. A real, mechanical defect.
-           Fails the run. (oversize, duplicate section numbers, malformed
-           frontmatter, dead renamed-skill references.)
+           Fails the run. (duplicate section numbers, malformed frontmatter,
+           dead renamed-skill references.)
   NOTE   — heuristic. Surfaces a site worth a human's eye without claiming a
            defect. Never fails the run.
 
@@ -33,17 +33,26 @@ deterministic spine plus conservative NOTE-tier signals that point at where such
 defects hide, not a guesser that invents them.
 
 Maps AUDIT.md §1 defect classes:
-  §1.1 dilution/oversize            -> oversize            (ISSUE)
+  §1   growth without deletion      -> growth (git history) (NOTE)
+  §1.1 dilution                     -> size                 (NOTE)
   §1.2 determinism-written-as-prose -> determinism-as-prose (NOTE)
-  §1.3 live contradictions          -> supersession-site   (NOTE)
+  §1.3 live contradictions          -> supersession-site    (NOTE)
+  second copies that drift          -> cross-skill-duplicate (NOTE, multi-skill runs)
 plus AUDIT §5.5 (duplicate section numbers) and §5.6 (dead skill-name refs).
+
+Size was an ISSUE until 2026-09-25. Demoted: a line cap measures the symptom,
+and splitting mandatory rules into references/ to meet it makes them less likely
+to be followed. The disease is growth without deletion — measured from git, not
+from a snapshot baseline that goes stale.
 
 Commands / contract:
 
     lint-skill.py <path>...            one or more SKILL.md files, or dirs
                                        containing SKILL.md (a bare dir is fine).
-      --max-body-lines N               oversize threshold (default 250; AUDIT
-                                       §6.4 target, ready-to-clear=176 is the model).
+      --max-body-lines N               size-NOTE threshold (default 250; advisory).
+      --no-history                     skip the git growth check.
+                                       Pass several skills to get the
+                                       cross-skill duplicate check.
       --json                           machine-readable report to stdout.
       --notes                          include NOTES in text output (default:
                                        shown; --no-notes to suppress).
@@ -62,13 +71,26 @@ import argparse
 import json
 import os
 import re
+import subprocess
 import sys
 
 # ---------------------------------------------------------------------------
 # Tunables. Named, not buried, so a justified change is visible in a diff.
 # ---------------------------------------------------------------------------
 
-DEFAULT_MAX_BODY_LINES = 250  # AUDIT §6.4: "SKILL.md judgment, gates, run order. <250 lines."
+DEFAULT_MAX_BODY_LINES = 250  # AUDIT §6.4 target — advisory NOTE only since 2026-09-25
+
+# Growth-without-deletion (NOTE). Fleet 2026-09-25: skills being cleaned run
+# 50–150%; accreting ones 4–16%. Below 20% with real volume is the signal.
+GROWTH_WINDOW = 10       # last N modifying commits
+GROWTH_MIN_ADDED = 100   # ignore small edit histories
+GROWTH_MIN_RATE = 0.20   # deleted/added below this => NOTE
+
+# Cross-skill duplicate paragraphs (NOTE). Tuned on the fleet 2026-09-25.
+DUP_SHINGLE = 5
+DUP_MIN_SHINGLES = 15
+DUP_MIN_CONTAINMENT = 0.30
+WORD_RE = re.compile(r"[a-z0-9_/.#-]+")
 
 # Skills renamed in the repo's history whose old names still leak into prose
 # (AUDIT §5.6). A dead reference points a teammate's grep at a skill that does
@@ -299,16 +321,117 @@ def check_frontmatter(fm_lines, fm_status, skill_dirname, findings):
 
 
 def check_oversize(body_lines, max_body_lines, findings):
+    """NOTE, not ISSUE (demoted 2026-09-25). Size is a symptom, not the defect:
+    the AUDIT disease is growth without deletion, which check_growth measures.
+    Splitting a mandatory rule into references/ to hit a count makes it LESS
+    likely to be followed (the model must choose to open it)."""
     n = len(body_lines)
     if n > max_body_lines:
         findings.append(Finding(
-            "ISSUE", "oversize",
-            f"body <= {max_body_lines} lines (AUDIT §6.4; ready-to-clear=176 is the model)",
-            f"{n} body lines ({n - max_body_lines} over)",
+            "NOTE", "size",
+            f"body <= {max_body_lines} lines is a hint, not a bar",
+            f"{n} body lines",
             "whole SKILL.md body",
-            "move institutional facts/postmortems to references/, templates to templates/, "
-            "deterministic steps to scripts/ (AUDIT §6.4 progressive disclosure)",
+            "cut superseded, harness-owned, and duplicated text; move only RARE-BRANCH "
+            "content to references/ — never split a mandatory rule out to hit a count",
         ))
+
+
+def check_growth(skill_path, findings, window, min_added, min_rate):
+    """NOTE: growth without deletion — the AUDIT §1 disease (3–18% deletion rate).
+    Reads the file's last `window` MODIFYING commits (`--diff-filter=M`, so the
+    creating commit and a rename-as-add don't read as accretion). Git history is
+    the baseline: nothing stored here can go stale. Heuristic by nature —
+    legitimate feature growth exists — so NOTE, never ISSUE."""
+    real = os.path.realpath(skill_path)
+    try:
+        proc = subprocess.run(
+            ["git", "-C", os.path.dirname(real), "log", "-n", str(window),
+             "--diff-filter=M", "--numstat", "--format=", "--", os.path.basename(real)],
+            capture_output=True, text=True, timeout=20,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        proc, err = None, str(exc)
+    if proc is None or proc.returncode != 0:
+        # Skipped is said out loud — a silent skip reads as "no growth problem".
+        findings.append(Finding(
+            "NOTE", "growth",
+            "git history readable for the growth check",
+            "growth check skipped: " + (err if proc is None else proc.stderr.strip()[:120]),
+            real, "run inside the skill's git repo, or pass --no-history",
+        ))
+        return
+    added = deleted = commits = 0
+    for line in proc.stdout.splitlines():
+        parts = line.split("\t")
+        if len(parts) == 3 and parts[0].isdigit() and parts[1].isdigit():
+            added += int(parts[0])
+            deleted += int(parts[1])
+            commits += 1
+    if added >= min_added and deleted / added < min_rate:
+        findings.append(Finding(
+            "NOTE", "growth",
+            f"deletions >= {int(min_rate * 100)}% of additions over the last {window} edits",
+            f"+{added} -{deleted} ({deleted * 100 // added}%) across {commits} edit(s)",
+            "git history of " + os.path.basename(os.path.dirname(real)) + "/SKILL.md",
+            "every new rule should retire or rewrite an old one; look for superseded, "
+            "harness-owned, or duplicated text to cut",
+        ))
+
+
+def _paragraphs(body_lines, body_start):
+    """Yield (file_lineno, text) for blank-line/heading-separated blocks."""
+    cur, start = [], 0
+    for idx, line in enumerate(body_lines):
+        if line.strip() == "" or HEADING_RE.match(line):
+            if cur:
+                yield start, " ".join(cur)
+                cur = []
+            continue
+        if not cur:
+            start = body_start + idx
+        cur.append(line)
+    if cur:
+        yield start, " ".join(cur)
+
+
+def _shingles(text):
+    words = WORD_RE.findall(text.lower())
+    return {tuple(words[i:i + DUP_SHINGLE]) for i in range(len(words) - DUP_SHINGLE + 1)}
+
+
+def check_cross_skill_duplicates(parsed, reports_by_skill):
+    """NOTE: a paragraph shared between two skills — a second copy that drifts
+    (the `/concurrency` §3 rule, violated by /concurrency itself). Word 5-gram
+    containment >= 0.3 between paragraphs of DIFFERENT skills. Tuned on the fleet
+    2026-09-25: 4 hits, all real duplicates, zero noise. Catches verbatim and
+    near-verbatim copies only; paraphrase is the eval pass's job (deferred)."""
+    items = []
+    for skill, (body_lines, body_start) in parsed.items():
+        for lineno, text in _paragraphs(body_lines, body_start):
+            sh = _shingles(text)
+            if len(sh) >= DUP_MIN_SHINGLES:
+                items.append((skill, lineno, sh))
+    for i, (sa, la, sha) in enumerate(items):
+        for sb, lb, shb in items[i + 1:]:
+            if sa == sb:
+                continue
+            ratio = len(sha & shb) / min(len(sha), len(shb))
+            if ratio < DUP_MIN_CONTAINMENT:
+                continue
+            for me, my_ln, other, other_ln in ((sa, la, sb, lb), (sb, lb, sa, la)):
+                reports_by_skill[me].append(Finding(
+                    "NOTE", "cross-skill-duplicate",
+                    "one owner per rule; others reference it by section",
+                    f"{int(ratio * 100)}% shingle overlap with {_skill_name(other)} L{other_ln}",
+                    f"paragraph at L{my_ln}",
+                    "keep the copy in the owning skill, replace the other with a "
+                    "cross-reference (CLAUDE.md §3.5); if it's a procedure, it may be a script",
+                ))
+
+
+def _skill_name(skill_path):
+    return os.path.basename(os.path.dirname(os.path.abspath(skill_path)))
 
 
 def iter_headings(body_lines, body_start):
@@ -438,8 +561,8 @@ def resolve_skill_path(path):
     return None
 
 
-def lint_file(skill_path, max_body_lines):
-    """Returns (findings, body_len, read_error). read_error is None on success,
+def lint_file(skill_path, max_body_lines, history=True):
+    """Returns (findings, body_lines, body_start, read_error). read_error is None on success,
     or a message when the file is not decodable — a parse error the driver maps
     to exit 2, without crashing the whole run or aborting sibling files
     (adversarial review, 2026-09-23)."""
@@ -447,7 +570,7 @@ def lint_file(skill_path, max_body_lines):
         with open(skill_path, "r", encoding="utf-8") as fh:
             text = fh.read()
     except (UnicodeDecodeError, OSError) as exc:
-        return [], 0, f"could not read as UTF-8 text: {exc}"
+        return [], [], 1, f"could not read as UTF-8 text: {exc}"
 
     if text.startswith("﻿"):  # strip a leading BOM before the `---` test
         text = text[1:]
@@ -462,7 +585,9 @@ def lint_file(skill_path, max_body_lines):
     check_stale_skill_names(body_lines, body_start, findings)
     check_determinism_as_prose(body_lines, body_start, findings)
     check_supersession_sites(body_lines, body_start, findings)
-    return findings, len(body_lines), None
+    if history:
+        check_growth(skill_path, findings, GROWTH_WINDOW, GROWTH_MIN_ADDED, GROWTH_MIN_RATE)
+    return findings, body_lines, body_start, None
 
 
 def main(argv):
@@ -476,6 +601,7 @@ def main(argv):
     ap.add_argument("--no-notes", action="store_true", help="ISSUES only in text output")
     ap.add_argument("--notes", action="store_true", help="(default) include NOTES in text output")
     ap.add_argument("--quiet", action="store_true", help="print nothing; rely on exit code")
+    ap.add_argument("--no-history", action="store_true", help="skip the git growth check")
     args = ap.parse_args(argv)
 
     reports = []
@@ -483,16 +609,28 @@ def main(argv):
     total_notes = 0
     unresolved = []
     parse_errors = []  # (path, message) — not decodable; exit 2, never crash
+    per_skill = {}     # skill_path -> findings (cross-skill check appends here)
+    parsed = {}        # skill_path -> (body_lines, body_start)
 
     for path in args.paths:
         skill_path = resolve_skill_path(path)
         if skill_path is None:
             unresolved.append(path)
             continue
-        findings, body_len, read_error = lint_file(skill_path, args.max_body_lines)
+        if skill_path in per_skill:
+            continue  # same skill named twice would duplicate-match itself
+        findings, body_lines, body_start, read_error = lint_file(
+            skill_path, args.max_body_lines, history=not args.no_history)
         if read_error is not None:
             parse_errors.append((skill_path, read_error))
             continue
+        per_skill[skill_path] = findings
+        parsed[skill_path] = (body_lines, body_start)
+
+    check_cross_skill_duplicates(parsed, per_skill)
+
+    for skill_path, findings in per_skill.items():
+        body_len = len(parsed[skill_path][0])
         issues = [f for f in findings if f.tier == "ISSUE"]
         notes = [f for f in findings if f.tier == "NOTE"]
         total_issues += len(issues)

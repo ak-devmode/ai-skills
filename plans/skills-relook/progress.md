@@ -15,8 +15,9 @@ ceo-review decisions logged below (linter now / eval deferred; scope 2 ≠ scope
 (Claude adversarial + critical pass; codex DEGRADED), found + fixed 8 fail-open/false-positive bugs,
 verdict SHIP (`artifacts/review-2.1-lint-skill.md`). Gate C met; no PR (Alex, 2026-09-25 — push only).
 **2.2 DONE (2026-09-25):** fleet on 5.5 (live + tracked config); verbosity measurement folded into 2.3.
-**Next: 2.3** — apply the loop to core skills, logging every conciseness-floor breach observed under 5.5.
-Open blockers: none. Pending human step: merge `dev-workbench` `fix/opus-5-5-default`.
+**2.3 IN PROGRESS (2026-09-25):** linter reframed (size advisory; growth + cross-skill-duplicate NOTEs).
+**Next:** `/concurrency` pilot — remove copies of `herdr` content (§2 preconditions + GLM traps, §10 Ghostty
+fix), then the core five. Log floor breaches + toolkit candidates as found. Open blockers: none.
 
 ## Decisions Log (append-only)
 - 2026-09-23 — Reframe: scope = an iterative dogfooded skill-eval/improvement loop, not a cleanup pass. (Alex, Q2/Q3/Q4)
@@ -26,6 +27,8 @@ Open blockers: none. Pending human step: merge `dev-workbench` `fix/opus-5-5-def
 - 2026-09-23 (ceo-review) — Scope 2 (skills) and scope 5 (verify-lever, code/output/product) stay **separate — do not conflate**. (Alex)
 - 2026-09-25 — 2.2.3/2.2.4 (measure 5.5 verbosity, tune floor) **folded into 2.3**: 2.3 runs entirely on 5.5 and IS the measurement; log each floor breach per skill; a second sighting of the same breach triggers the deferred eval harness. Avoids building the harness ceo-review deferred. (Alex)
 - 2026-09-25 — Stay on Opus 5.5 (5.0/5.1 disliked; 5.5 good so far). Tracked `dev-workbench` settings aligned to live `opus[1m]`, not symlinked. (Alex)
+- 2026-09-25 — **250-line cap dropped as a bar.** Size is a symptom; splitting mandatory rules into `references/` makes them less likely to be followed. Linter: size ISSUE → NOTE; new NOTE checks `growth` (git history, deleted/added < 20% over last 10 modifying commits — git chosen over a snapshot baseline: nothing to go stale, same metric as AUDIT §1) and `cross-skill-duplicate` (word 5-gram containment ≥ 0.3; fleet: all hits real, zero noise; misses paraphrase). 2.3 now cuts superseded / harness-owned / contradictory / duplicated text; `references/` only for rare-branch content. (Alex)
+- 2026-09-25 — **Standing lens for 2.3: toolkit candidates.** Deterministic, CLI-executable steps written as prose get logged in *Toolkit candidates* below as found (pulled back from scope 5's verify intent; model = `resolve-plans-dir.sh`, the ADR/scope resolvers). (Alex)
 
 ## Progress Log (append-only)
 - 2026-09-23 — Scope authored (scope.md, progress.md, stubs 2.1–2.3). Conciseness floor added to global CLAUDE.md.
@@ -74,10 +77,38 @@ pushed, merge pending). Verbosity measurement lives in 2.3 now.
   `modelSettings.claude-opus-5-5.effortLevel: high`). Branch `fix/opus-5-5-default` off `origin/main`
   via a temp worktree (1password branch untouched); commit `227b0c2`, pushed. Why: reinstall would roll back to 4.8.
 
+## Plan 2.3: Apply the loop to the core skills
+
+**Status:** 🔨 In progress.
+
+### Resume Context (Plan 2.3)
+Linter reframed + fleet baseline `artifacts/lint-baseline-2026-09-25.json` (0 ISSUE / 45 NOTE, 26 skills).
+Next: `/concurrency` pilot, then `/closeout`, `/cross-repo-init`, `/markdown-style` (growth NOTEs), `/plan`, `/scope`.
+
+### Session: 2026-09-25 (Opus 5.5)
+- **Phase 0** ✅ DONE. Plan stub reframed by decision (log 2026-09-25) — the 250-line target and
+  "eval suite per skill" tasks are superseded; cure = cut superseded/harness-owned/contradictory/duplicated text.
+- **Linter reframe** ✅ DONE. `scripts/lint-skill.py`: size → NOTE; + `growth` (git) + `cross-skill-duplicate`;
+  `--no-history`. Verified: fleet run exit 0; non-git skill reports skipped growth check aloud; a skill named
+  twice doesn't self-match. Files: `scripts/lint-skill.py`, `scripts/README.md`, `CLAUDE.md` §4/§6,
+  `plans/skills-relook/artifacts/lint-baseline-2026-09-25.json`.
+- **5.5 conciseness-floor log:** no breach observed in this session so far (2.2 + 2.3 start).
+
+## Toolkit candidates (append as found — deterministic steps still written as prose)
+| # | Candidate | Where it lives as prose now | Why deterministic |
+|---|---|---|---|
+| 1 | herdr pane identity + layout (rename, `report-metadata`, split-right-half) | `herdr` §2/§5, `/concurrency` §6.1b | fixed naming scheme + fixed geometry (Alex) |
+| 2 | plan/scope folder create + related-file sweep (`mkdir`/`mv prd-{slug}*`) | `/plan` §2.5, `/scope` ~L643 — duplicated | fixed path derivation from slug; linter dup hit |
+| 3 | session-start context gather (`cat CLAUDE.md \| head -60 …`) | `/prd` ~L67, `/scope` ~L100 — duplicated | fixed file list; linter dup hit |
+| 4 | `Executed by` stamp from git config | `/plan` §3.1 | one correct answer |
+| 5 | Repo Graph freshness classify (SHA/branch → unchanged/advanced/diverged/missing) | `/plan` §5.6.1 | pure git classification |
+| 6 | closeout-prep.md bootstrap from template + phase header | `/plan` §5.13 | template copy + timestamp |
+| 7 | dispatch-log JSONL append | `/concurrency` §6.4 | fixed record shape |
+
 ## Human Steps
 | Step | Status |
 |---|---|
 | Clear + reload in Opus 5.5 with updated global prompt, then execute 2.1 | [x] Done (ran under 4.8; 5.5 seat is 2.2's concern) |
 | Review 2.1 — `/review` done (SHIP, 8 bugs fixed in-band) | [x] Done |
 | Open PR for `feature/skills-relook-opus5` | [x] N/A — Alex: no PR, push only (2026-09-25) |
-| Merge `dev-workbench` `fix/opus-5-5-default` → `main` | [ ] Pending |
+| Merge `dev-workbench` `fix/opus-5-5-default` → `main` | [x] Done — ff to `227b0c2` (2026-09-25) |

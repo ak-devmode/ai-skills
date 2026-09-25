@@ -34,15 +34,16 @@ already caused real data loss. Prose cannot enforce itself — the same reasonin
     plans-index.py add  <index> --num --status --folder --desc [--creator] [--dry-run]
     plans-index.py move <index> --num --to {active,archived} [--folder] [--status] [--dry-run]
 
-    lint-skill.py <skill-dir|SKILL.md>... [--max-body-lines N] [--json] [--no-notes] [--quiet]
+    lint-skill.py <skill-dir|SKILL.md>... [--max-body-lines N] [--no-history] [--json] [--no-notes] [--quiet]
       exit: 0 no ISSUES (NOTES allowed) · 1 ISSUES found · 2 usage/parse error
       Reads only. Each finding is `expected · found · where · next`.
-      ISSUES (fail the run, deterministic): oversize body (>N lines, default 250),
-      duplicate section numbers, malformed frontmatter (missing name/description,
+      ISSUES (fail the run, deterministic): duplicate section numbers, malformed frontmatter (missing name/description,
       empty allowed-tools, name≠dir), dead renamed-skill references.
-      NOTES (advisory, never fail): determinism-as-prose (filesystem-mutation verbs
-      in a fenced shell block), supersession sites (where a live contradiction may
-      hide). The ISSUE/NOTE split IS the design — fuzzy checks are NOTES so the
+      NOTES (advisory, never fail): growth (deletions < 20% of additions over the
+      last 10 modifying commits, from git), cross-skill-duplicate (word 5-gram
+      overlap between skills in one run), size (>N lines, default 250 — a hint,
+      not a cap), determinism-as-prose (filesystem-mutation verbs in a fenced shell
+      block), supersession sites (where a live contradiction may hide). The ISSUE/NOTE split IS the design — fuzzy checks are NOTES so the
       linter never cries wolf. Semantic contradiction detection is deferred to an
       eval pass (scope 2 §2.1). Bump the threshold only with a recorded reason.
 

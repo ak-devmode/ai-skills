@@ -110,3 +110,17 @@
 
 ### §9 Deferred Items
 - 2.2.3 measure 5.5 verbosity + 2.2.4 tune floor → folded into **2.3** (log floor breaches per skill; 2nd sighting → eval harness).
+
+---
+
+## Phase 3: 2.3 Apply the loop (started 2026-09-25)
+
+### §2 Files Changed
+**ai-skills — code:** `scripts/lint-skill.py` — size ISSUE→NOTE; new `growth` (git numstat, `--diff-filter=M`) + `cross-skill-duplicate` (5-gram containment) NOTEs; `--no-history`.
+**ai-skills — doc:** `CLAUDE.md` §4/§6, `scripts/README.md` (contract); `plans/skills-relook/artifacts/lint-baseline-2026-09-25.json` (new).
+
+### §8 Assumptions
+- Growth thresholds (window 10, min +100, <20%) and dup thresholds (5-gram, ≥15 shingles, ≥0.30) tuned on one fleet snapshot 2026-09-25.
+
+### §11 Risk Flags
+- `cross-skill-duplicate` misses paraphrased copies (e.g. /concurrency GLM traps vs herdr §6) — found by reading, not the linter.

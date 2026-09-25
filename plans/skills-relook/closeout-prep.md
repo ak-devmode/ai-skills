@@ -128,3 +128,4 @@
 **ai-skills — doc (skills):** `plan/SKILL.md` 3.6.0→3.7.0, `closeout/SKILL.md` 1.2.0→1.3.0 (defect fixes + dedup; −92 lines net).
 **ai-skills — doc (skills):** `scope/SKILL.md` 3.6.0→3.7.0 (contradictions + index-row leak + harness-owned cuts); `prd/SKILL.md` 1.0.0→1.0.1 (grep index, drop CLAUDE.md cat).
 **ai-skills — doc (skills):** `cross-repo-init/SKILL.md` 1.3.0→1.4.0 (default-branch bug, memory cites, §7 dedup); `cross-repo-init/templates/CLAUDE.md.template` (§8.2/§9 memory paths removed); `plans/TO-DO.md` (fleet CLAUDE.md cleanup item).
+**ai-skills — doc/code:** `markdown-style/SKILL.md` 1.2.0→1.3.0 (6 contradictions); `closeout/SKILL.md` §13.1 per-plan-row line; `closeout-extended/SKILL.md` 1.0.1 (memory cite); `scripts/lint-skill.py` + README + CLAUDE.md §6 (`memory-citation` ISSUE).

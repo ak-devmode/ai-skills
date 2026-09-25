@@ -1,6 +1,6 @@
 ---
 name: closeout-extended
-version: 1.0.0
+version: 1.0.1
 description: |
   Recursive cross-repo self-heal across the CROSS-REPO.md graph. Walks Pattern Sources
   upward and Consumers outward (default max depth 2, per-repo override available),
@@ -255,9 +255,8 @@ For each repo in the traversal list, in order:
 that.
 
 7.1.2 Else, check whether `develop` branch exists in the neighbor (`git ls-remote
---heads <neighbor-path> develop`). If yes, use `develop`. Per
-`feedback_branch_off_develop.md`, pmg-integrations and similar repos use develop
-as the trunk.
+--heads <neighbor-path> develop`). If yes, use `develop` — wellmed and pmg repos
+(pmg-integrations included) use develop as the trunk.
 
 7.1.3 Else, fall back to `main`. If neither develop nor main exists (rare),
 halt with diagnostic and skip the neighbor (log to progress file).

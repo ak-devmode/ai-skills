@@ -561,7 +561,7 @@ Completion & Archive) and follow that procedure verbatim:
   move to `archive/`)
 - §11.4 Update PLANS-INDEX.md — **move the scope's row from Active Plans to
   Completed / Archived in the same commit as the folder move**, compressed to one
-  line. Never append a per-plan row. This is the step that keeps the index from
+  line (per-plan `{N}.{P}` rows are fine — `/markdown-style` §11.7.5). This is the step that keeps the index from
   accumulating stale Active rows (37 of 61 on 2026-08-07) and headerless
   fragments; see `/markdown-style` §11.7.
 - §11.5 Update parent scope (if applicable)

@@ -38,7 +38,8 @@ already caused real data loss. Prose cannot enforce itself — the same reasonin
       exit: 0 no ISSUES (NOTES allowed) · 1 ISSUES found · 2 usage/parse error
       Reads only. Each finding is `expected · found · where · next`.
       ISSUES (fail the run, deterministic): duplicate section numbers, malformed frontmatter (missing name/description,
-      empty allowed-tools, name≠dir), dead renamed-skill references.
+      empty allowed-tools, name≠dir), dead renamed-skill references, agent-memory
+      file citations (memory is per-cwd; CLAUDE.md §9.3).
       NOTES (advisory, never fail): growth (deletions < 20% of additions over the
       last 10 modifying commits, from git), cross-skill-duplicate (word 5-gram
       overlap between skills in one run), size (>N lines, default 250 — a hint,

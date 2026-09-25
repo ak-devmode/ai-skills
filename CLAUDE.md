@@ -231,7 +231,7 @@ Claude Code invocation:
   conventions, backed by `scripts/lint-skill.py` (the accretion linter):
   `./scripts/lint-skill.py <skill-dir|SKILL.md>…`. It fails (exit 1) on
   deterministic defects — duplicate section numbers, malformed frontmatter,
-  dead renamed-skill references — and emits advisory NOTES without failing:
+  dead renamed-skill references, memory-file citations (§9.3) — and emits advisory NOTES without failing:
   growth without deletion (from git history), paragraphs duplicated across
   skills (pass several skills), size, determinism-as-prose, supersession sites.
   Size is advisory, not a cap: never split a mandatory rule into `references/`

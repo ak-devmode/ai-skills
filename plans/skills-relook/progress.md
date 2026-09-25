@@ -124,7 +124,20 @@ Next: `/concurrency` pilot, then `/closeout`, `/cross-repo-init`, `/markdown-sty
   CLAUDE.md files. §7 restated the body (7.4a/7.8/7.11/7.12 + intro) → one-line rules pointing at the
   procedure; stale "v1.1 TO-DO" pointer cut. **Template defect with fleet reach:** `CLAUDE.md.template` §9.2
   wrote the pmg memory path into every scaffold → fixed; 13 repos already carry it → `plans/TO-DO.md`.
-- **5.5 conciseness-floor log:** no breach observed in this session so far (2.2 + 2.3 start).
+- **`/markdown-style`** ✅ DONE. Contradictions fixed: §10.1.1 gave child plans their own PROGRESS file
+  (retired by /plan v3.3.0) + §10.3 schema lacked Operating Contract and per-plan sections; §8.9.2 "stub
+  ships Draft, /plan deepens it" vs §8.2.2/"/plan refuses Draft" → the Draft→Ready flip is the human's go
+  signal; §11.1.2 hardcoded plans paths (missing IRIS) vs §8.1.3 "never hardcode"; §11.7 intro "read into
+  context… four rules keep it bounded" vs /plan §1.1 grep-don't-read + five rules; §1.2 "no emoji" vs the
+  🔲/✅ markers /plan parses; stale `wellmed-system-architecture` + pre-numbering plan path. History
+  blockquotes trimmed to one line. Also `/closeout` §13.1 still said "never append a per-plan row" against
+  §11.7.5 + /plan §11.4 → fixed.
+- **Linter: `memory-citation` ISSUE** ✅. The recurring defect of this pass (5 citations across 4 skills + a
+  template) is deterministic → ISSUE tier. Last hit fixed (`closeout-extended` 1.0.1). Negative control:
+  planted citation → exit 1; fleet → 0 ISSUE / 38 NOTE.
+- **5.5 conciseness-floor log (2.2 + 2.3):** no flagrant breach. Checkpoint summaries ran ~15–25 lines —
+  within the floor for multi-item reports, but the longest candidate for tightening. No lever needed.
+- **5.5 conciseness-floor log:** see entry above.
 
 ## Toolkit candidates (append as found — deterministic steps still written as prose)
 | # | Candidate | Where it lives as prose now | Why deterministic |

@@ -18,7 +18,7 @@ Two tiers, and the split is the whole design:
 
   ISSUE  — deterministic, zero false positives. A real, mechanical defect.
            Fails the run. (duplicate section numbers, malformed frontmatter,
-           dead renamed-skill references.)
+           dead renamed-skill references, agent-memory file citations.)
   NOTE   — heuristic. Surfaces a site worth a human's eye without claiming a
            defect. Never fails the run.
 
@@ -117,6 +117,13 @@ MUTATION_VERB_RE = re.compile(
 SUPERSESSION_RE = re.compile(
     r"\bREMOVED\b|\b[Ss]uperseded\b|\b[Dd]eprecated\b|\bno longer\b"
     r"|\breplaced by\b|\b[Oo]bsolete\b"
+)
+
+# Agent-memory file citations (ISSUE). Memory filenames follow <type>_<slug>.md;
+# also catch explicit memory/ and ~/.claude/projects/*/memory paths.
+MEMORY_CITE_RE = re.compile(
+    r"\b(?:feedback|project|reference|user)_[a-z0-9_]+\.md\b"
+    r"|\bmemory/[A-Za-z0-9_-]+\.md\b|\.claude/projects/[^\s`]*/memory"
 )
 
 HEADING_RE = re.compile(r"^(#{2,6})\s+(.*)$")
@@ -489,6 +496,26 @@ def check_stale_skill_names(body_lines, body_start, findings):
             ))
 
 
+def check_memory_citations(body_lines, body_start, findings):
+    """ISSUE: a skill citing an agent-memory file. Memory is scoped per working
+    directory, so the citation dead-ends in every other project (CLAUDE.md §9.3);
+    the rule must be stated in the skill itself. Fleet 2026-09-25: 5 found across
+    4 skills + a template, all real — deterministic, zero noise."""
+    hits = []
+    for idx, line in enumerate(body_lines):
+        for m in MEMORY_CITE_RE.finditer(line):
+            hits.append((body_start + idx, m.group(0)))
+    if hits:
+        where = ", ".join(f"L{ln} `{txt}`" for ln, txt in hits[:6]) + (" …" if len(hits) > 6 else "")
+        findings.append(Finding(
+            "ISSUE", "memory-citation",
+            "no citation of an agent-memory file (CLAUDE.md §9.3)",
+            f"{len(hits)} memory citation(s)",
+            where,
+            "state the rule inline and drop the path — memory does not travel across projects",
+        ))
+
+
 def check_determinism_as_prose(body_lines, body_start, findings):
     """NOTE: fenced shell blocks that perform filesystem mutation are candidates
     for a script (AUDIT §1.2). Conservative by design — read-only/orchestration
@@ -583,6 +610,7 @@ def lint_file(skill_path, max_body_lines, history=True):
     check_oversize(body_lines, max_body_lines, findings)
     check_duplicate_section_numbers(body_lines, body_start, findings)
     check_stale_skill_names(body_lines, body_start, findings)
+    check_memory_citations(body_lines, body_start, findings)
     check_determinism_as_prose(body_lines, body_start, findings)
     check_supersession_sites(body_lines, body_start, findings)
     if history:

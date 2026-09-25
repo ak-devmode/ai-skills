@@ -1,12 +1,12 @@
 ---
 name: scope
-version: 3.6.0
+version: 3.8.0
 description: |
   Task scoping, skill router, and progress tracker. Reads current context (git diff,
   branch, CLAUDE.md, open files), eliminates assumptions via two rounds of open-ended
   numbered inline questions, then outputs a phased scope with a full 18-skill checklist
-  marking N/A skills with reasons. For multi-session work, generates plan stub files
-  (one per phase, each ~1 context window) that /plan can execute. Creates
+  marking N/A skills with reasons. For phased work, generates plan stub files
+  (one per gate-bounded phase) that /plan can execute. Creates
   a tracking folder (scope.md + progress.md) in the project's central plans directory.
   Progress.md is a living document updated throughout execution.
   Use when asked to "scope this", "plan this task", "what skills do I need", "before
@@ -24,15 +24,8 @@ allowed-tools:
 
 # /scope — Task Scoping, Skill Router & Progress Tracker
 
-> **v3.6.0 (2026-08-09).** Deterministic steps now call `ai-skills/scripts/*`:
-> plans-dir resolution, scope-number claiming (which **raced** as prose — scope 110
-> collided), and PLANS-INDEX writes (whose old 7-column template matched no reader).
-> `/ship` is N/A always rather than conditional. Step 0 greps the index instead of
-> cat-ing ~31k tokens. Removed the standalone `mkdir artifacts` step and the
-> close-background-shells step (harness-tracked now).
-
 You are acting as a structured scoping agent. Your job: read context, ask two focused
-rounds of questions to eliminate assumptions, then produce a phased PRD with a ranked
+rounds of questions to eliminate assumptions, then produce a phased scope with a ranked
 skill checklist. The output goes directly into plan execution — make it actionable.
 
 The scope folder is the **single source of truth** for a task's plan, decisions, and
@@ -75,44 +68,18 @@ pause-and-clear (A/D/E — you're stopping anyway) or roll straight through (B/C
 
 ---
 
-## Step 0 — Gather Context (run all bash blocks below, then synthesize)
+## Step 0 — Gather Context (one script, then synthesize)
 
 Gather context before asking any questions. Never ask about something already
 determinable from the environment.
 
 ```bash
-# Detect project identity and branch
-git remote -v 2>/dev/null | head -4
-echo "---BRANCH---"
-git branch --show-current 2>/dev/null || echo "unknown"
-echo "---PWD---"
-pwd
+~/Projects/ai-skills/scripts/context-gather.sh            # identity, recent activity, plans dir, live index rows, PRDs
+PLANS_DIR="$(~/Projects/ai-skills/scripts/resolve-plans-dir.sh)" || exit   # 3 = unknown project (ask) · 4 = docs repo not cloned (stop)
 ```
 
-```bash
-# Recent git activity (what changed, what's in flight)
-git log --oneline -10 2>/dev/null || echo "no git history"
-echo "---DIFF STAT---"
-git diff --stat HEAD 2>/dev/null | head -30
-git diff --staged --stat 2>/dev/null | head -20
-```
-
-```bash
-# Open issues / work in progress indicators
-cat CLAUDE.md 2>/dev/null | head -60 || cat .claude/CLAUDE.md 2>/dev/null | head -60 || echo "no CLAUDE.md"
-```
-
-```bash
-# Plans dir comes from the script — one owner, five callers (scripts/README.md).
-# Exit 3 = unrecognized project (ask the user); exit 4 = docs repo not cloned.
-PLANS_DIR="$(~/Projects/ai-skills/scripts/resolve-plans-dir.sh)" || exit
-echo "PLANS_DIR=$PLANS_DIR"
-ls -d "$PLANS_DIR"/[0-9]*-*/ 2>/dev/null || echo "no active scopes"
-# GREP the index, never cat it — it is ~31k tokens in WellMed (/plan §1.1).
-grep -n '^## ' "$PLANS_DIR/PLANS-INDEX.md" 2>/dev/null
-grep -nE '^\| *[0-9]+ .*(Ready to execute|In progress|Active)' "$PLANS_DIR/PLANS-INDEX.md" 2>/dev/null | head -20
-~/Projects/ai-skills/scripts/plans-index.py validate "$PLANS_DIR/PLANS-INDEX.md" 2>&1 | tail -5
-```
+The index is grepped, never cat'ed (~31k tokens in WellMed; /plan §1.1), and CLAUDE.md
+is not re-read — the harness already loaded it.
 
 After running the above, synthesize what you know:
 - Project (WellMed, PMG, other — from remote URL or PWD)
@@ -120,7 +87,7 @@ After running the above, synthesize what you know:
 - Branch name and what it implies about the task
 - What files have changed and in which direction
 - Any active scope folders already tracking work
-- Project-specific context from CLAUDE.md (compliance needs, stack, etc.)
+- Project-specific context from CLAUDE.md (already in context — the harness loads it)
 
 ---
 
@@ -231,7 +198,7 @@ skip. Extract 3–6 keywords from the task title, branch name and diff, then gre
 files for them and read the title, status and relevant section of each match. Parallel is
 fine — the greps are independent.
 
-### 0.7.3 Surface ADRs before Round 1
+### 0.7.2 Surface ADRs before Round 1
 
 Present matched ADRs to the user as a confirmation block, not a question:
 
@@ -386,7 +353,6 @@ Ask 5–15 open-ended questions in a **single response** as a numbered list. The
 **Rules for Round 1:**
 - Do NOT ask about things already determinable from git diff, branch name, or CLAUDE.md
 - Each question is one line, no preamble, numbered (1, 2, 3...)
-- Cover where ambiguity exists: scope boundary, timeline, prod vs exploratory, UI involvement, compliance, coordination with other services/people, testing strategy, cross-repo touchpoints
 - For WellMed context: include SATU SEHAT compliance angle if the change touches patient data, API endpoints, or health records
 - For PMG context: include worker health data handling, regulatory angle where relevant
 - **If CROSS-REPO.md exists** (Step 0.5 ran): ALWAYS include a cross-repo coordination question that lists the Consumer repos by name and asks which are in-scope vs deferred. Don't ask abstractly ("any other repos?") — name them.
@@ -455,7 +421,7 @@ you have," which conflates size with gates.
 
 ## Step 4 — Generate the Skill Checklist (N/A logic)
 
-Every scope document includes ALL 18 skills. Mark each as YES, OPTIONAL, or N/A with
+Every scope considers ALL 18 skills. Mark each as YES, OPTIONAL, or N/A with
 a reason. N/A is determined per-task, not per-project — both WellMed and PMG have
 frontends and all skills are potentially applicable.
 
@@ -487,10 +453,6 @@ is automatic on merge, `/document-release` covers docs, and `/closeout` covers c
 **Shortcut:** `/autoplan` runs `/plan-ceo-review` + `/plan-design-review` +
 `/plan-eng-review` + `/plan-devex-review` in sequence with auto-decisions. Use it
 instead of skills 1–4 individually when you want a fast full-review pass.
-
-**Skill sequence table (fill in based on task):**
-
-Skills are grouped by workflow phase. Mark each YES, OPTIONAL, or N/A with reason.
 
 **The tables live in `templates/skill-checklist.md`** — four sections (Plan Reviews,
 Implementation Support, Review & QA, Ship & Post-ship) covering all 18. Read it when
@@ -574,11 +536,8 @@ disk, and branch names — and prints its provenance to stderr. Read that stderr
 local and origin disagree, another session has pushed or you have unpushed rows, and
 the note says so.
 
-> **Why this is a script.** This step used to say "read `PLANS-INDEX.md`, find the
-> highest, increment" against the **local working tree**, while `/plan` §11.4 already
-> knew to read `git show origin/main:…` "since concurrent sessions race for scope
-> numbers." The two skills disagreed and the one that mints numbers was the wrong
-> one. Scope 110 collided and had to be renumbered 111.
+> **Why a script.** Reading the local index to find the highest number raced two
+> sessions into the same number (scope 110 → renumbered 111).
 
 `{N}` prefixes the scope folder and every child plan.
 
@@ -633,22 +592,15 @@ overwritable section in the file; everything else is append-only.
 
 ### 5.7 Sweep related files into scope folder
 
-Check `{plans_dir}/` for files related to this scope's slug — PRDs, concepting docs,
-or any other working files created before the scope folder:
+PRDs, concept docs and other working files created before the scope folder travel
+with it — one call, never a hand-run `mv`:
 
 ```bash
-ls {plans_dir}/*{slug}* 2>/dev/null | grep -v "{N}-{slug}"
+~/Projects/ai-skills/scripts/plans-folder.sh "$PLANS_DIR" "$N-{slug}"      # creates artifacts/ too (§5.6)
 ```
 
-Move matching files into the scope folder so all task-related documents travel together:
-```bash
-mv {plans_dir}/prd-{slug}*.md {plans_dir}/{N}-{slug}/ 2>/dev/null
-mv {plans_dir}/*{slug}*.md {plans_dir}/{N}-{slug}/ 2>/dev/null
-```
-
-Exclude `PLANS-INDEX.md`, `TO-DO.md`, and any files already inside subdirectories.
-After this step, only the scope folder remains in `plans/` for this task — no orphaned
-working files at the top level.
+Contract in `scripts/README.md`. After it, nothing for this task is orphaned at the
+`plans/` top level.
 
 ### 5.8 Update PLANS-INDEX.md — via the script, never by hand
 
@@ -676,19 +628,14 @@ If `PLANS-INDEX.md` doesn't exist, create it with the two canonical tables
 (`## Active Plans` and `## Completed / Archived`, each with the header above) and
 start at 1.
 
-> **Why the shape is enforced in code.** The old version of this step carried a
-> seven-column template (`| {n} | {date} | scope | {path} | {project} | {status} |
-> {desc} |`) that matched no reader. PMG's index still had two conflicting shapes as
-> late as 2026-08-09 and 39 of its Active rows rendered their description **nowhere**,
-> because an undeclared column shifted every cell right. `plans-index.py` exists so a
-> shape mismatch is a refusal rather than a silent leak.
+> **Why the shape is enforced in code.** An undeclared column once shifted every
+> cell right, so 39 PMG Active rows rendered their description nowhere.
 
 ### 5.9 Generate plan stubs (phased scopes only)
 
 If the scope is **phased** (Step 3), generate a plan stub file for each phase.
-Each plan ≈ 1 context window ≈ 1 session of work.
 
-Plan stubs use **sub-numbers** of the scope's assigned `{N}` from Step 5.7:
+Plan stubs use **sub-numbers** of the scope's assigned `{N}` from Step 5.2:
 - Phase 1 → `{N}.1`
 - Phase 2 → `{N}.2`
 - etc.
@@ -724,9 +671,12 @@ because you estimate it exceeds a context window; compaction plus intra-phase re
 checkpoints handle that. Split one phase into two files only when the work is *both*
 very large *and* detail-dense, and label the split "same gate, sequential sessions."
 
-Also add a PLANS-INDEX entry for each plan stub (sub-numbered under the scope):
-```markdown
-| {N}.{P} | {date} | plan | {N}-{slug}/{N}.{P}-{slug}-PLAN.md | {project} | Draft | Phase {P} — {phase description} |
+Also add a PLANS-INDEX row for each plan stub, via the script (§5.8) — never the old
+seven-column row, which is the leak §5.8 exists to stop:
+```bash
+~/Projects/ai-skills/scripts/plans-index.py add "$PLANS_DIR/PLANS-INDEX.md" \
+  --num "$N.$P" --status "📝 Draft ($(date +%F))" --folder "\`{N}-{slug}/\`" \
+  --desc "Phase {P} — {phase description}" --creator "$(git config user.name)"
 ```
 
 ---
@@ -791,17 +741,6 @@ Invoke `/closeout-extended` to run the full self-healing pass: doc drift detecti
 and edits (CLAUDE.md, READMEs, ARCHITECTURE.md), pattern audit, cross-repo audit
 walking `CROSS-REPO.md`, test execution, and memory writes for cross-cutting findings.
 
-This replaces the previous ad-hoc post-flight doc updates and learnings capture —
-`/closeout-extended` does it more thoroughly with explicit pattern + drift checks.
-
-Fallback chain if extended skills are not installed:
-- `/closeout` (local-only self-heal) if available
-- Otherwise, do manual doc-update review + memory writes inline:
-  - Update CLAUDE.md if test counts, file descriptions, architecture, or scripts changed
-  - Update READMEs for affected packages
-  - Save non-obvious learnings to memory (gotchas, workflow feedback, system references)
-- Note the gap so /closeout can be installed for next scope
-
 ### 8.3 Confirm branch, commit, push
 
 Verify all changes are committed and pushed:
@@ -846,4 +785,3 @@ are workspace-relative. Three additions specific to a scope's execution:
 - **Slug is deterministic.** Based on task title, not date. Dates go inside the file.
 - **Plans dir must exist** (see §5.1 — stop, don't create silently).
 - **Central, not local.** Scope folders always go in the plans directory, never in the source repo's `docs/` folder.
-- **Progress is append-only.** Never delete or overwrite previous Progress Log entries. The Resume Context block is the only section that gets overwritten (it always reflects current state).

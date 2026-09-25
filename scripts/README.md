@@ -16,6 +16,15 @@ already caused real data loss. Prose cannot enforce itself — the same reasonin
 | `plans-index.py` | "append a row" with no header written — **leaked 40 untabled rows** | /scope §5.8, /plan §11.4, /closeout §13, /repo-cleanup §6 |
 | `repo-graph-snapshot.sh` | /scope §0.5.2's serial per-repo walk | /scope §0.5.2 |
 | `edit-guard.py` | `python3 - <<PY` string-replaces that **no-op silently** | any scripted multi-file edit |
+| `plans-folder.sh` | hand-run `mkdir`/`mv` sweep copied into two skills | /plan §2.5, /scope §5.6–5.7 |
+| `context-gather.sh` | Step-0 bash blocks copied into two skills — /prd's cat'ed both indexes whole | /scope Step 0, /prd Step 0 |
+| `stamp-executed-by.sh` | "derive the name, write the header" prose | /plan §3.1 |
+| `repo-graph-check.py` | a four-way SHA/branch classification written as steps | /plan §5.6.1 |
+| `ledger-init.sh` | "copy the template, append a phase header" prose | /plan §5.13 |
+| `dispatch-log.py` | hand-written JSONL lines | /concurrency §6, §7.1 |
+| `herdr-pane.sh` | the two-call pane naming rule (the second call was the recurring miss) + helper split | /concurrency §6, herdr §2/§5 |
+| `repo-survey.sh` | default-branch + survey cascade + MERGED/LIVE shell — **its `\|\| echo main` never fell back** | /cross-repo-init §2.1–2.2 |
+| `lint-skill.py` | eyeballing SKILL.md quality — CLAUDE.md §6 said "no linter currently" while the skills accreted past obey-able size | any skill edit; `/scope`, `/plan`, `/closeout` bodies |
 
 ## Contracts
 
@@ -32,6 +41,39 @@ already caused real data loss. Prose cannot enforce itself — the same reasonin
     plans-index.py next-number <index>    stdout: highest whole scope number + 1
     plans-index.py add  <index> --num --status --folder --desc [--creator] [--dry-run]
     plans-index.py move <index> --num --to {active,archived} [--folder] [--status] [--dry-run]
+
+    plans-folder.sh <plans-dir> <folder-name> [--slug S] [--move FILE]... [--dry-run]
+      exit: 0 ok · 1 a move refused (destination exists) or failed to land · 2 usage
+    context-gather.sh [repo-dir]          always exit 0; `== section ==` blocks on stdout
+    stamp-executed-by.sh <plan-file> [--repo DIR]
+      exit: 0 stamped/unchanged · 1 write did not land · 2 usage · 3 no git user.name
+    repo-graph-check.py <scope.md> [--projects DIR]
+      exit: 0 unchanged · 1 advanced only (confirm) · 3 diverged/missing (stop) · 4 no Repo Graph · 2 usage
+    ledger-init.sh <folder> --plan <plan> --phase "<P>: <name>" [--slug S] [--resumed]
+      exit: 0 ok · 1 write did not land · 2 usage · 4 template missing
+    dispatch-log.py --scope --task --status {dispatched,done,blocked,failed} [--seat --branch --worktree --pane --tail --log]
+      exit: 0 written + read back · 1 did not land · 2 usage
+    herdr-pane.sh name <pane> <task> <seat> [--source SKILL]  |  herdr-pane.sh helper [--cwd DIR]
+      exit: 0 ok · 1 herdr call failed / label not visible · 2 usage · 3 not in herdr / no server
+    repo-survey.sh [repo-dir] [--no-fetch]
+      exit: 0 ok · 1 not a git repo. Read-only; never checks out.
+
+    Every writer above reads its result back from the destination before reporting
+    success — a green exit is a landed write, not a printed intention (CLAUDE.md §3.6.2).
+
+    lint-skill.py <skill-dir|SKILL.md>... [--max-body-lines N] [--no-history] [--json] [--no-notes] [--quiet]
+      exit: 0 no ISSUES (NOTES allowed) · 1 ISSUES found · 2 usage/parse error
+      Reads only. Each finding is `expected · found · where · next`.
+      ISSUES (fail the run, deterministic): duplicate section numbers, malformed frontmatter (missing name/description,
+      empty allowed-tools, name≠dir), dead renamed-skill references, agent-memory
+      file citations (memory is per-cwd; CLAUDE.md §9.3).
+      NOTES (advisory, never fail): growth (deletions < 20% of additions over the
+      last 10 modifying commits, from git), cross-skill-duplicate (word 5-gram
+      overlap between skills in one run), size (>N lines, default 250 — a hint,
+      not a cap), determinism-as-prose (filesystem-mutation verbs in a fenced shell
+      block), supersession sites (where a live contradiction may hide). The ISSUE/NOTE split IS the design — fuzzy checks are NOTES so the
+      linter never cries wolf. Semantic contradiction detection is deferred to an
+      eval pass (scope 2 §2.1). Bump the threshold only with a recorded reason.
 
 `add` and `move` refuse to write against a non-canonical header rather than
 silently appending a mismatched row. **Nothing is ever truncated** — the

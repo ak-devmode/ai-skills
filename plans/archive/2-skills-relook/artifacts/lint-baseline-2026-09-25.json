@@ -1,0 +1,518 @@
+{
+  "summary": {
+    "issues": 0,
+    "notes": 45,
+    "skills": 26,
+    "max_body_lines": 250
+  },
+  "reports": [
+    {
+      "skill": "closeout-extended/SKILL.md",
+      "body_lines": 644,
+      "findings": [
+        {
+          "tier": "NOTE",
+          "check": "size",
+          "expected": "body <= 250 lines is a hint, not a bar",
+          "found": "644 body lines",
+          "where": "whole SKILL.md body",
+          "next": "cut superseded, harness-owned, and duplicated text; move only RARE-BRANCH content to references/ \u2014 never split a mandatory rule out to hit a count"
+        },
+        {
+          "tier": "NOTE",
+          "check": "determinism-as-prose",
+          "expected": "deterministic file mutation lives in scripts/, not prose (\u00a73.6.1)",
+          "found": "shell block mutates the filesystem (touch)",
+          "where": "fenced block at L340",
+          "next": "if this is a fixed procedure, move it to scripts/ and call it; if it is illustrative, leave it \u2014 this is advisory"
+        },
+        {
+          "tier": "NOTE",
+          "check": "supersession-site",
+          "expected": "a supersession fully replaces the old text, leaving no live contradiction",
+          "found": "3 supersession marker(s)",
+          "where": "L201, L448, L476",
+          "next": "confirm the superseded directive was deleted, not left living beside its replacement (AUDIT \u00a75.3 class); deep semantic check is the eval pass (deferred)"
+        },
+        {
+          "tier": "NOTE",
+          "check": "growth",
+          "expected": "deletions >= 20% of additions over the last 10 edits",
+          "found": "+150 -15 (10%) across 2 edit(s)",
+          "where": "git history of closeout-extended/SKILL.md",
+          "next": "every new rule should retire or rewrite an old one; look for superseded, harness-owned, or duplicated text to cut"
+        }
+      ]
+    },
+    {
+      "skill": "closeout/SKILL.md",
+      "body_lines": 842,
+      "findings": [
+        {
+          "tier": "NOTE",
+          "check": "size",
+          "expected": "body <= 250 lines is a hint, not a bar",
+          "found": "842 body lines",
+          "where": "whole SKILL.md body",
+          "next": "cut superseded, harness-owned, and duplicated text; move only RARE-BRANCH content to references/ \u2014 never split a mandatory rule out to hit a count"
+        },
+        {
+          "tier": "NOTE",
+          "check": "supersession-site",
+          "expected": "a supersession fully replaces the old text, leaving no live contradiction",
+          "found": "1 supersession marker(s)",
+          "where": "L288",
+          "next": "confirm the superseded directive was deleted, not left living beside its replacement (AUDIT \u00a75.3 class); deep semantic check is the eval pass (deferred)"
+        },
+        {
+          "tier": "NOTE",
+          "check": "growth",
+          "expected": "deletions >= 20% of additions over the last 10 edits",
+          "found": "+320 -51 (15%) across 10 edit(s)",
+          "where": "git history of closeout/SKILL.md",
+          "next": "every new rule should retire or rewrite an old one; look for superseded, harness-owned, or duplicated text to cut"
+        },
+        {
+          "tier": "NOTE",
+          "check": "cross-skill-duplicate",
+          "expected": "one owner per rule; others reference it by section",
+          "found": "52% shingle overlap with plan L540",
+          "where": "paragraph at L232",
+          "next": "keep the copy in the owning skill, replace the other with a cross-reference (CLAUDE.md \u00a73.5); if it's a procedure, it may be a script"
+        },
+        {
+          "tier": "NOTE",
+          "check": "cross-skill-duplicate",
+          "expected": "one owner per rule; others reference it by section",
+          "found": "38% shingle overlap with plan L645",
+          "where": "paragraph at L573",
+          "next": "keep the copy in the owning skill, replace the other with a cross-reference (CLAUDE.md \u00a73.5); if it's a procedure, it may be a script"
+        }
+      ]
+    },
+    {
+      "skill": "concurrency/SKILL.md",
+      "body_lines": 347,
+      "findings": [
+        {
+          "tier": "NOTE",
+          "check": "size",
+          "expected": "body <= 250 lines is a hint, not a bar",
+          "found": "347 body lines",
+          "where": "whole SKILL.md body",
+          "next": "cut superseded, harness-owned, and duplicated text; move only RARE-BRANCH content to references/ \u2014 never split a mandatory rule out to hit a count"
+        },
+        {
+          "tier": "NOTE",
+          "check": "supersession-site",
+          "expected": "a supersession fully replaces the old text, leaving no live contradiction",
+          "found": "1 supersession marker(s)",
+          "where": "L301",
+          "next": "confirm the superseded directive was deleted, not left living beside its replacement (AUDIT \u00a75.3 class); deep semantic check is the eval pass (deferred)"
+        },
+        {
+          "tier": "NOTE",
+          "check": "cross-skill-duplicate",
+          "expected": "one owner per rule; others reference it by section",
+          "found": "36% shingle overlap with herdr L42",
+          "where": "paragraph at L42",
+          "next": "keep the copy in the owning skill, replace the other with a cross-reference (CLAUDE.md \u00a73.5); if it's a procedure, it may be a script"
+        }
+      ]
+    },
+    {
+      "skill": "cross-repo-init/SKILL.md",
+      "body_lines": 705,
+      "findings": [
+        {
+          "tier": "NOTE",
+          "check": "size",
+          "expected": "body <= 250 lines is a hint, not a bar",
+          "found": "705 body lines",
+          "where": "whole SKILL.md body",
+          "next": "cut superseded, harness-owned, and duplicated text; move only RARE-BRANCH content to references/ \u2014 never split a mandatory rule out to hit a count"
+        },
+        {
+          "tier": "NOTE",
+          "check": "supersession-site",
+          "expected": "a supersession fully replaces the old text, leaving no live contradiction",
+          "found": "1 supersession marker(s)",
+          "where": "L551",
+          "next": "confirm the superseded directive was deleted, not left living beside its replacement (AUDIT \u00a75.3 class); deep semantic check is the eval pass (deferred)"
+        },
+        {
+          "tier": "NOTE",
+          "check": "growth",
+          "expected": "deletions >= 20% of additions over the last 10 edits",
+          "found": "+538 -80 (14%) across 5 edit(s)",
+          "where": "git history of cross-repo-init/SKILL.md",
+          "next": "every new rule should retire or rewrite an old one; look for superseded, harness-owned, or duplicated text to cut"
+        }
+      ]
+    },
+    {
+      "skill": "grafana-remediate/SKILL.md",
+      "body_lines": 49,
+      "findings": []
+    },
+    {
+      "skill": "herdr/SKILL.md",
+      "body_lines": 175,
+      "findings": [
+        {
+          "tier": "NOTE",
+          "check": "cross-skill-duplicate",
+          "expected": "one owner per rule; others reference it by section",
+          "found": "36% shingle overlap with concurrency L42",
+          "where": "paragraph at L42",
+          "next": "keep the copy in the owning skill, replace the other with a cross-reference (CLAUDE.md \u00a73.5); if it's a procedure, it may be a script"
+        }
+      ]
+    },
+    {
+      "skill": "kalpa-coding-standards/SKILL.md",
+      "body_lines": 280,
+      "findings": [
+        {
+          "tier": "NOTE",
+          "check": "size",
+          "expected": "body <= 250 lines is a hint, not a bar",
+          "found": "280 body lines",
+          "where": "whole SKILL.md body",
+          "next": "cut superseded, harness-owned, and duplicated text; move only RARE-BRANCH content to references/ \u2014 never split a mandatory rule out to hit a count"
+        }
+      ]
+    },
+    {
+      "skill": "kalpa-context/SKILL.md",
+      "body_lines": 37,
+      "findings": []
+    },
+    {
+      "skill": "kalpa-generate-api/SKILL.md",
+      "body_lines": 88,
+      "findings": []
+    },
+    {
+      "skill": "kalpa-migrate/SKILL.md",
+      "body_lines": 83,
+      "findings": []
+    },
+    {
+      "skill": "kalpa-satu-sehat-fhir/SKILL.md",
+      "body_lines": 118,
+      "findings": []
+    },
+    {
+      "skill": "markdown-style/SKILL.md",
+      "body_lines": 619,
+      "findings": [
+        {
+          "tier": "NOTE",
+          "check": "size",
+          "expected": "body <= 250 lines is a hint, not a bar",
+          "found": "619 body lines",
+          "where": "whole SKILL.md body",
+          "next": "cut superseded, harness-owned, and duplicated text; move only RARE-BRANCH content to references/ \u2014 never split a mandatory rule out to hit a count"
+        },
+        {
+          "tier": "NOTE",
+          "check": "growth",
+          "expected": "deletions >= 20% of additions over the last 10 edits",
+          "found": "+360 -42 (11%) across 10 edit(s)",
+          "where": "git history of markdown-style/SKILL.md",
+          "next": "every new rule should retire or rewrite an old one; look for superseded, harness-owned, or duplicated text to cut"
+        }
+      ]
+    },
+    {
+      "skill": "md2docx/SKILL.md",
+      "body_lines": 89,
+      "findings": []
+    },
+    {
+      "skill": "member-record-amend/SKILL.md",
+      "body_lines": 152,
+      "findings": []
+    },
+    {
+      "skill": "nano-banana/SKILL.md",
+      "body_lines": 79,
+      "findings": []
+    },
+    {
+      "skill": "pha-console/SKILL.md",
+      "body_lines": 247,
+      "findings": []
+    },
+    {
+      "skill": "plan/SKILL.md",
+      "body_lines": 852,
+      "findings": [
+        {
+          "tier": "NOTE",
+          "check": "size",
+          "expected": "body <= 250 lines is a hint, not a bar",
+          "found": "852 body lines",
+          "where": "whole SKILL.md body",
+          "next": "cut superseded, harness-owned, and duplicated text; move only RARE-BRANCH content to references/ \u2014 never split a mandatory rule out to hit a count"
+        },
+        {
+          "tier": "NOTE",
+          "check": "determinism-as-prose",
+          "expected": "deterministic file mutation lives in scripts/, not prose (\u00a73.6.1)",
+          "found": "shell block mutates the filesystem (mkdir)",
+          "where": "fenced block at L179",
+          "next": "if this is a fixed procedure, move it to scripts/ and call it; if it is illustrative, leave it \u2014 this is advisory"
+        },
+        {
+          "tier": "NOTE",
+          "check": "determinism-as-prose",
+          "expected": "deterministic file mutation lives in scripts/, not prose (\u00a73.6.1)",
+          "found": "shell block mutates the filesystem (mv)",
+          "where": "fenced block at L184",
+          "next": "if this is a fixed procedure, move it to scripts/ and call it; if it is illustrative, leave it \u2014 this is advisory"
+        },
+        {
+          "tier": "NOTE",
+          "check": "determinism-as-prose",
+          "expected": "deterministic file mutation lives in scripts/, not prose (\u00a73.6.1)",
+          "found": "shell block mutates the filesystem (mv)",
+          "where": "fenced block at L189",
+          "next": "if this is a fixed procedure, move it to scripts/ and call it; if it is illustrative, leave it \u2014 this is advisory"
+        },
+        {
+          "tier": "NOTE",
+          "check": "determinism-as-prose",
+          "expected": "deterministic file mutation lives in scripts/, not prose (\u00a73.6.1)",
+          "found": "shell block mutates the filesystem (mv)",
+          "where": "fenced block at L195",
+          "next": "if this is a fixed procedure, move it to scripts/ and call it; if it is illustrative, leave it \u2014 this is advisory"
+        },
+        {
+          "tier": "NOTE",
+          "check": "determinism-as-prose",
+          "expected": "deterministic file mutation lives in scripts/, not prose (\u00a73.6.1)",
+          "found": "shell block mutates the filesystem (mv)",
+          "where": "fenced block at L720",
+          "next": "if this is a fixed procedure, move it to scripts/ and call it; if it is illustrative, leave it \u2014 this is advisory"
+        },
+        {
+          "tier": "NOTE",
+          "check": "determinism-as-prose",
+          "expected": "deterministic file mutation lives in scripts/, not prose (\u00a73.6.1)",
+          "found": "shell block mutates the filesystem (mkdir, mv)",
+          "where": "fenced block at L726",
+          "next": "if this is a fixed procedure, move it to scripts/ and call it; if it is illustrative, leave it \u2014 this is advisory"
+        },
+        {
+          "tier": "NOTE",
+          "check": "supersession-site",
+          "expected": "a supersession fully replaces the old text, leaving no live contradiction",
+          "found": "2 supersession marker(s)",
+          "where": "L51, L324",
+          "next": "confirm the superseded directive was deleted, not left living beside its replacement (AUDIT \u00a75.3 class); deep semantic check is the eval pass (deferred)"
+        },
+        {
+          "tier": "NOTE",
+          "check": "cross-skill-duplicate",
+          "expected": "one owner per rule; others reference it by section",
+          "found": "52% shingle overlap with closeout L232",
+          "where": "paragraph at L540",
+          "next": "keep the copy in the owning skill, replace the other with a cross-reference (CLAUDE.md \u00a73.5); if it's a procedure, it may be a script"
+        },
+        {
+          "tier": "NOTE",
+          "check": "cross-skill-duplicate",
+          "expected": "one owner per rule; others reference it by section",
+          "found": "38% shingle overlap with closeout L573",
+          "where": "paragraph at L645",
+          "next": "keep the copy in the owning skill, replace the other with a cross-reference (CLAUDE.md \u00a73.5); if it's a procedure, it may be a script"
+        },
+        {
+          "tier": "NOTE",
+          "check": "cross-skill-duplicate",
+          "expected": "one owner per rule; others reference it by section",
+          "found": "30% shingle overlap with scope L643",
+          "where": "paragraph at L193",
+          "next": "keep the copy in the owning skill, replace the other with a cross-reference (CLAUDE.md \u00a73.5); if it's a procedure, it may be a script"
+        }
+      ]
+    },
+    {
+      "skill": "prd/SKILL.md",
+      "body_lines": 306,
+      "findings": [
+        {
+          "tier": "NOTE",
+          "check": "size",
+          "expected": "body <= 250 lines is a hint, not a bar",
+          "found": "306 body lines",
+          "where": "whole SKILL.md body",
+          "next": "cut superseded, harness-owned, and duplicated text; move only RARE-BRANCH content to references/ \u2014 never split a mandatory rule out to hit a count"
+        },
+        {
+          "tier": "NOTE",
+          "check": "cross-skill-duplicate",
+          "expected": "one owner per rule; others reference it by section",
+          "found": "55% shingle overlap with scope L100",
+          "where": "paragraph at L67",
+          "next": "keep the copy in the owning skill, replace the other with a cross-reference (CLAUDE.md \u00a73.5); if it's a procedure, it may be a script"
+        }
+      ]
+    },
+    {
+      "skill": "ready-to-clear/SKILL.md",
+      "body_lines": 258,
+      "findings": [
+        {
+          "tier": "NOTE",
+          "check": "size",
+          "expected": "body <= 250 lines is a hint, not a bar",
+          "found": "258 body lines",
+          "where": "whole SKILL.md body",
+          "next": "cut superseded, harness-owned, and duplicated text; move only RARE-BRANCH content to references/ \u2014 never split a mandatory rule out to hit a count"
+        },
+        {
+          "tier": "NOTE",
+          "check": "growth",
+          "expected": "deletions >= 20% of additions over the last 10 edits",
+          "found": "+116 -15 (12%) across 5 edit(s)",
+          "where": "git history of ready-to-clear/SKILL.md",
+          "next": "every new rule should retire or rewrite an old one; look for superseded, harness-owned, or duplicated text to cut"
+        }
+      ]
+    },
+    {
+      "skill": "repo-cleanup-all/SKILL.md",
+      "body_lines": 16,
+      "findings": []
+    },
+    {
+      "skill": "repo-cleanup/SKILL.md",
+      "body_lines": 418,
+      "findings": [
+        {
+          "tier": "NOTE",
+          "check": "size",
+          "expected": "body <= 250 lines is a hint, not a bar",
+          "found": "418 body lines",
+          "where": "whole SKILL.md body",
+          "next": "cut superseded, harness-owned, and duplicated text; move only RARE-BRANCH content to references/ \u2014 never split a mandatory rule out to hit a count"
+        },
+        {
+          "tier": "NOTE",
+          "check": "growth",
+          "expected": "deletions >= 20% of additions over the last 10 edits",
+          "found": "+216 -17 (7%) across 5 edit(s)",
+          "where": "git history of repo-cleanup/SKILL.md",
+          "next": "every new rule should retire or rewrite an old one; look for superseded, harness-owned, or duplicated text to cut"
+        }
+      ]
+    },
+    {
+      "skill": "research/SKILL.md",
+      "body_lines": 234,
+      "findings": [
+        {
+          "tier": "NOTE",
+          "check": "growth",
+          "expected": "deletions >= 20% of additions over the last 10 edits",
+          "found": "+223 -25 (11%) across 6 edit(s)",
+          "where": "git history of research/SKILL.md",
+          "next": "every new rule should retire or rewrite an old one; look for superseded, harness-owned, or duplicated text to cut"
+        }
+      ]
+    },
+    {
+      "skill": "review/SKILL.md",
+      "body_lines": 296,
+      "findings": [
+        {
+          "tier": "NOTE",
+          "check": "size",
+          "expected": "body <= 250 lines is a hint, not a bar",
+          "found": "296 body lines",
+          "where": "whole SKILL.md body",
+          "next": "cut superseded, harness-owned, and duplicated text; move only RARE-BRANCH content to references/ \u2014 never split a mandatory rule out to hit a count"
+        },
+        {
+          "tier": "NOTE",
+          "check": "growth",
+          "expected": "deletions >= 20% of additions over the last 10 edits",
+          "found": "+101 -4 (3%) across 3 edit(s)",
+          "where": "git history of review/SKILL.md",
+          "next": "every new rule should retire or rewrite an old one; look for superseded, harness-owned, or duplicated text to cut"
+        }
+      ]
+    },
+    {
+      "skill": "scope-review/SKILL.md",
+      "body_lines": 338,
+      "findings": [
+        {
+          "tier": "NOTE",
+          "check": "size",
+          "expected": "body <= 250 lines is a hint, not a bar",
+          "found": "338 body lines",
+          "where": "whole SKILL.md body",
+          "next": "cut superseded, harness-owned, and duplicated text; move only RARE-BRANCH content to references/ \u2014 never split a mandatory rule out to hit a count"
+        }
+      ]
+    },
+    {
+      "skill": "scope/SKILL.md",
+      "body_lines": 826,
+      "findings": [
+        {
+          "tier": "NOTE",
+          "check": "size",
+          "expected": "body <= 250 lines is a hint, not a bar",
+          "found": "826 body lines",
+          "where": "whole SKILL.md body",
+          "next": "cut superseded, harness-owned, and duplicated text; move only RARE-BRANCH content to references/ \u2014 never split a mandatory rule out to hit a count"
+        },
+        {
+          "tier": "NOTE",
+          "check": "determinism-as-prose",
+          "expected": "deterministic file mutation lives in scripts/, not prose (\u00a73.6.1)",
+          "found": "shell block mutates the filesystem (mv)",
+          "where": "fenced block at L644",
+          "next": "if this is a fixed procedure, move it to scripts/ and call it; if it is illustrative, leave it \u2014 this is advisory"
+        },
+        {
+          "tier": "NOTE",
+          "check": "cross-skill-duplicate",
+          "expected": "one owner per rule; others reference it by section",
+          "found": "30% shingle overlap with plan L193",
+          "where": "paragraph at L643",
+          "next": "keep the copy in the owning skill, replace the other with a cross-reference (CLAUDE.md \u00a73.5); if it's a procedure, it may be a script"
+        },
+        {
+          "tier": "NOTE",
+          "check": "cross-skill-duplicate",
+          "expected": "one owner per rule; others reference it by section",
+          "found": "55% shingle overlap with prd L67",
+          "where": "paragraph at L100",
+          "next": "keep the copy in the owning skill, replace the other with a cross-reference (CLAUDE.md \u00a73.5); if it's a procedure, it may be a script"
+        }
+      ]
+    },
+    {
+      "skill": "todo-sweep/SKILL.md",
+      "body_lines": 191,
+      "findings": [
+        {
+          "tier": "NOTE",
+          "check": "supersession-site",
+          "expected": "a supersession fully replaces the old text, leaving no live contradiction",
+          "found": "1 supersession marker(s)",
+          "where": "L139",
+          "next": "confirm the superseded directive was deleted, not left living beside its replacement (AUDIT \u00a75.3 class); deep semantic check is the eval pass (deferred)"
+        }
+      ]
+    }
+  ],
+  "unresolved": [],
+  "parse_errors": []
+}

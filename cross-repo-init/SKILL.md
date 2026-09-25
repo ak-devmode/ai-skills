@@ -1,6 +1,6 @@
 ---
 name: cross-repo-init
-version: 1.3.0
+version: 1.5.0
 description: |
   Bootstrap **and ongoing maintenance** of the trio — CROSS-REPO.md, ARCHITECTURE.md,
   and CLAUDE.md — for a repo so /plan and /closeout-extended have the metadata they
@@ -37,9 +37,6 @@ allowed-tools:
 This skill is the on-ramp for the closeout-skills framework. After /cross-repo-init runs
 on a repo, /plan reads its CROSS-REPO.md at session start (pattern-first rule), and
 /closeout-extended uses it to walk the cross-repo graph.
-
-The skill **never uses AskUserQuestion** — all user interaction is open-ended numbered
-inline questions answered by number.
 
 ---
 
@@ -79,23 +76,15 @@ broken paths) then LLM-judge on the candidates.
 
 ## 2. Step 0 — Detect Current Repo
 
-### 2.1 Identify repo + default branch
+### 2.1 Identify repo + survey branch
 
 ```bash
-git rev-parse --show-toplevel 2>/dev/null || { echo "ERROR: not a git repo"; exit 1; }
-REPO_ROOT=$(git rev-parse --show-toplevel)
-REPO_NAME=$(basename "$REPO_ROOT")
-REMOTE_URL=$(git remote get-url origin 2>/dev/null || echo "(no remote)")
-DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@' || echo "main")
-CURRENT_BRANCH=$(git -C "$REPO_ROOT" branch --show-current)
-echo "REPO_NAME=$REPO_NAME"
-echo "REPO_ROOT=$REPO_ROOT"
-echo "REMOTE_URL=$REMOTE_URL"
-echo "DEFAULT_BRANCH=$DEFAULT_BRANCH"
-echo "CURRENT_BRANCH=$CURRENT_BRANCH"
+~/Projects/ai-skills/scripts/repo-survey.sh "$PWD"     # exit 1 = not a git repo: halt with a clear error
 ```
 
-Halt with a clear error if not in a git repo.
+It prints `REPO`, `REPO_ROOT`, `REMOTE_URL`, `DEFAULT_BRANCH` (falls back to `main`
+when `origin/HEAD` is unset), `CURRENT_BRANCH`, `SURVEY_BRANCH` + `SURVEY_REASON`, then
+every remote branch classified vs the survey trunk. Read-only; never checks out.
 
 ### 2.2 Branch survey — CRITICAL FOR AUTO-DETECTION ACCURACY
 
@@ -105,40 +94,14 @@ stable release/snapshot branch while real current-state code lives on
 look at the branch that holds current work — not just whatever happens to
 be checked out.
 
-```bash
-# Enumerate non-stale remote branches and classify each vs trunk, so a branch
-# already integrated into trunk is NOT mistaken for live drift (same merged-vs-
-# unmerged test the SessionStart git-hygiene hook uses: rev-list count of commits
-# the branch holds that trunk does not).
-git -C "$REPO_ROOT" fetch --prune origin 2>/dev/null  # best-effort refresh
-TRUNK="origin/$DEFAULT_BRANCH"   # swap to origin/develop once the cascade below selects it
-for ref in $(git -C "$REPO_ROOT" for-each-ref --format='%(refname:short)' refs/remotes/origin \
-              | grep -vE '/(HEAD|gh-pages)$'); do
-  [ "$ref" = "$TRUNK" ] && continue
-  ahead=$(git -C "$REPO_ROOT" rev-list --count "$TRUNK..$ref" 2>/dev/null)
-  when=$(git -C "$REPO_ROOT" log -1 --format='%cs' "$ref" 2>/dev/null)
-  if [ "${ahead:-0}" = "0" ]; then
-    echo "MERGED  $ref  ($when)"          # fully contained in trunk — NOT drift
-  else
-    echo "LIVE    $ref  ($when, +$ahead)" # unmerged commits — a real candidate
-  fi
-done
-git -C "$REPO_ROOT" rev-list --left-right --count "origin/$DEFAULT_BRANCH...origin/develop" 2>/dev/null || true
-```
+`repo-survey.sh` (§2.1) applies the cascade and the classification — the rules, so
+its output can be checked:
 
-A branch that reads `+N ahead` but was **squash-merged** is also already in
-trunk by content; ancestry can't see that. Confirm the ambiguous ones with
-`git -C "$REPO_ROOT" cherry "$TRUNK" "$ref"` — if every line is prefixed `-`
-(all commits already applied upstream), treat it as MERGED.
-
-**Pick the survey branch** (the one auto-detection scans against), using
-this cascade:
-
-1. If `CROSS-REPO.md` already exists with a populated `trunk-branch:` field, use that.
-2. Else if `origin/develop` exists AND is non-trivially ahead of
-   `origin/$DEFAULT_BRANCH` (≥5 commits ahead OR has files the default branch
-   doesn't), use `develop`.
-3. Else use `$DEFAULT_BRANCH`.
+- **Survey branch:** CROSS-REPO.md `trunk-branch:` if set → else `origin/develop` if
+  it is ≥5 commits ahead of default OR adds files default lacks → else default.
+- **MERGED** — no commits trunk lacks. **SQUASHED** — ahead by ancestry, but
+  `git cherry` shows every patch already upstream (in trunk by content). **LIVE** —
+  real unmerged work. Only LIVE is ever drift.
 
 Surface the choice to the user in the Step 0 report, even when no
 ambiguity exists:
@@ -213,7 +176,8 @@ default. An `!README.md` exception is a tell that the rule is overbroad —
 the right fix is to remove the `*.md` line, not add more exceptions.
 
 Don't silently `git add -f` to bypass the rule — that papers over a real
-gitignore problem.
+gitignore problem. (wellmed-backbone had `*.md` + `!README.md`, which blocked
+its trio commit.)
 
 ### 2.5 Step 0 report
 
@@ -358,9 +322,7 @@ checked-out branch. Use `git ls-tree -r --name-only origin/$SURVEY_BRANCH` /
   built-but-not-merged-to-main) component. If no drift surfaced, render as
   the green-check line per §2.3. ADR numbering collisions (two ADRs with the
   same number) are *not* drift content — they go in §3 Key Decisions or §5 ADR
-  Index as a known anomaly with a recommended renumbering. (Future polish: a
-  separate audit pass for ADR-number collisions across `adrs/*.md` —
-  see v1.1 TO-DO.)
+  Index as a known anomaly with a recommended renumbering.
 
 ### 4.2 Presentation
 
@@ -438,8 +400,7 @@ three archetype patterns (Go service / frontend leaf / docs leaf).
 
 5.2.3 Auto-detect what you can (run against `$SURVEY_BRANCH`):
 - **What this service is** — derive from README.md head + module name + port.
-- **Trunk branch + workflow** — from §2.2 survey + memory pointer to
-  `feedback_branch_off_develop.md` if applicable.
+- **Trunk branch + workflow** — from §2.2 survey.
 - **Build/test/lint** — detect from `Makefile`, `package.json` scripts,
   `go.mod` (Go), `composer.json` (PHP), etc.
 - **Architecture decisions** — lift from the just-written ARCHITECTURE.md §4
@@ -465,7 +426,8 @@ template:
 - Trunk branch and workflow section
 - Cross-repo position pointer to `CROSS-REPO.md`
 - Pointer to `ARCHITECTURE.md` for component layout
-- Memory pointers (`~/.claude/projects/.../memory/`)
+- Plans-dir pointer (never a memory path — memory is per working directory and
+  dead-ends for anyone else; a rule an agent must follow goes in the file itself)
 
 5.3.3 Identify content the existing file ALREADY covers well — preserve those
 sections verbatim. **Do not rewrite for rewriting's sake.**
@@ -481,7 +443,7 @@ Existing CLAUDE.md is healthy in:
 Proposed additions (sections currently missing):
   + §N. Trunk branch and workflow
   + §N+1. Cross-repo position (pointer to CROSS-REPO.md)
-  + §N+2. Plans and memory pointers
+  + §N+2. Plans pointer
 
 Inline edits (small corrections):
   - Update port from :50054 to :50053 (env.example is authoritative)
@@ -509,8 +471,8 @@ content from the existing `.claude/CLAUDE.md` into it section-by-section.
 
 5.4.3 The folded root CLAUDE.md should:
 - Preserve every load-bearing section from the original
-- Add the trio-specific sections (archetype, cross-repo position, plans/
-  memory pointers) it didn't have
+- Add the trio-specific sections (archetype, cross-repo position, plans
+  pointer) it didn't have
 - Open with a one-paragraph preamble noting the fold + delete of the old
   `.claude/CLAUDE.md`
 
@@ -569,9 +531,10 @@ the standard scaffold:
 - Note where the actual work lives (uncommitted local? another branch?
   another team member?)
 - Mark "refresh this trio when implementation lands" as the explicit
-  follow-up.
+  follow-up. Mark all three trio files STUB, not just CLAUDE.md.
 
-See `<SKILL_DIR>/templates/CLAUDE.md.examples.md` for the stub archetype.
+Common cause: the actual work lives uncommitted on someone's machine. See
+`<SKILL_DIR>/templates/CLAUDE.md.examples.md` for the stub archetype.
 
 ## 6. Step 4 — Idempotency Verification
 
@@ -625,15 +588,9 @@ especially approximate — it depends on what other repos are checked out locall
 7.4 **Never auto-generate diagrams.** The Data Flow ASCII diagram in ARCHITECTURE.md
 requires user input. A wrong diagram is misleading; a placeholder is honest.
 
-7.4a **Always survey the right branch.** The checked-out branch is not the
-truth. Pick `$SURVEY_BRANCH` per §2.2 cascade and run ALL auto-detection
-against it via `git show` / `git ls-tree`, not `cat` / `ls`. Surface the
-branch choice to the user in the Step 0 report so they can correct if
-wrong. This rule was added 2026-05-11 after a kalpa-docs dogfood where
-the adapter framework lived on `wellmed-infrastructure/develop` (built,
-Phase 2 complete) but the checked-out `main` showed only observability
-SDK files — auto-detection inferred zero adapter infrastructure when in
-fact ~20+ domain adapters existed on develop.
+7.4a **Always survey the right branch** (§2.2) — `git show`/`git ls-tree` against
+`$SURVEY_BRANCH`, never `cat`/`ls` on the checkout. A `main`-only scan once
+inferred zero adapters in a repo whose `develop` had 20+.
 
 7.4b **Always render §6 Drift.** Every ARCHITECTURE.md gets §6 (Current
 Code State vs Target Architecture). If no drift surfaced, render the
@@ -651,19 +608,9 @@ dir is typically `~/Projects/ai-skills/cross-repo-init/` (symlinked into
 `~/.claude/skills/cross-repo-init/`). If templates are not found, halt with a clear
 message telling the user to check skill installation.
 
-7.8 **Assess-first, don't sidecar-by-default.** When CLAUDE.md or
-ARCHITECTURE.md already exists, the skill READS the existing file FIRST,
-identifies what's worth preserving and what's missing relative to the trio
-shape, and presents a targeted delta proposal — sections to add, inline
-edits to apply. The skill does NOT default to writing a parallel sidecar
-file (e.g., `CLAUDE.pmg.md` or `.claude/CLAUDE.md` while leaving the
-existing root file untouched). Single canonical per repo. The fold
-patterns in §5.3 / §5.4 / §5.5 are how this rule is operationalized for
-CLAUDE.md; for ARCHITECTURE.md, §4.4 (long-form predecessor) is the
-operative path. This rule was added 2026-05-11 after a wellmed-* cascade
-revealed that nearly every code service had rich content in
-`.claude/CLAUDE.md` and stale/shallow content at root — the right move was
-fold-up-and-delete, not sidecar.
+7.8 **Assess-first, don't sidecar-by-default.** Read what exists, keep what's
+good, write one canonical file — never a parallel sidecar. Procedure: §5.3–§5.5
+(CLAUDE.md), §4.4 (ARCHITECTURE.md).
 
 7.9 **Single canonical per repo.** Don't keep two architecture docs or
 two CLAUDE.md files co-canonical — one will get stale. For long-form
@@ -683,30 +630,12 @@ service metadata are easy to get wrong if you trust an existing
   files; env.example was right.)
 - **Module path**: grep `go.mod` / `package.json` / `composer.json`. Go
   module paths are case-sensitive and must be lowercase
-  (`kalpa-health`, not `Kalpa-Health`) — see
-  `memory/feedback_kalpa_health_lowercase.md`.
+  (`kalpa-health`, not `Kalpa-Health`).
 - **Branch survey**: §2.2 cascade, not the checked-out branch.
 
-7.11 **Stub-repo detection.** If §2.3 surfaces stub-only signals
-(repo has only `README.md` + `.gitignore`, only `main` branch, single
-commit history, no source code), treat this as a special case:
-- Use the stub-trio templates (CLAUDE.md.examples.md "Stub" archetype)
-- Mark all three trio files explicitly with "STUB" warnings
-- Document the intended role from ADRs / system architecture if known
-- Instruct future agents not to fabricate implementation
-- Make "refresh this trio when implementation lands" the explicit
-  follow-up
+7.11 **Stub-repo detection** — §2.3 classifies, §5.6 handles.
 
-Common cause of stub repos: the actual work lives uncommitted on someone's
-local machine. Surface this in the trio so future agents understand the gap.
-
-7.12 **`.gitignore *.md` audit.** During Step 0, scan `.gitignore` for any
-rule that ignores markdown files broadly (`*.md`, `*.markdown`). If found,
-surface it in the Step 0 report and propose removal — the trio files plus
-all docs/ content should be tracked by default. (2026-05-11 calibration:
-wellmed-backbone's `.gitignore` had `*.md` + `!README.md` rules that
-blocked the trio commit until force-added; the rules were removed in a
-follow-up commit.)
+7.12 **`.gitignore *.md` audit** — §2.4.
 
 7.13 **Two-trunk-archetype awareness for WellMed-shaped systems.** Some
 codebases have BOTH an **application trunk** (the main app where contracts

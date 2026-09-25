@@ -115,22 +115,16 @@ All sourced from SSM at deploy time; manifest at
 8.1 {{ARCHETYPE_ONE_LINER}} in the {{PROJECT_GRAPH}} code graph. Pattern
 Sources: {{PATTERN_SOURCES_INLINE}}. See `CROSS-REPO.md` for the full graph.
 
-8.2 PMG ↔ WellMed is a hard wall. See
-`memory/project_pmg_wellmed_trunks.md`.
+8.2 PMG ↔ WellMed is a hard wall — no shared code, contracts, or plans.
 
 ---
 
-## 9. Plans and memory
+## 9. Plans
 
 9.1 **System-wide plans** at `{{PLANS_DIR}}`. {{PLANS_CONTEXT}}
 
-9.2 **Global agent memory** at
-`~/.claude/projects/-Users-alexknecht-Projects-pmg/memory/`. Key
-pointers for this repo:
-
-{{MEMORY_POINTERS}}
-<!-- Curated list of memory entries that an agent working in this repo
-     should be aware of. Pull from MEMORY.md index by relevance. -->
+<!-- No memory paths here: agent memory is scoped per working directory and
+     does not travel with the repo. A rule an agent must follow goes in this file. -->
 
 ---
 

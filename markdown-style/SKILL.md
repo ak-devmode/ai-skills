@@ -1,6 +1,6 @@
 ---
 name: markdown-style
-version: 1.2.0
+version: 1.3.0
 description: "Use for creating, updating, or revising structured .md documents — strategy docs, PRDs, plans, playbooks, integration specs, or any markdown maintained over time and loaded into future context windows. Trigger on: 'create a plan', 'draft a PRD', 'update the doc', 'write this up as a document', or references to versioned documents. Do NOT use for READMEs, quick notes, or throwaway content."
 allowed-tools:
   - Bash
@@ -21,7 +21,8 @@ This skill is the base style guide for all structured markdown documents. Domain
 
 1.1 **Conversational authority** — write like a smart operator explaining their business to another smart operator. Direct, no filler. Say what it is. No executive summary fluff, no hedging, no restating what the reader already knows.
 
-1.2 No emoji. No "Conclusion" or "Summary" sections — the edit log is always last.
+1.2 No emoji — except the status markers `/plan` parses (🔲 ✅ ❌ ⏸️ ⏭️) in plan and
+progress files. No "Conclusion" or "Summary" sections — the edit log is always last.
 
 1.3 Use parenthetical asides for context that's not primary: "(corrected from v1)" or "(thesis — needs testing)".
 
@@ -61,12 +62,8 @@ specific. Use `@TBD` when a task is genuinely unassigned. Do **not** tag every
 task: in a plan executed end-to-end by one person, per-task tags restate the
 header on every line and are the first thing to go stale.
 
-> **Why this was narrowed (2026-08-07).** The rule previously mandated `@Name` on
-> *every* task. It was ignored wholesale — scopes 98, 102 and 108 carry zero owner
-> tags across every plan file. A rule obeyed nowhere is worse than no rule, because
-> its presence implies ownership is tracked when it isn't. Ownership now lives at
-> the grain people actually work at: `Created by` / `Executed by` in the header
-> (§8.2, §11.2), with `@Name` reserved for genuine per-task exceptions.
+> **Why narrowed (2026-08-07).** Mandatory per-task tags were obeyed nowhere; a rule
+> nobody follows implies tracking that isn't happening.
 
 2.2.4 **Acceptance criteria** follow each objective's task list: 1–3 concrete, testable conditions.
 
@@ -254,10 +251,8 @@ path. A child plan of a scope sits in that scope's folder as
 8.2.1.1 **Both names are derived from `git config user.name`, never typed and
 never copied from an example.** `Created by` is written once at creation;
 `Executed by` is stamped by `/plan` at phase start (`/plan` §3.1) and may differ
-per sibling plan. The single `**Author:**` field these replace could not hold both
-roles, so sessions improvised — six different formats across nine scopes, and no
-value at all on fifteen plan files. Supersedes `**Author:**`; existing documents
-keep theirs until touched.
+per sibling plan. Supersedes `**Author:**`, which could not hold both roles;
+existing documents keep theirs until touched.
 
 8.2.2 Status must be set to "Ready to execute" before handing off to `/plan`. A plan with "Draft" status will be rejected by the pre-flight check.
 
@@ -351,7 +346,7 @@ roll through at B/C). Checkpoints inserted by hand outside a /scope phase may om
 
 8.9.1 When /scope generates plan files for a phased scope, each plan is a child of the scope and uses sub-numbered filenames: `{N}.{P}-{slug}-PLAN.md` where `{N}` is the scope number and `{P}` is the phase number.
 
-8.9.2 Stub-level detail is acceptable at scope-generation time. The plan can ship with Status "Draft" and shallow task descriptions; the executing /plan session deepens detail at start of run.
+8.9.2 Stub-level detail is acceptable at scope-generation time. A stub ships with Status "Draft" and shallow task descriptions. `/plan` refuses Draft (§8.2.2), so flipping a stub to "Ready to execute" is the human's go signal; the executing session then deepens task detail at start of run.
 
 8.9.3 Child plans must include `**Parent scope:**` in the header (see 8.5.2).
 
@@ -399,7 +394,7 @@ Every PRD must include these sections in this order. All follow Mode B formattin
 **9.2.8 Feeds Into.** State the Plan file this PRD will generate. If the Plan doesn't exist yet, state the intended path:
 
 ```markdown
-**Plan:** `kalpa-docs/plans/consultation-booking/consultation-booking-PLAN.md` (to be created)
+**Plan:** `kalpa-docs/plans/{N}-consultation-booking/{N}.1-consultation-booking-PLAN.md` (to be created)
 ```
 
 ### 9.3 Authoring Guidance
@@ -408,7 +403,7 @@ Every PRD must include these sections in this order. All follow Mode B formattin
 
 9.3.2 Every requirement must map to at least one acceptance criterion. If you can't write a criterion for it, the requirement is too vague.
 
-9.3.3 After drafting, read the relevant architecture docs (wellmed-system-architecture, service READMEs, ADRs) and verify no known constraints are violated. Flag any conflicts as Open Questions — don't silently design around constraints.
+9.3.3 After drafting, read the relevant architecture docs (the docs repo's `ARCHITECTURE.md`, service READMEs, ADRs) and verify no known constraints are violated. Flag any conflicts as Open Questions — don't silently design around constraints.
 
 9.3.4 For WellMed features: always explicitly address multi-clinic data isolation. If a feature only applies to a single clinic context, state that. If it crosses clinic boundaries, flag it — that's an architectural decision that needs an ADR.
 
@@ -428,7 +423,7 @@ Progress files pair with plans and scopes to track execution state across sessio
 
 ### 10.1 Naming and Pairing
 
-10.1.1 Plan progress file: `{plan-stem}-PROGRESS.md` next to its plan file (`39.2-cashier-PLAN.md` ↔ `39.2-cashier-PROGRESS.md`). Plain `PROGRESS.md` is acceptable for plans named plain `PLAN.md`.
+10.1.1 **Standalone** plan progress file: `{plan-stem}-PROGRESS.md` next to its plan file (`ci-hardening-PLAN.md` ↔ `ci-hardening-PROGRESS.md`); plain `PROGRESS.md` for a plan named `PLAN.md`. A **child plan of a scope has no progress file of its own** — its progress is a `## Plan {N}.{P}: {Title}` section inside the scope's `progress.md` (`/plan` §2.3, §4).
 
 10.1.2 Scope progress file: `progress.md` inside the scope folder (`{N}-{slug}/progress.md`).
 
@@ -449,6 +444,9 @@ Every progress file includes these sections in this order:
 ```markdown
 # Progress: {Plan or Scope Title}
 
+## Operating Contract (scope progress only — pinned, re-read on resume)
+{Numbered ground rules agreed at kickoff; /scope §5.5}
+
 ## Resume Context
 {Block with Last action / Next action / Open blockers / Key files changed}
 
@@ -466,6 +464,9 @@ Every progress file includes these sections in this order:
 
 ## Artifacts (scope progress only)
 {List of non-code artifacts produced — dashboards, configs, templates}
+
+## Plan {N}.{P}: {Title}  (scope progress only — one per child plan)
+{Its own Resume Context block, then append-only Session blocks — /plan §4}
 ```
 
 ### 10.4 Resume Context Block
@@ -506,10 +507,7 @@ Scope documents orchestrate multi-skill, multi-phase work. They are the parent o
 
 11.1.1 Scope folder name: `{N}-{slug}/` where `{N}` is the sequential scope number assigned in `PLANS-INDEX.md` and `slug` is lowercase, hyphenated, 3–5 words derived from the task title. Matches the wellmed/PMG convention (e.g. `32-pmg-testsuite/`, `47-kalpa-grafana-dashboard/`). Legacy `scope-<slug>/` folders exist in archives — preserved in place, not renamed.
 
-11.1.2 The folder lives in the project's central plans directory, not in the source repo:
-- PMG: `~/Projects/pmg/pmg-docs/plans/{N}-{slug}/`
-- WellMed: `~/Projects/wellmed/kalpa-docs/plans/{N}-{slug}/`
-- AI-skills: `~/Projects/ai-skills/plans/{N}-{slug}/`
+11.1.2 The folder lives in the project's central plans directory, not in the source repo — resolved by `scripts/resolve-plans-dir.sh` (§8.1.3), never from a hardcoded list.
 
 11.1.3 Inside the scope folder: `scope.md`, `progress.md`, `artifacts/`, and (for phased scopes) sub-numbered plan stubs `{N}.{P}-{slug}-PLAN.md`.
 
@@ -581,8 +579,8 @@ Every scope.md includes these sections in this order:
 
 ### 11.7 PLANS-INDEX Conventions
 
-`PLANS-INDEX.md` is read into agent context to orient a session, so its size is a
-running cost, not a cosmetic concern. Four rules keep it bounded.
+`PLANS-INDEX.md` is long by design and **grepped, not read** (`/plan` §1.1). Five rules
+keep it well-formed.
 
 11.7.1 **Two tables, one shape.** Active Plans and Completed / Archived both use
 `| # | Status | Folder | Description | Created by |`. A row that does not match
@@ -606,25 +604,16 @@ to be read that way. Past roughly 900 characters, ask whether what you are addin
 is *status* (belongs here) or *rationale* (belongs in the scope's `progress.md`
 Decisions Log) — but never truncate an existing cell to hit a number.
 
-> **Why this replaced a hard cap (2026-08-09).** This rule used to say "Status
-> cells cap at ~300 characters, overflowing to `… → detail in progress.md`." The
-> WellMed index carried 80 cells past that cap, several over 3,000 characters, and
-> the 2026-08-09 audit proposed compressing them on the strength of the written
-> rule. That was backwards: the long descriptions are load-bearing for the one
-> person who reads them. A cap violated 80 times is not drift — it is a rule that
-> was wrong, exactly as §2.2.3's `@Owner` narrowing already established.
+> **Why no cap (2026-08-09).** A ~300-character cap was violated 80 times in WellMed;
+> the long cells are load-bearing for the one reader who uses them. The rule was wrong.
 
 11.7.5 **Per-plan rows are allowed, and normal for a phased scope.** A `{N}.{P}`
 row per phase is how progress stays visible from the index without opening the
 folder. The scope's `progress.md` remains the authoritative, detailed record — the
 index row is the glance.
 
-> **Why this reversed (2026-08-09).** This rule used to read "No per-plan rows."
-> WellMed carried 132 of them and PMG 76, all deliberate, all useful. `/plan`
-> §11.4's stronger claim ("never append a per-plan row") was aimed at a real
-> defect — a *headerless* append that leaked 40 untabled rows — and over-corrected
-> from "append without a header" to "never append." The header is the thing that
-> matters, and `scripts/plans-index.py` now enforces it mechanically.
+> **Why allowed (2026-08-09).** The defect was a *headerless* append, not per-plan rows;
+> `scripts/plans-index.py` now enforces the header.
 
 ---
 

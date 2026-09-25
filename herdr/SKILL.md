@@ -1,6 +1,6 @@
 ---
 name: herdr
-version: 0.1.2
+version: 0.1.5
 description: |
   Alex's herdr WORKFLOW layer — the single source of truth for how we drive
   herdr (terminal workspace manager for AI agents) for agent work: naming, the
@@ -64,6 +64,7 @@ codex pane displayed `@opus`). So:
   `herdr pane rename <pane> "<task> @<seat>"` **plus**
   `herdr pane report-metadata <pane> --source <skill> --display-agent "<task> @<seat>"`
   (without the metadata the sidebar shows the workspace label for every agent).
+  Both in one call, read back: `~/Projects/ai-skills/scripts/herdr-pane.sh name <pane> <task> <seat> --source <skill>`.
 - **Driver** (a `/plan` session's own agent): `herdr agent rename $HERDR_PANE_ID driver`.
 - Auto-name from context when inside a pane via `$HERDR_PANE_ID` / `$HERDR_WORKSPACE_ID`.
 
@@ -104,7 +105,8 @@ permission prompt (the auto-mode classifier blocks it, correctly). Fix it at
   (7/7), so `/concurrency` has not hit it; a new untrusted cwd will. Start
   agents in a pre-trusted folder, as `/research` does with `~/.cache/research-lanes`. **WORKERS ONLY, never the driver.**
 - Safe here *specifically* because each worker is sandboxed: isolated worktree,
-  `/freeze`d file scope, never pushes/PRs/merges. That is the "no human in the
+  disjoint touch-set, never pushes/PRs/merges (not `/freeze` — its state is one
+  global file; `/concurrency` §10). That is the "no human in the
   loop" threat model; bypass mode matches it. Do not use it for the driver or
   any session working a shared/primary tree.
 - **Narrower alternative** (if a worker must still honor tool prompts): pre-trust
@@ -140,17 +142,17 @@ seeded standby panes** in the "work" tab before splitting new ones.
   worker splits the driver **right**; the second splits that pane **down** (half
   height); later workers add columns to the right, each split **down** into two.
   `--no-focus` on every split so the driver keeps focus. A helper pane a worker
-  opens splits its OWN pane **right** at half size — never the herd layout, never
-  a new workspace or tab.
+  opens splits its OWN pane **right** at half size (`~/Projects/ai-skills/scripts/herdr-pane.sh helper`)
+  — never the herd layout, never a new workspace or tab.
 
 ## 6. Model routing table
 
-THE single source of routing truth (verified on this machine 2026-08-23). New
+THE single source of routing truth (verified on this machine 2026-08-23; opus seat re-verified 2026-09-25). New
 seats are new rows.
 
 | Seat | Launch inside pane | Route to it |
 |------|-------------------|-------------|
-| `opus` | `claude` (global default: Opus 4.8) | judgment, design-adjacent implementation, prod-shaped decisions |
+| `opus` | `claude` (global default `opus[1m]` → Opus 5.5, `claude-opus-5-5`) | judgment, design-adjacent implementation, prod-shaped decisions |
 | `codex` | `codex -m gpt-5.6-sol` (headless: `codex exec -m gpt-5.6-sol`) | secondary implementation, independent review passes |
 | `glm` | `ANTHROPIC_BASE_URL=https://openrouter.ai/api ANTHROPIC_AUTH_TOKEN=$(security find-generic-password -s openrouter-api-key -w) ANTHROPIC_SMALL_FAST_MODEL=z-ai/glm-5-turbo claude --model z-ai/glm-5.2` | mechanical/bulk: migrations-by-pattern, test scaffolds, sweeps |
 
@@ -175,8 +177,9 @@ curl both endpoint styles before touching account settings.
   in the host window's default foreground (Homebrew green). herdr has NO config
   knob for pane fg — it only *forwards* the host's. Fix: `_herdr_attach` in
   `~/.zshrc` emits OSC 10 `#d8d8d8` on the host Ghostty window before `herdr`
-  attaches, so forwarded pane fg is neutral. (Supersedes the removed `herd()`
-  alias.) TERM/terminfo makes no difference to content color.
+  attaches, so forwarded pane fg is neutral. TERM/terminfo makes no difference to
+  content color; the zshrc `HERDR_ENV`→TERM/TERMINFO block is for TUI
+  correctness (export TERMINFO before TERM) — suspect it if a TUI misbehaves.
 - **Pane content colors are NOT herdr theme tokens** — `theme.custom.*` paints
   chrome (sidebar/borders/status) only. Content color = host-fg / terminfo.
 - **herdr is a brew service** (`homebrew.mxcl.herdr`) — survives logout; attach
@@ -192,6 +195,7 @@ curl both endpoint styles before touching account settings.
 ## 8. Supervision primitives (for reference; owned by the dispatching skill)
 
 - PRIMARY wait is the skill's own done-marker, not a herdr state:
-  `herdr agent wait <pane> --until done|blocked`, `herdr notification show`.
+  `herdr pane wait-output <pane> --match "<marker>"`. `agent wait --until done`
+  hangs on codex (it reports `idle`); use `--until blocked` for alerts only.
 - `pane.report_agent` states: `idle | working | blocked | done | unknown`.
   `unknown` is not proof of completion; `blocked` = an approval/question UI.

@@ -4,7 +4,7 @@
 # Approach: map a working path to its project's docs repo. This is the single
 # owner of a mapping that was previously copy-pasted as a `case` block into
 # /scope, /plan, /prd, /markdown-style and /member-record-amend — five copies
-# that could disagree, and did (see plans/skills-relook/AUDIT.md §6.3).
+# that could disagree, and did (see plans/archive/2-skills-relook/AUDIT.md §6.3).
 #
 # Usage:  resolve-plans-dir.sh [path]         # default: $PWD
 # Output: absolute plans dir on stdout, nothing else.

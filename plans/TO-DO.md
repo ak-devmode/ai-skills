@@ -288,3 +288,15 @@ Touches: ai-skills · concurrency/SKILL.md · herdr/SKILL.md · scope + plan + c
 - [ ] **Integrate the friend's bars/diff tool** (follow-up scope). Attach points
       in `plans/4-herdr-agent-workflow/artifacts/friend-tool-seams.md`. Do NOT
       build bars / model-token / space-level-limit before his repo lands.
+
+## skills-relook — fleet CLAUDE.md memory pointers (Scope 2, Plan 2.3)
+Source: plans/skills-relook/progress.md (Plan 2.3)
+Touches: cross-repo-init/templates/CLAUDE.md.template · 13 repo CLAUDE.md files (§8.2 + §9 "Plans and memory")
+- [ ] **Strip the pmg memory path from 13 repos' CLAUDE.md** — the trio template wrote
+      `~/.claude/projects/-Users-alexknecht-Projects-pmg/memory/` (+ `memory/…` citations) into
+      every scaffolded CLAUDE.md; it dead-ends outside the pmg store (ai-skills CLAUDE.md §9.3).
+      Template fixed 2026-09-25 (cross-repo-init 1.4.0). Repos: wellmed/{kalpa-company-profile,
+      wellmed-fe, wellmed-backbone, wellmed-cashier, wellmed-hq, wellmed-consultation,
+      wellmed-supply-chain, wellmed-hq-fe, wellmed-gateway-go, wellmed-pharmacy},
+      pmg/{pmg-docs, pmg-chatwoot, pmg-integrations}. Inline any rule a pointer carried before
+      deleting it. Next `/closeout` trio sync per repo will propose it, or do a sweep.

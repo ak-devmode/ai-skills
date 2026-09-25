@@ -118,6 +118,12 @@ Next: `/concurrency` pilot, then `/closeout`, `/cross-repo-init`, `/markdown-sty
   inbound refs; 8.x kept — `/ready-to-clear` cites 8.4). `/prd`: same CLAUDE.md cut, and it `cat`ed BOTH
   PLANS-INDEX files whole (~31k tokens WellMed) → resolve-plans-dir + grep.
   Remaining scope↔prd dup NOTEs = the shared context-gather block (toolkit candidate #3).
+- **`/cross-repo-init`** ✅ DONE. 705→~680 body lines. Real bug: §2.1 `symbolic-ref | sed || echo main`
+  never fell back (the `||` tests sed) → empty `DEFAULT_BRANCH` when `origin/HEAD` unset; fixed + tested in
+  bash and zsh. Cut two memory-file citations and the instruction to add "memory pointers" to repo
+  CLAUDE.md files. §7 restated the body (7.4a/7.8/7.11/7.12 + intro) → one-line rules pointing at the
+  procedure; stale "v1.1 TO-DO" pointer cut. **Template defect with fleet reach:** `CLAUDE.md.template` §9.2
+  wrote the pmg memory path into every scaffold → fixed; 13 repos already carry it → `plans/TO-DO.md`.
 - **5.5 conciseness-floor log:** no breach observed in this session so far (2.2 + 2.3 start).
 
 ## Toolkit candidates (append as found — deterministic steps still written as prose)
@@ -130,6 +136,7 @@ Next: `/concurrency` pilot, then `/closeout`, `/cross-repo-init`, `/markdown-sty
 | 5 | Repo Graph freshness classify (SHA/branch → unchanged/advanced/diverged/missing) | `/plan` §5.6.1 | pure git classification |
 | 6 | closeout-prep.md bootstrap from template + phase header | `/plan` §5.13 | template copy + timestamp |
 | 7 | dispatch-log JSONL append | `/concurrency` §6.4 | fixed record shape |
+| 8 | repo survey: default branch + branch classify (MERGED/LIVE, squash via `cherry`) + survey-branch cascade | `/cross-repo-init` §2.1–2.2 (and `/repo-cleanup`'s classifier) | pure git; the §2.1 bug shows prose shell drifts |
 
 ## Human Steps
 | Step | Status |

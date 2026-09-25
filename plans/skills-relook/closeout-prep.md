@@ -127,3 +127,4 @@
 **ai-skills — doc (skills):** `concurrency/SKILL.md` 0.3.1→0.4.0 (dedup vs herdr, −45 lines); `herdr/SKILL.md` 0.1.3→0.1.4 (/freeze contradiction, wait primitive, TERMINFO note).
 **ai-skills — doc (skills):** `plan/SKILL.md` 3.6.0→3.7.0, `closeout/SKILL.md` 1.2.0→1.3.0 (defect fixes + dedup; −92 lines net).
 **ai-skills — doc (skills):** `scope/SKILL.md` 3.6.0→3.7.0 (contradictions + index-row leak + harness-owned cuts); `prd/SKILL.md` 1.0.0→1.0.1 (grep index, drop CLAUDE.md cat).
+**ai-skills — doc (skills):** `cross-repo-init/SKILL.md` 1.3.0→1.4.0 (default-branch bug, memory cites, §7 dedup); `cross-repo-init/templates/CLAUDE.md.template` (§8.2/§9 memory paths removed); `plans/TO-DO.md` (fleet CLAUDE.md cleanup item).

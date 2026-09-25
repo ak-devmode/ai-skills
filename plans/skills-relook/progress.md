@@ -92,6 +92,13 @@ Next: `/concurrency` pilot, then `/closeout`, `/cross-repo-init`, `/markdown-sty
   `--no-history`. Verified: fleet run exit 0; non-git skill reports skipped growth check aloud; a skill named
   twice doesn't self-match. Files: `scripts/lint-skill.py`, `scripts/README.md`, `CLAUDE.md` §4/§6,
   `plans/skills-relook/artifacts/lint-baseline-2026-09-25.json`.
+- **`/concurrency` pilot** ✅ DONE. 347 → 302 body lines with **no split** — cut copies of `herdr` content
+  (§2 server/pane preconditions, env-leak + GLM traps, §6.1b layout/naming, §7.1 + §10 `--source recent`,
+  §10 Ghostty/colors); rewrote the `/freeze` supersession as a plain rule; fixed stale design-record path.
+  Fixed two defects in `herdr` the read surfaced: §4 still called workers "`/freeze`d" (live cross-skill
+  contradiction with `/concurrency` §10) and §8 named `agent wait --until done` as the primary wait (hangs
+  on codex). Kept the TERMINFO note in `herdr` §7 (was only in `/concurrency`). Lint: dup + supersession
+  NOTEs cleared; only `size` remains. Files: `concurrency/SKILL.md` (0.4.0), `herdr/SKILL.md` (0.1.4).
 - **5.5 conciseness-floor log:** no breach observed in this session so far (2.2 + 2.3 start).
 
 ## Toolkit candidates (append as found — deterministic steps still written as prose)

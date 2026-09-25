@@ -124,3 +124,4 @@
 
 ### §11 Risk Flags
 - `cross-skill-duplicate` misses paraphrased copies (e.g. /concurrency GLM traps vs herdr §6) — found by reading, not the linter.
+**ai-skills — doc (skills):** `concurrency/SKILL.md` 0.3.1→0.4.0 (dedup vs herdr, −45 lines); `herdr/SKILL.md` 0.1.3→0.1.4 (/freeze contradiction, wait primitive, TERMINFO note).

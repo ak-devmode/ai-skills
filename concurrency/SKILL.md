@@ -1,6 +1,6 @@
 ---
 name: concurrency
-version: 0.3.1
+version: 0.4.0
 description: |
   ONE responsibility: map what can run in parallel and what cannot, against a
   clear set of rules — re-derived from repo ground truth on every run, never
@@ -27,8 +27,7 @@ allowed-tools:
 
 # /concurrency — herdr-backed multi-agent dispatch
 
-Design record: `plans/concurrency/scope.md` (ai-skills). Status lives in
-`plans/concurrency/progress.md`, never here and never in scope.md.
+Design record: `plans/archive/3-concurrency/scope.md` (ai-skills, archived).
 
 ## 1. Operating tiers
 
@@ -39,35 +38,19 @@ Design record: `plans/concurrency/scope.md` (ai-skills). Status lives in
 
 ## 2. Preconditions — check ALL before anything else
 
-- [ ] herdr server answers: `herdr workspace list` exits 0. If not: report and
-      stop — never `brew services start` on Alex's behalf mid-skill.
-- [ ] Running inside a herdr pane: `test "${HERDR_ENV:-}" = 1`. If outside,
-      say so and ask before proceeding — the socket works from outside, but
-      pane-context is absent and herdr's own guidance is to control only from
-      within.
 - [ ] Load the `herdr` skill (workflow layer: naming, worktree lifecycle, worker
       launch/trust, layout, routing) AND run `herdr --skill` (raw CLI mechanics).
       This skill = WHAT to dispatch; the `herdr` skill = the workflow; `herdr
-      --skill` = the raw CLI.
+      --skill` = the raw CLI. The `herdr` skill's §1 preconditions (server up, in a pane)
+      must pass.
 - [ ] Target repo identified, trunk known (`develop` for wellmed/pmg, `main`
       otherwise), `git fetch` run. Never dispatch from a dirty primary tree
       without surfacing it first.
 - [ ] For the GLM seat only: the OpenRouter key resolves from Keychain
       (`security find-generic-password -s openrouter-api-key -w` — check
       LENGTH only, never print). Absent ⇒ GLM rows in the plan are marked
-      `seat-unavailable`, never silently rerouted. The key is looked up
-      inline in the launch command, never via herdr `--env` (which would
-      persist the literal in herdr session state) and never in this
-      supervisor's transcript.
-      GLM launch traps (cost a relaunch on 2026-08-23):
-      · base URL is `https://openrouter.ai/api` — NOT `/api/v1`; the SDK
-        appends `/v1/messages`, so `/api/v1` 404s and surfaces as
-        "model may not exist".
-      · bearer only (`ANTHROPIC_AUTH_TOKEN`); setting `ANTHROPIC_API_KEY`
-        triggers an interactive use-this-key dialog that blocks the pane.
-      · "model not found" with a 200-tested key+model = plumbing, not
-        OpenRouter permissions — curl both endpoint styles before touching
-        account settings.
+      `seat-unavailable`, never silently rerouted. Env-leak rule and GLM
+      launch traps: `herdr` §6.
 
 ## 3. Model routing table
 
@@ -172,13 +155,8 @@ Per partition, in this order (syntax authority: `herdr --skill`):
    --branch concurrency/<scope>-<task>` — no `--env`, for any seat (the glm
    override is inline in its launch command; `herdr` skill §6). Workspace label = run name only (`<scope> run`); seat identity
    goes on the PANE per the `herdr` skill §2 (naming).
-1b. **Layout + naming — see the `herdr` skill (§5 layout, §2 naming).** Driver
-   full-height LEFT, workers half-height filling RIGHTWARD; **NO tabs — Alex
-   owns tabs and manual reorg.** Pane identity = `<task> @<seat>` via `pane
-   rename` + `pane report-metadata --source concurrency --display-agent`
-   (without the metadata the sidebar shows the workspace label for every agent).
-   Helper panes a worker opens split its OWN pane right at half size — never the
-   herd layout, never a tab.
+1b. **Layout + naming: `herdr` §5 and §2** — no tabs; pane identity
+   `<task> @<seat>` with `--source concurrency`.
 2. Launch the seat's command (§3) in the created pane via `pane run` — claude/glm
    workers append `--dangerously-skip-permissions` (`herdr` skill §4: clears the
    fresh-worktree trust dialog + tool prompts; safe via worktree +
@@ -206,9 +184,8 @@ Per partition, in this order (syntax authority: `herdr --skill`):
   needs-attention alerts.
 - On `blocked`: `herdr notification show` naming pane label + last visible
   lines; do not answer another agent's permission prompts on its behalf.
-- Read output with `pane read --source detection` (or `visible`).
-  **NEVER `--source recent`** — it returns empty when no UI client is
-  attached, which is exactly this skill's headless condition.
+- Read output with `pane read --source detection` (or `visible`) — never
+  `recent` (`herdr` §7).
 - Record every terminal state in the dispatch log (`status: done|blocked|
   failed`, plus the tail that proves it).
 
@@ -291,20 +268,16 @@ zero-cost-basis silent defeat that build/test/disjointness passes all missed).
 
 ## 10. Known traps
 
-- `pane read --source recent` empty headless (§7).
 - One git index per checkout: every WRITER partition gets its OWN worktree,
   ALWAYS — two writers in one tree corrupt the shared index, the failure this
   skill exists to prevent. One writer at a time per worktree (the worker, then
   later its fix writer). A READ-ONLY agent (a `/review` pane, §7.3) is the
   exception — it rides the worktree of the partition it reviews rather than
   taking its own. The rule is who MUTATES, not how many agents touch the tree.
-- `/freeze` is REMOVED from concurrent dispatch (2026-09-02): its state is ONE
-  GLOBAL file (`~/.gstack/freeze-dir.txt`), so concurrent lanes overwrite each
-  other's boundary mid-run — a no-op at best, misleading at worst, and it does
-  not govern `Bash` edits anyway. Do NOT put `/freeze` in dispatched briefs. The
-  ONLY cross-partition isolation is disjoint touch-sets (§4.2) + a separate
-  worktree per writer (§10, one git index per checkout). (A future skill rewrite
-  may reintroduce a per-worktree freeze; until then, don't use it.)
+- Never put `/freeze` in a dispatched brief: its state is ONE global file
+  (`~/.gstack/freeze-dir.txt`), so concurrent lanes overwrite each other's
+  boundary, and it doesn't govern `Bash` edits anyway. Cross-partition
+  isolation is disjoint touch-sets (§4.2) + a worktree per writer (above).
 - `agent wait` on a pane whose process died may hang: guard waits with a
   timeout and re-check `herdr agent list`.
 - codex model cache staleness: a 400 "requires a newer version of Codex"
@@ -319,25 +292,7 @@ zero-cost-basis silent defeat that build/test/disjointness passes all missed).
   "approval-backed commit pending"). Plan for it: either pre-approve, widen
   the codex sandbox for that path, or have the SUPERVISOR commit the codex
   seat's work after review.
-- Radioactive-green prose in panes = default-fg text hitting Ghostty's
-  Homebrew foreground (#00ff00). Claude Code prose in herdr panes carries NO
-  color codes (verified via `pane read --format ansi`), so it always renders
-  in the window's default foreground — TERM makes no difference (proven
-  2026-08-23: TERM=xterm-ghostty confirmed in-pane, prose still green).
-  ACTUAL fix (2026-08-30 — supersedes the old `herd` alias): the
-  `_herdr_attach` function in ~/.zshrc emits OSC 10 `#d8d8d8` on the host
-  Ghostty window right before `herdr` attaches. herdr forwards the host
-  window's default fg to every pane, so pane prose renders neutral instead of
-  Homebrew green; fg resets on detach, and it's tty-guarded so it never fires
-  on `herdr <subcommand>` API calls. NO separate Ghostty instance needed — the
-  old fix launched `open -na Ghostty.app --args --foreground=…` via a `herd()`
-  wrapper that was buggy and has since been removed. herdr has no config knob
-  for pane fg; it only forwards the host's (verified against config-reference
-  v0.8.2). The zshrc HERDR_ENV→TERM/TERMINFO block remains for terminfo
-  correctness (export TERMINFO BEFORE TERM); if a TUI misbehaves in a pane,
-  suspect that block first.
-- Pane content colors are NOT herdr theme tokens — theme.custom.* paints
-  chrome only. Content color problems are TERM/terminfo problems.
+- Pane display issues (green prose, content colors, terminfo): `herdr` §7.
 
 ## 11. Overnight tier (`--overnight`)
 

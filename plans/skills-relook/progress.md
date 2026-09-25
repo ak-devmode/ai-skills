@@ -109,6 +109,15 @@ Next: `/concurrency` pilot, then `/closeout`, `/cross-repo-init`, `/markdown-sty
   fallback, closeout "used to say" blockquotes. De-duplicated: §4 entry format (owner /plan §7.7 +
   template) and residual-vs-trunk verification (owner /plan §11.1, absorbed closeout's grep-the-trunk detail).
   Lint: both plan↔closeout duplicate NOTEs cleared. Remaining plan↔scope dup = toolkit candidate #2.
+- **`/scope` (+ `/prd`)** ✅ DONE. scope 826→792 body lines, no splits. Contradictions fixed: §5.9 +
+  frontmatter said "each plan ≈ 1 context window" against Phase Boundaries' "context size is NOT a gate";
+  §5.9 still wrote plan-stub index rows in the retired 7-column shape (the leak §5.8 exists to stop) → now
+  `plans-index.py add`; "includes ALL 18" vs "emit only what applies"; `{N}` "from Step 5.7" (is 5.2).
+  Cut: changelog banner, Step 0 `cat CLAUDE.md | head -60` (harness loads it), duplicate ambiguity-topics
+  bullet, stale "extended skills not installed" fallback, duplicate append-only rule. 0.7.3→0.7.2 (no
+  inbound refs; 8.x kept — `/ready-to-clear` cites 8.4). `/prd`: same CLAUDE.md cut, and it `cat`ed BOTH
+  PLANS-INDEX files whole (~31k tokens WellMed) → resolve-plans-dir + grep.
+  Remaining scope↔prd dup NOTEs = the shared context-gather block (toolkit candidate #3).
 - **5.5 conciseness-floor log:** no breach observed in this session so far (2.2 + 2.3 start).
 
 ## Toolkit candidates (append as found — deterministic steps still written as prose)

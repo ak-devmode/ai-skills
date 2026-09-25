@@ -1,6 +1,6 @@
 ---
 name: prd
-version: 1.0.0
+version: 1.0.1
 description: |
   Product Requirements Document generator. Translates a business need, user problem,
   or feature request into a structured PRD through iterative assumption reduction and
@@ -68,20 +68,19 @@ pwd
 # Check for existing PRDs and plans
 find ~/Projects/pmg/pmg-docs/development/prds/ -name "*.md" 2>/dev/null || echo "no PMG PRDs"
 find ~/Projects/wellmed/kalpa-docs/ -name "*PRD*" -o -name "*prd*" 2>/dev/null || echo "no WellMed PRDs"
-cat CLAUDE.md 2>/dev/null | head -60 || cat .claude/CLAUDE.md 2>/dev/null | head -60 || echo "no CLAUDE.md"
 ```
 
 ```bash
-# Check PLANS-INDEX for related work
-cat ~/Projects/pmg/pmg-docs/plans/PLANS-INDEX.md 2>/dev/null || true
-cat ~/Projects/wellmed/kalpa-docs/plans/PLANS-INDEX.md 2>/dev/null || true
+# Related work: GREP the index, never cat it — ~31k tokens in WellMed (/plan §1.1)
+PLANS_DIR="$(~/Projects/ai-skills/scripts/resolve-plans-dir.sh)" || true
+grep -nE '^\| *[0-9]+ .*(Ready to execute|In progress|Active|Draft)' "$PLANS_DIR/PLANS-INDEX.md" 2>/dev/null | head -20
 ```
 
 After running the above, synthesize:
 - Project (WellMed, PMG, other)
 - Plans directory (for PLANS-INDEX updates)
 - Existing PRDs that might overlap or relate
-- Project-specific context from CLAUDE.md
+- Project-specific context from CLAUDE.md (already in context — the harness loads it)
 
 ---
 

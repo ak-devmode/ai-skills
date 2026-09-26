@@ -64,6 +64,10 @@ is a script, not a paragraph a skill can skip).
   lists the fields a public verdict may carry.
 - **Examples live in `templates/examples/`**, never inside a template; a test asserts a
   freshly generated file carries no example rows.
+- **Message contract (DX review G1):** every message from the runner, the gate,
+  `plans-index.py status` and the judge line carries *what happened · why · cause class
+  (code / environment / tooling) · next command · where to read more*, with the actual
+  values. The cause class answers a teammate's first question: my code, or the setup?
 - **Feature map contract**: `features/README.md` index (feature · status · last verdict date
   + rung) + one file per feature with four H2s (Sub-features · How to get to it · Driving it
   with <cli> · Gotchas). Status vocabulary: roadmap · scoped · in progress · in testing ·
@@ -157,6 +161,14 @@ is a script, not a paragraph a skill can skip).
   `Touches:`, originating `run_id` and scope; only a match from a different scope or run is
   the second sighting → "build the lever now" (a re-run can't manufacture one).
 - Fold in the ledger-template defect (see §8).
+- **Onboarding (DX review):** `./setup.sh` checks Python ≥ 3.9 and codex (installed, logged
+  in, able to run) and **warns** with the exact fix commands (never fails the pull);
+  `/verify --demo` runs the fixture scope in ~1 minute and shows a failing verdict naming the
+  planted defects plus a passing control; a README "Verification" section orients (what
+  `/review` + `/verify` do, prerequisites, what each ⚠ means, advisory vs blocking,
+  `--skip-verify`, reading a verdict). Target: `git pull && ./setup.sh` → restart →
+  `/verify --demo`, under 5 minutes. `/verify` and `/plan` print one line when the local
+  ai-skills clone is behind `origin/main`.
 - Rollout per ai-skills CLAUDE.md §2.1: announce the `git pull`; team works without herdr.
 
 ## 5. Architecture
@@ -300,6 +312,10 @@ N/A x4 — not a bug fix, no UI design (`/investigate`, `/design-consultation`, 
   revision range, closeout on a failing verdict, feature-map handoff, lever dedupe by run,
   fixtures that can't be passed by failing everything). All accepted —
   `artifacts/eng-review-2026-09-26.md`.
+- **DX review 2026-09-26 (triage):** persona = a teammate who didn't ask for the gate and
+  meets it inside paid work. Getting started 3 → 8 (setup check that warns, `/verify --demo`,
+  README orientation); errors 4 → 8 (one message contract with a cause class); stale-clone
+  warning. `artifacts/devex-review-2026-09-26.md`.
 - **Deliberate divergence from pstack**: poteto verifies behavior only ("the best spec is
   code"); we add conformance because the scope is where Alex holds the product vision.
   Her verification is the author closing its own loop; ours adds the independent judge —

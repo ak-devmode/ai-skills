@@ -13,8 +13,8 @@
 
 ## Resume Context
 **Scope:** ~/Projects/ai-skills/plans/5-verify-lever/scope.md
-**Last action:** /plan-ceo-review + /plan-eng-review done — CEO + ENG CLEARED; 33 findings accepted and folded into scope.md + 5.1–5.3 v0.3 (2026-09-26)
-**Next action:** `/plan-devex-review` (YES in the checklist) or `/plan 5.1` — Alex's call
+**Last action:** CEO + eng + DX (triage) reviews done — all CLEARED, no unresolved decisions; findings folded into scope.md + 5.1–5.3 (2026-09-26)
+**Next action:** `/plan 5.1` — Task 1.0 (test entrypoint) first
 **Open blockers:** None
 **Key files changed:** `scripts/plans-index.py` (70d1222 — unplanned fix, see Progress Log)
 
@@ -51,6 +51,7 @@
 | 2026-09-26 | /scope | Done | Phased, 3 plans (5.1–5.3), each exits on gate A |
 | 2026-09-26 | /plan-ceo-review | Done | HOLD SCOPE; approach C (scripts + runner evidence floor, codex judge downgrade-only). Codex outside voice: 11 findings, 7 new. All 17 accepted → `artifacts/ceo-review-2026-09-26.md` |
 | 2026-09-26 | /plan-eng-review | Done | 7 Claude + 9 codex findings, all accepted → `artifacts/eng-review-2026-09-26.md`; test plan → `artifacts/eng-review-test-plan-2026-09-26.md`. CEO + ENG CLEARED |
+| 2026-09-26 | /plan-devex-review | Done | Triage. Getting started 3→8 (setup warns, `/verify --demo`, README section), errors 4→8 (message contract with cause class), stale-clone warning → `artifacts/devex-review-2026-09-26.md` |
 | 2026-09-26 | Unplanned fix | Done | `scripts/plans-index.py`: `add` accepts per-plan `N.P` numbers; duplicate check compares the exact `#` cell (70d1222). Found by /scope §5.9 — stub rows were refused as non-integer |
 
 ---
@@ -81,3 +82,4 @@
 - `artifacts/ceo-review-2026-09-26.md` — CEO review + codex outside voice, 17 accepted findings
 - `artifacts/eng-review-2026-09-26.md` — eng review + codex outside voice, 16 accepted findings
 - `artifacts/eng-review-test-plan-2026-09-26.md` — test plan (edge cases + critical paths)
+- `artifacts/devex-review-2026-09-26.md` — DX triage review, persona, scorecard

@@ -296,7 +296,7 @@ the plan wins, so ask.
   (`bases()`), `scripts/verdict-gate.py`, `templates/verify-contracts.md` §4.3,
   `scripts/tests/{_helpers,test_verify_run}.py`, `README.md`, `ARCHITECTURE.md`, `CLAUDE.md`
 - **Verified:** `lint-skill.py verify` is clean. `setup.sh` linked
-  `~/.claude/skills/verify`, and the skill appears in this session's skill list. Suite 81 OK:
+  `~/.claude/skills/verify`, and the skill appears in this session's skill list. Suite 75 OK:
   every F2 codex failure mode ends as a `none …` line (not installed, not authed, model
   unusable, crash, timeout, empty, refusal, malformed, non-object, no model banner), and a
   stale answer file is never reused. judge.py covers prepare from disk, the empty-range and

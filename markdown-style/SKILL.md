@@ -1,6 +1,6 @@
 ---
 name: markdown-style
-version: 1.3.0
+version: 1.3.1
 description: "Use for creating, updating, or revising structured .md documents — strategy docs, PRDs, plans, playbooks, integration specs, or any markdown maintained over time and loaded into future context windows. Trigger on: 'create a plan', 'draft a PRD', 'update the doc', 'write this up as a document', or references to versioned documents. Do NOT use for READMEs, quick notes, or throwaway content."
 allowed-tools:
   - Bash
@@ -346,7 +346,7 @@ roll through at B/C). Checkpoints inserted by hand outside a /scope phase may om
 
 8.9.1 When /scope generates plan files for a phased scope, each plan is a child of the scope and uses sub-numbered filenames: `{N}.{P}-{slug}-PLAN.md` where `{N}` is the scope number and `{P}` is the phase number.
 
-8.9.2 Stub-level detail is acceptable at scope-generation time. A stub ships with Status "Draft" and shallow task descriptions. `/plan` refuses Draft (§8.2.2), so flipping a stub to "Ready to execute" is the human's go signal; the executing session then deepens task detail at start of run.
+8.9.2 Stub-level detail is acceptable at scope-generation time. A stub ships with Status "Draft" and shallow task descriptions. `/plan` refuses Draft (§8.2.2), so flipping a stub to "Ready to execute" is the human's go signal. The executing session deepens task detail at start of run **in the plan's section of the scope `progress.md`** (a `### Task Detail` block under `## Plan {N}.{P}`), never in the plan file — `/plan` §8.1 treats the plan as read-only apart from the `Executed by` stamp. A deepening that contradicts the plan (new task, changed acceptance) is a scope↔plan mismatch: stop and ask, don't absorb it silently.
 
 8.9.3 Child plans must include `**Parent scope:**` in the header (see 8.5.2).
 
@@ -569,7 +569,7 @@ Every scope.md includes these sections in this order:
 
 11.5.2 Each stub references the scope as parent via `**Parent scope:**` header field.
 
-11.5.3 Stub depth: name, type, brief action sketch per task. Detail is filled at execution time by the running /plan session.
+11.5.3 Stub depth: name, type, brief action sketch per task. Detail is filled at execution time by the running /plan session, in `progress.md` (see §8.9.2).
 
 ### 11.6 File References
 

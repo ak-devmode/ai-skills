@@ -1,8 +1,9 @@
 <!-- /scope §5.9 writes one per phase as {N}.{P}-{slug}-PLAN.md. Stub depth is fine;
-     the executing /plan session deepens it. The Gate field is REQUIRED. -->
+     the executing /plan session deepens it in progress.md, never here (/markdown-style
+     §8.9.2). The Gate field is REQUIRED. -->
 # Plan {N}.{P}: {Phase name}
 
-**Version:** 0.1 (stub — detail filled at session start)
+**Version:** 0.1 (stub — detail filled in progress.md at session start)
 **Date:** {today's date}
 **Created by:** {derived from git config — see §5.4; never a literal name}
 **Executed by:** TBD
@@ -22,7 +23,7 @@
 ### Task {P}.1: {Task Title}
 - **Type**: AI | HUMAN | AI+HUMAN_REVIEW
 - **Input**: {workspace-relative paths}
-- **Action**: {outline — detail filled at session start}
+- **Action**: {outline — detail filled in progress.md at session start}
 - **Output**: {files/artifacts produced}
 - **Acceptance**: {how to verify}
 

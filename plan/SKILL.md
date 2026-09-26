@@ -1,6 +1,6 @@
 ---
 name: plan
-version: 3.8.0
+version: 3.8.1
 description: |
   Execute tasks from a structured plan document step by step, logging progress and
   stopping at human checkpoints. Plan files follow the naming convention *-PLAN.md
@@ -495,7 +495,7 @@ This bias reflects the structural truth that trunk leads, leaves inherit. Parall
 
 ## 8. Important Behaviors
 
-8.1 **Never modify the plan file** — the one exception is the §3.1 `Executed by` stamp. The plan is the source of truth. If something in the plan is wrong, tell the human and stop.
+8.1 **Never modify the plan file** — the one exception is the §3.1 `Executed by` stamp. The plan is the source of truth. If something in the plan is wrong, tell the human and stop. Deepening a stub's task detail at start of run is not a modification: it goes in a `### Task Detail` block in the plan's `progress.md` section (`/markdown-style` §8.9.2).
 
 8.2 **Always append to the resolved progress file.** Never delete or overwrite previous entries (Resume Context blocks excepted, per §4). The log is an audit trail. For child plans, "the progress file" means the `## Plan {N}.{P}: ...` subsection of the scope `progress.md` — see §2.3 + §4. Never write child-plan task entries to a `<plan-stem>-PROGRESS.md` file.
 

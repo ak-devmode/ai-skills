@@ -221,6 +221,16 @@ Resumed/restarted phases append a SECOND block:
 - ai-skills · doc: `plans/5-verify-lever/5.{1,2,3}-verify-lever-PLAN.md`, `progress.md`, `plans/PLANS-INDEX.md` — Status → Ready to execute (8173b95)
 - ai-skills · test: `scripts/tests/_helpers.py`, `scripts/tests/test_entrypoint.py` — Task 1.0 entrypoint
 - ai-skills · doc: `CLAUDE.md` §6 (`Test:` line), `scripts/README.md` (Tests note) — Task 1.0
+- ai-skills · doc: `templates/verify-contracts.md` — Task 1.1 spec
+- ai-skills · config: `templates/{finish-conditions,features-README,feature,feature-map-handoff}.md.template` — Task 1.1
+- ai-skills · doc: `templates/examples/` (6 files) — Task 1.1
+- ai-skills · test: `scripts/tests/test_contracts.py` — Task 1.1
+
+### §3 Patterns Followed
+- Message contract ← `scripts/lint-skill.py` `expected · found · where · next` output
+  deviation: adds `cause` + `docs` (DX review G1)
+- Verdict-log writes ← `scripts/dispatch-log.py` write-then-read-back
+- Template placeholders ← `templates/closeout-prep.md.template` `{{UPPER_SNAKE}}` + `Schema version` header
 
 ### §6 Docs Loaded During Planning
 - `CLAUDE.md`, `ARCHITECTURE.md`, `CROSS-REPO.md` (repo root) — CROSS-REPO: standalone leaf, no Pattern Sources

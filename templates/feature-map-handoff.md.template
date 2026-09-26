@@ -1,0 +1,15 @@
+<!-- Contract: templates/verify-contracts.md §8.3. Writer: /closeout. Readers: whoever applies
+     it in the product test-suite repo, or /closeout-extended. /closeout never edits the
+     test-suite itself. Filled example: templates/examples/feature-map-handoff.md. -->
+# Feature-map handoff — {{UNIT}}
+
+**Schema version:** verify/1
+**Result:** {{RESULT}}
+**Test-suite:** {{TEST_SUITE_REPO}}
+**Verdict log:** {{VERDICT_LOG}}
+
+`Result` is exactly one of `clean | changed | blocked`. `clean` has no rows; `blocked` names
+what stopped the maintain pass in the first row.
+
+| Feature | Change | What | Evidence |
+|---|---|---|---|

@@ -1,0 +1,15 @@
+<!-- Contract: templates/verify-contracts.md §8.2. Writer: agents in the product test-suite.
+     Readers: /verify, the author's inner loop. Exactly these four H2s, in this order.
+     Filled example: templates/examples/features/sign-in.md. -->
+# {{FEATURE}}
+
+**Status:** unknown
+**Last evidence:** none
+
+## Sub-features
+
+## How to get to it
+
+## Driving it with {{CLI}}
+
+## Gotchas

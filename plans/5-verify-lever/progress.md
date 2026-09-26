@@ -13,8 +13,8 @@
 
 ## Resume Context
 **Scope:** ~/Projects/ai-skills/plans/5-verify-lever/scope.md
-**Last action:** Plan 5.1 Task 1.0 done — test entrypoint live (2026-09-26)
-**Next action:** Plan 5.1 Task 1.1 — contract documents (stops for Alex's review)
+**Last action:** Plan 5.1 Task 1.1 drafted — contracts + templates + examples + test_contracts.py (2026-09-26)
+**Next action:** Alex reviews `templates/verify-contracts.md`; on approval, Task 1.2 (`resolve-identifiers.py`)
 **Open blockers:** None
 **Key files changed:** `scripts/plans-index.py` (70d1222 — unplanned fix, see Progress Log)
 
@@ -89,8 +89,8 @@
 ## Plan 5.1: Contracts + deterministic scripts
 
 ### Resume Context (Plan 5.1)
-**Last action:** Task 1.0 done — test entrypoint live (1 test, green)
-**Next action:** Task 1.1 — contract documents (AI+HUMAN_REVIEW: stop for Alex after)
+**Last action:** Task 1.1 drafted — awaiting Alex's review
+**Next action:** on approval, deepen 1.2–1.4 detail here, then Task 1.2
 **Open blockers:** None
 
 ### Task Detail
@@ -125,3 +125,16 @@ plan file is unchanged; where this block and the plan differ, the plan wins, so 
 - **Files created:** `scripts/tests/_helpers.py`, `scripts/tests/test_entrypoint.py`
 - **Files modified:** `CLAUDE.md` (§6 `Test:` line + suite note), `scripts/README.md` (Tests note)
 - **Verified:** `python3 -m unittest discover scripts/tests` → 1 test OK, exit 0; `grep '^Test:' CLAUDE.md` hits
+
+#### Task 1.1: Contract documents — ⏸️ WAITING_HUMAN (review)
+- **Files created:** `templates/verify-contracts.md` (the spec, §1–§10); templates
+  `templates/finish-conditions.md.template`, `features-README.md.template`, `feature.md.template`,
+  `feature-map-handoff.md.template`; examples `templates/examples/finish-conditions.md`,
+  `verify-log.jsonl`, `review-log.jsonl`, `features/README.md`, `features/sign-in.md`,
+  `feature-map-handoff.md`; `scripts/tests/test_contracts.py`
+- **Verified:** suite 10 tests OK. Mutation check: a planted table row, and a row parked in an
+  HTML comment, are both caught by the detector.
+- **Design calls for Alex:** one normative spec, with templates only for files that get
+  generated per scope. `verify-run.py` is the only writer of the verdict log, for all three run
+  states. A table revision bump invalidates earlier verdicts. Every row is required. The message
+  contract is lint-skill's four fields plus `cause` and `docs`.

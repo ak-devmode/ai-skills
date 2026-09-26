@@ -1,0 +1,20 @@
+<!-- Contract: templates/verify-contracts.md §3. Writer: /scope (or /plan self-heal, Alex
+     confirms). Readers: verify-run.py, verdict-gate.py, /verify, /closeout.
+     A filled example is templates/examples/finish-conditions.md — never copy rows from it. -->
+# Finish conditions — {{SCOPE_SLUG}}
+
+**Schema version:** verify/1
+**Revision:** 1
+**Scope:** {{SCOPE_PATH}}
+
+One row per check. `check` is a shell command or the literal `judge`. A literal `|` in a
+cell is `\|`. Every row is required; `unreachable_ok` is the only exemption, and it needs
+Alex's reason.
+
+| check_id | deliverable | owner | class | check | repo | dir | env | timeout | rung | unreachable_ok | evidence |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+
+## Changelog
+
+| Rev | Date | Change | By |
+|---|---|---|---|

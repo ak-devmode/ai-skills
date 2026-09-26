@@ -2,7 +2,7 @@
      Contract: templates/verify-contracts.md §8.2. -->
 # Sign-in
 
-**Status:** working
+**Status:** shipped
 **Last evidence:** 2026-09-26 · rung 5 · run `5.2-20260926T110000-c3d4` (private)
 
 ## Sub-features

@@ -122,10 +122,15 @@ CASES = [
      {"server/routes.js": "router.get('/patients/:id', show);\n"},
      {"web/api.ts": "fetch(`/patients/${id}`);\nfetch('/patient-list');\n"},
      1, r"found 2 · resolved 1 · unresolved 1", "route `/patient-list` does not resolve"),
-    ("route under an unseen group prefix resolves as suffix",
+    ("a suffix-only match is not resolved (prefix unseen)",
      {"server/routes.go": "package server\nfunc reg(g *gin.RouterGroup) { g.GET(\"/invoices\", h) }\n"},
      {"web/api.ts": "axios.get('/api/v1/invoices');\n"},
-     0, r"resolved 1", "suffix — group prefix assumed"),
+     1, r"unresolved 1", "matches only as a suffix"),
+    ("a gin group prefix in the same file resolves the full route",
+     {"server/routes.go": "package server\nfunc reg(r *gin.Engine) {\n\tapi := r.Group(\"/api\")\n"
+                          "\tv1 := api.Group(\"/v1\")\n\tv1.GET(\"/invoices\", h)\n}\n"},
+     {"web/api.ts": "axios.get('/api/v1/invoices');\n"},
+     0, r"resolved 1", "server/routes.go:5"),
     ("generated .pb.go struct declares a Go caller's fields",
      {"proto/approvalpb/approval.pb.go": "package approvalpb\n\ntype UpsertPolicyRequest struct {\n"
                                           "\tstate protoimpl.MessageState\n\tActionKey string `protobuf:\"x\"`\n}\n"},

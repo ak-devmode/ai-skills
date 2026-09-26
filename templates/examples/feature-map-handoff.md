@@ -11,4 +11,4 @@ what stopped the maintain pass in the first row.
 
 | Feature | Change | What | Evidence |
 |---|---|---|---|
-| Sign-in | update | Status unknown → working; add the session-expiry sub-feature | run `5.2-20260926T110000-c3d4`, rung 5 |
+| Sign-in | update | Status shipped (unproven) → shipped; add the session-expiry sub-feature | run `5.2-20260926T110000-c3d4`, rung 5 |

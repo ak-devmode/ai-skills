@@ -251,7 +251,8 @@ hand-writes it); `/closeout` writes only the handoff. **Readers:** `/verify`, an
 author's own inner loop.
 
 8.1 **Index** — `features/README.md` (template `templates/features-README.md.template`):
-one row per feature — feature · status (`working | degraded | broken | unknown`) · last
+one row per feature — feature · status (`roadmap · scoped · in progress · in testing ·
+shipped`, as scope 5 §4.1 fixes it; `shipped` with no evidence renders `shipped (unproven)`) · last
 verdict (date + rung) · file.
 
 8.2 **Feature file** — `features/<feature>.md` (template `templates/feature.md.template`):

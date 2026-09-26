@@ -258,21 +258,6 @@ def cmd_judged(a):
     return vl.EXIT_PASS
 
 
-def authority(p, j):
-    """§5.1 — final {result, rung_reached, reason} for one check."""
-    if p["command"] == "judge":
-        if j is None:
-            return {"result": "inconclusive", "rung_reached": 0, "reason": "judge row: no judge verdict"}
-        return {"result": j["verdict"], "rung_reached": j["rung_reached"], "reason": f"judge: {j['reason']}"}
-    if j is None:
-        return {"result": p["result"], "rung_reached": p["rung_reached"], "reason": f"runner: {p['reason']}"}
-    if vl.ORDER[j["verdict"]] < vl.ORDER[p["result"]]:
-        return {"result": j["verdict"], "rung_reached": min(p["rung_reached"], j["rung_reached"]),
-                "reason": f"judge downgraded runner {p['result']}: {j['reason']}"}
-    return {"result": p["result"], "rung_reached": min(p["rung_reached"], j["rung_reached"]),
-            "reason": f"runner: {p['reason']}; judge concurs"}
-
-
 def cmd_finalize(a):
     recs = run_records(a.log, a.run_id)
     if any(r["run_state"] == "final" for r in recs):
@@ -301,7 +286,7 @@ def cmd_finalize(a):
                                           a.judge or "nothing", a.log, "tooling",
                                           f"verify-run.py finalize --log {a.log} --run-id {a.run_id} "
                                           "--judge 'none <why the judge did not run>'", f"{vl.CONTRACT} §4.6"))
-    results = {cid: authority(p, judged.get(cid)) for cid, p in pending.items()}
+    results = {cid: vl.authority(p, judged.get(cid)) for cid, p in pending.items()}
     revs = {p["table_rev"] for p in pending.values()}
     final = {"schema": vl.SCHEMA, "ts": now(), "run_id": a.run_id, "run_state": "final",
              "unit": next(iter(pending.values()))["unit"], "judge": judge, "table_rev": max(revs),

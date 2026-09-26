@@ -6,7 +6,8 @@
 **Schema version:** verify/1
 **Driver CLI:** {{CLI}}
 
-Status is one of `working | degraded | broken | unknown`. Last verdict is the date and rung
+Status is one of `roadmap · scoped · in progress · in testing · shipped` (scope 5 §4.1); a `shipped`
+feature with no evidence renders `shipped (unproven)`. Last verdict is the date and rung
 of the newest `/verify` result for the feature.
 
 | Feature | Status | Last verdict | File |

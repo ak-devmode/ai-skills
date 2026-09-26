@@ -21,9 +21,11 @@ unsupported and is never a pass — found, resolved and unsupported are always p
 Heuristics, stated so nobody mistakes them for a parser: references are regex-extracted
 (Go composite literals opened on an added line, Python `_pb2` kwargs, fetch/axios/http
 client calls, the common env accessors); route declarations are gin/echo/express-style
-`<router>.<verb>("/path"`, Go `Handle[Func]`, and Laravel `Route::<verb>`. A route that
-only matches as a suffix of the used path (a group prefix the script can't see) resolves
-but is labelled `suffix`.
+`<router>.<verb>("/path"`, Go `Handle[Func]`, and Laravel `Route::<verb>`, with gin/echo
+`x := y.Group("/prefix")` prefixes followed within the file. A route that matches a
+declaration only as a suffix — a prefix the script cannot see — is NOT resolved: assuming
+the missing prefix is exactly the invented-reality move this check exists to refuse. The
+failure names the candidate so a reader can confirm it.
 
 Usage:
   resolve-identifiers.py --repo PATH --range BASE..HEAD [--decl-rev REV] [--decl-repo PATH ...] [--json]
@@ -93,6 +95,7 @@ ROUTE_CLIENT = re.compile(r"\b(\w*(?:[Aa]pi|[Cc]lient)\w*)\.(" + VERBS + r")\(\s
 ROUTE_DECL = re.compile(r"\b([A-Za-z_]\w*)\.(" + VERBS + r"|Handle|HandleFunc)\(\s*[`'\"]([^`'\"]*)",
                         re.I)
 ROUTE_LARAVEL = re.compile(r"Route::(" + VERBS + r"|match)\(\s*['\"]([^'\"]*)", re.I)
+GROUP_DECL = re.compile(r"\b(\w+)\s*:?=\s*(\w+)\.Group\(\s*\"([^\"]*)\"")
 DECL_RECV = re.compile(r"^(router|app|r|e|g|rg|grp|group|mux|srv|server|routes?|v\d+|\w*Router|"
                        r"\w*Group|\w*router|\w*group)$")
 
@@ -316,6 +319,14 @@ class Index:
             for tree in self.all:
                 paths = [p for p in tree.paths if is_source(p) and not TEST_FILE.search(p)]
                 for p, text in tree.read(paths).items():
+                    groups = {m.group(1): (m.group(2), m.group(3)) for m in GROUP_DECL.finditer(text)}
+
+                    def prefix(var, seen=()):
+                        if var not in groups or var in seen:
+                            return ""
+                        parent, pre = groups[var]
+                        return prefix(parent, seen + (var,)) + pre
+
                     for i, line in enumerate(text.splitlines(), 1):
                         if is_comment(line):
                             continue
@@ -332,7 +343,7 @@ class Index:
                             elif verb.lower() not in ("all", "any"):
                                 method = verb.upper()
                             if raw.startswith("/"):
-                                self._route.append((method, raw, where))
+                                self._route.append((method, prefix(recv).rstrip("/") + raw, where))
                         for m in ROUTE_LARAVEL.finditer(line):
                             verb, raw = m.groups()
                             method = None if verb.lower() in ("any", "match") else verb.upper()
@@ -449,7 +460,8 @@ def resolve(r, idx):
             if have and len(have) < len(want) and seg_match(want[-len(have):], have) and suffix is None:
                 suffix = where
         if suffix:
-            return "resolved", f"{suffix} (suffix — group prefix assumed)"
+            return "unresolved", (f"a router registration for {method or 'any method'} {name} — {suffix} matches "
+                                  "only as a suffix; its prefix is not visible, so it is not assumed", 0)
         return "unresolved", (f"a router registration for {method or 'any method'} {name}", 0)
     raise ValueError(kind)
 

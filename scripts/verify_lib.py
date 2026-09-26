@@ -202,6 +202,23 @@ def read_jsonl(path):
     return out
 
 
+def authority(p, j):
+    """§5.1 — final {result, rung_reached, reason} for one check, from its pending record `p`
+    and its judged record `j` (or None). One implementation: verify-run.py finalizes with it
+    and verdict-gate.py re-checks every final result against it."""
+    if p["command"] == "judge":
+        if j is None:
+            return {"result": "inconclusive", "rung_reached": 0, "reason": "judge row: no judge verdict"}
+        return {"result": j["verdict"], "rung_reached": j["rung_reached"], "reason": f"judge: {j['reason']}"}
+    if j is None:
+        return {"result": p["result"], "rung_reached": p["rung_reached"], "reason": f"runner: {p['reason']}"}
+    if ORDER[j["verdict"]] < ORDER[p["result"]]:
+        return {"result": j["verdict"], "rung_reached": min(p["rung_reached"], j["rung_reached"]),
+                "reason": f"judge downgraded runner {p['result']}: {j['reason']}"}
+    return {"result": p["result"], "rung_reached": min(p["rung_reached"], j["rung_reached"]),
+            "reason": f"runner: {p['reason']}; judge concurs"}
+
+
 def _tail(path, n):
     with open(path, encoding="utf-8") as fh:
         return [json.loads(x) for x in fh.read().splitlines() if x.strip()][-n:]

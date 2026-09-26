@@ -177,6 +177,19 @@ class TestGate(Fixture):
         self.assertEqual(code, 1)
         self.assertIn("outside the unit's range", doc["report"][0])
 
+    def test_hand_edited_final_record_blocks(self):
+        self.set_table([row("bad", "exit 1")])
+        self.ledger()
+        self.verify()
+        with open(self.log) as fh:
+            recs = [json.loads(x) for x in fh]
+        recs[-1]["results"]["bad"].update(result="pass", rung_reached=4)  # forge the verdict
+        with open(self.log, "w") as fh:
+            fh.write("".join(json.dumps(r) + "\n" for r in recs))
+        code, doc = self.gate_json("--blocking")
+        self.assertEqual(code, 1)
+        self.assertIn("contradicts its own evidence", doc["report"][0])
+
     def test_table_revision_change_blocks(self):
         self.ledger()
         self.verify()

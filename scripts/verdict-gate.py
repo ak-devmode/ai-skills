@@ -115,6 +115,18 @@ def evaluate(scope, unit, projects):
         pend = next((r for r in recs if r.get("run_state") == "pending" and r.get("run_id") == final["run_id"]
                      and r.get("check_id") == cid), None)
         judges.add(final.get("judge", ""))
+        # §5.1 re-check: the final result must follow from its own evidence. A final record
+        # edited by hand (or written by anything but verify-run.py) is caught here.
+        if pend is not None:
+            jud = [r for r in recs if r.get("run_state") == "judged" and r.get("run_id") == final["run_id"]
+                   and r.get("check_id") == cid]
+            want = vl.authority(pend, jud[-1] if jud else None)
+            if (want["result"], want["rung_reached"]) != (res["result"], res["rung_reached"]):
+                block("final verdict contradicts its own evidence",
+                      f"{want['result']} · rung {want['rung_reached']} (authority rule over run {final['run_id']})",
+                      f"{res['result']} · rung {res['rung_reached']} in the final record", "tooling",
+                      "re-run the checks; never edit a final record")
+                continue
         if final.get("table_rev") != table["revision"]:
             block("verdict predates the current finish table", f"table_rev {table['revision']}",
                   f"table_rev {final.get('table_rev')}", "code")

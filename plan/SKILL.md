@@ -1,6 +1,6 @@
 ---
 name: plan
-version: 3.8.1
+version: 3.8.2
 description: |
   Execute tasks from a structured plan document step by step, logging progress and
   stopping at human checkpoints. Plan files follow the naming convention *-PLAN.md
@@ -259,8 +259,8 @@ same branch) / `diverged` (branch moved, not an ancestor, or newly dirty) /
   files of concern. Default is proceed.
 - **3** (diverged or missing) — STOP. Present the report and ask: "Re-scope, override
   (acknowledge drift and continue), or abort?" Do not proceed without direction.
-- **4** — no `## Repo Graph` section: skip, and note "Parent scope predates Repo Graph
-  contract — freshness validation skipped."
+- **4** — no Repo Graph snapshot table (no section, or a prose-only one): skip, and note
+  "freshness validation skipped — nothing was checked" with the script's reason.
 
 Also:
 

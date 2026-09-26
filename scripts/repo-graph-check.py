@@ -16,7 +16,12 @@ do about drift stays a human call, which is why the exit code tiers it.
 Usage:  repo-graph-check.py <scope.md> [--projects DIR]
 Output: one line per repo + a verdict line on stdout.
 Exit:   0 all unchanged · 1 advanced only (confirm) · 3 diverged/missing (stop)
-        · 4 no Repo Graph section (older scope — skip, note it) · 2 usage
+        · 4 no Repo Graph snapshot table (older scope, or a prose-only section —
+          skip, note it) · 2 usage
+
+The heading may be numbered (`## 2. Repo Graph`) — /markdown-style numbers every
+heading. A section with no table rows is exit 4, never a pass: zero rows checked is
+not "all unchanged".
 """
 
 import os
@@ -31,7 +36,7 @@ def git(path, *args):
 
 
 def parse_table(text):
-    m = re.search(r"^## Repo Graph\s*$", text, re.M)
+    m = re.search(r"^##[ \t]+(?:\d+(?:\.\d+)*\.?[ \t]+)?Repo Graph\b.*$", text, re.M)
     if not m:
         return None
     rows, header = [], None
@@ -78,6 +83,10 @@ def main(argv):
         return 2
     if rows is None:
         print("no Repo Graph section — scope predates the contract; freshness validation skipped")
+        return 4
+    if not any(re.sub(r"[`*]", "", r.get("repo", "")).strip() for r in rows):
+        print("Repo Graph section has no snapshot table (no rows with a `repo` column) — "
+              "freshness validation skipped; nothing was checked")
         return 4
 
     worst = 0

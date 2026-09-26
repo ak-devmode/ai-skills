@@ -138,3 +138,17 @@ plan file is unchanged; where this block and the plan differ, the plan wins, so 
   generated per scope. `verify-run.py` is the only writer of the verdict log, for all three run
   states. A table revision bump invalidates earlier verdicts. Every row is required. The message
   contract is lint-skill's four fields plus `cause` and `docs`.
+
+#### Unplanned: `repo-graph-check.py` numbered heading + empty-section false pass (Alex: fix now)
+- **Files modified:** `scripts/repo-graph-check.py`, `plan/SKILL.md` (§5.6.1 exit-4 wording, 3.8.2)
+- **Files created:** `scripts/tests/test_repo_graph_check.py`
+- **Why:** the heading regex missed `## 2. Repo Graph`, the numbering `/markdown-style`
+  requires. Fixing only that would have exposed a second defect: a prose-only section parses
+  to zero rows and printed "all unchanged — proceed", a false pass. Both are fixed, and both
+  are covered by table-driven tests. Scope 5 now returns exit 4, "nothing was checked".
+- **Verified:** suite 12 tests OK.
+
+#### Task 1.1 — ✅ DONE (Alex approved contracts 2026-09-26)
+- Alex also decided that disposition coverage (every finding ID dispositioned) is enforced in
+  `verdict-gate.py` rather than by `/verify` judgment, so it can't drift. Spec §5.2/§6
+  updated to match. This adds to Task 1.4.

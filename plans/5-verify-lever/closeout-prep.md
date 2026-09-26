@@ -225,6 +225,9 @@ Resumed/restarted phases append a SECOND block:
 - ai-skills · config: `templates/{finish-conditions,features-README,feature,feature-map-handoff}.md.template` — Task 1.1
 - ai-skills · doc: `templates/examples/` (6 files) — Task 1.1
 - ai-skills · test: `scripts/tests/test_contracts.py` — Task 1.1
+- ai-skills · code: `scripts/repo-graph-check.py` (unplanned) — numbered heading + empty-section false pass
+- ai-skills · test: `scripts/tests/test_repo_graph_check.py` (unplanned)
+- ai-skills · doc: `plan/SKILL.md` §5.6.1 exit-4 wording, v3.8.2 (unplanned)
 
 ### §3 Patterns Followed
 - Message contract ← `scripts/lint-skill.py` `expected · found · where · next` output
@@ -239,7 +242,7 @@ Resumed/restarted phases append a SECOND block:
 - `artifacts/eng-review-2026-09-26.md`, `artifacts/eng-review-test-plan-2026-09-26.md` (task detail)
 
 ### §11 Risk Flags
-- Repo Graph freshness: `repo-graph-check.py` exit 4 — scope.md's heading is `## 2. Repo Graph` (numbered), the script looks for an unnumbered one. Single-repo scope, snapshot `feaa5a9` → HEAD `8173b95` is linear on main (own commits). Script/heading mismatch is a latent defect worth a TO-DO.
+- Repo Graph freshness: `repo-graph-check.py` exit 4. It missed the numbered heading, and would then have false-passed a prose-only section. Both fixed (unplanned, Alex-directed); scope 5 is still exit 4 because its graph is prose (single repo, linear on main from `feaa5a9`).
 - herdr pane present (`w14:p4`) but Primary repo = none → §5.8.1 worktree + driver rename skipped.
 
 ---

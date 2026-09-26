@@ -13,8 +13,8 @@
 
 ## Resume Context
 **Scope:** ~/Projects/ai-skills/plans/5-verify-lever/scope.md
-**Last action:** Plan 5.1 Task 1.1 drafted — contracts + templates + examples + test_contracts.py (2026-09-26)
-**Next action:** Alex reviews `templates/verify-contracts.md`; on approval, Task 1.2 (`resolve-identifiers.py`)
+**Last action:** Plan 5.1 Task 1.2 done — `resolve-identifiers.py` (2026-09-26)
+**Next action:** Plan 5.1 Task 1.3 — `verify-run.py`
 **Open blockers:** None
 **Key files changed:** `scripts/plans-index.py` (70d1222 — unplanned fix, see Progress Log)
 
@@ -89,8 +89,8 @@
 ## Plan 5.1: Contracts + deterministic scripts
 
 ### Resume Context (Plan 5.1)
-**Last action:** Task 1.1 drafted — awaiting Alex's review
-**Next action:** on approval, deepen 1.2–1.4 detail here, then Task 1.2
+**Last action:** Task 1.2 done — `resolve-identifiers.py` + 7 test groups; WellMed smoke 207/213 resolved
+**Next action:** Task 1.3 — `verify-run.py`
 **Open blockers:** None
 
 ### Task Detail
@@ -105,10 +105,33 @@ plan file is unchanged; where this block and the plan differ, the plan wins, so 
 - **1.1** — templates in `templates/`, filled examples in `templates/examples/`. Each contract
   opens with a reader/writer header. Plus `scripts/tests/test_contracts.py`: generate each file
   from its template, assert no example rows. Stop for Alex's review.
-- **1.2–1.4** — detail written when 1.1's contracts are approved, since those contracts fix
-  the scripts' field names and messages. Tests follow the eng review's coverage map
-  (`artifacts/eng-review-2026-09-26.md` §2). Every error message is checked against the
-  message contract.
+- **1.2 `resolve-identifiers.py`** — two input modes: `--range BASE..HEAD` extracts
+  references from the added lines of source files, or `--ids FILE` takes JSONL
+  `{kind,name,namespace?,file?,line?}` (the judge's feed). References resolve against the
+  HEAD tree, so a declaration added in the same diff counts; `--decl-repo` adds cross-repo
+  declaration roots. Kinds and namespaces: **env** declared in `.env*.example|sample|template`
+  / compose `environment:` in the using file's directory or an ancestor (a sibling service's
+  file doesn't count); **ssm** declared in `*.tf` `name =`, `FLEET.md`, or `ssm*` files, with
+  segment-placeholder matching; **proto** is Go composite literals and Python `_pb2` kwargs
+  against the named message's fields in `*.proto`; **route** covers fetch/axios/http client
+  paths against router registrations (gin/echo/express/Laravel/mux); a suffix match under a
+  group prefix resolves but is labelled. Comment lines and fixture paths never count as
+  declarations or as uses. Any other kind counts as unsupported. Exit codes: 0 all resolved,
+  1 anything unresolved or unsupported, 2 usage, 3 git error. Unresolved references print
+  per §10.
+- **1.3 `verify-run.py`** — subcommands `run` (pending), `judged` (records the judge's JSON
+  output), `finalize` (§5.1 authority rule, one `final` line). Parses the finish table with
+  `\|` unescaping and blank-cell errors; `--owner` selects rows; each row runs in
+  `~/Projects/<repo>/<dir>` with its env overlay and timeout; exit codes map per §4.7.
+  Class-A records are refused into a public-denylisted or non-git destination. Every write
+  is followed by a read-back.
+- **1.4 `verdict-gate.py`** — §5.2 + §5.2.1 (disposition coverage) + §5.3 marker + §5.4
+  advisory/skip. `ledger-init.sh --repo PATH` records `base: <repo> <sha>` in the phase
+  block. `plans-index.py status` runs the gate before writing Done. `plans-index.py
+  validate` checks Done phase rows **only in scopes that have a `finish-conditions.md`** —
+  older scopes are exempt until self-heal, or every historical row would fail.
+- Tests follow the eng review's coverage map (`artifacts/eng-review-2026-09-26.md` §2).
+  Every emitted message is asserted to carry the six §10 fields.
 
 ### Session: 2026-09-26 (Alex / Claude)
 - **Phase 0** ✅ DONE. Input and related-doc paths all resolve. Status is Ready (Alex's go
@@ -152,3 +175,19 @@ plan file is unchanged; where this block and the plan differ, the plan wins, so 
 - Alex also decided that disposition coverage (every finding ID dispositioned) is enforced in
   `verdict-gate.py` rather than by `/verify` judgment, so it can't drift. Spec §5.2/§6
   updated to match. This adds to Task 1.4.
+
+#### Task 1.2: `scripts/resolve-identifiers.py` — ✅ DONE
+- **Files created:** `scripts/resolve-identifiers.py`, `scripts/tests/test_resolve_identifiers.py`
+- **Files modified:** `scripts/README.md` (table row)
+- **Verified:** suite 19 tests OK. Every acceptance case is covered: comment-only name fails,
+  unrelated-proto name fails, same-diff declaration passes, fake env var fails, unsupported
+  kind is reported and never green. Also covered: fixture-only declarations, sibling-service
+  namespace, SSM placeholders, routes (params / suffix / method), empty range → exit 3,
+  cross-repo `--decl-repo`, `--json`, and all six §10 fields on every failure.
+- **Smoke against real WellMed history (read-only, last 30 commits, 4 repos):** the first run
+  showed two false-positive classes. Gateway env vars are declared as SSM paths in
+  `wellmed-infrastructure/ssm/parameters/*.json`, and gateway protos come from generated
+  `.pb.go` files whose `.proto` lives in backbone. Both are now declaration sources, the
+  SSM one namespaced by service segment or `shared/`. After the fix: 213 references, 207
+  resolved. The 6 unresolved are all in `wellmed-cashier/cmd/reproject-ledger/main.go`,
+  env vars declared nowhere, so true positives by the rule.

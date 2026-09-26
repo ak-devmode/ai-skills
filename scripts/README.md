@@ -25,6 +25,7 @@ already caused real data loss. Prose cannot enforce itself — the same reasonin
 | `herdr-pane.sh` | the two-call pane naming rule (the second call was the recurring miss) + helper split | /concurrency §6, herdr §2/§5 |
 | `repo-survey.sh` | default-branch + survey cascade + MERGED/LIVE shell — **its `\|\| echo main` never fell back** | /cross-repo-init §2.1–2.2 |
 | `lint-skill.py` | eyeballing SKILL.md quality — CLAUDE.md §6 said "no linter currently" while the skills accreted past obey-able size | any skill edit; `/scope`, `/plan`, `/closeout` bodies |
+| `resolve-identifiers.py` | grepping for a name and calling it declared — comment, fixture and sibling-service hits read as real | `/verify` + `/review` local-maxima lens (scope 5 Phase 2) |
 
 **Tests:** `python3 -m unittest discover scripts/tests` from the repo root (stdlib only,
 Python >= 3.9). One `test_<name>.py` per script; `_helpers.py` runs a script as a

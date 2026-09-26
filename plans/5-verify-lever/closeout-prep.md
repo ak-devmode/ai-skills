@@ -228,12 +228,20 @@ Resumed/restarted phases append a SECOND block:
 - ai-skills · code: `scripts/repo-graph-check.py` (unplanned) — numbered heading + empty-section false pass
 - ai-skills · test: `scripts/tests/test_repo_graph_check.py` (unplanned)
 - ai-skills · doc: `plan/SKILL.md` §5.6.1 exit-4 wording, v3.8.2 (unplanned)
+- ai-skills · code: `scripts/resolve-identifiers.py` — Task 1.2
+- ai-skills · test: `scripts/tests/test_resolve_identifiers.py` — Task 1.2
+- ai-skills · doc: `scripts/README.md` (resolve-identifiers row) — Task 1.2
 
 ### §3 Patterns Followed
 - Message contract ← `scripts/lint-skill.py` `expected · found · where · next` output
   deviation: adds `cause` + `docs` (DX review G1)
 - Verdict-log writes ← `scripts/dispatch-log.py` write-then-read-back
 - Template placeholders ← `templates/closeout-prep.md.template` `{{UPPER_SNAKE}}` + `Schema version` header
+- `resolve-identifiers.py` CLI shape ← `scripts/dispatch-log.py` (argparse, docstring Usage/Output/Exit); test layout ← `test_repo_graph_check.py` (table-driven, throwaway repos)
+
+### §8 Assumptions
+- The SSM-as-env rule (`/…/<shared|service>/<NAME>` declares NAME for the repo whose name ends with `-<service>`) mirrors WellMed's `ssmconfig.Load` as described in `wellmed-infrastructure/ssm/parameters/shared.json`'s comments. Not verified against the loader's code.
+- Proto Go-literal extraction only fires for packages named `*pb`, `*proto` or `*v<N>`; other generated-package names are invisible (a miss, never a false pass).
 
 ### §6 Docs Loaded During Planning
 - `CLAUDE.md`, `ARCHITECTURE.md`, `CROSS-REPO.md` (repo root) — CROSS-REPO: standalone leaf, no Pattern Sources

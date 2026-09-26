@@ -336,3 +336,24 @@ the plan wins, so ask.
   with no package.json). The range was reviewed, not reported empty. All 5 IDs were
   dispositioned; a `fixed` claim using a commit that didn't touch the file was refused;
   the gate's coverage check came back empty. `lint-skill.py review` clean. Suite 82 OK.
+
+#### Unplanned (Alex-directed): fix the 6 spike findings in the private infra repo
+- Alex, at the Task 2.2 review: "don't TO-DO them — fix them." All 6 were verified before
+  fixing, against current `develop` and live data (read-only), and all 6 were real. Fixed on
+  a local branch in the private infra repo, 4 commits, **not pushed** (landing is Alex's
+  call). Details stay in that repo's commit messages; this public repo gets classes only:
+  3 dashboard fail-open queries (a slot-unaware liveness panel reading a service
+  permanently DOWN; empty-vector fallbacks reading green on missing telemetry; a
+  vanished-job blind spot), 1 fail-open deploy verification (`rsync | sed` without
+  pipefail), and 1 exclude-list packaging hole with a comment claiming otherwise.
+- **Dogfood:** new `/review` 3.0.0 on that branch. Round 1 found 1 blocking + 3 should-fix
+  *in my fix* (expected state computed from a different tree than the package; per-job
+  presence; a lookback-bounded inventory; no regression test). All were addressed, plus a
+  new regression test wired into CI. Round 2: **SHIP**, 0 blocking. One follow-up was fixed;
+  one (query-level regression tests for dashboard panels) was deferred, since that repo has
+  no PromQL panel-test harness.
+- **Self-inflicted bug caught before it shipped:** a scripted block move matched the
+  heredoc opener `<<SYNC` as its end marker and swallowed the upload step into the remote
+  script text. The staged test run exposed it (empty `cat`, wrong step order); it was
+  repaired with guarded line moves and re-verified by the full diff and the test. Nothing
+  ran against the host.

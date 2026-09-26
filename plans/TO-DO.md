@@ -334,3 +334,11 @@ Touches: plan/SKILL.md §11.3 · closeout/SKILL.md §13 · plans/archive/{2,4,6}
       `Status: in-progress`. Seen in archived scopes 2, 4 and 6. Not a resume blocker (closed
       scopes aren't resumed), but a cold reader following those lines hits nothing. Fix in
       /plan §11.3: repoint the three lines and flip the ledger status in the same commit as the move.
+
+## Contracts + deterministic scripts (Plan 5.1)
+Source: plans/5-verify-lever/progress.md (## Plan 5.1)
+Touches: scripts/{resolve-identifiers,verify-run,verdict-gate,plans-index}.py · scripts/ledger-init.sh · templates/verify-contracts.md
+- [ ] Run /closeout for plan 5.1 — deferred at completion on 2026-09-26 (Alex: straight into
+      5.2); fold into the scope-level closeout after 5.3.
+Nothing else deferred: the pending wiring (`ledger-init.sh --repo` from /plan §5.13,
+advisory → blocking flip) is planned work in 5.3 Tasks 3.2/3.4, not a residual.

@@ -13,9 +13,9 @@
 
 ## Resume Context
 **Scope:** ~/Projects/ai-skills/plans/5-verify-lever/scope.md
-**Last action:** Plan 5.1 all tasks done (2026-09-26) — at Phase 1 CHECKPOINT
-**Next action:** Alex's Phase 1 review (gate A); then `/plan 5.2`
-**Open blockers:** None
+**Last action:** Plan 5.1 complete, Phase 1 approved (2026-09-26)
+**Next action:** Plan 5.2 Phase 0, then Task 2.1 (`/verify` skill)
+**Open blockers:** closeout deferred to scope end (see TO-DO.md)
 **Key files changed:** `scripts/plans-index.py` (70d1222 — unplanned fix, see Progress Log)
 
 ---
@@ -39,6 +39,10 @@
 - (2026-09-26) Brief's credentials redacted (`eaeb441`); brief moved to `artifacts/`.
 - (2026-09-26) CEO review: approach C — a deterministic row passes only on runner evidence; the codex judge may only downgrade. Required fail/inconclusive blocks; latest run per check decides; evidence bound to SHAs. Gate enforced by plans-index.py, advisory for 3 clean scopes then blocking. Non-codex judge → ⚠ in PLANS-INDEX (Alex's D3 idea).
 - (2026-09-26) Codex CLI upgraded 0.152.1 → 0.157.1 (npm) — the old CLI rejected gstack's model; live evidence for the judge-failure handling (F2).
+- (2026-09-26) Phase 1 contracts approved as written: one normative spec (`templates/verify-contracts.md`), `verify-run.py` sole verdict-log writer, table revision bump invalidates verdicts, every row required, message contract = lint-skill's four fields + cause + docs.
+- (2026-09-26) Disposition coverage is enforced by `verdict-gate.py`, not `/verify` judgment — so it can't drift.
+- (2026-09-26) Evidence from a dirty working tree is accepted: verification is pre-PR. Contract §5.2.
+- (2026-09-26) No `/clear` at the 5.1 → 5.2 boundary; proceed straight into Phase 2. Closeout deferred to scope end.
 
 ---
 
@@ -53,6 +57,7 @@
 | 2026-09-26 | /plan-eng-review | Done | 7 Claude + 9 codex findings, all accepted → `artifacts/eng-review-2026-09-26.md`; test plan → `artifacts/eng-review-test-plan-2026-09-26.md`. CEO + ENG CLEARED |
 | 2026-09-26 | /plan-devex-review | Done | Triage. Getting started 3→8 (setup warns, `/verify --demo`, README section), errors 4→8 (message contract with cause class), stale-clone warning → `artifacts/devex-review-2026-09-26.md` |
 | 2026-09-26 | Unplanned fix | Done | `scripts/plans-index.py`: `add` accepts per-plan `N.P` numbers; duplicate check compares the exact `#` cell (70d1222). Found by /scope §5.9 — stub rows were refused as non-integer |
+| 2026-09-26 | /plan | Done | 5.1-verify-lever-PLAN.md complete — contracts spec + templates, resolve-identifiers.py, verify-run.py, verdict-gate.py, plans-index status/validate, ledger-init base SHA; 62 tests. Alex approved at gate A. TODOs extracted to TO-DO.md (closeout deferral only) |
 
 ---
 
@@ -70,7 +75,7 @@
 
 | # | Plan File | Phase | Status | Notes |
 |---|-----------|-------|--------|-------|
-| 5.1 | 5.1-verify-lever-PLAN.md | Phase 1 — Contracts + deterministic scripts | Ready to execute | Gate A |
+| 5.1 | 5.1-verify-lever-PLAN.md | Phase 1 — Contracts + deterministic scripts | Done | Gate A — approved 2026-09-26 |
 | 5.2 | 5.2-verify-lever-PLAN.md | Phase 2 — `/verify` + `/review` on codex | Ready to execute | Gate A |
 | 5.3 | 5.3-verify-lever-PLAN.md | Phase 3 — Wiring + self-heal + rollout | Ready to execute | Gate A |
 
@@ -89,8 +94,8 @@
 ## Plan 5.1: Contracts + deterministic scripts
 
 ### Resume Context (Plan 5.1)
-**Last action:** Task 1.4 done — all 5 tasks complete; suite 61 OK
-**Next action:** Phase 1 CHECKPOINT (gate A) — Alex approves contracts + reviews demo
+**Last action:** Plan complete — 5/5 tasks done; Alex approved Phase 1 (2026-09-26)
+**Next action:** none — continues in Plan 5.2
 **Open blockers:** None
 
 ### Task Detail

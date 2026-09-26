@@ -171,6 +171,10 @@ edited.
 - the verdict's `sha` for that repo is outside the unit's range `base..HEAD` — `base` is the
   repo's SHA recorded by `ledger-init.sh` in the phase block at phase start.
 
+**Uncommitted work is accepted, deliberately** (Alex, 2026-09-26). Verification runs
+pre-PR, on the working tree the author is about to commit — so evidence with `dirty: true`
+passes. The flag stays on the record so a reader can see it; it is not a block.
+
 5.2.1 **Per unit, the gate also blocks when** `artifacts/review-<unit>.jsonl` exists and
 breaks §6.3: a `finding_id` with no disposition, a `fixed` without `sha`, or a `rejected`
 without `reason`. Deterministic, so the gate owns it — `/verify` judges whether a rejection

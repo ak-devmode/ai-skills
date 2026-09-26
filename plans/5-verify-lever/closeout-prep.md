@@ -264,7 +264,7 @@ Resumed/restarted phases append a SECOND block:
 ### §11 Risk Flags
 - Repo Graph freshness: `repo-graph-check.py` exit 4. It missed the numbered heading, and would then have false-passed a prose-only section. Both fixed (unplanned, Alex-directed); scope 5 is still exit 4 because its graph is prose (single repo, linear on main from `feaa5a9`).
 - herdr pane present (`w14:p4`) but Primary repo = none → §5.8.1 worktree + driver rename skipped.
-- Gate accepts evidence recorded on a dirty tree (`dirty: true`): the SHA doesn't capture uncommitted changes. Not in the contract; candidate §5.2 rule for Alex.
+- Gate accepts evidence recorded on a dirty tree (`dirty: true`) — Alex decided 2026-09-26 this is correct (pre-PR model); now stated in contract §5.2.
 - `ledger-init.sh --repo` isn't passed by /plan §5.13 yet (5.3 Task 3.2). Until then units have no base, and the gate requires evidence at HEAD, which is strict and not unsafe.
 
 ---

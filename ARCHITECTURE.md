@@ -40,7 +40,9 @@ start to understand which skills exist and how they fit together.
   rows, a codex judge (fresh, read-only; Claude subagent fallback) confirms or
   downgrades via `verify/scripts/judge.py`, `verdict-gate.py` decides Done.
   Contracts: `templates/verify-contracts.md`.
-- `review/` — gstack engine + Kalpa/PMG domain pass.
+- `review/` — codex as the gate over an explicit range (gstack checklist + `review/rules/`
+  domain + lenses); Claude pass (gstack engine) as fallback; findings logged with stable IDs
+  and dispositioned through `review/scripts/review.py`.
 - `scope-review/` — altitude-ordered review of a team member's scope.
 - `concurrency/` — partition a scope into a verified DAG, dispatch the ready
   frontier to named herdr panes (worktree per writer), supervise.
@@ -229,7 +231,7 @@ graphs.
 | `prd` | 1.1.0 | Step 0 = `context-gather.sh`. |
 | `concurrency` | 0.5.0 | Dedup'd against herdr; pane naming + dispatch log via scripts. |
 | `herdr` | 0.1.5 | Opus seat = 5.5 (`opus[1m]`). |
-| `review` | 2.2.0 | |
+| `review` | 3.0.0 | codex gate; rules extracted to `review/rules/`; dispositions enforced. |
 | `ready-to-clear` | 1.1.0 | |
 | `verify` | 0.1.0 | New (scope 5). Advisory gate until 3 clean scopes. |
 | `kalpa-*` | unversioned | Flattened 2026-08-09. |

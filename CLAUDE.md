@@ -185,7 +185,9 @@ closeout-extended/tests/upward-traversal-recipe.md
 cross-repo-init/SKILL.md        — trio bootstrap + maintenance (invoked by /closeout Step 8)
 cross-repo-init/templates/      — CROSS-REPO / ARCHITECTURE / CLAUDE templates + examples
 markdown-style/SKILL.md         — markdown formatting rules
-review/SKILL.md                 — two-pass review: gstack engine + Kalpa domain pass
+review/SKILL.md                 — pre-landing review: codex gate, Claude (gstack engine) fallback
+review/rules/                   — domain.md (Kalpa/PMG groups) + lenses.md, read by both executors
+review/scripts/review.py        — review prompt / findings log (stable IDs) / dispositions
 verify/SKILL.md                 — independent verification: runner + codex judge + gate
 verify/scripts/judge.py         — judge prompt render / answer record / report (both executors)
 templates/verify-contracts.md   — verification contracts: finish table, verdict log, gate, dispositions

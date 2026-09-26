@@ -282,7 +282,14 @@ Resumed/restarted phases append a SECOND block:
 - ai-skills · test: `scripts/tests/test_codex_exec.py`, `scripts/tests/test_judge.py`, `scripts/tests/test_verify_run.py` (+VERIFY_BASE), `scripts/tests/_helpers.py` (repo-relative paths) — Task 2.1
 - ai-skills · doc: `README.md`, `ARCHITECTURE.md` §1.1/§1.4/§6.1, `CLAUDE.md` §4 — Task 2.1
 
+- ai-skills · doc: `plans/5-verify-lever/artifacts/review-codex-spike-2026-09-26.md` — Task 2.2a
+- ai-skills · doc: `review/SKILL.md` (3.0.0), `review/rules/domain.md` (moved from §3), `review/rules/lenses.md`, `review/prompts/review.md`, `templates/verify-contracts.md` §6 — Task 2.2
+- ai-skills · code: `review/scripts/review.py` — Task 2.2; config: `review/schemas/review-output.schema.json`
+- ai-skills · test: `scripts/tests/test_review.py` — Task 2.2
+- ai-skills · doc: `ARCHITECTURE.md`, `CLAUDE.md` — Task 2.2
+
 ### §3 Patterns Followed
+- `review.py` ← `verify/scripts/judge.py` (prepare/record split; both executors through one writer)
 - `/verify` fallback subagent ← `ready-to-clear/SKILL.md` §1.1 + §4 (paths-only prompt, pre-authorized dispatch)
 - `codex-exec.py` flags ← gstack `codex/SKILL.md` (read-only sandbox, `model_reasoning_effort`), but its own fresh probe (E1)
 

@@ -34,7 +34,7 @@ correct answer is enforced by `scripts/verify-run.py`, `scripts/verdict-gate.py`
 | §3 | `finish-conditions.md` | `/scope`; `/plan` self-heal drafts it, Alex confirms | `verify-run.py`, `verdict-gate.py`, `/verify`, `/closeout` |
 | §4 | `artifacts/verify-<unit>.jsonl` | `verify-run.py` only (all three run states) | `verdict-gate.py`, `/verify`, `/closeout` |
 | §5 | gate result (stdout + exit) | `verdict-gate.py` | `plans-index.py status`/`validate`, `/plan`, `/closeout` |
-| §6 | `artifacts/review-<unit>.jsonl` | `/review`, through a script (Phase 2 names it) | `verdict-gate.py` (coverage), `/verify` (rejection audit) |
+| §6 | `artifacts/review-<unit>.jsonl` | `review/scripts/review.py` (`record`, `dispose`) | `verdict-gate.py` (coverage), `/verify` (rejection audit) |
 | §8 | `features/README.md` + feature files | agents in the product test-suite | `/verify`, the author's inner loop |
 | §8 | `artifacts/feature-map-handoff-<unit>.md` | `/closeout` | whoever applies it in the test-suite repo, `/closeout-extended` |
 | §9 | adapter CLI | the product test-suite | `verify-run.py` (through finish-table commands), `/verify` |
@@ -199,23 +199,27 @@ pass.
 
 ## 6. Review disposition log — `artifacts/review-<unit>.jsonl`
 
-**Writer:** `/review`, through a script (named in Phase 2; no hand-written JSON).
+**Writer:** `review/scripts/review.py` only — `record` (findings, from the reviewer's JSON)
+and `dispose` (dispositions). No hand-written JSON.
 **Readers:** `verdict-gate.py` enforces coverage (§5.2.1); `/verify` audits every
-rejection's reasoning and whether each `fixed <sha>` touches the finding's file.
+rejection's reasoning.
 
 Every record carries `record`: `finding` or `disposition`.
 
 6.1 **`finding`** records keep the reviewer's raw output: `schema` · `ts` · `review_id`
 (`<unit>-r<n>`) · `finding_id` (`<review_id>-<nn>`, stable for that review) · `reviewer`
-(judge line, §4.6) · `range` (`{repo: "base..head"}`) · `file` · `line` · `category` ·
-`severity` · `text`.
+(judge line, §4.6) · `range` (`{repo: "base..head"}`) · `file` · `line` · `category`
+(`engine | domain | local-maxima | silent-failure | dirty-comment | doc-claim | fail-open`) ·
+`group` (the domain rule section, else empty) · `severity` (`blocking | should-fix | note`) ·
+`text` · `fix`. IDs are assigned in severity order.
 
 6.2 **`disposition`** records: `schema` · `ts` · `finding_id` · `disposition`
 (`fixed | rejected`) · `sha` (required for `fixed`) · `reason` (required for `rejected`) ·
 `by`.
 
 6.3 **Coverage rule.** Every `finding_id` has at least one disposition; the latest one
-decides. A `fixed <sha>` commit must touch the finding's `file`. Nothing silently
+decides. A `fixed <sha>` commit must touch the finding's `file` — `dispose` refuses it
+otherwise, at write time. Nothing silently
 dismissed, nothing silently dropped. A re-review mints a new `review_id`; the old findings
 stay.
 

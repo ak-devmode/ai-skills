@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "/review gate output",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["findings", "checked_clear", "not_applicable", "cannot_do", "verdict"],
+  "properties": {
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["file", "line", "severity", "category", "group", "text", "fix"],
+        "properties": {
+          "file": {"type": "string"},
+          "line": {"type": "integer"},
+          "severity": {"type": "string", "enum": ["blocking", "should-fix", "note"]},
+          "category": {"type": "string", "enum": ["engine", "domain", "local-maxima", "silent-failure",
+                                                  "dirty-comment", "doc-claim", "fail-open"]},
+          "group": {"type": "string"},
+          "text": {"type": "string"},
+          "fix": {"type": "string"}
+        }
+      }
+    },
+    "checked_clear": {"type": "array", "items": {"type": "string"}},
+    "not_applicable": {"type": "array", "items": {"type": "string"}},
+    "cannot_do": {"type": "array", "items": {"type": "string"}},
+    "verdict": {"type": "string", "enum": ["SHIP", "SHIP AFTER BLOCKING", "DO NOT SHIP"]}
+  }
+}

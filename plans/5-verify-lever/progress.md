@@ -14,7 +14,7 @@
 ## Resume Context
 **Scope:** ~/Projects/ai-skills/plans/5-verify-lever/scope.md
 **Last action:** Plan 5.1 complete, Phase 1 approved (2026-09-26)
-**Next action:** Plan 5.2 Task 2.2 — `/review` onto codex (spike first)
+**Next action:** Alex reviews Task 2.2 (`/review` on codex); then Plan 5.2 Task 2.3
 **Open blockers:** closeout deferred to scope end (see TO-DO.md)
 **Key files changed:** `scripts/plans-index.py` (70d1222 — unplanned fix, see Progress Log)
 
@@ -250,8 +250,8 @@ plan file is unchanged; where this block and the plan differ, the plan wins, so 
 ## Plan 5.2: `/verify` skill + `/review` on codex
 
 ### Resume Context (Plan 5.2)
-**Last action:** Task 2.1 done — `/verify` skill + codex-exec.py + judge.py; live codex e2e green
-**Next action:** Task 2.2 — `/review` onto codex (spike first; AI+HUMAN_REVIEW)
+**Last action:** Task 2.2 done — codex spike + /review 3.0.0 + review.py; awaiting Alex's review
+**Next action:** on Alex's OK, Task 2.3 — verifier fixtures + `/verify --demo`
 **Open blockers:** None
 
 ### Task Detail
@@ -310,3 +310,29 @@ the plan wins, so ask.
 - **Found along the way:** codex waits on stdin unless it's closed (a headless hang); the
   model name is only on stderr's banner, not the JSON events. Both handled in
   `codex-exec.py`. I removed a hidden `--allow-empty` flag from my own draft.
+
+#### Task 2.2: `/review` onto codex (spike first) — ⏸️ WAITING_HUMAN (review)
+- **(a) Spike** → `artifacts/review-codex-spike-2026-09-26.md` (public, so classes and counts
+  only). Codex alone on the WellMed 108.6 pre-fix diff (`gpt-6-sol`, 262 s) caught **4/6**
+  of the original findings, **including both criticals**. It missed a doc claim and an
+  over-broad deletion. It raised 6 findings the original review didn't have (unverified).
+  Codex listed what it can't do itself: no network, no live services or browser, no
+  write-side tests, no specialists.
+- **(b) Migration.** `review/SKILL.md` 2.2.0 → **3.0.0**: codex is the gate, the Claude pass
+  (gstack engine + the same rules) is the fallback with a DEGRADED header, an explicit
+  range is required (empty = failure), and every finding gets a disposition. §3's domain
+  rules moved **verbatim** into `review/rules/domain.md`; §1.1.1–1.1.2 plus the new lenses
+  (silent failure, local maxima, dirty comments, and a doc-claim lens added because of the
+  spike's miss) are in `review/rules/lenses.md`. `review/scripts/review.py` `prepare` /
+  `record` / `dispose` is the review-log writer; `dispose` refuses a `fixed <sha>` that
+  doesn't touch the finding's file. Contract §6 updated.
+- **Files:** created `review/{rules/domain.md,rules/lenses.md,prompts/review.md,schemas/review-output.schema.json,scripts/review.py}`,
+  `scripts/tests/test_review.py`, the spike note. Modified `review/SKILL.md`,
+  `templates/verify-contracts.md`, `ARCHITECTURE.md`, `CLAUDE.md`.
+- **Acceptance (live, real codex, scratchpad repo on `main`, explicit 1-commit range):**
+  the planted `|| true` → blocking silent-failure; the workaround comment → blocking
+  dirty-comment; the invented `PAYMENT_KEYZ` → should-fix. Codex also found two unplanted
+  real defects (`res.ok` never checked, so a declined charge reads as success; a build step
+  with no package.json). The range was reviewed, not reported empty. All 5 IDs were
+  dispositioned; a `fixed` claim using a commit that didn't touch the file was refused;
+  the gate's coverage check came back empty. `lint-skill.py review` clean. Suite 82 OK.

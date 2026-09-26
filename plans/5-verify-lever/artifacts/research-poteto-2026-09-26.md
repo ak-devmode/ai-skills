@@ -76,12 +76,55 @@ internal repos. A mirror (`backnotprop/pstack`) advertises it for Claude Code an
 - **Instruction trimming for Opus 5.5** mirrors scope 2's accretion work — no action.
 - **Feature file shape** is settled: four questions + regression-order index.
 
+## 4a. Complete Guide to pstack Pt. 1 — "Verification is all you need" (pasted by Alex)
+
+**Dated 2026-09-01 — predates the cutoff.** Lane a2 dated it "after 2026-09-21" by
+reasoning that its status ID postdates the talk; the ID (2094…) is *lower* than the
+talk's (2102…), so it is earlier. A lane-inferred date, not a sourced one; no claims
+were extracted from it, so no finding rested on it.
+
+What it adds for `/verify` and the test-suite program:
+
+- **The CLI's scope includes the dev environment.** Seeding a dev database, auth, test
+  users, API calls against test/staging, bringing the env up consistently — all listed
+  as part of the verification CLI. This is the test-suite program's job, and it confirms
+  the seam: the skill consumes, the sidecar CLI provides.
+- **CLI design properties** — the contract for the test-suite CLI: composable (deep
+  modules); `--dry-run` on anything destructive; subcommands for progressive disclosure;
+  error messages that say what to do instead; rich `--help`; JSON output. The error rule
+  is the brief's `expected · found · where · next check` pattern.
+- **Command families:** inspection, navigation, interaction, performance, streaming,
+  health & cleanup (`doctor`, `cleanup`).
+- **Feature map shape:** `references/features/` + a `README.md` index inside the skill;
+  each file has four H2s — Sub-features · How to get to it (user POV) · Driving it with
+  <cli> · Gotchas. **Agents generate it** by cataloguing the app; nobody hand-writes it.
+- **Maintained daily** by a scheduled `/maintain-verification-skill`, plus agents
+  updating it as they work; "you may even want to put an oncall rotation on it."
+- **Her verification is the author closing its own loop** ("use /control-app to verify
+  your changes and show me a video and screenshots as proof"). It is an inner-loop tool
+  for the agent doing the work, not an independent judge.
+- **Cloud agents over worktrees** for parallelism; `/swarm` fans out many agents running
+  the verification skill for perf sample size or fuzzing. Auto-reproduce user reports by
+  piping feedback channels into routines.
+
+Implications:
+
+- **Two uses of one lever.** The CLI + feature map serve the author's inner loop (iterate
+  until it works) *and* `/verify`'s independent judgment at checkpoints. Build once; both
+  use it. Her design has only the first; the independent judge is ours.
+- **Bootstrap the feature map by agent crawl**, then maintain — never hand-author.
+- **Maintenance cadence is a decision:** her daily routine vs our closeout-time pass.
+- **Worktrees vs cloud agents** is a divergence of infrastructure, not of principle —
+  herdr worktrees stay; no action for scope 5.
+
 ## 5. Caveats
 
 - Verification was a single independent verifier, weaker than the workflow's 3-vote panel.
-- **Missing coverage:** her "Complete Guide to pstack" Pt. 1 and Pt. 2 (X articles
-  2094457600259842065, 2097732320606507506) were found but yielded no claims — likely
-  unfetchable X article pages. Probably the most relevant primary material in the window.
+- **Missing coverage, resolved:** her "Complete Guide to pstack" Pt. 1 and Pt. 2 (X articles
+  2094457600259842065, 2097732320606507506) yielded no claims — X article pages are not
+  fetchable. Alex pasted Pt. 1 (§4a; dated 2026-09-01, pre-baseline). Pt. 2 has been
+  deleted. Her current thinking is taken from the pstack repo; her recent posts mostly
+  build into the Grok Bot ecosystem, which Alex does not use. **Stream closed 2026-09-26.**
 - Several sources predate the cutoff (2026-08-21, 2026-09-05) and are tangential by design.
 - No angle lane was interrupted in this run; the failed-lane path was tested in a separate
   throwaway run (`interrupt-test-r1`).

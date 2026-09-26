@@ -13,8 +13,8 @@
 
 ## Resume Context
 **Scope:** ~/Projects/ai-skills/plans/5-verify-lever/scope.md
-**Last action:** /plan-ceo-review done — HOLD SCOPE, approach C, 17 findings accepted and folded into scope.md + 5.1–5.3 (2026-09-26)
-**Next action:** `/plan-eng-review` on `5-verify-lever/scope.md`
+**Last action:** /plan-ceo-review + /plan-eng-review done — CEO + ENG CLEARED; 33 findings accepted and folded into scope.md + 5.1–5.3 v0.3 (2026-09-26)
+**Next action:** `/plan-devex-review` (YES in the checklist) or `/plan 5.1` — Alex's call
 **Open blockers:** None
 **Key files changed:** `scripts/plans-index.py` (70d1222 — unplanned fix, see Progress Log)
 
@@ -50,6 +50,7 @@
 | 2026-09-26 | /research (scope 6 live test) | Done | poteto since 2026-09-11 → `artifacts/research-poteto-2026-09-26.md` |
 | 2026-09-26 | /scope | Done | Phased, 3 plans (5.1–5.3), each exits on gate A |
 | 2026-09-26 | /plan-ceo-review | Done | HOLD SCOPE; approach C (scripts + runner evidence floor, codex judge downgrade-only). Codex outside voice: 11 findings, 7 new. All 17 accepted → `artifacts/ceo-review-2026-09-26.md` |
+| 2026-09-26 | /plan-eng-review | Done | 7 Claude + 9 codex findings, all accepted → `artifacts/eng-review-2026-09-26.md`; test plan → `artifacts/eng-review-test-plan-2026-09-26.md`. CEO + ENG CLEARED |
 | 2026-09-26 | Unplanned fix | Done | `scripts/plans-index.py`: `add` accepts per-plan `N.P` numbers; duplicate check compares the exact `#` cell (70d1222). Found by /scope §5.9 — stub rows were refused as non-integer |
 
 ---
@@ -78,3 +79,5 @@
 - `artifacts/scope-brief.md` — the 2026-09-11 brief (pain, pstack, locked design)
 - `artifacts/research-poteto-2026-09-26.md` — poteto research + Complete Guide Pt. 1 notes
 - `artifacts/ceo-review-2026-09-26.md` — CEO review + codex outside voice, 17 accepted findings
+- `artifacts/eng-review-2026-09-26.md` — eng review + codex outside voice, 16 accepted findings
+- `artifacts/eng-review-test-plan-2026-09-26.md` — test plan (edge cases + critical paths)

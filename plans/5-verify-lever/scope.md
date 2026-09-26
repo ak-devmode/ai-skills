@@ -34,20 +34,28 @@ surface; ADR checks belong to the test-suite program's member scopes.
 ### 4.1 Phase 1 — Contracts + deterministic scripts (gate A)
 The formats everything else reads, and the scripts that enforce them (trust ladder: a gate
 is a script, not a paragraph a skill can skip).
-- **Finish-condition table** (in `scope.md`): one row per deliverable →
-  `check_id · check (an executable command, or the literal "judge") · rung required ·
-  unreachable-allowed (Alex's reason, or no) · evidence artifact`. Revisioned; the verdict is
-  generated from it.
-- **Verdict artifact** (`artifacts/verify-<phase>.tsv`): `ts · run_id · check_id · deliverable
-  · rung · repo SHA(s) · deployed version (live rows) · finish-table revision · evidence ·
-  judge · result`. Append-only for audit; **the latest run of each `check_id` decides
-  readiness** (so a fixed failure can clear). Results `pass | fail | inconclusive |
-  verified-unreachable`.
-- **Gate semantics** (approach C, one-way authority): a deterministic row passes only on
-  runner evidence; the judge may only downgrade. A required row that is `fail` or
+- **Finish-condition table** (its own revisioned file, `finish-conditions.md` in the scope
+  folder, with a changelog — never inside `scope.md`, which `/ready-to-clear` treats as a
+  write-once design record): one row per deliverable → `check_id · owner (phase/unit that
+  must pass it) · check (an executable command, or the literal "judge") · repo · working dir
+  · env · timeout (default 120 s) · rung required · unreachable-allowed (Alex's reason, or no)
+  · evidence artifact`. A checkpoint runs exactly the rows its unit owns; closeout runs all.
+- **Verdict artifact** (`artifacts/verify-<phase>.jsonl` — JSONL, written with
+  `dispatch-log.py`'s write-then-read-back pattern; free-text evidence breaks TSV): per row
+  `ts · run_id · run_state · check_id · deliverable · rung · repo SHA(s) · resolved repo/dir/env
+  · deployed version (live rows) · finish-table revision · evidence · judge · result`.
+  Append-only for audit. **Runs move `pending → judged → final`**; the judge's verdict is bound
+  to its `run_id`; finalization is atomic. **The latest final run of each `check_id` decides
+  readiness** (a fixed failure can clear); a pending run blocks. Results `pass | fail |
+  inconclusive | verified-unreachable`. The gate prints it as a table for humans.
+- **Gate semantics** (approach C, one-way authority): a **runner** row passes only on runner
+  evidence; the judge may only downgrade it. On a **`judge`** row the judge's verdict is the
+  result, pass or fail. A required row that is `fail` or
   `inconclusive` **blocks**; `verified-unreachable` passes only where the table declared it
-  allowed; evidence whose SHA is outside the current unit's range is rejected.
-- **Review disposition log** (`artifacts/review-<phase>.tsv`): the reviewer's raw output is
+  allowed; evidence whose SHA is outside the current unit's range is rejected. The unit's
+  range is `base..HEAD` per repo, where `ledger-init.sh` records each repo's base SHA in the
+  phase block at phase start.
+- **Review disposition log** (`artifacts/review-<phase>.jsonl`): the reviewer's raw output is
   kept with stable finding IDs; the log must cover every ID with `fixed <sha>` or
   `rejected <reason>`. Nothing silently dismissed, nothing silently dropped.
 - **Evidence placement:** class-A evidence (URLs, screenshots, command output from a product
@@ -71,19 +79,29 @@ is a script, not a paragraph a skill can skip).
   declaration files, namespace-aware; hits in comments or fixtures don't count; a real new
   declaration in the same diff resolves. Every run prints `found N · resolved M ·
   unsupported kinds K`; unresolved or unsupported is never a pass.
-- **`scripts/verify-run.py`** (the deterministic runner): executes each finish-table row's
-  command, writes evidence (command, exit code, output hash, ts, SHA); rows it cannot
-  execute become `inconclusive` with the reason. Refuses to write class-A evidence under a
+- **`scripts/verify-run.py`** (the deterministic runner): executes each owned finish-table
+  row's command in its declared repo / dir / env with its timeout, writes evidence (command,
+  resolved context, exit code, output hash, ts, SHA) as a `pending` run; rows it cannot
+  execute become `inconclusive` with the reason; a timeout becomes `inconclusive: timed out
+  after Ns`. Refuses to write class-A evidence under a
   public repo (git remote + denylist).
-- **`scripts/verdict-gate.py`**: applies the gate semantics above to the latest run per
-  check. **Enforced at the index**: `plans-index.py` refuses to mark a phase Done unless the
-  gate passes. When the judge line isn't codex, it appends `⚠ judge: <fallback>` to the
+- **`scripts/verdict-gate.py`**: applies the gate semantics above to the latest final run per
+  owned check. **Enforced at the index, two layers**: a new `plans-index.py status` command
+  runs the gate before writing Done (preventive), and `plans-index.py validate` fails on any
+  Done phase row without a passing verdict, which the SessionStart hook surfaces (detective —
+  agents can still edit the file directly). When the judge line isn't codex, it appends `⚠ judge: <fallback>` to the
   phase's index status; a later codex verdict clears it.
+- **Test entrypoint:** `scripts/tests/test_*.py` (stdlib `unittest`, run with
+  `python3 -m unittest discover scripts/tests`) + a `Test:` line in CLAUDE.md §6, so
+  `/closeout` Step 3 and `/verify` class B actually run the scripts' tests. ai-skills has none
+  today.
 
 ### 4.2 Phase 2 — `/verify` skill + `/review` on codex (gate A)
 - **`/verify`** (new top skill, generic, public) = the **runner** (`verify-run.py`, executes)
   + the **judge** (codex, reads runner evidence + git only; runs in a read-only sandbox, so it
-  never drives an env itself). Never asks the author for data. The verdict header records
+  never drives an env itself). Never asks the author for data. Its own ~20-line codex probe
+  runs fresh every call (`codex --version` + a one-line `codex exec` ping) — never gstack's
+  internal probe, which caches failures for an hour. The verdict header records
   `judge: codex <model codex reports> | claude-fallback <reason> | none <reason>`; no model
   is pinned; not-installed / not-authed / model-unusable / timeout / empty / refusal /
   malformed all end as non-codex judge lines and none can produce a pass.
@@ -106,8 +124,11 @@ is a script, not a paragraph a skill can skip).
   diff (108.6 if available) with the engine checks + domain rules; record what codex cannot
   do (specialists, browser, completion markers) and design around it.
 - **Verifier fixtures:** a known-bad scope under `verify/tests/fixtures/` (invented env var,
-  one-caller abstraction, rejection with no reason, missing evidence, row under its rung)
-  that `/verify` must fail; runs on any change to `/verify`, its scripts or contracts.
+  over-built abstraction, rejection with no reason, missing evidence, row under its rung,
+  dropped finding ID) where `/verify` must produce a finding naming each planted defect, plus
+  clean control fixtures and repaired copies that must pass. `judge: none` fails the suite.
+  Over-building is judged on the pattern, not a caller count. Runs from the test entrypoint
+  on any change to `/verify`, its scripts or contracts.
 - **Proof before the gate:** dogfood `/verify` on Phase 1's outputs (class B), then a live
   class-A trial on dev `clinic_3` through the runner (temporary; permanent = a stood-up test
   tenant) that produces **three outcomes**: a real end-to-end pass, a planted behavior
@@ -119,22 +140,29 @@ is a script, not a paragraph a skill can skip).
   review + verify tasks ("if there is a commit, review runs"); phases with no commit
   (wiring inside third-party apps) carry verify only.
 - **`/plan`**: runs `/review` on each commit-producing unit and `/verify` per unit at
-  checkpoints; the gate is enforced through `plans-index.py`. **Advisory first**: the gate
+  checkpoints, passing both the unit's exact revision range (`base..HEAD` per repo); an
+  unexpectedly empty diff is a failure, not a clean review (direct-to-main repos like
+  ai-skills leave nothing for a branch diff). The gate is enforced through `plans-index.py`. **Advisory first**: the gate
   warns + marks the index but doesn't block until 3 real scopes pass through cleanly, then
   flips to blocking. `--skip-verify "<reason>"` exists, loud in the header and the index. **Self-heal**: on a scope with no
   finish-condition table, draft one from the scope's deliverables and ask Alex to confirm
   once before proceeding.
-- **`/closeout`**: verdict present + complete, else run `/verify` now; maintain pass on the
-  feature map; `/cross-repo-init` trio sync gains the feature map as a member. Lever
-  candidates go to a `## Lever candidates` section of the project's `plans/TO-DO.md` with a
-  `Touches:` line; a grep match at append time is the second sighting → "build the lever now".
+- **`/closeout`**: verdict present + complete, else run `/verify` now. A failing or blocked
+  final verdict means closeout cannot report HEALED; the scope still archives (closeout's
+  archive-anyway rule stands), the index row reads `✅ Done — ⚠ verify failed <check_ids>`,
+  and the failed checks go to TO-DO.md. Closeout never edits the private test-suite: it
+  writes a feature-map maintenance handoff (`clean | changed | blocked` + the change list) to
+  the scope's artifacts, applied in the test-suite repo or via `/closeout-extended`. Lever
+  candidates go to a `## Lever candidates` section of the project's `plans/TO-DO.md` with
+  `Touches:`, originating `run_id` and scope; only a match from a different scope or run is
+  the second sighting → "build the lever now" (a re-run can't manufacture one).
 - Fold in the ledger-template defect (see §8).
 - Rollout per ai-skills CLAUDE.md §2.1: announce the `git pull`; team works without herdr.
 
 ## 5. Architecture
 
 ```
-   /scope --- finish-condition table (check_id · command|judge · rung · unreachable-ok · evidence)
+   /scope --- finish-conditions.md (check_id · owner · command|judge · repo/dir/env · timeout · rung · unreachable-ok)
       |
    /plan  --- per commit-producing unit -------------------------------------+
       |                                                                      |
@@ -143,11 +171,11 @@ is a script, not a paragraph a skill can skip).
       |     + local-maxima + silent-fail            runs each row's command  |
       |     + dirty comments                        -> evidence: exit, hash, |
       |     raw findings (stable IDs)                  SHA, deploy ver, ts   |
-      |     -> review-<phase>.tsv                 codex JUDGE (read-only)    |
+      |     -> review-<phase>.jsonl               codex JUDGE (read-only)    |
       |        every ID: fixed <sha> |              reads evidence + git     |
       |        rejected <why>                       may only DOWNGRADE rows  |
       |                                             + over-build, rejections |
-      |                                           -> verify-<phase>.tsv      |
+      |                                           -> verify-<phase>.jsonl    |
       |                                              latest run per check_id |
       |                                                                      |
       +---- verdict-gate.py: required fail|inconclusive blocks; stale SHA rejected
@@ -265,6 +293,13 @@ N/A x4 — not a bug fix, no UI design (`/investigate`, `/design-consultation`, 
   independently matched three of Claude's findings and added seven, two of which broke the
   first draft of C (downgrade-to-inconclusive passed; one failure could never clear). All
   seventeen accepted — full record in `artifacts/ceo-review-2026-09-26.md`.
+- **Eng review 2026-09-26:** 7 Claude findings (own codex probe, JSONL artifacts, two-layer
+  index enforcement, per-repo base SHA, finish table in its own file, a real test entrypoint,
+  per-row timeouts) + 9 from codex's outside voice (judge rows can pass, run states with
+  atomic finalization, per-unit check ownership, execution context per row, explicit unit
+  revision range, closeout on a failing verdict, feature-map handoff, lever dedupe by run,
+  fixtures that can't be passed by failing everything). All accepted —
+  `artifacts/eng-review-2026-09-26.md`.
 - **Deliberate divergence from pstack**: poteto verifies behavior only ("the best spec is
   code"); we add conformance because the scope is where Alex holds the product vision.
   Her verification is the author closing its own loop; ours adds the independent judge —

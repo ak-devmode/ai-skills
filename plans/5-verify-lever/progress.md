@@ -13,8 +13,8 @@
 
 ## Resume Context
 **Scope:** ~/Projects/ai-skills/plans/5-verify-lever/scope.md
-**Last action:** Scope written from the 2026-09-11 brief + the 2026-09-26 scoping rounds (2026-09-26)
-**Next action:** `/plan-ceo-review` on `5-verify-lever/scope.md`
+**Last action:** /plan-ceo-review done — HOLD SCOPE, approach C, 17 findings accepted and folded into scope.md + 5.1–5.3 (2026-09-26)
+**Next action:** `/plan-eng-review` on `5-verify-lever/scope.md`
 **Open blockers:** None
 **Key files changed:** `scripts/plans-index.py` (70d1222 — unplanned fix, see Progress Log)
 
@@ -37,6 +37,8 @@
 - (2026-09-26) clinic_3 in dev = temporary trial target; permanent = stood-up tenant per env.
 - (2026-09-26) Faithful-port rule lives in `/verify`, not global CLAUDE.md.
 - (2026-09-26) Brief's credentials redacted (`eaeb441`); brief moved to `artifacts/`.
+- (2026-09-26) CEO review: approach C — a deterministic row passes only on runner evidence; the codex judge may only downgrade. Required fail/inconclusive blocks; latest run per check decides; evidence bound to SHAs. Gate enforced by plans-index.py, advisory for 3 clean scopes then blocking. Non-codex judge → ⚠ in PLANS-INDEX (Alex's D3 idea).
+- (2026-09-26) Codex CLI upgraded 0.152.1 → 0.157.1 (npm) — the old CLI rejected gstack's model; live evidence for the judge-failure handling (F2).
 
 ---
 
@@ -47,6 +49,7 @@
 | 2026-09-11 | brief | Done | Placeholder brief — pain, pstack take/leave, locked design |
 | 2026-09-26 | /research (scope 6 live test) | Done | poteto since 2026-09-11 → `artifacts/research-poteto-2026-09-26.md` |
 | 2026-09-26 | /scope | Done | Phased, 3 plans (5.1–5.3), each exits on gate A |
+| 2026-09-26 | /plan-ceo-review | Done | HOLD SCOPE; approach C (scripts + runner evidence floor, codex judge downgrade-only). Codex outside voice: 11 findings, 7 new. All 17 accepted → `artifacts/ceo-review-2026-09-26.md` |
 | 2026-09-26 | Unplanned fix | Done | `scripts/plans-index.py`: `add` accepts per-plan `N.P` numbers; duplicate check compares the exact `#` cell (70d1222). Found by /scope §5.9 — stub rows were refused as non-integer |
 
 ---
@@ -74,3 +77,4 @@
 ## Artifacts
 - `artifacts/scope-brief.md` — the 2026-09-11 brief (pain, pstack, locked design)
 - `artifacts/research-poteto-2026-09-26.md` — poteto research + Complete Guide Pt. 1 notes
+- `artifacts/ceo-review-2026-09-26.md` — CEO review + codex outside voice, 17 accepted findings

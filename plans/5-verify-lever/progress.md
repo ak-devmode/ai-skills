@@ -16,7 +16,7 @@
 **Last action:** Scope written from the 2026-09-11 brief + the 2026-09-26 scoping rounds (2026-09-26)
 **Next action:** `/plan-ceo-review` on `5-verify-lever/scope.md`
 **Open blockers:** None
-**Key files changed:** None yet
+**Key files changed:** `scripts/plans-index.py` (70d1222 — unplanned fix, see Progress Log)
 
 ---
 
@@ -47,6 +47,7 @@
 | 2026-09-11 | brief | Done | Placeholder brief — pain, pstack take/leave, locked design |
 | 2026-09-26 | /research (scope 6 live test) | Done | poteto since 2026-09-11 → `artifacts/research-poteto-2026-09-26.md` |
 | 2026-09-26 | /scope | Done | Phased, 3 plans (5.1–5.3), each exits on gate A |
+| 2026-09-26 | Unplanned fix | Done | `scripts/plans-index.py`: `add` accepts per-plan `N.P` numbers; duplicate check compares the exact `#` cell (70d1222). Found by /scope §5.9 — stub rows were refused as non-integer |
 
 ---
 

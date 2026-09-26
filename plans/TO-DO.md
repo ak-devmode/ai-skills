@@ -324,3 +324,13 @@ Touches: research/SKILL.md · research/scripts/lanes.py · templates/closeout-pr
       by guessing from its status ID and got the comparison backwards (it was 2026-09-01). On a
       second sighting, tell lanes to report only dates read on the page and leave `publishDate` null
       otherwise.
+
+## plan §11 archive — stale paths inside archived scopes (seen at scope 6 closeout)
+Source: plans/5-verify-lever/progress.md (ready-to-clear audit, 2026-09-26)
+Touches: plan/SKILL.md §11.3 · closeout/SKILL.md §13 · plans/archive/{2,4,6}-*/
+- [ ] **Archiving leaves pre-archive paths inside the moved docs.** After `mv` to `archive/`,
+      progress.md `**Scope:**`, the plan's `**Parent scope:**`, and closeout-prep's `**Plan:**`
+      still point at `plans/<N>-<slug>/`, and closeout-prep's header still reads
+      `Status: in-progress`. Seen in archived scopes 2, 4 and 6. Not a resume blocker (closed
+      scopes aren't resumed), but a cold reader following those lines hits nothing. Fix in
+      /plan §11.3: repoint the three lines and flip the ledger status in the same commit as the move.

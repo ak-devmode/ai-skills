@@ -235,6 +235,7 @@ Resumed/restarted phases append a SECOND block:
 - ai-skills · test: `scripts/tests/test_verify_run.py` — Task 1.3
 - ai-skills · code: `scripts/verdict-gate.py` (new); `scripts/plans-index.py` (`status` + validate gate check); `scripts/ledger-init.sh` (`--repo` base SHA); `scripts/verify_lib.py` (`GATE_MODE`, `PROJECTS`) — Task 1.4
 - ai-skills · test: `scripts/tests/test_verdict_gate.py` — Task 1.4
+- ai-skills · code+test: `scripts/verdict-gate.py`, `scripts/tests/test_verdict_gate.py` — block messages carry the runner's output line (checkpoint DX fix)
 - ai-skills · doc: `scripts/README.md` rows — Task 1.4
 - ai-skills · doc: `templates/verify-contracts.md` §4.3 (`cwd`, `output_tail`) + §9 (`deployed_version` from verb JSON); `scripts/README.md` rows — Task 1.3
 

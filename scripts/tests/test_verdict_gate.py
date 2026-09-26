@@ -130,6 +130,13 @@ class TestGate(Fixture):
         self.verify()
         self.assertEqual(self.gate("--blocking").returncode, 0)
 
+    def test_block_message_carries_the_output_line(self):
+        self.set_table([row("bad", "echo '  [FAIL] env `X` does not resolve'; exit 1")])
+        self.ledger()
+        self.verify()
+        p = self.gate("--blocking")
+        self.assertIn("output: [FAIL] env `X` does not resolve", p.stdout)
+
     def test_runner_row_downgraded_by_judge_blocks(self):
         self.ledger()
         self.verify("codex gpt-test", [self.v("ok", "fail")])

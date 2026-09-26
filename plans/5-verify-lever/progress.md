@@ -230,3 +230,12 @@ plan file is unchanged; where this block and the plan differ, the plan wins, so 
   exit code. (2) I wrote a `2>/dev/null` into ledger-init; replaced it with an explicit
   projects-root check. Runs under macOS's bash 3.2.
 - **Real index:** `plans-index.py validate plans/PLANS-INDEX.md` is still conformant.
+
+#### Checkpoint prep — live demo + one DX fix
+- Demo in scratchpad: a throwaway app plus a finish table with `resolve-identifiers.py` and
+  `node --check` rows. A planted `process.env.API_KEY_TYPO` fails the runner, blocks the gate
+  (blocking), and is marked `⚠ verify advisory: 1 blocked (names-resolve)` in advisory mode.
+- **DX fix:** gate blocks now carry the runner's first `[FAIL]` line, or failing that its last
+  output line, in `found`. Before, the output said only "exit 1" and the reason sat in the
+  verdict log. Files: `scripts/verdict-gate.py`, `scripts/tests/test_verdict_gate.py`.
+  Suite 62 OK.

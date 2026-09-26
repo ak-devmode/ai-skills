@@ -83,6 +83,15 @@ def coverage_blocks(review_log):
     return blocks, len(findings)
 
 
+def evidence_line(pend):
+    """The one output line that says why: the first [FAIL]/[BLOCK]/[ERROR] line, else the last
+    non-empty line of the runner's output_tail (§10: actual values, not adjectives)."""
+    lines = [x.strip() for x in ((pend or {}).get("output_tail") or "").splitlines() if x.strip()]
+    flagged = [x for x in lines if re.match(r"^\[(FAIL|BLOCK|ERROR)\]", x)]
+    line = (flagged or lines or [""])[0 if flagged else -1]
+    return f" — output: {line[:200]}" if line else ""
+
+
 def evaluate(scope, unit, projects):
     """Return (rows_report, blocks, judge_lines). Raises vl.ContractError."""
     table = vl.parse_table(os.path.join(scope, "finish-conditions.md"))
@@ -125,7 +134,7 @@ def evaluate(scope, unit, projects):
                   f"table_rev {final.get('table_rev')}", "code")
             continue
         if res["result"] in ("fail", "inconclusive"):
-            block(f"verdict is {res['result']}", "pass", f"{res['result']}: {res['reason']}",
+            block(f"verdict is {res['result']}", "pass", f"{res['result']}: {res['reason']}{evidence_line(pend)}",
                   "code" if res["result"] == "fail" else "environment")
             continue
         if res["result"] == "verified-unreachable" and not row["unreachable_ok"]:

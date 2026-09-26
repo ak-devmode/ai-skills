@@ -36,6 +36,10 @@ start to understand which skills exist and how they fit together.
 - `cross-repo-init/` — bootstrap + maintenance of the trio (CROSS-REPO.md,
   ARCHITECTURE.md, CLAUDE.md); templates in `cross-repo-init/templates/`.
 - `ready-to-clear/` — fresh-subagent clear-readiness gate (disk truth vs git truth).
+- `verify/` — independent verification: `verify-run.py` runs the finish-condition
+  rows, a codex judge (fresh, read-only; Claude subagent fallback) confirms or
+  downgrades via `verify/scripts/judge.py`, `verdict-gate.py` decides Done.
+  Contracts: `templates/verify-contracts.md`.
 - `review/` — gstack engine + Kalpa/PMG domain pass.
 - `scope-review/` — altitude-ordered review of a team member's scope.
 - `concurrency/` — partition a scope into a verified DAG, dispatch the ready
@@ -65,13 +69,16 @@ start to understand which skills exist and how they fit together.
 ### 1.4 Shared resources
 
 - `templates/` — templates shared across skills (`closeout-prep.md.template`:
-  written by /plan, read by /closeout).
+  written by /plan, read by /closeout); `verify-contracts.md` + the finish-table,
+  feature-map and handoff templates, with filled examples in `templates/examples/`.
 - `scripts/` — deterministic steps the skills call instead of describing them in
   prose (CLAUDE.md §3.6.1). Plans dir, scope numbering, PLANS-INDEX writes,
   folder sweep, context gather, `Executed by` stamp, Repo Graph snapshot +
   freshness gate, ledger bootstrap, dispatch log, herdr pane identity, branch
-  survey, guarded edits, and the accretion linter (`lint-skill.py`). Contracts
-  and exit codes: `scripts/README.md`.
+  survey, guarded edits, the accretion linter (`lint-skill.py`), and the
+  verification toolchain (`resolve-identifiers.py`, `verify-run.py`,
+  `verdict-gate.py`, `codex-exec.py`, `verify_lib.py`). Contracts and exit codes:
+  `scripts/README.md`; tests: `python3 -m unittest discover scripts/tests`.
 
 ### 1.5 Repo-local planning state
 
@@ -213,17 +220,18 @@ graphs.
 
 | Skill | Version | Notes |
 |---|---|---|
-| `plan` | 3.8.0 | Scripts for folder, stamp, Repo Graph gate, ledger. |
+| `plan` | 3.8.2 | Scripts for folder, stamp, Repo Graph gate, ledger; stub detail goes in progress.md. |
 | `scope` | 3.8.0 | Step 0 = `context-gather.sh`; stub index rows via `plans-index.py`. |
 | `closeout` | 1.3.0 | Memory steps follow harness conventions; residual verify owned by /plan §11.1. |
 | `closeout-extended` | 1.0.1 | |
 | `cross-repo-init` | 1.5.0 | Branch survey = `repo-survey.sh`; CLAUDE template no longer writes memory paths. |
-| `markdown-style` | 1.3.0 | Child plans have no own progress file; Draft→Ready is the go signal. |
+| `markdown-style` | 1.3.1 | Child plans have no own progress file; Draft→Ready is the go signal; stub deepening lands in progress.md. |
 | `prd` | 1.1.0 | Step 0 = `context-gather.sh`. |
 | `concurrency` | 0.5.0 | Dedup'd against herdr; pane naming + dispatch log via scripts. |
 | `herdr` | 0.1.5 | Opus seat = 5.5 (`opus[1m]`). |
 | `review` | 2.2.0 | |
 | `ready-to-clear` | 1.1.0 | |
+| `verify` | 0.1.0 | New (scope 5). Advisory gate until 3 clean scopes. |
 | `kalpa-*` | unversioned | Flattened 2026-08-09. |
 
 ### 6.2 Active scope

@@ -14,7 +14,7 @@
 ## Resume Context
 **Scope:** ~/Projects/ai-skills/plans/5-verify-lever/scope.md
 **Last action:** Plan 5.1 complete, Phase 1 approved (2026-09-26)
-**Next action:** Plan 5.2 Phase 0, then Task 2.1 (`/verify` skill)
+**Next action:** Plan 5.2 Task 2.2 — `/review` onto codex (spike first)
 **Open blockers:** closeout deferred to scope end (see TO-DO.md)
 **Key files changed:** `scripts/plans-index.py` (70d1222 — unplanned fix, see Progress Log)
 
@@ -244,3 +244,69 @@ plan file is unchanged; where this block and the plan differ, the plan wins, so 
   output line, in `found`. Before, the output said only "exit 1" and the reason sat in the
   verdict log. Files: `scripts/verdict-gate.py`, `scripts/tests/test_verdict_gate.py`.
   Suite 62 OK.
+
+---
+
+## Plan 5.2: `/verify` skill + `/review` on codex
+
+### Resume Context (Plan 5.2)
+**Last action:** Task 2.1 done — `/verify` skill + codex-exec.py + judge.py; live codex e2e green
+**Next action:** Task 2.2 — `/review` onto codex (spike first; AI+HUMAN_REVIEW)
+**Open blockers:** None
+
+### Task Detail
+Deepened at start of run (`/markdown-style` §8.9.2). Where this block and the plan differ,
+the plan wins, so ask.
+- **2.1** — how codex gets called is shared with 2.2's `/review`, so it's a shared script:
+  `scripts/codex-exec.py`.
+  - `probe` runs `codex --version`, then a `codex exec` ping with stdin closed (without that,
+    codex waits on stdin and a headless run hangs). The model is read from stderr's
+    `model:` banner line; the JSON event stream carries none. Output is `codex <model>`, or
+    `none <reason>` for each failure mode.
+  - `exec` runs a prompt read-only with `--output-schema`, `--ephemeral` and a timeout.
+  - `VERIFY_CODEX_BIN` lets the tests supply fake codex binaries for every F2 failure mode.
+  - `/verify`-private: `verify/prompts/judge.md`, `verify/schemas/judge-output.schema.json`,
+    and `verify/scripts/judge.py`. `prepare` renders the prompt from disk (the run's pending
+    records, the unit's range from the ledger bases). `record` validates the judge output
+    (every check_id covered, finding shape), writes verdicts through `verify-run.py judged`,
+    and keeps the raw output as `artifacts/verify-<unit>-judge-<run_id>.json`.
+  - codex and the Claude fallback both go through `prepare` + `record`; only the executor
+    differs, so the fallback can't take a different path.
+  - `verify/SKILL.md` flow: resolve → empty-range check → runner → probe → judge (codex /
+    claude-fallback subagent / none) → finalize → gate → report
+    (`artifacts/verify-<unit>-report.md`).
+  - Lenses (over-build, invented reality, rejection audit, test plan, faithful port) are
+    judged through standard finish-table rows the skill documents; `/scope` emits them in
+    5.3.
+  - `bases()` moves into `verify_lib`, since both the gate and `judge.py` read it.
+- **2.2–2.4** — detail written when each starts.
+
+### Session: 2026-09-26 (Alex / Claude, continued)
+- **Phase 0** ✅ DONE. Status is Ready. `Executed by` was stamped. The ledger phase block
+  records `base: 5.2 ai-skills e3b74ec…`, the first real use of `--repo`. Inputs resolve.
+  codex-cli 0.157.1 is present; the probe ping answered `pong` on model `gpt-6-sol`. No
+  `/clear` at the boundary, per Alex.
+
+#### Task 2.1: `/verify` skill — ✅ DONE
+- **Files created:** `verify/SKILL.md` (v0.1.0), `verify/prompts/judge.md`,
+  `verify/schemas/judge-output.schema.json`, `verify/scripts/judge.py`, `scripts/codex-exec.py`,
+  `scripts/tests/test_codex_exec.py`, `scripts/tests/test_judge.py`
+- **Files modified:** `scripts/verify-run.py` (exports `VERIFY_BASE`/`VERIFY_UNIT` from the
+  ledger, so a static `names-resolve` row can name the range), `scripts/verify_lib.py`
+  (`bases()`), `scripts/verdict-gate.py`, `templates/verify-contracts.md` §4.3,
+  `scripts/tests/{_helpers,test_verify_run}.py`, `README.md`, `ARCHITECTURE.md`, `CLAUDE.md`
+- **Verified:** `lint-skill.py verify` is clean. `setup.sh` linked
+  `~/.claude/skills/verify`, and the skill appears in this session's skill list. Suite 81 OK:
+  every F2 codex failure mode ends as a `none …` line (not installed, not authed, model
+  unusable, crash, timeout, empty, refusal, malformed, non-object, no model banner), and a
+  stale answer file is never reused. judge.py covers prepare from disk, the empty-range and
+  no-range refusals, malformed answers recording nothing, and the report's automatic lever
+  candidates.
+- **Live e2e with real codex (`gpt-6-sol`), scratchpad demo scope:** the runner failed
+  `names-resolve` on a planted `API_KEY_TYPO`. Codex, reading only disk and git, confirmed
+  it, passed `app-parses`, and independently failed the judge row `scope-deliverables` at
+  rung 2, citing `.env.example:1`. Record → finalize → gate reported `ADVISORY — would block
+  (2)` with findings ranked. The first real use of `--output-schema` accepted our schema.
+- **Found along the way:** codex waits on stdin unless it's closed (a headless hang); the
+  model name is only on stderr's banner, not the JSON events. Both handled in
+  `codex-exec.py`. I removed a hidden `--allow-empty` flag from my own draft.

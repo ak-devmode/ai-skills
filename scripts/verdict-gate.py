@@ -42,20 +42,6 @@ def git_out(path, *args):
     return p.stdout.strip() if p.returncode == 0 else None
 
 
-def bases(ledger, unit):
-    """{repo: sha} — the FIRST `- base: <unit> <repo> <sha>` per repo (a resumed phase
-    must not shrink the range)."""
-    out = {}
-    if not os.path.exists(ledger):
-        return out
-    with open(ledger, encoding="utf-8") as fh:
-        for line in fh:
-            m = re.match(r"^\s*-\s*base:\s*(\S+)\s+(\S+)\s+([0-9a-f]{7,40})\s*$", line)
-            if m and m.group(1) == unit:
-                out.setdefault(m.group(2), m.group(3))
-    return out
-
-
 def coverage_blocks(review_log):
     """§6.3 / §5.2.1 — findings without a valid latest disposition."""
     recs = vl.read_jsonl(review_log)
@@ -98,7 +84,7 @@ def evaluate(scope, unit, projects):
     owned = vl.select(table["rows"], unit)
     log = os.path.join(scope, "artifacts", f"verify-{unit}.jsonl")
     recs = vl.read_jsonl(log)
-    base = bases(os.path.join(scope, "closeout-prep.md"), unit)
+    base = vl.bases(os.path.join(scope, "closeout-prep.md"), unit)
     report, blocks, judges = [], [], set()
     if not owned:
         raise vl.ContractError(vl.message("ERROR", f"no finish-table rows owned by {unit}",

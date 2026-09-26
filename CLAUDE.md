@@ -186,6 +186,9 @@ cross-repo-init/SKILL.md        — trio bootstrap + maintenance (invoked by /cl
 cross-repo-init/templates/      — CROSS-REPO / ARCHITECTURE / CLAUDE templates + examples
 markdown-style/SKILL.md         — markdown formatting rules
 review/SKILL.md                 — two-pass review: gstack engine + Kalpa domain pass
+verify/SKILL.md                 — independent verification: runner + codex judge + gate
+verify/scripts/judge.py         — judge prompt render / answer record / report (both executors)
+templates/verify-contracts.md   — verification contracts: finish table, verdict log, gate, dispositions
 kalpa-*/SKILL.md                — WellMed/Kalpa project skills (flat, namespaced — §3.8)
 member-record-amend/SKILL.md    — PMG Padma Care record-edit skill
 templates/closeout-prep.md.template   — ledger schema (shared by /plan + /closeout)
@@ -203,6 +206,12 @@ scripts/dispatch-log.py         — /concurrency JSONL dispatch log, read-back v
 scripts/herdr-pane.sh           — herdr pane identity (rename + metadata) + helper split
 scripts/repo-survey.sh          — /cross-repo-init default/survey branch + MERGED/SQUASHED/LIVE
 scripts/lint-skill.py           — accretion linter for SKILL.md (dup-number/frontmatter/stale-name fail; growth/duplicate/size advise)
+scripts/resolve-identifiers.py  — invented-reality check: env/SSM/proto/route refs vs declarations
+scripts/verify-run.py           — verification runner; sole writer of the verdict log
+scripts/verdict-gate.py         — may this unit be marked Done? (plans-index.py status/validate call it)
+scripts/codex-exec.py           — codex headless probe + exec; honest `none <reason>` judge lines
+scripts/verify_lib.py           — shared table parser, §10 messages, verified JSONL append
+scripts/tests/                  — stdlib unittest suite for the scripts (CLAUDE.md §6 Test:)
 plans/PLANS-INDEX.md            — local plans tracking ai-skills development
 plans/<scope>/                  — active scope folders
 plans/archive/                  — completed scopes

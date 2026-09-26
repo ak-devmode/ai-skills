@@ -118,7 +118,9 @@ finalization is a single append — a run is final entirely or not at all.
 4.3 **`pending`** — one record per check the runner touched:
 `check_id` · `deliverable` · `class` · `rung_required` · `rung_reached` (4 for a class-B
 command, 5 for a class-A command, 0 when not executed) · `table_rev` · `repo` · `dir` ·
-`env` (the row's overlay only — never the caller's environment) · `cwd` (resolved) · `sha`
+`env` (the row's overlay only — never the caller's environment — plus `VERIFY_UNIT` and, when
+the ledger records one for the row's repo, `VERIFY_BASE`, which the runner exports so a
+static command can name the unit's range, e.g. `--range $VERIFY_BASE..HEAD`) · `cwd` (resolved) · `sha`
 (repo HEAD when run) · `dirty` (bool) · `deployed_version` (class A: what the env reported;
 else `null`) · `command` · `exit_code` (`null` if not run) · `duration_s` · `output_sha256` ·
 `output_tail` (last 40 lines, at most 4000 chars — the evidence the judge reads) · `result` ·

@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "verify judge output (templates/verify-contracts.md §4.4)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["verdicts", "findings", "lever_candidates", "feature_map"],
+  "properties": {
+    "verdicts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["check_id", "verdict", "rung_reached", "reason"],
+        "properties": {
+          "check_id": {"type": "string"},
+          "verdict": {"type": "string", "enum": ["pass", "fail", "inconclusive"]},
+          "rung_reached": {"type": "integer"},
+          "reason": {"type": "string"}
+        }
+      }
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["check_id", "lens", "severity", "where", "text"],
+        "properties": {
+          "check_id": {"type": "string"},
+          "lens": {"type": "string", "enum": ["conformance", "test-plan", "rejection-audit", "faithful-port",
+                                              "over-build", "invented-reality", "evidence"]},
+          "severity": {"type": "string", "enum": ["high", "medium", "low"]},
+          "where": {"type": "string"},
+          "text": {"type": "string"}
+        }
+      }
+    },
+    "lever_candidates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["check_id", "gap", "lever"],
+        "properties": {
+          "check_id": {"type": "string"},
+          "gap": {"type": "string"},
+          "lever": {"type": "string"}
+        }
+      }
+    },
+    "feature_map": {"type": "string", "enum": ["clean", "changed", "blocked", "n/a"]}
+  }
+}

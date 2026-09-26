@@ -11,6 +11,7 @@ Custom Claude Code skills for the PMG/Kalpa team. Includes our own skills plus a
 | `/scope` | Task scoping and multi-skill orchestration |
 | `/scope-review` | Review a team scope/PRD/plan at the right altitude, in Alex's voice |
 | `/plan` | Single-session execution from a plan file |
+| `/verify` | Independent verification: a runner executes the finish conditions, a codex judge (Claude fallback) confirms or downgrades, the gate decides Done |
 | `/concurrency` | herdr-backed multi-agent dispatch — partition a scope, dispatch lanes to named herdr panes |
 | `/research` | Cost-tuned deep research — visible herdr lanes per angle (default) or the background `deep-research-lean` workflow |
 | `/herdr` | herdr workflow layer — naming, worktree lifecycle, worker launch, pane layout (referenced by `/concurrency`, `/plan`, `/closeout`) |

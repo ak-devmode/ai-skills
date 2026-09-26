@@ -17,8 +17,8 @@ REPO = os.path.dirname(SCRIPTS)
 
 
 def script(name):
-    """Absolute path of scripts/<name>."""
-    return os.path.join(SCRIPTS, name)
+    """Absolute path of scripts/<name>, or of a repo-relative path like verify/scripts/x.py."""
+    return os.path.join(REPO if "/" in name else SCRIPTS, name)
 
 
 def run(name, *args, cwd=None, env=None, timeout=60):

@@ -121,7 +121,13 @@ def decode(b):
     return b.decode("utf-8", "replace") if isinstance(b, bytes) else (b or "")
 
 
-def execute(row, projects, run_id, unit, rev):
+def execute(row, projects, run_id, unit, rev, bases=None):
+    # §4.3: the unit's base SHA for this repo (from the ledger) is exported as VERIFY_BASE, so a
+    # static command can name the unit's range — `resolve-identifiers.py --range $VERIFY_BASE..HEAD`.
+    overlay = dict(row["env"], VERIFY_UNIT=unit)
+    if (bases or {}).get(row["repo"]):
+        overlay["VERIFY_BASE"] = bases[row["repo"]]
+    row = dict(row, env=overlay)
     rec = {"schema": vl.SCHEMA, "ts": now(), "run_id": run_id, "run_state": "pending", "unit": unit,
            "check_id": row["check_id"], "deliverable": row["deliverable"], "class": row["class"],
            "rung_required": row["rung"], "rung_reached": 0, "table_rev": rev, "repo": row["repo"],
@@ -182,7 +188,8 @@ def cmd_run(a):
         return vl.EXIT_FAIL
     unit = a.owner.split("/")[0] if a.owner else rows[0]["owner"].split("/")[0]
     run_id = f"{unit}-{datetime.datetime.now(datetime.timezone.utc):%Y%m%dT%H%M%S}-{secrets.token_hex(2)}"
-    recs = [execute(r, a.projects, run_id, unit, table["revision"]) for r in rows]
+    bases = vl.bases(os.path.join(os.path.dirname(os.path.abspath(a.table)), "closeout-prep.md"), unit)
+    recs = [execute(r, a.projects, run_id, unit, table["revision"], bases) for r in rows]
     vl.append_verified(a.log, recs)
     failed = False
     for r in recs:

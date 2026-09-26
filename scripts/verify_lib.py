@@ -158,6 +158,21 @@ def _validate_row(r, where):
     return errs
 
 
+def bases(ledger, unit):
+    """{repo: sha} from closeout-prep.md — the FIRST `- base: <unit> <repo> <sha>` per repo,
+    written by ledger-init.sh --repo (§5.2). First, because a resumed phase must not shrink
+    the range."""
+    out = {}
+    if not os.path.exists(ledger):
+        return out
+    with open(ledger, encoding="utf-8") as fh:
+        for line in fh:
+            m = re.match(r"^\s*-\s*base:\s*(\S+)\s+(\S+)\s+([0-9a-f]{7,40})\s*$", line)
+            if m and m.group(1) == unit:
+                out.setdefault(m.group(2), m.group(3))
+    return out
+
+
 def select(rows, owner):
     """§3.4: `5.1` selects `5.1` and every `5.1/…` row; `None` selects all (closeout)."""
     if owner is None:

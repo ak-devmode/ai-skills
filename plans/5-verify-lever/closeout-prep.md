@@ -270,3 +270,20 @@ Resumed/restarted phases append a SECOND block:
 ---
 
 <!-- Ledger ends here. Status flips to "complete" when all plan phases done. -->
+
+---
+
+## Phase 2: /verify + /review on codex (started 2026-09-26T07:09:38Z)
+
+### §2 Files Changed
+- ai-skills · code: `scripts/codex-exec.py` (new, shared with /review), `verify/scripts/judge.py` (new), `scripts/verify-run.py` (exports VERIFY_BASE/VERIFY_UNIT), `scripts/verify_lib.py` (`bases()` moved in), `scripts/verdict-gate.py` (uses `vl.bases`) — Task 2.1
+- ai-skills · doc: `verify/SKILL.md`, `verify/prompts/judge.md`, `templates/verify-contracts.md` §4.3 — Task 2.1
+- ai-skills · config: `verify/schemas/judge-output.schema.json` — Task 2.1
+- ai-skills · test: `scripts/tests/test_codex_exec.py`, `scripts/tests/test_judge.py`, `scripts/tests/test_verify_run.py` (+VERIFY_BASE), `scripts/tests/_helpers.py` (repo-relative paths) — Task 2.1
+- ai-skills · doc: `README.md`, `ARCHITECTURE.md` §1.1/§1.4/§6.1, `CLAUDE.md` §4 — Task 2.1
+
+### §3 Patterns Followed
+- `/verify` fallback subagent ← `ready-to-clear/SKILL.md` §1.1 + §4 (paths-only prompt, pre-authorized dispatch)
+- `codex-exec.py` flags ← gstack `codex/SKILL.md` (read-only sandbox, `model_reasoning_effort`), but its own fresh probe (E1)
+
+- base: 5.2 ai-skills e3b74ec3a5f45f4747d1b0f549f4bf875cd927dc

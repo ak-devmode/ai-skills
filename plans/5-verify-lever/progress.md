@@ -14,7 +14,7 @@
 ## Resume Context
 **Scope:** ~/Projects/ai-skills/plans/5-verify-lever/scope.md
 **Last action:** Plan 5.1 complete, Phase 1 approved (2026-09-26)
-**Next action:** Plan 5.2 Task 2.4 — dogfood + three-outcome trial
+**Next action:** Plan 5.2 Task 2.4 part B — class-A trial, blocked on Alex (target + credential)
 **Open blockers:** closeout deferred to scope end (see TO-DO.md)
 **Key files changed:** `scripts/plans-index.py` (70d1222 — unplanned fix, see Progress Log)
 
@@ -250,8 +250,9 @@ plan file is unchanged; where this block and the plan differ, the plan wins, so 
 ## Plan 5.2: `/verify` skill + `/review` on codex
 
 ### Resume Context (Plan 5.2)
-**Last action:** Task 2.3 done — fixtures + `/verify --demo`; live eval green (all 6 caught, control passes)
-**Next action:** Task 2.4 — dogfood `/verify` on Phase 1 + three-outcome class-A trial on dev clinic_3 (AI+HUMAN_REVIEW)
+**Last action:** Task 2.4 part A done — dogfood verdict on 5.1 recorded (advisory, 4 blocked; defects fixed in 5.2)
+**Next action:** Task 2.4 part B — class-A trial: BLOCKED on Alex (clinic_3 is staging, not dev; login secret is a human step)
+**Open blockers:** Alex: confirm staging clinic_3 as the trial target + provide the gateway credential secret outside the repos
 **Open blockers:** None
 
 ### Task Detail
@@ -375,3 +376,34 @@ the plan wins, so ask.
   run live: **all 6 caught, control passes** (`demo.py --check`, 95 s), and both judge-caught
   repaired copies pass their row (285 s for the tier). Suite 91 OK, 2 skipped (live-judge
   tier, opt-in).
+
+#### Task 2.4: Dogfood + three-outcome trial — ⏸️ part A done · part B BLOCKED (Alex)
+- **Part A — `/verify` class B on Phase 1 (live codex `gpt-6-sol`).** Created
+  `finish-conditions.md` (rev 3; the Phase 1 rows are retroactive) and a retroactive ledger
+  base for 5.1 (`8173b95`). Three runs; the verdict of record is `5.1-20260926T100859-79e8`:
+  **advisory, 4 blocked**, and codex passed `no-overbuild` and `contracts-generate-clean`.
+  The dogfood found real Phase 1 defects, **all fixed in 5.2** (`e4aaa0a`, `36625e4`):
+  1. `VERIFY_PROJECTS` read but never declared, with CLAUDE.md §5 saying "N/A" →
+     `.env.example` plus a corrected §5.
+  2. The gate trusted `final.results`, contrary to contract §5.1, so a forged final passed →
+     the gate re-checks the authority rule (shared `verify_lib.authority`), and a test forges
+     one.
+  3. I **invented** the feature-map status vocabulary instead of using scope.md §4.1's → aligned.
+  4. The resolver "resolved" a route by assuming an unseen prefix → gin/echo `Group()`
+     prefixes are followed and a suffix-only match is unresolved.
+  5. Resolver false positives from source embedded in test files → test files skipped for
+     every kind.
+  Codex also caught me **moving the goalposts** (`--decl-rev HEAD` for a closed unit). That
+  was reverted, so Phase 1 is judged against its own declarations. Retroactive runner rows
+  ran at today's HEAD and were downgraded to inconclusive; that's correct, and a pinned-SHA
+  runner is recorded as a lever candidate.
+- **Index enforcement on real data:** with the table present, `plans-index.py validate`
+  flagged 5.1's hand-written Done. `status` then wrote `⚠ verify advisory: 4 blocked (…)`,
+  and validate is conformant again.
+- **Part B — class-A trial: BLOCKED, two plan↔reality mismatches** (Operating Contract #1):
+  `clinic_3` is **staging** tenant 6, not dev (kalpa-docs scope 89 artifacts); and the login
+  needs the staging gateway's credential secret, which is **not** in the test-suite
+  (`/wellmed/testsuite/*` in SSM is empty, and the repo has no clinic_3 reference). Reading
+  SSM values is a documented human step for agents. Needs Alex: target confirmation plus the
+  secret in a local file outside all repos.
+- Suite: 93 OK, 2 skipped (live-judge tier).

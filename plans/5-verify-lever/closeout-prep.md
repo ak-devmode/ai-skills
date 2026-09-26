@@ -265,6 +265,8 @@ Resumed/restarted phases append a SECOND block:
 - Repo Graph freshness: `repo-graph-check.py` exit 4. It missed the numbered heading, and would then have false-passed a prose-only section. Both fixed (unplanned, Alex-directed); scope 5 is still exit 4 because its graph is prose (single repo, linear on main from `feaa5a9`).
 - herdr pane present (`w14:p4`) but Primary repo = none → §5.8.1 worktree + driver rename skipped.
 - Gate accepts evidence recorded on a dirty tree (`dirty: true`) — Alex decided 2026-09-26 this is correct (pre-PR model); now stated in contract §5.2.
+- Retroactive verification of a closed unit runs its runner rows at today's HEAD, and the judge rightly downgrades them to inconclusive. A runner `--at <sha>` (pinned worktree) is the lever; first sighting, recorded, not built.
+- The trial target in scope/plan ("dev clinic_3") is wrong: clinic_3 is staging tenant 6. The test-suite has no clinic_3 credentials, contrary to the brief. Class-A trial blocked on Alex.
 - `ledger-init.sh --repo` isn't passed by /plan §5.13 yet (5.3 Task 3.2). Until then units have no base, and the gate requires evidence at HEAD, which is strict and not unsafe.
 
 ---
@@ -289,6 +291,9 @@ Resumed/restarted phases append a SECOND block:
 - ai-skills · doc: `ARCHITECTURE.md`, `CLAUDE.md` — Task 2.2
 
 - ai-skills · code: `verify/scripts/fixture.py`, `verify/scripts/demo.py` — Task 2.3
+- ai-skills · code: `scripts/resolve-identifiers.py` (test files skipped, `--decl-rev`, Group() prefixes, suffix-only unresolved), `scripts/verdict-gate.py` (authority re-check), `scripts/verify_lib.py` (`authority()`), `scripts/verify-run.py` — Task 2.4 dogfood fixes
+- ai-skills · config/doc: `.env.example` (new), `CLAUDE.md` §5, `templates/verify-contracts.md` §8.1 + feature-map templates/examples — Task 2.4 dogfood fixes
+- ai-skills · doc: `plans/5-verify-lever/finish-conditions.md` (new, rev 3), `artifacts/verify-5.1.jsonl`, `artifacts/verify-5.1-report.md`, `artifacts/verify-5.1-judge-*.json`, `plans/PLANS-INDEX.md` (5.1 advisory marker) — Task 2.4 part A
 - ai-skills · test: `verify/tests/fixtures/notes/` (base tree + parts + README), `scripts/tests/test_verify_fixtures.py` — Task 2.3
 - ai-skills · doc: `verify/SKILL.md` 0.2.0 (§2.0 `--demo`), `ARCHITECTURE.md`, `CLAUDE.md` — Task 2.3
 
@@ -298,3 +303,6 @@ Resumed/restarted phases append a SECOND block:
 - `codex-exec.py` flags ← gstack `codex/SKILL.md` (read-only sandbox, `model_reasoning_effort`), but its own fresh probe (E1)
 
 - base: 5.2 ai-skills e3b74ec3a5f45f4747d1b0f549f4bf875cd927dc
+
+- base: 5.1 ai-skills 8173b959e6f6655e0438e8441aec84bc418cb374
+  (retroactive: Phase 1 started at 8173b95 per progress.md; it predates `ledger-init.sh --repo`)

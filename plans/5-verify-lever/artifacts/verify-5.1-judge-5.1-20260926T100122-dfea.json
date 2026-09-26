@@ -1,0 +1,133 @@
+{
+  "verdicts": [
+    {
+      "check_id": "scripts-tests-green",
+      "verdict": "inconclusive",
+      "rung_reached": 4,
+      "reason": "The suite exited 0, but the runner recorded SHA e4aaa0a, outside the specified 8173b95..e3b74ec revision range. Scripts and tests changed after e3b74ec, so this run does not establish that the Phase 1 suite passes."
+    },
+    {
+      "check_id": "names-resolve",
+      "verdict": "fail",
+      "rung_reached": 4,
+      "reason": "The runner resolved declarations at later HEAD. A read-only check against declarations at e3b74ec exited 1: VERIFY_PROJECTS in scripts/verify_lib.py:26 was undeclared."
+    },
+    {
+      "check_id": "contracts-generate-clean",
+      "verdict": "inconclusive",
+      "rung_reached": 4,
+      "reason": "The nine tests passed at e4aaa0a, outside the specified revision range. The contract changed after e3b74ec; the recorded run does not prove the Phase 1 contract passes."
+    },
+    {
+      "check_id": "gate-semantics-tested",
+      "verdict": "fail",
+      "rung_reached": 3,
+      "reason": "The runner tested later SHA e4aaa0a. More decisively, the Phase 1 gate reads a final result without recomputing the runner–judge authority rule, contrary to contract §5.1."
+    },
+    {
+      "check_id": "scope-deliverables",
+      "verdict": "fail",
+      "rung_reached": 2,
+      "reason": "The finish-condition table and verdict artifact were absent at e3b74ec. The feature-map contract also uses a status vocabulary different from scope.md §4.1, and route resolution accepts an unverified prefix."
+    },
+    {
+      "check_id": "no-overbuild",
+      "verdict": "pass",
+      "rung_reached": 2,
+      "reason": "The shared parser and log writer serve the runner and gate, and the identifier indexes support the four requested kinds. Review of the revision range found no unneeded registry, plugin layer, or parallel implementation."
+    },
+    {
+      "check_id": "test-plan-followed",
+      "verdict": "fail",
+      "rung_reached": 2,
+      "reason": "Phase 1 tests cover several runner and gate cases, but the listed judge failure modes, /verify and /review interactions, known-bad fixture, and three-outcome dev trial are not covered in the Phase 1 revision range."
+    }
+  ],
+  "findings": [
+    {
+      "check_id": "scripts-tests-green",
+      "lens": "evidence",
+      "severity": "high",
+      "where": "artifacts/verify-5.1.jsonl, run 5.1-20260926T100122-dfea",
+      "text": "The test-suite record names e4aaa0a, a descendant of the range endpoint e3b74ec. The suite was run against later code and tests."
+    },
+    {
+      "check_id": "names-resolve",
+      "lens": "invented-reality",
+      "severity": "high",
+      "where": "e3b74ec:scripts/verify_lib.py:26",
+      "text": "VERIFY_PROJECTS is used without a declaration at e3b74ec. Running resolve-identifiers.py with --range 8173b95..e3b74ec --decl-rev e3b74ec produced found 1, resolved 0, and exit 1."
+    },
+    {
+      "check_id": "names-resolve",
+      "lens": "evidence",
+      "severity": "high",
+      "where": "finish-conditions.md revision 2; artifacts/verify-5.1.jsonl",
+      "text": "The runner command used --decl-rev HEAD at e4aaa0a. That later tree contains the new .env.example declaration and cannot establish that Phase 1 identifiers resolved at e3b74ec."
+    },
+    {
+      "check_id": "contracts-generate-clean",
+      "lens": "evidence",
+      "severity": "medium",
+      "where": "artifacts/verify-5.1.jsonl; templates/verify-contracts.md",
+      "text": "The contract test ran at e4aaa0a, and templates/verify-contracts.md changed after e3b74ec. The recorded pass is for a different contract revision."
+    },
+    {
+      "check_id": "gate-semantics-tested",
+      "lens": "conformance",
+      "severity": "high",
+      "where": "e3b74ec:scripts/verdict-gate.py:117-171",
+      "text": "The gate trusts final.results[cid] and checks its status, rung, revision, and SHA. It never recomputes authority from the pending and judged records, although verify-contracts.md §5.1 says the gate rechecks it."
+    },
+    {
+      "check_id": "gate-semantics-tested",
+      "lens": "test-plan",
+      "severity": "medium",
+      "where": "e3b74ec:scripts/tests/test_verdict_gate.py",
+      "text": "The tests exercise runner downgrade and stale evidence, but do not test a final result that contradicts its pending or judged records. The runner also tested later gate code at e4aaa0a."
+    },
+    {
+      "check_id": "scope-deliverables",
+      "lens": "conformance",
+      "severity": "high",
+      "where": "e3b74ec tree; scope.md §4.1",
+      "text": "The Phase 1 revision contains neither plans/5-verify-lever/finish-conditions.md nor artifacts/verify-5.1.jsonl. The supplied table says it was created retroactively in Phase 2; it did not land within the specified Phase 1 range."
+    },
+    {
+      "check_id": "scope-deliverables",
+      "lens": "conformance",
+      "severity": "medium",
+      "where": "e3b74ec:templates/verify-contracts.md:259-269; templates/features-README.md.template:9",
+      "text": "The feature-map contract specifies working, degraded, broken, and unknown. Scope.md §4.1 specifies roadmap, scoped, in progress, in testing, and shipped, including shipped (unproven) without evidence."
+    },
+    {
+      "check_id": "scope-deliverables",
+      "lens": "invented-reality",
+      "severity": "medium",
+      "where": "e3b74ec:scripts/resolve-identifiers.py:436-449; scripts/tests/test_resolve_identifiers.py:125-128",
+      "text": "A route such as /api/v1/invoices is marked resolved by a registration for /invoices solely by assuming an unseen group prefix. The test explicitly accepts that assumption, so route resolution does not always establish an authoritative declaration for the referenced route."
+    },
+    {
+      "check_id": "test-plan-followed",
+      "lens": "test-plan",
+      "severity": "medium",
+      "where": "artifacts/eng-review-test-plan-2026-09-26.md; e3b74ec:scripts/tests/",
+      "text": "No Phase 1 test covers the seven listed judge failure modes, the /verify and /review critical interactions, the known-bad fixture, or the three-outcome clinic_3 trial. Those paths were scheduled for later phases, but the listed plan is not covered by this unit."
+    }
+  ],
+  "lever_candidates": [
+    {
+      "check_id": "scripts-tests-green",
+      "gap": "The recorded suite ran against a later SHA.",
+      "lever": "Run the same unittest command in a checkout pinned to e3b74ec and record that checkout SHA."
+    },
+    {
+      "check_id": "contracts-generate-clean",
+      "gap": "The recorded contract test used the later contract revision.",
+      "lever": "Run test_contracts.py in a checkout pinned to e3b74ec and record that checkout SHA."
+    }
+  ],
+  "feature_map": "n/a",
+  "judge": "codex gpt-6-sol",
+  "run_id": "5.1-20260926T100122-dfea"
+}

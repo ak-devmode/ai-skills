@@ -1,6 +1,6 @@
 ---
 name: verify
-version: 0.1.0
+version: 0.2.0
 description: |
   Independent verification of a unit of scoped work. A deterministic runner executes
   every finish-condition row the unit owns and records evidence; a judge from the
@@ -12,7 +12,8 @@ description: |
   Use when asked to "verify", "/verify", "verify this phase", "verify plan 5.1",
   "check this was built as scoped", "run the finish conditions", or at a /plan
   checkpoint and at /closeout. Never asks the author for data: disk, git and the
-  running app only.
+  running app only. `/verify --demo` runs a fixture with six planted defects and a
+  clean control (~2 minutes) — the first thing to run after setup.
 allowed-tools:
   - Bash
   - Read
@@ -46,6 +47,11 @@ bad case can't happen · 4 ran a script that fails loud · 5 reproduced in the r
 ---
 
 ## 2. Inputs
+
+2.0 **`--demo`** — run `python3 ~/Projects/ai-skills/verify/scripts/demo.py` (Bash timeout
+≥ 900 s) and present its output as-is: six planted defects (`verify/tests/fixtures/notes/README.md`),
+each caught by name, and a clean control that passes. Nothing else in this skill runs. If it
+prints `No judge ran`, say so first and give its fix line; the deterministic half still ran.
 
 2.1 **Unit** — a plan number (`5.1`). The scope folder holds `finish-conditions.md`,
 `closeout-prep.md` (base SHAs) and `artifacts/`. Resolve the plans dir with

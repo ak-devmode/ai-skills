@@ -190,6 +190,8 @@ review/rules/                   — domain.md (Kalpa/PMG groups) + lenses.md, re
 review/scripts/review.py        — review prompt / findings log (stable IDs) / dispositions
 verify/SKILL.md                 — independent verification: runner + codex judge + gate
 verify/scripts/judge.py         — judge prompt render / answer record / report (both executors)
+verify/scripts/demo.py          — `/verify --demo`; also the eval (`VERIFY_EVAL=1` runs it from the suite)
+verify/tests/fixtures/notes/    — the planted-defect fixture (6 defects, clean control, repaired copies)
 templates/verify-contracts.md   — verification contracts: finish table, verdict log, gate, dispositions
 kalpa-*/SKILL.md                — WellMed/Kalpa project skills (flat, namespaced — §3.8)
 member-record-amend/SKILL.md    — PMG Padma Care record-edit skill

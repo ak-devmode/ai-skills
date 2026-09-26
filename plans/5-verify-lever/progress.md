@@ -14,7 +14,7 @@
 ## Resume Context
 **Scope:** ~/Projects/ai-skills/plans/5-verify-lever/scope.md
 **Last action:** Plan 5.1 complete, Phase 1 approved (2026-09-26)
-**Next action:** Alex reviews Task 2.2 (`/review` on codex); then Plan 5.2 Task 2.3
+**Next action:** Plan 5.2 Task 2.4 — dogfood + three-outcome trial
 **Open blockers:** closeout deferred to scope end (see TO-DO.md)
 **Key files changed:** `scripts/plans-index.py` (70d1222 — unplanned fix, see Progress Log)
 
@@ -250,8 +250,8 @@ plan file is unchanged; where this block and the plan differ, the plan wins, so 
 ## Plan 5.2: `/verify` skill + `/review` on codex
 
 ### Resume Context (Plan 5.2)
-**Last action:** Task 2.2 done — codex spike + /review 3.0.0 + review.py; awaiting Alex's review
-**Next action:** on Alex's OK, Task 2.3 — verifier fixtures + `/verify --demo`
+**Last action:** Task 2.3 done — fixtures + `/verify --demo`; live eval green (all 6 caught, control passes)
+**Next action:** Task 2.4 — dogfood `/verify` on Phase 1 + three-outcome class-A trial on dev clinic_3 (AI+HUMAN_REVIEW)
 **Open blockers:** None
 
 ### Task Detail
@@ -311,7 +311,7 @@ the plan wins, so ask.
   model name is only on stderr's banner, not the JSON events. Both handled in
   `codex-exec.py`. I removed a hidden `--allow-empty` flag from my own draft.
 
-#### Task 2.2: `/review` onto codex (spike first) — ⏸️ WAITING_HUMAN (review)
+#### Task 2.2: `/review` onto codex (spike first) — ✅ DONE (Alex approved 2026-09-26)
 - **(a) Spike** → `artifacts/review-codex-spike-2026-09-26.md` (public, so classes and counts
   only). Codex alone on the WellMed 108.6 pre-fix diff (`gpt-6-sol`, 262 s) caught **4/6**
   of the original findings, **including both criticals**. It missed a doc claim and an
@@ -357,3 +357,21 @@ the plan wins, so ask.
   script text. The staged test run exposed it (empty `cat`, wrong step order); it was
   repaired with guarded line moves and re-verified by the full diff and the test. Nothing
   ran against the host.
+
+#### Task 2.3: Verifier fixtures + `/verify --demo` — ✅ DONE
+- **Files created:** `verify/tests/fixtures/notes/` (base repo tree, `parts/`, README listing
+  the six planted defects), `verify/scripts/fixture.py` (builder: `bad` / `clean` /
+  `repaired-<defect>`; every variant differs from the control in exactly the defects it names),
+  `verify/scripts/demo.py` (`/verify --demo`; `--check` is the eval),
+  `scripts/tests/test_verify_fixtures.py`
+- **Files modified:** `verify/SKILL.md` 0.2.0 (§2.0 `--demo`), `ARCHITECTURE.md`, `CLAUDE.md`
+- **Planted defects → caught by:** invented env var → `names-resolve` (runner) · over-build →
+  `no-overbuild` (judge) · missing evidence → `changelog-entry` (judge) · under-rung → gate ·
+  rejection without a reason → gate coverage · dropped finding → gate coverage.
+- **Verified:** the deterministic tier (always in the suite) covers bad blocking every
+  script-caught defect by name, the control clean, each repaired copy clearing exactly its
+  defect, `judge: none` unable to pass the control, an always-failing judge failing the
+  control, and `demo.py --check` exiting 1 with no codex. The judge tier (`VERIFY_EVAL=1`),
+  run live: **all 6 caught, control passes** (`demo.py --check`, 95 s), and both judge-caught
+  repaired copies pass their row (285 s for the tier). Suite 91 OK, 2 skipped (live-judge
+  tier, opt-in).

@@ -1,0 +1,1 @@
+- Export notes as plain text (`notes.export.export_text`), bucket from `NOTES_EXPORT_BUCKET`.

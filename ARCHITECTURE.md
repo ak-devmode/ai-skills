@@ -233,7 +233,7 @@ graphs.
 | `herdr` | 0.1.5 | Opus seat = 5.5 (`opus[1m]`). |
 | `review` | 3.0.0 | codex gate; rules extracted to `review/rules/`; dispositions enforced. |
 | `ready-to-clear` | 1.1.0 | |
-| `verify` | 0.1.0 | New (scope 5). Advisory gate until 3 clean scopes. |
+| `verify` | 0.2.0 | New (scope 5). Advisory gate until 3 clean scopes; `--demo` on the planted-defect fixture. |
 | `kalpa-*` | unversioned | Flattened 2026-08-09. |
 
 ### 6.2 Active scope

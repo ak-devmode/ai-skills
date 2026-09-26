@@ -288,6 +288,10 @@ Resumed/restarted phases append a SECOND block:
 - ai-skills · test: `scripts/tests/test_review.py` — Task 2.2
 - ai-skills · doc: `ARCHITECTURE.md`, `CLAUDE.md` — Task 2.2
 
+- ai-skills · code: `verify/scripts/fixture.py`, `verify/scripts/demo.py` — Task 2.3
+- ai-skills · test: `verify/tests/fixtures/notes/` (base tree + parts + README), `scripts/tests/test_verify_fixtures.py` — Task 2.3
+- ai-skills · doc: `verify/SKILL.md` 0.2.0 (§2.0 `--demo`), `ARCHITECTURE.md`, `CLAUDE.md` — Task 2.3
+
 ### §3 Patterns Followed
 - `review.py` ← `verify/scripts/judge.py` (prepare/record split; both executors through one writer)
 - `/verify` fallback subagent ← `ready-to-clear/SKILL.md` §1.1 + §4 (paths-only prompt, pre-authorized dispatch)

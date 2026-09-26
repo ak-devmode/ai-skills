@@ -231,6 +231,9 @@ Resumed/restarted phases append a SECOND block:
 - ai-skills · code: `scripts/resolve-identifiers.py` — Task 1.2
 - ai-skills · test: `scripts/tests/test_resolve_identifiers.py` — Task 1.2
 - ai-skills · doc: `scripts/README.md` (resolve-identifiers row) — Task 1.2
+- ai-skills · code: `scripts/verify-run.py`, `scripts/verify_lib.py` — Task 1.3; `scripts/resolve-identifiers.py` now uses `verify_lib.message`
+- ai-skills · test: `scripts/tests/test_verify_run.py` — Task 1.3
+- ai-skills · doc: `templates/verify-contracts.md` §4.3 (`cwd`, `output_tail`) + §9 (`deployed_version` from verb JSON); `scripts/README.md` rows — Task 1.3
 
 ### §3 Patterns Followed
 - Message contract ← `scripts/lint-skill.py` `expected · found · where · next` output
@@ -238,6 +241,8 @@ Resumed/restarted phases append a SECOND block:
 - Verdict-log writes ← `scripts/dispatch-log.py` write-then-read-back
 - Template placeholders ← `templates/closeout-prep.md.template` `{{UPPER_SNAKE}}` + `Schema version` header
 - `resolve-identifiers.py` CLI shape ← `scripts/dispatch-log.py` (argparse, docstring Usage/Output/Exit); test layout ← `test_repo_graph_check.py` (table-driven, throwaway repos)
+
+- `verify-run.py` read-back ← `scripts/dispatch-log.py`; verdict-log appends go through `verify_lib.append_verified` (one writer)
 
 ### §8 Assumptions
 - The SSM-as-env rule (`/…/<shared|service>/<NAME>` declares NAME for the repo whose name ends with `-<service>`) mirrors WellMed's `ssmconfig.Load` as described in `wellmed-infrastructure/ssm/parameters/shared.json`'s comments. Not verified against the loader's code.

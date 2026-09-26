@@ -26,6 +26,8 @@ already caused real data loss. Prose cannot enforce itself — the same reasonin
 | `repo-survey.sh` | default-branch + survey cascade + MERGED/LIVE shell — **its `\|\| echo main` never fell back** | /cross-repo-init §2.1–2.2 |
 | `lint-skill.py` | eyeballing SKILL.md quality — CLAUDE.md §6 said "no linter currently" while the skills accreted past obey-able size | any skill edit; `/scope`, `/plan`, `/closeout` bodies |
 | `resolve-identifiers.py` | grepping for a name and calling it declared — comment, fixture and sibling-service hits read as real | `/verify` + `/review` local-maxima lens (scope 5 Phase 2) |
+| `verify-run.py` | "it passed" as a claim — runs each finish-table row in its declared context and is the only writer of the verdict log | `/verify`, `/plan` checkpoints, `/closeout` (scope 5) |
+| `verify_lib.py` | (library, not a CLI) one table parser, message formatter and verified JSONL appender for the verify scripts | `verify-run.py`, `verdict-gate.py`, `resolve-identifiers.py` |
 
 **Tests:** `python3 -m unittest discover scripts/tests` from the repo root (stdlib only,
 Python >= 3.9). One `test_<name>.py` per script; `_helpers.py` runs a script as a

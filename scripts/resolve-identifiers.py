@@ -43,6 +43,9 @@ import re
 import subprocess
 import sys
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import verify_lib as vl  # noqa: E402
+
 DOCS = "templates/verify-contracts.md §10 · scripts/README.md (resolve-identifiers.py)"
 KINDS = ("env", "ssm", "proto", "route")
 SRC_EXT = {".go", ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".py", ".php", ".sh"}
@@ -450,13 +453,7 @@ def resolve(r, idx):
 # ---------- output -----------------------------------------------------------------
 
 def message(level, what, expected, found, where, cause, nxt):
-    return (f"  [{level}] {what}\n"
-            f"      expected · {expected}\n"
-            f"      found    · {found}\n"
-            f"      where    · {where}\n"
-            f"      cause    · {cause}\n"
-            f"      next     · {nxt}\n"
-            f"      docs     · {DOCS}")
+    return vl.message(level, what, expected, found, where, cause, nxt, DOCS)
 
 
 def loc(r):

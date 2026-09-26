@@ -13,8 +13,8 @@
 
 ## Resume Context
 **Scope:** ~/Projects/ai-skills/plans/5-verify-lever/scope.md
-**Last action:** Plan 5.1 Task 1.2 done — `resolve-identifiers.py` (2026-09-26)
-**Next action:** Plan 5.1 Task 1.3 — `verify-run.py`
+**Last action:** Plan 5.1 Task 1.3 done — `verify-run.py` (2026-09-26)
+**Next action:** Plan 5.1 Task 1.4 — `verdict-gate.py` + index enforcement + base SHA
 **Open blockers:** None
 **Key files changed:** `scripts/plans-index.py` (70d1222 — unplanned fix, see Progress Log)
 
@@ -89,8 +89,8 @@
 ## Plan 5.1: Contracts + deterministic scripts
 
 ### Resume Context (Plan 5.1)
-**Last action:** Task 1.2 done — `resolve-identifiers.py` + 7 test groups; WellMed smoke 207/213 resolved
-**Next action:** Task 1.3 — `verify-run.py`
+**Last action:** Task 1.3 done — `verify-run.py` + `verify_lib.py`; suite 38 OK
+**Next action:** Task 1.4 — `verdict-gate.py` + `ledger-init.sh` base SHA + `plans-index.py status`/`validate`
 **Open blockers:** None
 
 ### Task Detail
@@ -191,3 +191,20 @@ plan file is unchanged; where this block and the plan differ, the plan wins, so 
   SSM one namespaced by service segment or `shared/`. After the fix: 213 references, 207
   resolved. The 6 unresolved are all in `wellmed-cashier/cmd/reproject-ledger/main.go`,
   env vars declared nowhere, so true positives by the rule.
+
+#### Task 1.3: `scripts/verify-run.py` (runner) — ✅ DONE
+- **Files created:** `scripts/verify-run.py`, `scripts/verify_lib.py` (shared parser, message
+  formatter and verified appender, so the runner and gate can't disagree),
+  `scripts/tests/test_verify_run.py`
+- **Files modified:** `scripts/resolve-identifiers.py` (uses `verify_lib.message`),
+  `templates/verify-contracts.md` (§4.3 `cwd` + `output_tail`; §9 `deployed_version`),
+  `scripts/README.md`
+- **Verified:** suite 38 OK. Every acceptance case is covered: pass, fail, non-executable,
+  timeout, resolved context recorded when run from a foreign cwd, public-repo refusal (plus
+  non-git refusal, and class-B-about-another-repo refusal in a public repo), and read-back
+  failure → exit 3. Also covered: judged + finalize authority rule (downgrade only, judge row
+  takes the judge verdict, lower rung wins, `none` judge), malformed judge output writes
+  nothing, double finalize refused, table defects exit 3 with `cause code`. Mutation check:
+  letting the judge upgrade a fail is caught by `test_authority_rule`.
+- **Note:** I removed an `except: pass` in the first draft, the silent-failure pattern
+  Phase 2's `/review` will flag.

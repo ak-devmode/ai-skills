@@ -118,9 +118,11 @@ finalization is a single append — a run is final entirely or not at all.
 4.3 **`pending`** — one record per check the runner touched:
 `check_id` · `deliverable` · `class` · `rung_required` · `rung_reached` (4 for a class-B
 command, 5 for a class-A command, 0 when not executed) · `table_rev` · `repo` · `dir` ·
-`env` (resolved) · `sha` (repo HEAD when run) · `dirty` (bool) · `deployed_version`
-(class A: what the env reported; else `null`) · `command` · `exit_code` (`null` if not
-run) · `duration_s` · `output_sha256` · `result` · `reason`.
+`env` (the row's overlay only — never the caller's environment) · `cwd` (resolved) · `sha`
+(repo HEAD when run) · `dirty` (bool) · `deployed_version` (class A: what the env reported;
+else `null`) · `command` · `exit_code` (`null` if not run) · `duration_s` · `output_sha256` ·
+`output_tail` (last 40 lines, at most 4000 chars — the evidence the judge reads) · `result` ·
+`reason`.
 
 4.4 **`judged`** — one record per check the judge assessed: `check_id` · `judge` (§4.6) ·
 `verdict` (`pass | fail | inconclusive`) · `rung_reached` · `reason`.
@@ -263,7 +265,8 @@ by `/closeout-extended`.
 - `doctor` — checks the env is reachable and credentials resolve; message per failure.
 - `env --json` — the env handle: `{name, url, tenant, credential_ref}`. `credential_ref`
   is a pointer (an SSM path, a keychain item), never the value.
-- verbs — the product's journeys and probes, one subcommand each.
+- verbs — the product's journeys and probes, one subcommand each. A verb's `--json` output
+  may carry `deployed_version`; the runner records it on the class-A row.
 
 9.2 **CLI rules:** subcommands for progressive disclosure · rich `--help` · `--json` output
 on every verb · `--dry-run` on anything destructive · errors per §10.

@@ -233,6 +233,9 @@ Resumed/restarted phases append a SECOND block:
 - ai-skills · doc: `scripts/README.md` (resolve-identifiers row) — Task 1.2
 - ai-skills · code: `scripts/verify-run.py`, `scripts/verify_lib.py` — Task 1.3; `scripts/resolve-identifiers.py` now uses `verify_lib.message`
 - ai-skills · test: `scripts/tests/test_verify_run.py` — Task 1.3
+- ai-skills · code: `scripts/verdict-gate.py` (new); `scripts/plans-index.py` (`status` + validate gate check); `scripts/ledger-init.sh` (`--repo` base SHA); `scripts/verify_lib.py` (`GATE_MODE`, `PROJECTS`) — Task 1.4
+- ai-skills · test: `scripts/tests/test_verdict_gate.py` — Task 1.4
+- ai-skills · doc: `scripts/README.md` rows — Task 1.4
 - ai-skills · doc: `templates/verify-contracts.md` §4.3 (`cwd`, `output_tail`) + §9 (`deployed_version` from verb JSON); `scripts/README.md` rows — Task 1.3
 
 ### §3 Patterns Followed
@@ -243,6 +246,9 @@ Resumed/restarted phases append a SECOND block:
 - `resolve-identifiers.py` CLI shape ← `scripts/dispatch-log.py` (argparse, docstring Usage/Output/Exit); test layout ← `test_repo_graph_check.py` (table-driven, throwaway repos)
 
 - `verify-run.py` read-back ← `scripts/dispatch-log.py`; verdict-log appends go through `verify_lib.append_verified` (one writer)
+
+### §5 Cross-Repo Touchpoints
+- `plans-index.py validate` now spawns `verdict-gate.py` for Done phase rows in scopes with a `finish-conditions.md`. The SessionStart hook runs validate against kalpa-docs and pmg-docs indexes; no scope there has a table yet, so nothing changes until 5.3 wiring.
 
 ### §8 Assumptions
 - The SSM-as-env rule (`/…/<shared|service>/<NAME>` declares NAME for the repo whose name ends with `-<service>`) mirrors WellMed's `ssmconfig.Load` as described in `wellmed-infrastructure/ssm/parameters/shared.json`'s comments. Not verified against the loader's code.
@@ -257,6 +263,8 @@ Resumed/restarted phases append a SECOND block:
 ### §11 Risk Flags
 - Repo Graph freshness: `repo-graph-check.py` exit 4. It missed the numbered heading, and would then have false-passed a prose-only section. Both fixed (unplanned, Alex-directed); scope 5 is still exit 4 because its graph is prose (single repo, linear on main from `feaa5a9`).
 - herdr pane present (`w14:p4`) but Primary repo = none → §5.8.1 worktree + driver rename skipped.
+- Gate accepts evidence recorded on a dirty tree (`dirty: true`): the SHA doesn't capture uncommitted changes. Not in the contract; candidate §5.2 rule for Alex.
+- `ledger-init.sh --repo` isn't passed by /plan §5.13 yet (5.3 Task 3.2). Until then units have no base, and the gate requires evidence at HEAD, which is strict and not unsafe.
 
 ---
 

@@ -13,20 +13,21 @@ already caused real data loss. Prose cannot enforce itself — the same reasonin
 |---|---|---|
 | `resolve-plans-dir.sh` | A `case` block copy-pasted into 5 skills | /scope, /plan, /prd, /closeout, /repo-cleanup |
 | `claim-scope-number.sh` | "read the index, find the highest, increment" — **raced; scope 110 collided** | /scope §5.2 |
-| `plans-index.py` | "append a row" with no header written — **leaked 40 untabled rows** | /scope §5.8, /plan §11.4, /closeout §13, /repo-cleanup §6 |
+| `plans-index.py` | "append a row" with no header written — **leaked 40 untabled rows** | /scope §5.8, /plan §11.4, /closeout §13, /repo-cleanup §6; `status` runs the verdict gate before Done, `validate` catches a hand-edited Done |
 | `repo-graph-snapshot.sh` | /scope §0.5.2's serial per-repo walk | /scope §0.5.2 |
 | `edit-guard.py` | `python3 - <<PY` string-replaces that **no-op silently** | any scripted multi-file edit |
 | `plans-folder.sh` | hand-run `mkdir`/`mv` sweep copied into two skills | /plan §2.5, /scope §5.6–5.7 |
 | `context-gather.sh` | Step-0 bash blocks copied into two skills — /prd's cat'ed both indexes whole | /scope Step 0, /prd Step 0 |
 | `stamp-executed-by.sh` | "derive the name, write the header" prose | /plan §3.1 |
 | `repo-graph-check.py` | a four-way SHA/branch classification written as steps | /plan §5.6.1 |
-| `ledger-init.sh` | "copy the template, append a phase header" prose | /plan §5.13 |
+| `ledger-init.sh` | "copy the template, append a phase header" prose; `--repo` records the unit's base SHA for the gate | /plan §5.13 |
 | `dispatch-log.py` | hand-written JSONL lines | /concurrency §6, §7.1 |
 | `herdr-pane.sh` | the two-call pane naming rule (the second call was the recurring miss) + helper split | /concurrency §6, herdr §2/§5 |
 | `repo-survey.sh` | default-branch + survey cascade + MERGED/LIVE shell — **its `\|\| echo main` never fell back** | /cross-repo-init §2.1–2.2 |
 | `lint-skill.py` | eyeballing SKILL.md quality — CLAUDE.md §6 said "no linter currently" while the skills accreted past obey-able size | any skill edit; `/scope`, `/plan`, `/closeout` bodies |
 | `resolve-identifiers.py` | grepping for a name and calling it declared — comment, fixture and sibling-service hits read as real | `/verify` + `/review` local-maxima lens (scope 5 Phase 2) |
 | `verify-run.py` | "it passed" as a claim — runs each finish-table row in its declared context and is the only writer of the verdict log | `/verify`, `/plan` checkpoints, `/closeout` (scope 5) |
+| `verdict-gate.py` | "verify ran, so it's done" — applies §5 to the latest final verdict per owned check (range, rung, revision, disposition coverage); advisory until 3 clean scopes | `plans-index.py status`/`validate`, `/plan`, `/closeout` |
 | `verify_lib.py` | (library, not a CLI) one table parser, message formatter and verified JSONL appender for the verify scripts | `verify-run.py`, `verdict-gate.py`, `resolve-identifiers.py` |
 
 **Tests:** `python3 -m unittest discover scripts/tests` from the repo root (stdlib only,
@@ -49,6 +50,8 @@ by `test_entrypoint.py`'s compile check.
     plans-index.py next-number <index>    stdout: highest whole scope number + 1
     plans-index.py add  <index> --num --status --folder --desc [--creator] [--dry-run]
     plans-index.py move <index> --num --to {active,archived} [--folder] [--status] [--dry-run]
+    plans-index.py status <index> --num --status [--skip-verify R] [--blocking|--advisory] [--dry-run]
+      exit: 0 written · 1 gate BLOCKED (row untouched) or write did not land · 2 usage · 3 gate could not evaluate
 
     plans-folder.sh <plans-dir> <folder-name> [--slug S] [--move FILE]... [--dry-run]
       exit: 0 ok · 1 a move refused (destination exists) or failed to land · 2 usage
@@ -56,9 +59,15 @@ by `test_entrypoint.py`'s compile check.
     stamp-executed-by.sh <plan-file> [--repo DIR]
       exit: 0 stamped/unchanged · 1 write did not land · 2 usage · 3 no git user.name
     repo-graph-check.py <scope.md> [--projects DIR]
-      exit: 0 unchanged · 1 advanced only (confirm) · 3 diverged/missing (stop) · 4 no Repo Graph · 2 usage
-    ledger-init.sh <folder> --plan <plan> --phase "<P>: <name>" [--slug S] [--resumed]
-      exit: 0 ok · 1 write did not land · 2 usage · 4 template missing
+      exit: 0 unchanged · 1 advanced only (confirm) · 3 diverged/missing (stop) · 4 no Repo Graph table · 2 usage
+    ledger-init.sh <folder> --plan <plan> --phase "<P>: <name>" [--slug S] [--resumed] [--repo PATH]...
+      exit: 0 ok · 1 write did not land / --repo not a git repo · 2 usage · 4 template missing
+    resolve-identifiers.py --repo P (--range BASE..HEAD | --ids FILE) [--decl-repo P]... [--json]
+      exit: 0 all resolved · 1 unresolved or unsupported · 2 usage · 3 git error / empty range
+    verify-run.py run|judged|finalize ...  (templates/verify-contracts.md §4)
+      exit: 0 runner rows passed / recorded · 1 a row failed or refused · 2 usage · 3 malformed input / write did not land
+    verdict-gate.py --scope DIR --unit N.P [--advisory|--blocking] [--skip-verify R] [--json]
+      exit: 0 pass / advisory / skipped · 1 blocked · 2 usage · 3 could not evaluate
     dispatch-log.py --scope --task --status {dispatched,done,blocked,failed} [--seat --branch --worktree --pane --tail --log]
       exit: 0 written + read back · 1 did not land · 2 usage
     herdr-pane.sh name <pane> <task> <seat> [--source SKILL]  |  herdr-pane.sh helper [--cwd DIR]

@@ -13,8 +13,8 @@
 
 ## Resume Context
 **Scope:** ~/Projects/ai-skills/plans/5-verify-lever/scope.md
-**Last action:** Plan 5.1 Task 1.3 done — `verify-run.py` (2026-09-26)
-**Next action:** Plan 5.1 Task 1.4 — `verdict-gate.py` + index enforcement + base SHA
+**Last action:** Plan 5.1 all tasks done (2026-09-26) — at Phase 1 CHECKPOINT
+**Next action:** Alex's Phase 1 review (gate A); then `/plan 5.2`
 **Open blockers:** None
 **Key files changed:** `scripts/plans-index.py` (70d1222 — unplanned fix, see Progress Log)
 
@@ -89,8 +89,8 @@
 ## Plan 5.1: Contracts + deterministic scripts
 
 ### Resume Context (Plan 5.1)
-**Last action:** Task 1.3 done — `verify-run.py` + `verify_lib.py`; suite 38 OK
-**Next action:** Task 1.4 — `verdict-gate.py` + `ledger-init.sh` base SHA + `plans-index.py status`/`validate`
+**Last action:** Task 1.4 done — all 5 tasks complete; suite 61 OK
+**Next action:** Phase 1 CHECKPOINT (gate A) — Alex approves contracts + reviews demo
 **Open blockers:** None
 
 ### Task Detail

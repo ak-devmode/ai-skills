@@ -164,8 +164,8 @@ Lever + skills land in `ai-skills` and `dev-workbench`; trials land in their pro
 **Port-fidelity is DEAD as a trial** (2026-09-11): 64 and 128 have since taken days of
 intentional copy divergence. Do not resurrect it.
 
-- **Primary candidate:** WellMed **staging `clinic_3`** (demo tenant, `testing`/`12345678`;
-  ⚠ `clinic_4`/`clinic_5` on staging are REAL patient copies — never drive them) —
+- **Primary candidate:** WellMed **`clinic_3`** (demo tenant; credentials and the
+  tenant-safety list live in the private test-suite, never in this public repo) —
   `doctor · login · screenshot · one journey`. This is the e2e-in-staging shape workbench is for.
 - **Driver warm-up:** `v2-padmacare` staging — already proven reachable (§3.9); cheapest
   first feature file.

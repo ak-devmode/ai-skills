@@ -229,9 +229,12 @@ CLAUDE.md
 
 ## 5. Environment variables
 
-N/A. Skills run inside Claude Code's session and inherit whatever
-environment Claude Code itself has. No `.env` file, no SSM, no API keys
-managed at this layer.
+Skills run inside Claude Code's session and inherit its environment. No SSM,
+no API keys managed at this layer. The verification scripts read three optional
+overrides, declared in `.env.example` (so `resolve-identifiers.py` can resolve
+them): `VERIFY_PROJECTS` (root for finish-table `repo` cells, default
+`~/Projects`), `VERIFY_CODEX_BIN` (codex binary; tests use fakes), `VERIFY_EVAL`
+(`1` runs the live-judge eval tier in `scripts/tests`).
 
 ---
 

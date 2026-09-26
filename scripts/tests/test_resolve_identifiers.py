@@ -136,6 +136,10 @@ CASES = [
      {},
      {"x/db_integration_test.go": "package x\nvar d = os.Getenv(\"ONLY_IN_TESTS\")\n"},
      0, r"found 0", ""),
+    ("source embedded as strings in a test file is not a reference",
+     {},
+     {"tests/test_thing.py": "SRC = 'var a = &clinicv1.Invoice{Total: 3}'\nJS = \"fetch('/nope')\"\n"},
+     0, r"found 0", ""),
     ("route method mismatch fails",
      {"server/routes.js": "router.post('/invoices', create);\n"},
      {"web/api.ts": "axios.get('/invoices');\n"},
@@ -201,6 +205,21 @@ class TestResolveIdentifiers(unittest.TestCase):
             use.close()
         self.assertEqual(alone.returncode, 1, alone.stdout)
         self.assertEqual(joined.returncode, 0, joined.stdout)
+
+    def test_decl_rev_checks_a_closed_unit_against_later_declarations(self):
+        repo = Repo({".env.example": "A=1\n"}, {"x.ts": "process.env.LATER;\n"})
+        try:
+            unit_head = git(repo.path, "rev-parse", "HEAD")
+            write(repo.path, {".env.example": "A=1\nLATER=1\n"})
+            git(repo.path, "add", "-A")
+            git(repo.path, "commit", "-q", "-m", "declare later")
+            rng = f"{repo.base}..{unit_head}"
+            at_unit = run("resolve-identifiers.py", "--repo", repo.path, "--range", rng)
+            today = run("resolve-identifiers.py", "--repo", repo.path, "--range", rng, "--decl-rev", "HEAD")
+        finally:
+            repo.close()
+        self.assertEqual(at_unit.returncode, 1, at_unit.stdout)
+        self.assertEqual(today.returncode, 0, today.stdout)
 
     def test_json_output(self):
         repo = Repo({".env.example": "A=1\n"}, {"x.ts": "process.env.A; process.env.B;\n"})

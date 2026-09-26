@@ -11,8 +11,10 @@ service, or as the last segment of an SSM path under `shared/` or the using repo
 service segment (`/…/gateway-go/PORT` declares PORT for `wellmed-gateway-go` — the way an
 SSM loader injects env); a proto field must belong to the message it is set on, in a
 `.proto` or in the generated `.pb.go` struct a Go caller actually imports; SSM paths and
-routes match segment by segment with placeholders. Env reads inside test files are
-test-only switches, not deployed config, and are skipped. Comment lines and fixture paths count
+routes match segment by segment with placeholders. References inside test files are
+skipped: a test's env reads are test-only switches, and a test file routinely embeds
+source as fixture *strings* — neither is a reference the shipped code makes, and tests are
+checked by their own suite. Comment lines and fixture paths count
 neither as uses nor as declarations. A kind this script cannot check is reported as
 unsupported and is never a pass — found, resolved and unsupported are always printed.
 
@@ -24,7 +26,9 @@ only matches as a suffix of the used path (a group prefix the script can't see) 
 but is labelled `suffix`.
 
 Usage:
-  resolve-identifiers.py --repo PATH --range BASE..HEAD [--decl-repo PATH ...] [--json]
+  resolve-identifiers.py --repo PATH --range BASE..HEAD [--decl-rev REV] [--decl-repo PATH ...] [--json]
+    --decl-rev    resolve against REV's tree instead of the range's HEAD — for checking a
+                  closed unit against today's declarations (a later fix then counts)
   resolve-identifiers.py --repo PATH --ids FILE [--rev REV] [--decl-repo PATH ...] [--json]
     --ids FILE    JSONL, one {"kind", "name", "namespace"?, "file"?, "line"?} per line;
                   kinds: env · ssm · proto (name "Message.field") · route (name "/path",
@@ -203,13 +207,13 @@ def added_lines(repo, base, head):
 def extract(files):
     refs = []
     for path, lines in files.items():
-        if not is_source(path):
+        if not is_source(path) or TEST_FILE.search(path):
             continue
         open_msg = None  # (message, depth) for a Go literal opened on an added line
         for lineno, text in lines:
             if is_comment(text):
                 continue
-            for rx in ENV_USE if not TEST_FILE.search(path) else ():
+            for rx in ENV_USE:
                 for m in rx.finditer(text):
                     refs.append(ref("env", m.group(1), None, path, lineno))
             if SSM_HINT.search(text):
@@ -337,7 +341,7 @@ class Index:
 
 
 def tree_label(tree):
-    return "" if getattr(tree, "is_primary", False) else os.path.basename(tree.repo.rstrip("/")) + ":"
+    return "" if getattr(tree, "is_primary", False) else os.path.basename(os.path.realpath(tree.repo)) + ":"
 
 
 def parse_proto(text):
@@ -399,7 +403,7 @@ def resolve(r, idx):
                 hits.append(where)
         if hits:
             return "resolved", hits[0]
-        repo_base = os.path.basename(idx.repo.repo.rstrip("/"))
+        repo_base = os.path.basename(os.path.realpath(idx.repo.repo))
         for path, where, ign in idx.ssm():
             segs = segments(path)
             if len(segs) < 2 or segs[-1] != name or not ENV_NAME.match(name):
@@ -467,6 +471,7 @@ def main(argv):
     src.add_argument("--range", dest="rng")
     src.add_argument("--ids")
     ap.add_argument("--rev", default="HEAD", help="tree to resolve against in --ids mode")
+    ap.add_argument("--decl-rev", help="tree to resolve against in --range mode (default: the range's HEAD)")
     ap.add_argument("--decl-repo", action="append", default=[])
     ap.add_argument("--json", action="store_true")
     a = ap.parse_args(argv)
@@ -485,7 +490,7 @@ def main(argv):
                               "check the unit's base SHA — an empty range is a failure, not a clean pass"),
                       file=sys.stderr)
                 return 3
-            refs, rev = extract(files), head
+            refs, rev = extract(files), a.decl_rev or head
         else:
             refs, rev = [], a.rev
             with open(a.ids, encoding="utf-8") as fh:

@@ -34,7 +34,7 @@ correct answer is enforced by `scripts/verify-run.py`, `scripts/verdict-gate.py`
 | §3 | `finish-conditions.md` | `/scope`; `/plan` self-heal drafts it, Alex confirms | `verify-run.py`, `verdict-gate.py`, `/verify`, `/closeout` |
 | §4 | `artifacts/verify-<unit>.jsonl` | `verify-run.py` only (all three run states) | `verdict-gate.py`, `/verify`, `/closeout` |
 | §5 | gate result (stdout + exit) | `verdict-gate.py` | `plans-index.py status`/`validate`, `/plan`, `/closeout` |
-| §6 | `artifacts/review-<unit>.jsonl` | `/review`, through a script (Phase 2 names it) | `/verify` (coverage + rejection audit) |
+| §6 | `artifacts/review-<unit>.jsonl` | `/review`, through a script (Phase 2 names it) | `verdict-gate.py` (coverage), `/verify` (rejection audit) |
 | §8 | `features/README.md` + feature files | agents in the product test-suite | `/verify`, the author's inner loop |
 | §8 | `artifacts/feature-map-handoff-<unit>.md` | `/closeout` | whoever applies it in the test-suite repo, `/closeout-extended` |
 | §9 | adapter CLI | the product test-suite | `verify-run.py` (through finish-table commands), `/verify` |
@@ -169,6 +169,11 @@ edited.
 - the verdict's `sha` for that repo is outside the unit's range `base..HEAD` — `base` is the
   repo's SHA recorded by `ledger-init.sh` in the phase block at phase start.
 
+5.2.1 **Per unit, the gate also blocks when** `artifacts/review-<unit>.jsonl` exists and
+breaks §6.3: a `finding_id` with no disposition, a `fixed` without `sha`, or a `rejected`
+without `reason`. Deterministic, so the gate owns it — `/verify` judges whether a rejection
+was *right*, never whether one was recorded.
+
 5.3 **Judge marker.** When the deciding `final` record's judge line is not `codex …`, the
 gate reports `⚠ judge: <line>` and `plans-index.py status` appends it to the phase's index
 status. A later final run with a codex judge clears it.
@@ -187,7 +192,8 @@ pass.
 ## 6. Review disposition log — `artifacts/review-<unit>.jsonl`
 
 **Writer:** `/review`, through a script (named in Phase 2; no hand-written JSON).
-**Readers:** `/verify` — checks coverage and audits every rejection.
+**Readers:** `verdict-gate.py` enforces coverage (§5.2.1); `/verify` audits every
+rejection's reasoning and whether each `fixed <sha>` touches the finding's file.
 
 Every record carries `record`: `finding` or `disposition`.
 

@@ -224,8 +224,13 @@ managed at this layer.
 
 ## 6. Build / test / lint
 
-No build. No automated test suite. Skill verification is manual via
-Claude Code invocation:
+Test: `python3 -m unittest discover scripts/tests`
+
+No build. The automated suite covers the shared scripts only — stdlib
+`unittest`, Python >= 3.9, run from the repo root; the scripts are
+hyphenated, so tests call them as subprocesses or load them by path
+(`scripts/tests/_helpers.py`). New scripts land with a `test_<name>.py`.
+Skill verification is manual via Claude Code invocation:
 
 - **Add a skill or edit SKILL.md** — restart any open Claude Code
   session for the change to register (the skill list is loaded at

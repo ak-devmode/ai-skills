@@ -26,6 +26,11 @@ already caused real data loss. Prose cannot enforce itself — the same reasonin
 | `repo-survey.sh` | default-branch + survey cascade + MERGED/LIVE shell — **its `\|\| echo main` never fell back** | /cross-repo-init §2.1–2.2 |
 | `lint-skill.py` | eyeballing SKILL.md quality — CLAUDE.md §6 said "no linter currently" while the skills accreted past obey-able size | any skill edit; `/scope`, `/plan`, `/closeout` bodies |
 
+**Tests:** `python3 -m unittest discover scripts/tests` from the repo root (stdlib only,
+Python >= 3.9). One `test_<name>.py` per script; `_helpers.py` runs a script as a
+subprocess or loads it by path. The older scripts predate the suite and are covered only
+by `test_entrypoint.py`'s compile check.
+
 ## Contracts
 
     resolve-plans-dir.sh [path]

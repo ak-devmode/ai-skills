@@ -13,8 +13,8 @@
 
 ## Resume Context
 **Scope:** ~/Projects/ai-skills/plans/5-verify-lever/scope.md
-**Last action:** CEO + eng + DX (triage) reviews done — all CLEARED, no unresolved decisions; findings folded into scope.md + 5.1–5.3 (2026-09-26)
-**Next action:** `/plan 5.1` — Task 1.0 (test entrypoint) first
+**Last action:** Plan 5.1 Task 1.0 done — test entrypoint live (2026-09-26)
+**Next action:** Plan 5.1 Task 1.1 — contract documents (stops for Alex's review)
 **Open blockers:** None
 **Key files changed:** `scripts/plans-index.py` (70d1222 — unplanned fix, see Progress Log)
 
@@ -83,3 +83,45 @@
 - `artifacts/eng-review-2026-09-26.md` — eng review + codex outside voice, 16 accepted findings
 - `artifacts/eng-review-test-plan-2026-09-26.md` — test plan (edge cases + critical paths)
 - `artifacts/devex-review-2026-09-26.md` — DX triage review, persona, scorecard
+
+---
+
+## Plan 5.1: Contracts + deterministic scripts
+
+### Resume Context (Plan 5.1)
+**Last action:** Task 1.0 done — test entrypoint live (1 test, green)
+**Next action:** Task 1.1 — contract documents (AI+HUMAN_REVIEW: stop for Alex after)
+**Open blockers:** None
+
+### Task Detail
+Deepened at start of run (`/markdown-style` §8.9.2), from scope.md §4.1 + eng review. The
+plan file is unchanged; where this block and the plan differ, the plan wins, so ask.
+- **1.0** — `scripts/tests/` (`_helpers.py` runs scripts as subprocesses or loads them by
+  path, since hyphenated names can't be imported) + `test_entrypoint.py` (compile-checks every
+  `scripts/*.py`). CLAUDE.md §6 `Test:` line (the field `/closeout` §5.2 detects first);
+  scripts/README.md gets a Tests note. **Deviation:** the plan allowed "0 tests is a pass",
+  but on Python ≥ 3.12 `unittest discover` exits 5 when no tests run, so the entrypoint ships
+  with one real test.
+- **1.1** — templates in `templates/`, filled examples in `templates/examples/`. Each contract
+  opens with a reader/writer header. Plus `scripts/tests/test_contracts.py`: generate each file
+  from its template, assert no example rows. Stop for Alex's review.
+- **1.2–1.4** — detail written when 1.1's contracts are approved, since those contracts fix
+  the scripts' field names and messages. Tests follow the eng review's coverage map
+  (`artifacts/eng-review-2026-09-26.md` §2). Every error message is checked against the
+  message contract.
+
+### Session: 2026-09-26 (Alex / Claude)
+- **Phase 0** ✅ DONE. Input and related-doc paths all resolve. Status is Ready (Alex's go
+  signal, 8173b95). `Executed by` was stamped. Repo Graph check exited 4 because the numbered
+  heading doesn't match what the script looks for; this is a single-repo scope with linear
+  history, and it's logged as a ledger risk flag. herdr pane present, but Primary repo is none,
+  so no worktree. Ledger created. Branch: `main` (direct-to-main per CLAUDE.md §2). Sibling
+  plans 5.2 and 5.3 read.
+- **Unplanned (before Phase 0):** `/markdown-style` §8.9.2/§11.5.3 contradicted `/plan` §8.1
+  on stub deepening. Resolved: detail goes in progress.md. Files: `markdown-style/SKILL.md`,
+  `plan/SKILL.md`, `scope/templates/plan-stub.md.template` (e8bdc4d, pushed).
+
+#### Task 1.0: Test entrypoint — ✅ DONE
+- **Files created:** `scripts/tests/_helpers.py`, `scripts/tests/test_entrypoint.py`
+- **Files modified:** `CLAUDE.md` (§6 `Test:` line + suite note), `scripts/README.md` (Tests note)
+- **Verified:** `python3 -m unittest discover scripts/tests` → 1 test OK, exit 0; `grep '^Test:' CLAUDE.md` hits

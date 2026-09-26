@@ -24,6 +24,7 @@ Commands
 Exit codes: 0 ok · 1 herdr/runtime failure · 2 bad arguments. Stdlib only.
 """
 import argparse
+import hashlib
 import json
 import math
 import os
@@ -69,7 +70,11 @@ def save(path, data):
 
 def agent_name(run_dir, lane):
     # Unique per run so reruns never collide with a lane left open from an earlier tab.
-    return f"r-{Path(run_dir).name}-{lane}"
+    # herdr caps names at 32 chars of [a-z0-9_-], so the run is a stable 6-char hash,
+    # not its folder name (2026-09-26: "r-poteto-verify-r1-a1-pstack-repo" was refused).
+    run = hashlib.sha1(Path(run_dir).name.encode()).hexdigest()[:6]
+    safe = "".join(c if c.isalnum() or c in "-_" else "-" for c in lane.lower())
+    return f"r{run}-{safe}"[:32]
 
 
 def cmd_open(a):

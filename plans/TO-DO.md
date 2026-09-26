@@ -306,3 +306,21 @@ Source: plans/archive/2-skills-relook/progress.md (Plan 2.3)
 Touches: scripts/lint-skill.py · all SKILL.md
 - [ ] **Paraphrased cross-skill duplicates** are invisible to the linter (e.g. GLM traps /concurrency vs
       herdr were found by reading). Second sighting of a drift from one → build the deferred eval pass.
+
+## research-lanes — /research pane mode (Scope 6, Plan 6.1)
+Source: plans/archive/6-research-lanes/progress.md (Plan 6.1)
+Touches: research/SKILL.md · research/scripts/lanes.py · templates/closeout-prep.md.template · scripts/ledger-init.sh
+- [ ] **Closeout ledger template ships fake example entries.** `templates/closeout-prep.md.template`
+      carries worked examples (Chatwoot webhook, `validateWebhookSignature`, SSM token assumptions)
+      as section *bodies*, not inside HTML comments, and `scripts/ledger-init.sh` copies it whole —
+      so every new ledger opens with invented §3/§4/§5/§8/§10/§11 entries a /closeout could read as
+      real. Scope 6's ledger had them (only its phase blocks were real). Fix: move examples into
+      comments or `_(none)_` placeholders; have ledger-init fail if an example marker survives.
+- [ ] **X pages yield nothing to research lanes** (first sighting, 2026-09-26): a2 found poteto's
+      "Complete Guide to pstack" X articles but WebFetch extracted no claims. On a second sighting,
+      add to research/SKILL.md §3.3 brief: X/paywalled pages → record the URL as missing coverage and
+      ask the driver to request a paste.
+- [ ] **Lane-inferred dates** (first sighting, 2026-09-26): a2 dated an X article "after 2026-09-21"
+      by guessing from its status ID and got the comparison backwards (it was 2026-09-01). On a
+      second sighting, tell lanes to report only dates read on the page and leave `publishDate` null
+      otherwise.

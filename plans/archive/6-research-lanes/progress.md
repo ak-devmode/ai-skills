@@ -9,9 +9,9 @@
 
 ## Resume Context
 **Scope:** ~/Projects/ai-skills/plans/6-research-lanes/scope.md
-**Last action:** Plan 6.1 Task 1.4 done — live run + interrupt test passed (2026-09-26)
-**Next action:** Phase 1 CHECKPOINT (gate A) — Alex go/no-go on pane mode as default, then /closeout
-**Open blockers:** Alex's go/no-go
+**Last action:** Scope complete — gate A passed (Alex: go, pane mode default), /closeout run, archived (2026-09-26)
+**Next action:** none — scope closed
+**Open blockers:** none
 **Key files changed:** research/SKILL.md, research/scripts/lanes.py, herdr/SKILL.md, README.md, ARCHITECTURE.md, dev-workbench CLAUDE.md
 
 ---
@@ -23,6 +23,7 @@
 - (2026-09-23) Lane failure detected by state, never a fixed timeout; 15-min stall only flags.
 - (2026-09-23) Output + report in the driver's scratchpad.
 - (2026-09-23) /plan-ceo-review skipped (Alex): small skill change, premises settled in scoping.
+- (2026-09-26) Gate A: go — pane mode is the /research default; Workflow stays the offered alternative.
 
 ---
 
@@ -33,6 +34,8 @@
 | 2026-09-23 | /scope | Done | Atomic scope, one plan (6.1), exit gate A |
 | 2026-09-23 | /plan-ceo-review | Skipped | Alex's call |
 | 2026-09-26 | /plan 6.1 Task 1.4 | Done | Live run (3 lanes + verify) + separate interrupt test; lanes.py agent-name bug fixed |
+| 2026-09-26 | /plan | Done | 6.1-research-lanes-PLAN.md complete — 5/5 tasks. TODOs extracted to TO-DO.md |
+| 2026-09-26 | /closeout | Done | Archived. Ledger was the unfilled template plus real phase blocks — only phase blocks read |
 
 ---
 
@@ -42,7 +45,7 @@
 |------|--------|-------|
 | Trust `~/.cache/research-lanes` once (start `claude` there, choose trust, exit) | [x] Done 2026-09-23 (verified in ~/.claude.json) | Task 1.4 precondition; `lanes.py open` checks it |
 | Pick the first live research question | [x] Done 2026-09-26 | poteto on verification since 2026-09-11 (input to scope 5) |
-| Go/no-go after the live run | [ ] Pending | Phase exit gate A |
+| Go/no-go after the live run | [x] Done 2026-09-26 | Go — pane mode stays the /research default |
 
 ---
 
@@ -50,7 +53,7 @@
 
 | # | Plan File | Phase | Status | Notes |
 |---|-----------|-------|--------|-------|
-| 6.1 | 6.1-research-lanes-PLAN.md | Phase 1 — /research pane mode | 1.0–1.4 ✅ — at gate A checkpoint | |
+| 6.1 | 6.1-research-lanes-PLAN.md | Phase 1 — /research pane mode | ✅ Done (2026-09-26) | |
 
 ---
 
@@ -62,9 +65,8 @@
 ## Plan 6.1: /research pane mode
 
 ### Resume Context (Plan 6.1)
-**Last action:** Tasks 1.0–1.3 done (2026-09-23)
-**Next action:** Task 1.4 — first live run. Lane-home trust is done; only
-blocker is Alex running `/research <real question>` in a herdr pane.
+**Last action:** Plan complete — 5/5 tasks done (2026-09-26)
+**Next action:** none
 
 ### Session: 2026-09-23
 - Phase 0 ✅ — inputs resolve; main == origin/main; inside herdr (w14:pD);

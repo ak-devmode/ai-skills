@@ -228,9 +228,9 @@ graphs.
 
 ### 6.2 Active scope
 
-- None after scope 2 (skills-relook) closed 2026-09-25 — see
-  `plans/archive/2-skills-relook/`. Active: scopes 5 (verify-lever) and 6
-  (research-lanes) per `plans/PLANS-INDEX.md`.
+- Scope 5 (verify-lever) per `plans/PLANS-INDEX.md`. Closed recently: scope 6
+  (research-lanes, 2026-09-26) and scope 2 (skills-relook, 2026-09-25) — see
+  `plans/archive/`.
 
 ### 6.3 Known gaps
 

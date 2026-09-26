@@ -288,7 +288,10 @@ is distinct from `~/Projects/pmg/pmg-docs/plans/` and
 `~/Projects/wellmed/kalpa-docs/plans/` (which track work in those
 projects). `scripts/resolve-plans-dir.sh` resolves it for `/scope` and `/plan`.
 
-9.2 **Recent work:** `plans/archive/2-skills-relook/` (closed 2026-09-25) — the
+9.2 **Recent work:** `plans/archive/6-research-lanes/` (closed 2026-09-26) — `/research`
+pane mode: one visible Sonnet lane per angle in a fresh herdr tab plus an independent
+verify lane, driven by `research/scripts/lanes.py`; now the default, Workflow mode
+offered. Before that, `plans/archive/2-skills-relook/` (closed 2026-09-25) — the
 accretion linter (`scripts/lint-skill.py`), the fleet move to Opus 5.5, a
 defect pass over the core skills (contradictions, dead refs, harness-owned and
 duplicated text — no splitting to hit a line count), and eight toolkit scripts

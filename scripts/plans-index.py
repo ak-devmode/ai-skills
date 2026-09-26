@@ -114,6 +114,13 @@ def sub_num(cell: str) -> bool:
     return bool(re.match(r"^\*{0,2}\d+\.\d+", cell.strip()))
 
 
+def row_num(value: str) -> str:
+    """`add --num`: a scope (`5`) or a per-plan row (`5.1`) — /scope §5.9 adds both."""
+    if not re.match(r"^\d+(\.\d+)?$", value):
+        raise argparse.ArgumentTypeError(f"expected N or N.P, got '{value}'")
+    return value
+
+
 def slug_row(cell: str) -> bool:
     """A deliberately un-numbered row. Three valid forms: a program control surface
     or standing doc (`catalog-program`, `roadmap`); an em/en-dash or "TBD" marking a
@@ -289,8 +296,8 @@ def cmd_add(args) -> int:
         return 2
 
     for _, cells in target.rows:
-        if cells and scope_num(cells[0]) == args.num:
-            print(f"plans-index: scope {args.num} already has a row in Active.",
+        if cells and cells[0].strip().strip("*") == args.num:
+            print(f"plans-index: {args.num} already has a row in Active.",
                   file=sys.stderr)
             return 2
 
@@ -385,7 +392,7 @@ def main() -> int:
     n = sub.add_parser("next-number"); n.add_argument("index"); n.set_defaults(fn=cmd_next_number)
 
     a = sub.add_parser("add")
-    a.add_argument("index"); a.add_argument("--num", type=int, required=True)
+    a.add_argument("index"); a.add_argument("--num", type=row_num, required=True)
     a.add_argument("--status", required=True); a.add_argument("--folder", required=True)
     a.add_argument("--desc", required=True); a.add_argument("--creator")
     a.add_argument("--dry-run", action="store_true"); a.set_defaults(fn=cmd_add)

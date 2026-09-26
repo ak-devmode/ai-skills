@@ -17,6 +17,14 @@ Commands:
     next-number <index>              highest whole scope number + 1
     add <index> --num --status --folder --desc [--creator]
     move <index> --num --to {active,archived} [--folder] [--status]
+    status <index> --num --status [--skip-verify REASON] [--blocking|--advisory]
+
+Verification gate (templates/verify-contracts.md §5): `status` runs verdict-gate.py
+before writing a Done status on a phase row (`N.P`) whose scope folder has a
+finish-conditions.md — refusing in blocking mode, appending the gate's ⚠ marker
+otherwise. `validate` fails on a Done phase row in such a scope that has neither a
+passing gate nor a visible ⚠ advisory/skip marker: a Done written by hand. Scopes
+without a finish table predate the gate and are exempt until /plan self-heals them.
 
 Stdlib only. Never rewrites a row it was not asked to touch.
 """
@@ -24,8 +32,10 @@ Stdlib only. Never rewrites a row it was not asked to touch.
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import re
+import subprocess
 import sys
 
 CANONICAL = ["#", "Status", "Folder", "Description", "Created by"]
@@ -39,6 +49,16 @@ CANONICAL = ["#", "Status", "Folder", "Description", "Created by"]
 # contradicted that consistently is a rule that is wrong, per markdown-style
 # §2.2.3's own reasoning).
 CELL_SOFT = 900
+
+DONE = re.compile(r"✅|\bdone\b", re.I)
+MARKER = re.compile(r"\s*⚠ (?:judge|verify)[^⚠]*")
+GATE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "verdict-gate.py")
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import verify_lib as vl  # noqa: E402  (§10 message contract for `status`)
+
+
+def status_msg(level, what, expected, found, where, cause, nxt):
+    return vl.message(level, what, expected, found, where, cause, nxt, f"{vl.CONTRACT} §5")
 
 ACTIVE_HEADINGS = ("active plans", "active / in progress", "active")
 ARCHIVED_HEADINGS = ("completed / archived", "archived (complete)", "archived", "completed")
@@ -252,6 +272,29 @@ def cmd_validate(args) -> int:
                     f"at the plans root — §11.7.2"
                 )
 
+    # Verification gate, detective layer (verify-contracts.md §5): a Done phase row in a
+    # scope with a finish table needs a passing gate or a visible ⚠ advisory/skip marker.
+    for s in scope_tables:
+        for ln, cells in s.rows:
+            if len(cells) < 3 or not sub_num(cells[0]) or not DONE.search(cells[1]):
+                continue
+            num = cells[0].strip().strip("*")
+            g = run_gate(args.index, cells[2], num)
+            if g is None:
+                continue
+            code, doc, err = g
+            status = cells[1]
+            if code == 3:
+                issues.append(f"phase {num} (L{ln+1}) is Done but its gate could not evaluate: "
+                              f"{err.strip().splitlines()[0] if err.strip() else doc}")
+            elif doc.get("verdict") == "pass" or "⚠ verify skipped" in status or (
+                    doc.get("verdict") == "advisory" and "⚠ verify advisory" in status):
+                continue
+            else:
+                issues.append(f"phase {num} (L{ln+1}) is Done without a passing verdict (gate: "
+                              f"{doc.get('verdict')}) and no ⚠ marker — written by hand? Re-run "
+                              f"`plans-index.py status {args.index} --num {num} --status ...`")
+
     print()
     if notes:
         for n in notes:
@@ -375,6 +418,88 @@ def cmd_move(args) -> int:
     return 0
 
 
+# ----------------------------------------------------------------- status
+
+def run_gate(index: str, folder_cell: str, num: str, extra: list[str] | None = None):
+    """(exit, json doc, stderr) from verdict-gate.py, or None when the row's scope
+    folder has no finish-conditions.md (a scope that predates the gate)."""
+    folder = folder_cell.strip().strip("`").rstrip("/")
+    scope = os.path.join(os.path.dirname(os.path.abspath(index)), folder)
+    if not folder or not os.path.isfile(os.path.join(scope, "finish-conditions.md")):
+        return None
+    p = subprocess.run([sys.executable, GATE, "--scope", scope, "--unit", num, "--json", *(extra or [])],
+                       capture_output=True, text=True)
+    try:
+        doc = json.loads(p.stdout.strip().splitlines()[-1])
+    except (ValueError, IndexError):
+        doc = {"verdict": "error", "error": p.stdout.strip() or "no output"}
+        return 3, doc, p.stderr
+    return p.returncode, doc, p.stderr
+
+
+def cmd_status(args) -> int:
+    lines, sections = parse(args.index)
+    found = None
+    for s in sections:
+        if s.kind not in ("active", "archived"):
+            continue
+        for ln, cells in s.rows:
+            if cells and cells[0].strip().strip("*") == args.num:
+                found = (ln, cells)
+    if found is None:
+        print(f"plans-index: {args.num} has no row in the Active or Archived table.", file=sys.stderr)
+        return 2
+    ln, cells = found
+    cells = (cells + [""] * len(CANONICAL))[: len(CANONICAL)]
+    new = MARKER.sub("", args.status).strip()
+    if DONE.search(new) and sub_num(args.num):
+        extra = (["--skip-verify", args.skip_verify] if args.skip_verify is not None else []) + \
+            ([f"--{args.mode}"] if args.mode else [])
+        g = run_gate(args.index, cells[2], args.num, extra)
+        if g is None:
+            print(status_msg("WARN", f"gate not run for {args.num} — no finish table",
+                             "finish-conditions.md in the scope folder", f"none under {cells[2]}",
+                             f"{args.index} row {args.num}", "tooling",
+                             "nothing now — the scope predates the gate; /plan self-heal drafts one"),
+                  file=sys.stderr)
+        else:
+            code, doc, err = g
+            if code == 3:
+                print(err or doc.get("error", ""), file=sys.stderr)
+                print(status_msg("ERROR", f"refusing Done for {args.num} — the gate could not evaluate",
+                                 "a gate verdict", "exit 3 (see the message above)",
+                                 f"{args.index} row {args.num}", "tooling",
+                                 f"verdict-gate.py --scope <scope> --unit {args.num}"), file=sys.stderr)
+                return 3
+            for m in doc.get("messages", []):
+                print(m, file=sys.stderr)
+            if doc.get("verdict") == "blocked":
+                ids = ", ".join(b["id"] for b in doc.get("blocks", []))
+                print(status_msg("BLOCK", f"refusing Done for {args.num} — verdict gate BLOCKED",
+                                 "every owned check passing", f"{len(doc.get('blocks', []))} block(s): {ids}",
+                                 f"{args.index} row {args.num}",
+                                 next((b["cause"] for b in doc.get("blocks", [])), "code"),
+                                 'fix and re-run the checks (verify-run.py), or pass --skip-verify "<reason>"'),
+                      file=sys.stderr)
+                return 1
+            if doc.get("marker"):
+                new = f"{new} {doc['marker']}"
+    cells[1] = new
+    lines[ln] = build_row(*cells)
+    write(args.index, lines, args.dry_run)
+    if not args.dry_run:
+        _, again = parse(args.index)
+        landed = any(c and c[0].strip().strip("*") == args.num and len(c) > 1 and c[1] == new.replace("|", "\\|")
+                     for s2 in again for _, c in s2.rows)
+        if not landed:
+            print(status_msg("ERROR", f"status write for {args.num} did not land", new,
+                             "a different cell on re-read", args.index, "tooling",
+                             "check nothing else is writing the index, then re-run"), file=sys.stderr)
+            return 1
+    print(lines[ln])
+    return 0
+
+
 def write(path: str, lines: list[str], dry_run: bool) -> None:
     if dry_run:
         print("(--dry-run: not written)", file=sys.stderr)
@@ -402,6 +527,14 @@ def main() -> int:
     m.add_argument("--to", choices=["active", "archived"], required=True)
     m.add_argument("--folder"); m.add_argument("--status")
     m.add_argument("--dry-run", action="store_true"); m.set_defaults(fn=cmd_move)
+
+    st = sub.add_parser("status")
+    st.add_argument("index"); st.add_argument("--num", type=row_num, required=True)
+    st.add_argument("--status", required=True); st.add_argument("--skip-verify", metavar="REASON")
+    mg = st.add_mutually_exclusive_group()
+    mg.add_argument("--blocking", dest="mode", action="store_const", const="blocking")
+    mg.add_argument("--advisory", dest="mode", action="store_const", const="advisory")
+    st.add_argument("--dry-run", action="store_true"); st.set_defaults(fn=cmd_status)
 
     args = p.parse_args()
     if not os.path.isfile(args.index):

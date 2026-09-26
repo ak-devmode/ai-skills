@@ -315,7 +315,7 @@ def main(argv):
     r.add_argument("--table", required=True)
     r.add_argument("--log", required=True)
     r.add_argument("--owner")
-    r.add_argument("--projects", default=os.path.expanduser("~/Projects"))
+    r.add_argument("--projects", default=vl.PROJECTS)
     j = sub.add_parser("judged")
     j.add_argument("--log", required=True)
     j.add_argument("--run-id", required=True)

@@ -208,3 +208,25 @@ plan file is unchanged; where this block and the plan differ, the plan wins, so 
   letting the judge upgrade a fail is caught by `test_authority_rule`.
 - **Note:** I removed an `except: pass` in the first draft, the silent-failure pattern
   Phase 2's `/review` will flag.
+
+#### Task 1.4: `verdict-gate.py` + index enforcement + base SHA — ✅ DONE
+- **Files created:** `scripts/verdict-gate.py`, `scripts/tests/test_verdict_gate.py`
+- **Files modified:** `scripts/plans-index.py` (`status` command; `validate` catches a Done
+  phase row with no passing verdict and no ⚠ marker), `scripts/ledger-init.sh` (`--repo`
+  writes `- base: <unit> <repo> <sha>`; the first base is kept on resume), `scripts/verify_lib.py`
+  (`GATE_MODE = "advisory"`, `PROJECTS`), `scripts/README.md`
+- **Verified:** suite 61 OK. Every acceptance case is covered end to end through the real
+  runner: pass, missing, under-rung, fail-then-fixed clears, runner row downgraded blocks,
+  judge row passes on the judge verdict, pending blocks, undeclared-unreachable blocks,
+  stale SHA rejected (both with and without a base), hand-edited Done caught by validate,
+  fallback marker set then cleared, advisory warns without blocking. Also covered: disposition
+  coverage (Alex's §5.2.1), table-revision change, skip-verify needing a reason, a scope with
+  no table being exempt, blocking `status` refusing and leaving the row untouched, and all six
+  §10 fields on the refusal. Mutation checks: disabling the range check or the rung check each
+  fails its test.
+- **Bugs caught by the fail-loud design, before landing:** (1) ledger-init's read-back grep
+  took the `- base:` line as an option and exited 1. The line had landed; the check failed
+  loud instead of passing silently. Fixed with `-e`, and the fixture now asserts ledger-init's
+  exit code. (2) I wrote a `2>/dev/null` into ledger-init; replaced it with an explicit
+  projects-root check. Runs under macOS's bash 3.2.
+- **Real index:** `plans-index.py validate plans/PLANS-INDEX.md` is still conformant.

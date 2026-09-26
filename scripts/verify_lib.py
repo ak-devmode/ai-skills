@@ -20,6 +20,10 @@ RESULTS = ("pass", "fail", "inconclusive", "verified-unreachable")
 ORDER = {"fail": 0, "inconclusive": 1, "verified-unreachable": 2, "pass": 3}  # §5.1
 EXIT_PASS, EXIT_FAIL, EXIT_USAGE, EXIT_EVAL = 0, 1, 2, 3                     # §5.5
 JUDGE_LINE = re.compile(r"^(codex|claude-fallback|none) \S.*$")               # §4.6
+# §5.4: advisory until three real scopes pass cleanly — then Alex flips this to "blocking".
+GATE_MODE = "advisory"
+# Finish-table `repo` cells are paths under this root (§3.2). Tests point it elsewhere.
+PROJECTS = os.environ.get("VERIFY_PROJECTS", os.path.expanduser("~/Projects"))
 
 
 # ---------- §10 message contract ---------------------------------------------------

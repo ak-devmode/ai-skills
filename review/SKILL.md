@@ -52,9 +52,11 @@ and `scripts/codex-exec.py`. This file is the procedure; it never restates a rul
 diff is empty by construction — which is exactly why the range is explicit.
 `review.py prepare` exits 3 on an empty range; report it, don't work around it.
 
-1.2 **Project** is detected from the repo path (`review.py` does it): `~/Projects/wellmed/*`
-→ all domain groups · `~/Projects/pmg/*` → §3.1, §3.5, §3.6, §3.7 · anything else →
-domain checks `n/a` (never invented).
+1.2 **Project** is detected from the repo path — a worktree's primary checkout
+(`review.py` does it): `~/Projects/wellmed/kalpa-iris` → the IRIS groups, never
+WellMed's ADR checks · `~/Projects/wellmed/*` → all WellMed groups · `~/Projects/pmg/*`
+→ §3.1, §3.5, §3.6, §3.7 · anything else → domain checks `n/a` (never invented).
+`rules/domain.md` lists the groups per project.
 
 1.3 **Scope and unit.** When the work belongs to a `/plan` unit, pass `--scope <scope
 folder> --unit <N.P>` to `record` so findings are logged to

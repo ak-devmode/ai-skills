@@ -87,10 +87,15 @@ class TestReview(unittest.TestCase):
 
     # ---- prepare
     def test_prepare_selects_rules_by_project(self):
-        cases = [(self.repo, (), "domain ✓ (wellmed)", "apply all groups"),
+        iris = self.mkrepo("wellmed/kalpa-iris")
+        wt = os.path.join(self.tmp.name, "herdr-wt")
+        git(iris, "worktree", "add", "-q", wt)
+        cases = [(self.repo, (), "domain ✓ (wellmed)", "apply §3.1–§3.8"),
+                 (iris, (), "domain ✓ (iris)", "never §3.3/§3.4"),
+                 (wt, (), "domain ✓ (iris)", "never §3.3/§3.4"),
                  (self.generic, (), "domain n/a — generic repo", None),
                  (self.repo, ("--engine-only",), "domain SKIPPED (--engine-only)", None),
-                 (self.repo, ("--kalpa-only",), "engine SKIPPED (--kalpa-only)", "apply all groups")]
+                 (self.repo, ("--kalpa-only",), "engine SKIPPED (--kalpa-only)", "apply §3.1–§3.8")]
         for repo, flags, passes, rule in cases:
             with self.subTest(repo=repo, flags=flags):
                 p = run(REVIEW, "prepare", "--repo", repo, "--range", self.rng(repo), *flags, env=self.env)

@@ -46,7 +46,12 @@ ENGINE = os.path.expanduser("~/.claude/skills/gstack/review/checklist.md")
 DOCS = f"{vl.CONTRACT} §6 · review/SKILL.md"
 SEVERITIES = ("blocking", "should-fix", "note")
 CATEGORIES = ("engine", "domain", "local-maxima", "silent-failure", "dirty-comment", "doc-claim", "fail-open")
-GROUPS = {"wellmed": "all groups (§3.1–§3.8)", "pmg": "§3.1, §3.5, §3.6, §3.7 only"}
+GROUPS = {"wellmed": "§3.1–§3.8", "pmg": "§3.1, §3.5, §3.6, §3.7 only",
+          "iris": "§3.1, §3.2, §3.5, §3.6 (module paths + parameterized queries only), §3.7, §3.8, §3.9 — "
+                  "never §3.3/§3.4, which are WellMed ADRs IRIS does not inherit"}
+# Standalone graphs that live under another project's directory. Matched before the
+# top-level project, so kalpa-iris never inherits WellMed's ADR checks (IRIS CLAUDE.md §3.1).
+SUBPROJECTS = {"wellmed/kalpa-iris": "iris"}
 
 
 def now():
@@ -69,8 +74,19 @@ def repo_key(repo):
     return os.path.basename(os.path.realpath(repo)) if rel.startswith("..") else rel
 
 
+def main_worktree(repo):
+    """The primary checkout behind `repo` — a herdr worktree under ~/.herdr/worktrees/ sits
+    outside ~/Projects, so its own path cannot say which project it belongs to."""
+    code, common, _ = git(repo, "rev-parse", "--path-format=absolute", "--git-common-dir")
+    return os.path.dirname(common) if code == 0 and common else repo
+
+
 def project(repo):
-    top = repo_key(repo).split("/")[0]
+    key = repo_key(main_worktree(repo))
+    for prefix, name in SUBPROJECTS.items():
+        if key == prefix or key.startswith(prefix + "/"):
+            return name
+    top = key.split("/")[0]
     return top if top in GROUPS else "generic"
 
 

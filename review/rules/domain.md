@@ -2,7 +2,7 @@
 
 Read by both `/review` executors — the codex gate and the Claude fallback (`review/SKILL.md` §2). Moved verbatim from `review/SKILL.md` §3 (v2.2.0) so the two cannot drift.
 
-**Which groups apply** (from the repo path): WellMed `~/Projects/wellmed/*` → all groups · PMG `~/Projects/pmg/*` → §3.1, §3.5, §3.6, §3.7 (no SATU SEHAT, no ADR-028) · anything else → none (say so; do not invent domain checks).
+**Which groups apply** (from the repo path — for a worktree, its primary checkout's): IRIS `~/Projects/wellmed/kalpa-iris` → §3.1, §3.2, §3.5, §3.6 (module paths + parameterized queries), §3.7, §3.8, §3.9 — a standalone graph, so **never** the WellMed ADR groups §3.3/§3.4 · WellMed `~/Projects/wellmed/*` → §3.1–§3.8 · PMG `~/Projects/pmg/*` → §3.1, §3.5, §3.6, §3.7 (no SATU SEHAT, no ADR-028) · anything else → none (say so; do not invent domain checks).
 
 ## 3. Domain checks
 
@@ -21,7 +21,7 @@ upstream, patient identifiers (NIK, IHS ID, names, DOB), and full auth payloads.
 one WellMed service logs a full broker URL with password at Info level while its
 siblings redact. A new service copying a sibling's logger inherits nothing.
 
-### 3.2 SATU SEHAT and FHIR (WellMed only)
+### 3.2 SATU SEHAT and FHIR (WellMed, IRIS)
 
 - Every patient-data path carries **NIK**; IHS ID resolution has a miss path that
   fails closed, not silently.
@@ -31,8 +31,10 @@ siblings redact. A new service copying a sibling's logger inherits nothing.
 - Bundle structure matches the resource profiles; bundle size within limits.
 - **Environment is explicit.** Staging is `api-satusehat-stg.kemkes.go.id`; a
   hardcoded prod host in a non-prod path is a finding.
-- OAuth tokens expire in 1 hour — any new client has refresh, and refresh is
-  single-flight if it can be called concurrently.
+- OAuth tokens expire in **240 minutes (4h)** (Kemenkes remediation decks 24 & 26) —
+  any new client caches the token and refreshes near expiry, single-flight if it can be
+  called concurrently. A token requested per file or per call is a finding: it triggers
+  their rate-limit block.
 
 ### 3.3 Table write-ownership (WellMed, ADR-028)
 
@@ -79,3 +81,29 @@ unlisted is incomplete, not done.
 New behavior has a test; a bug fix has a regression test that fails without the fix.
 If the change alters something the repo `CLAUDE.md` or `ARCHITECTURE.md` states,
 the doc edit is part of this change.
+
+### 3.9 IRIS invariants (IRIS only)
+
+Each is backbone in `kalpa-iris/CLAUDE.md` — a violation is a design finding, not a
+style note, and the fix is never "document the exception".
+
+- **Identity is two layers** (§4.4). Internal IDs are opaque and system-minted — never
+  derived from, hashed from, or formatted around an MRN. Every external-key lookup
+  (MRN, WellMed visit/patient ID, name, name+DOB) is keyed **(tenant, MRN)**, never MRN
+  alone. No merge, no cross-MRN dedup.
+- **Three identifiers never conflated** (§5.5): WellMed order ID, IRIS study ID, ACSN.
+  One column, variable, or struct field holding two of them is a finding. IRIS mints
+  the ACSN.
+- **Never flatten the layers** (§4.5): base DICOM, AI annotation, human annotation stay
+  separate and independently toggleable at read time. A write that burns an annotation
+  into pixel data, or a read that cannot return the base alone, is a finding.
+- **Module boundary** (§4.3): one Go module per service. A `go.work`, a `replace`
+  pointing at another service, or an import across `services/*` is a finding.
+- **SATU SEHAT emission** (§5.3–5.4): off by default, opt-in per tenant, throttled per
+  tenant. Local storage and the local study lifecycle never wait on, or roll back on,
+  their acceptance. The emission toggle never keys off a pricing tier (§4.8.2).
+- **Validate at the wall** (`iris-docs/build-iris.md` §2.2, C3): untrusted input — modality, WellMed, SATU
+  SEHAT webhook — is validated and quarantined in GATEWAY, not trusted past it.
+- **PHI in DICOM**: patient tags (0010,xxxx), accession and referring-physician tags, and
+  burned-in text are PHI. §3.1 applies to them as to NIK — dumping a dataset or header
+  to a log is a finding.

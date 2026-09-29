@@ -53,6 +53,35 @@ def gate_mode(scope_dir):
     return GATE_MODE
 
 
+def todo_has_item(scope, finding_id, open_only):
+    """True when a TO-DO item line (`- [ ] …`, or also `- [x] …` unless open_only) opens
+    with the marker `[review <finding_id>]` followed by the work left, in the project's TO-DO.md — or, when not open_only, its
+    archive, where a closed item moves. The file is beside PLANS-INDEX.md, at most three
+    levels above the scope. The ID is the link: free text can't tie an item to a finding,
+    a substring matched an unrelated task and prose matched nothing real (review adhoc
+    r1-03 → r2-01 → r3-01, the §5.1 three-rounds stop — Alex chose the ID link)."""
+    finding_id = finding_id.strip()
+    if not finding_id:
+        return False
+    box = r"\[ \]" if open_only else r"\[[ xX]\]"
+    # the marker leads the item and text follows it: an ID merely mentioned in another
+    # task, or a bare marker with no work described, is not a follow-up (review adhoc-r4-01)
+    item = re.compile(rf"^\s*[-*] {box} (?:\*\*)?\[review {re.escape(finding_id)}\](?:\*\*)?[ \t]+\S", re.M)
+    d = os.path.realpath(scope)
+    for _ in range(3):
+        d = os.path.dirname(d)
+        todo = os.path.join(d, "TO-DO.md")
+        if os.path.isfile(todo):
+            files = [todo] + ([] if open_only else [os.path.join(d, "archive", "TO-DO-archive.md")])
+            for f in files:
+                if os.path.isfile(f):
+                    with open(f, encoding="utf-8") as fh:
+                        if item.search(fh.read()):
+                            return True
+            return False
+    return False
+
+
 # ---------- §10 message contract ---------------------------------------------------
 
 def message(level, what, expected, found, where, cause, nxt, docs):

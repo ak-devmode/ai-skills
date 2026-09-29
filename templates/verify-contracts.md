@@ -267,7 +267,7 @@ exclusive lock on the log, so concurrent or clean reviews never share an ID.
 `text` · `fix`. IDs are assigned in severity order.
 
 6.2 **`disposition`** records: `schema` · `ts` · `finding_id` · `disposition`
-(`fixed | rejected | deferred`) · `sha` (required for `fixed`) · `reason` (required for `rejected`; for `deferred`, the exact text of an item already in the project's `TO-DO.md` — never on a `blocking` finding or before round 4, `review/SKILL.md` §5.1) ·
+(`fixed | rejected | deferred`) · `sha` (required for `fixed`) · `reason` (required for `rejected`; for `deferred`, a note; the link is the finding ID, which must lead an open `- [ ]` item line in the project's `TO-DO.md` as `[review <id>]` followed by the work left, and the gate rechecks that item still exists, open or closed into `archive/TO-DO-archive.md` — never on a `blocking` finding or before round 4, `review/SKILL.md` §5.1) ·
 `by`.
 
 6.3 **Coverage rule.** Every `finding_id` has at least one disposition; the latest one

@@ -71,10 +71,12 @@ def coverage_blocks(review_log):
         elif d.get("disposition") == "rejected" and not str(d.get("reason") or "").strip():
             blocks.append((fid, "`rejected` disposition without a reason", "the reason the finding is wrong",
                            "reason missing", where, "code"))
-        elif d.get("disposition") == "deferred" and (f.get("severity") == "blocking"
-                                                     or not str(d.get("reason") or "").strip()):
-            blocks.append((fid, "`deferred` disposition on a blocking finding or without its TO-DO item",
-                           "a non-blocking finding and the TO-DO entry that carries it",
+        elif d.get("disposition") == "deferred" and (
+                f.get("severity") == "blocking"
+                or not str(d.get("reason") or "").strip()
+                or not vl.todo_has_item(os.path.dirname(os.path.dirname(review_log)), fid, open_only=False)):
+            blocks.append((fid, "`deferred` disposition on a blocking finding, or its TO-DO item is gone",
+                           "a non-blocking finding whose TO-DO item exists (open, or closed into the archive)",
                            f"severity {f.get('severity')}, reason {d.get('reason')!r}", where, "code"))
         elif d.get("disposition") not in ("fixed", "rejected", "deferred"):
             blocks.append((fid, "unknown disposition", "`fixed`, `rejected` or `deferred`",

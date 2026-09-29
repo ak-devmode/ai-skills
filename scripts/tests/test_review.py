@@ -302,16 +302,36 @@ class TestReview(unittest.TestCase):
         for _ in range(3):
             self.record()
         todo = os.path.join(os.path.dirname(self.scope), "TO-DO.md")
-        self.assertEqual(self.dispose("9.1-r4-02", "--deferred", "TO-DO: tenant filter").returncode, 1)  # no file
+        self.assertEqual(self.dispose("9.1-r4-02", "--deferred", "tenant filter").returncode, 1)  # no file
         with open(todo, "w") as fh:
-            fh.write("- [ ] TO-DO: tenant filter\n- [ ] TO-DO: comment\n")
-        self.assertEqual(self.dispose("9.1-r4-01", "--deferred", "TO-DO: tenant filter").returncode, 1)  # blocking
+            fh.write("Prose naming 9.1-r4-02 outside an item.\n- [x] [review 9.1-r4-03] closed already\n"
+                     "- [ ] [review 9.1-r4-020] a different finding\n- [ ] tenant filter, unlinked\n"
+                     "- [ ] unrelated task, see 9.1-r4-02 for context\n- [ ] [review 9.1-r4-02]\n")
+        for why in ("prose", "closed", "longer ID", "unlinked", "mentioned, not marked", "bare marker"):
+            with self.subTest(why=why):
+                self.assertEqual(self.dispose("9.1-r4-02", "--deferred", "tenant filter").returncode, 1)
+        self.assertEqual(self.dispose("9.1-r4-03", "--deferred", "comment").returncode, 1)  # only a closed item
+        with open(todo, "a") as fh:
+            fh.write("- [ ] [review 9.1-r4-02] tenant filter\n- [ ] [review 9.1-r4-03] comment\n"
+                     "- [ ] [review 9.1-r4-01] blocking one\n")
+        self.assertEqual(self.dispose("9.1-r4-01", "--deferred", "x").returncode, 1)  # blocking
         self.assertEqual(self.dispose("9.1-r4-02", "--deferred", "  ").returncode, 1)
-        self.assertEqual(self.dispose("9.1-r4-02", "--deferred", "TO-DO: not written").returncode, 1)
-        self.assertEqual(self.dispose("9.1-r4-02", "--deferred", "TO-DO: tenant filter").returncode, 0)
-        self.assertEqual(self.dispose("9.1-r4-03", "--deferred", "TO-DO: comment").returncode, 0)
+        self.assertEqual(self.dispose("9.1-r4-02", "--deferred", "tenant filter").returncode, 0)
+        self.assertEqual(self.dispose("9.1-r4-03", "--deferred", "comment").returncode, 0)
         r4 = [b[0] for b in gate.coverage_blocks(self.log)[0] if b[0].startswith("9.1-r4-")]
         self.assertEqual(r4, ["9.1-r4-01"])
+        # closing an item into the archive keeps the deferral valid; deleting it does not
+        os.makedirs(os.path.join(os.path.dirname(self.scope), "archive"), exist_ok=True)
+        with open(os.path.join(os.path.dirname(self.scope), "archive", "TO-DO-archive.md"), "w") as fh:
+            fh.write("- [x] [review 9.1-r4-03] comment — done\n")
+        with open(todo, "w") as fh:
+            fh.write("- [ ] [review 9.1-r4-02] tenant filter\n")
+        r4 = [b[0] for b in gate.coverage_blocks(self.log)[0] if b[0].startswith("9.1-r4-")]
+        self.assertEqual(r4, ["9.1-r4-01"])
+        with open(todo, "w") as fh:
+            fh.write("")
+        r4 = [b[0] for b in gate.coverage_blocks(self.log)[0] if b[0].startswith("9.1-r4-")]
+        self.assertEqual(r4, ["9.1-r4-01", "9.1-r4-02"])
         # a hand-written deferral of the blocking finding still blocks
         with open(self.log, "a") as fh:
             fh.write(json.dumps({"schema": "verify/1", "ts": "t", "record": "disposition", "finding_id": "9.1-r4-01",

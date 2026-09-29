@@ -121,6 +121,17 @@ class FinishTable(unittest.TestCase):
                          "amended: trial moved")
         self.assertEqual(t["revision"], 2)
 
+    def test_add_replace_refuses_a_no_op(self):
+        # 5.3-r5-03: an identical row must not bump the revision
+        self.ft("init", "--phase", "9.1=team/svc")
+        before = self.text()
+        same = self.rows_file({"check_id": "p1-no-overbuild", "deliverable": "No abstraction phase 9.1 did not need",
+                               "owner": "9.1", "check": "judge", "repo": "team/svc"})
+        p = self.ft("add", "--rows", same, "--change", "noop", "--replace")
+        self.assertEqual(p.returncode, 2, p.stdout)
+        self.assertIn("changes nothing", p.stderr)
+        self.assertEqual(self.text(), before)
+
     def test_add_that_would_not_parse_changes_nothing(self):
         self.ft("init", "--phase", "9.1=team/svc")
         before = self.text()

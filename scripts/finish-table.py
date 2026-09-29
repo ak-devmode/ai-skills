@@ -214,6 +214,11 @@ def cmd_add(a):
     existing = {r["check_id"]: r["_line"] for r in table["rows"]}
     if a.replace:
         for r in [r for r in new if r["check_id"] in existing]:
+            if lines[existing[r["check_id"]] - 1].strip() == render_row(r):
+                # a revision bump invalidates verdicts; never pay that for a no-op (5.3-r5-03)
+                return fail(f"--replace of `{r['check_id']}` changes nothing", "a row that differs from the table's",
+                            "an identical row", f"{path}:{existing[r['check_id']]}", "drop it from the rows file",
+                            code=vl.EXIT_USAGE)
             lines[existing[r["check_id"]] - 1] = render_row(r)
         new = [r for r in new if r["check_id"] not in existing]
     last = max(r["_line"] for r in table["rows"]) if table["rows"] else \

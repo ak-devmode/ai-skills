@@ -149,13 +149,13 @@ def shell_commands(line):
         sub = sep_after in ("&", "|", "|&") or sep_before in ("|", "|&")
         if line[a:b].strip():
             out.append([a, b, sub, sep_after])
-    # `A=1 && B=2 &` backgrounds the whole AND/OR list, not just its last command (5.3-r10-01)
-    for k in range(len(out) - 1, -1, -1):
-        if out[k][2] and out[k][3] == "&":
-            j = k - 1
-            while j >= 0 and out[j][3] in ("&&", "||"):
-                out[j][2] = True
-                j -= 1
+    # A line that backgrounds anything, or continues onto the next line, binds nothing: which
+    # commands a `&` sends to a subshell (a whole AND/OR list, pipelines inside it, lines
+    # continued with `&&` `||` `|` `\`) is not worth modeling — fail closed (5.3-r10-01, r11-01)
+    tail = syntax.rstrip()
+    if any(c[3] in ("&", "|&") for c in out) or re.search(r"(&&|\|\||\||\\)$", tail):
+        for c in out:
+            c[2] = True
     return [(a, b, sub) for a, b, sub, _ in out]
 
 
@@ -215,8 +215,9 @@ def shell_assigned(text):
     the diff reads is declared *somewhere*, i.e. was looked up rather than assumed. A name
     the script itself assigns (before reading it) is the script's own and not invented,
     whether or not that assignment runs on every path. Shell dataflow — conditional
-    branches, functions never called, `( … )` subshells — is deliberately not modeled; only
-    the two syntactic subshell forms, `… &` and pipelines, are excluded (5.3-r9-01)."""
+    branches, functions never called, `( … )` subshells — is deliberately not modeled. The
+    syntactic subshell forms are: a pipeline's commands bind nothing, and a line that
+    backgrounds anything or continues onto the next binds nothing (5.3-r9-01, r11-01)."""
     local, read_first = set(), set()
     for line in text.splitlines():
         if is_comment(line):

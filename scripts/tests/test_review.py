@@ -295,19 +295,28 @@ class TestReview(unittest.TestCase):
         git(wt, "commit", "-q", "-m", "fix in the worktree")
         self.assertEqual(self.dispose("9.1-r1-01", "--fixed", git(wt, "rev-parse", "HEAD")).returncode, 0)
 
-    def test_deferred_only_for_non_blocking_with_a_todo(self):
-        self.record()
+    def test_deferred_only_past_the_round_cap_with_a_written_todo(self):
         gate = load("verdict-gate.py")
-        self.assertEqual(self.dispose("9.1-r1-01", "--deferred", "TO-DO: x").returncode, 1)  # blocking
-        self.assertEqual(self.dispose("9.1-r1-02", "--deferred", "  ").returncode, 1)
-        self.assertEqual(self.dispose("9.1-r1-02", "--deferred", "TO-DO: tenant filter").returncode, 0)
-        self.assertEqual(self.dispose("9.1-r1-03", "--deferred", "TO-DO: comment").returncode, 0)
-        self.assertEqual([b[0] for b in gate.coverage_blocks(self.log)[0]], ["9.1-r1-01"])
+        self.record()
+        self.assertEqual(self.dispose("9.1-r1-02", "--deferred", "TO-DO: early").returncode, 1)  # round 1
+        for _ in range(3):
+            self.record()
+        todo = os.path.join(os.path.dirname(self.scope), "TO-DO.md")
+        self.assertEqual(self.dispose("9.1-r4-02", "--deferred", "TO-DO: tenant filter").returncode, 1)  # no file
+        with open(todo, "w") as fh:
+            fh.write("- [ ] TO-DO: tenant filter\n- [ ] TO-DO: comment\n")
+        self.assertEqual(self.dispose("9.1-r4-01", "--deferred", "TO-DO: tenant filter").returncode, 1)  # blocking
+        self.assertEqual(self.dispose("9.1-r4-02", "--deferred", "  ").returncode, 1)
+        self.assertEqual(self.dispose("9.1-r4-02", "--deferred", "TO-DO: not written").returncode, 1)
+        self.assertEqual(self.dispose("9.1-r4-02", "--deferred", "TO-DO: tenant filter").returncode, 0)
+        self.assertEqual(self.dispose("9.1-r4-03", "--deferred", "TO-DO: comment").returncode, 0)
+        r4 = [b[0] for b in gate.coverage_blocks(self.log)[0] if b[0].startswith("9.1-r4-")]
+        self.assertEqual(r4, ["9.1-r4-01"])
         # a hand-written deferral of the blocking finding still blocks
         with open(self.log, "a") as fh:
-            fh.write(json.dumps({"schema": "verify/1", "ts": "t", "record": "disposition", "finding_id": "9.1-r1-01",
+            fh.write(json.dumps({"schema": "verify/1", "ts": "t", "record": "disposition", "finding_id": "9.1-r4-01",
                                  "disposition": "deferred", "sha": None, "reason": "later", "by": "t"}) + "\n")
-        self.assertIn("deferred", gate.coverage_blocks(self.log)[0][0][1])
+        self.assertTrue(any(b[0] == "9.1-r4-01" and "deferred" in b[1] for b in gate.coverage_blocks(self.log)[0]))
 
     def test_accept_needs_every_disposition_and_a_new_finding_reopens(self):
         self.record()
@@ -315,12 +324,12 @@ class TestReview(unittest.TestCase):
         gate = load("verdict-gate.py")
         self.assertEqual(accept().returncode, 1)  # open findings
         self.dispose("9.1-r1-01", "--rejected", "x")
-        self.dispose("9.1-r1-02", "--deferred", "TO-DO: y")
+        self.dispose("9.1-r1-02", "--rejected", "y")
         self.dispose("9.1-r1-03", "--rejected", "z")
         self.assertFalse(gate.accepted(self.log))
         p = accept()
         self.assertEqual(p.returncode, 0, p.stderr)
-        self.assertIn("2 rejected, 1 deferred", p.stdout)
+        self.assertIn("0 fixed, 3 rejected, 0 deferred", p.stdout)
         self.assertTrue(gate.accepted(self.log))
         self.record()
         self.assertFalse(gate.accepted(self.log))

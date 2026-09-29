@@ -316,6 +316,17 @@ def build(a, doc, ordered, key, n, review_id):
     return [review] + records, findings, report
 
 
+def todo_file(scope):
+    """The project's TO-DO.md: beside PLANS-INDEX.md, at most three levels above the scope
+    (plans/{N}/, plans/archive/{N}/, plans/{program}/archive/{N}/)."""
+    d = os.path.realpath(scope)
+    for _ in range(3):
+        d = os.path.dirname(d)
+        if os.path.isfile(os.path.join(d, "TO-DO.md")):
+            return os.path.join(d, "TO-DO.md")
+    return None
+
+
 # ---------- accept -----------------------------------------------------------------
 
 def cmd_accept(a):
@@ -375,6 +386,21 @@ def cmd_dispose(a):
             return err("a blocking finding cannot be deferred", "`--fixed <sha>` or `--rejected \"<why>\"`",
                        "severity blocking", a.finding, "fix it, or reject it with the reason it is wrong",
                        cause="code", code=vl.EXIT_FAIL)
+        # SKILL.md §5.1: deferral is the round cap's release valve, not a way to skip a
+        # finding early, and the follow-up must exist (review adhoc-03)
+        m = re.search(r"-r(\d+)$", str(f.get("review_id", "")))
+        rnd = int(m.group(1)) if m else 0
+        if rnd <= ROUND_CAP:
+            return err(f"deferral before the round cap (round {rnd} ≤ {ROUND_CAP})",
+                       f"a finding from round {ROUND_CAP + 1} or later", f"round {rnd}", a.finding,
+                       "fix it, or reject it with the reason it is wrong", cause="code", code=vl.EXIT_FAIL)
+        todo = todo_file(a.scope)
+        text = open(todo, encoding="utf-8").read() if todo else ""
+        if a.deferred.strip() not in text:
+            return err("the deferral's TO-DO item is not in TO-DO.md", "the exact item text, already written to "
+                       "the project's TO-DO.md", a.deferred.strip()[:120], todo or f"no TO-DO.md above {a.scope}",
+                       "write the item to TO-DO.md first, then pass its exact text", cause="code",
+                       code=vl.EXIT_FAIL)
     by = a.by
     if not by:
         rc, name, _ = git(a.scope, "config", "user.name")

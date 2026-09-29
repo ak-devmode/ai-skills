@@ -225,6 +225,12 @@ verdict header and the index status.
 Any block is a failure whatever the mode: the scope cannot report HEALED, it still
 archives, and its index row carries the printed `⚠ verify failed <check_ids>` marker.
 
+5.4.2 **Per-graph override** — a `**Gate mode:** blocking` (or `advisory`) line in a graph's
+`PLANS-INDEX.md` sets the default for every scope under it; an explicit `--blocking` /
+`--advisory` flag still wins. kalpa-iris runs blocking from its first scope (Alex,
+2026-09-29): its code is not read by a human, so an advisory gate there is a report
+nobody reads.
+
 5.5 **Exit codes** for every script in this contract: `0` pass · `1` blocked / failed ·
 `2` usage · `3` could not evaluate (missing or malformed input, git error) — never read as
 pass.

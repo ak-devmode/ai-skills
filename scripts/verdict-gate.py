@@ -353,7 +353,7 @@ def main(argv):
         a = ap.parse_args(argv)
     except SystemExit as exc:
         return vl.EXIT_USAGE if exc.code else vl.EXIT_PASS
-    a.mode = a.mode or vl.GATE_MODE
+    a.mode = a.mode or vl.gate_mode(a.scope)
 
     if a.skip_verify is not None:
         if not a.skip_verify.strip():

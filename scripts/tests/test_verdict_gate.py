@@ -236,6 +236,18 @@ class TestGate(Fixture):
         self.assertIn("ADVISORY", p.stdout)
         self.assertIn("marker: ⚠ judge: none not configured ⚠ verify advisory: 1 blocked (bad)", p.stdout)
 
+    def test_index_gate_mode_line_makes_the_default_blocking(self):
+        self.set_table([row("bad", "exit 1")])
+        self.ledger()
+        self.verify()
+        self.assertEqual(self.gate().returncode, 0)  # fleet default: advisory
+        with open(self.index, "a") as fh:
+            fh.write("\n**Gate mode:** blocking\n")
+        p = self.gate()
+        self.assertEqual(p.returncode, 1, p.stdout)
+        self.assertIn("BLOCKED", p.stdout)
+        self.assertEqual(self.gate("--advisory").returncode, 0)  # an explicit flag still wins
+
     def test_skip_verify_needs_a_reason(self):
         self.assertEqual(self.gate("--skip-verify", "  ").returncode, 2)
         code, doc = self.gate_json("--skip-verify", "codex down for the day")

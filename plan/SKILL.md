@@ -447,6 +447,8 @@ on a direct-to-main repo a branch diff is empty by construction.
    `**Predates gate:**` skips this step.
 3. **Mark Done only through the gate:**
    `plans-index.py status <index> --num {N}.{P} --status "✅ Done ({date}) — …"`.
+   - The mode comes from the index's `**Gate mode:**` line, else `GATE_MODE`
+     (`verify-contracts.md` §5.4.2 — kalpa-iris is blocking).
    - **Advisory** (`GATE_MODE`, the default until five clean scopes): a block is
      reported, the unit is marked Done, and the index row carries the
      `⚠ verify advisory: …` marker. Tell the user what was blocked. Never soften it.

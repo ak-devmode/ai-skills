@@ -21,9 +21,9 @@ Usage:
   finish-table.py init --scope DIR --phase SPEC ... [--rows FILE] [--test-plan-owner N.P]
                        [--predates N.P,...] [--by NAME] [--dry-run]
   finish-table.py add  --scope DIR --rows FILE --change TEXT [--by NAME] [--dry-run]
-    --predates  phases already Done before the gate existed; verdict-gate.py and
-                plans-index.py validate exempt them (Alex, 2026-09-29: running scopes
-                are never asked to reconcile verify)
+    --predates  phases already started (Done or in progress) before the table existed;
+                verdict-gate.py and plans-index.py validate exempt them (Alex, 2026-09-29:
+                running scopes are never asked to reconcile verify)
 Output: the written table's path, revision and row count (or the table, with --dry-run).
 Exit:   0 written · 2 usage · 3 refused (table exists for init, missing for add, or the
         result would not parse — nothing written)
@@ -178,8 +178,8 @@ def cmd_init(a):
     predates = [u.strip() for u in (a.predates or "").split(",") if u.strip()]
     bad = [u for u in predates if not UNIT.match(u) or u in units]
     if bad:
-        return fail("bad --predates", "Done phases `N.P`, none of them also a --phase", ", ".join(bad),
-                    "--predates", "list only phases already Done", code=vl.EXIT_USAGE)
+        return fail("bad --predates", "started phases `N.P`, none of them also a --phase", ", ".join(bad),
+                    "--predates", "list only phases already started", code=vl.EXIT_USAGE)
     text = read(TEMPLATE)
     name = os.path.basename(os.path.normpath(a.scope))
     text = text.replace("{{SCOPE_SLUG}}", name).replace("{{SCOPE_PATH}}", os.path.join(a.scope, "scope.md"))

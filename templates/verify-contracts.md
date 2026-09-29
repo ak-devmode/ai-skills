@@ -71,8 +71,8 @@ Lives in the scope folder, never inside `scope.md` (a write-once design record).
 
 3.1 **Header fields:** `**Schema version:** verify/1` and `**Revision:** <integer>`. Every
 change to a row bumps the revision and adds a Changelog line (rev · date · change · by).
-Optional `**Predates gate:** <N.P>, …` names phases already Done when the table was
-created (self-heal on a running scope); they own no rows, `verdict-gate.py` reports them
+Optional `**Predates gate:** <N.P>, …` names phases already started (Done or in
+progress) when the table was created (self-heal on a running scope); they own no rows, `verdict-gate.py` reports them
 `predates-gate` and `plans-index.py validate` accepts their Done — a scope already in
 flight is never asked to reconcile verification after the fact (Alex, 2026-09-29).
 **Writer in practice:** `scripts/finish-table.py` (`init` with the standard rows per

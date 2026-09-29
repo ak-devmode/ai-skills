@@ -349,3 +349,8 @@ Resumed/restarted phases append a SECOND block:
 - `finish-table.py write_checked()` ← `verify_lib.append_verified` (write, read back through the consumer's parser, fail loud); restore-on-failure added because a table is rewritten, not appended
 - `plans-index.py cmd_gate_count()` ← `cmd_validate` section walk (same `parse()` + folder resolution as `run_gate`)
 - ai-skills · doc: `scope/SKILL.md` (3.9.0, §5.9, §5.10), `scope/templates/plan-stub.md.template`, `verify/SKILL.md` §4 — 3.1
+- ai-skills · doc: `plan/SKILL.md` (3.9.0 §5.6.2a/§5.13/§6.7/§6.8/§11.4), `plan/tests/verification-recipes.md` (Recipe 4) — 3.2
+- ai-skills · doc: `templates/verify-contracts.md` §3.1 wording; code: `scripts/finish-table.py` docstring/messages — 3.2
+
+### §11 Risk Flags (Phase 3, 3.2)
+- Self-heal's one halt and its phase classification are prose (the script takes the lists it is given). First real exercise will be the first pre-gate scope `/plan` resumes; watch that it classifies an in-progress phase as started.

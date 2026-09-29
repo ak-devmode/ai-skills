@@ -1,6 +1,6 @@
 # /plan — Verification Recipes
 
-Procedural tests for the three rule additions introduced by the closeout-skills work. These are not automated unit tests — ai-skills is a skills repo, not an executable code repo. Each recipe is a scripted manual verification procedure that Claude follows in a dogfood scope.
+Procedural tests for rule additions to /plan (Recipes 1–3: closeout-skills; Recipe 4: scope 5 verification wiring). These are not automated unit tests — ai-skills is a skills repo, not an executable code repo. Each recipe is a scripted manual verification procedure that Claude follows in a dogfood scope.
 
 These recipes are referenced by:
 - closeout-skills-PLAN.md §5.7 (Phase 2 test task)
@@ -167,6 +167,54 @@ Restore CROSS-REPO.md to its correct state after the test. Re-run /plan to confi
 - /plan continues past Phase 0 silently (the critical bug Issue 17 prevents — would produce spurious halt-and-asks indistinguishable from genuinely novel methods)
 - Halt message is generic ("file not found") without naming the source of the misconfiguration
 - /plan errors but in a way that requires manual progress-file cleanup before retry
+
+---
+
+## Recipe 4 — Verification wiring: self-heal, gate, skip, explicit range (scope 5.3)
+
+**Tests:** §5.6.2a self-heal, §5.13 `--repo` bases, §6.8 review + verify + gate. The
+scripts underneath have automated tests (`scripts/tests/test_{finish_table,verdict_gate}.py`).
+This recipe covers what only a `/plan` session can show: that the skill *calls* them in
+the right order and halts where it should.
+
+### Setup
+
+Scratch plans dir `$T/plans` inside a git repo, and a scratch code repo `$T/svc` on
+`main` with one commit. Scope `9-old/` has `scope.md`, `progress.md`, stubs
+`9.1-old-PLAN.md` (Plans table: Done) and `9.2-old-PLAN.md` (Ready, **no** Review/Verify
+tasks, the pre-5.3 shape, one AI task that commits a file to `svc`), no
+`finish-conditions.md`, and index rows `9`, `9.1 ✅ Done`, `9.2 Ready`. Run with
+`VERIFY_PROJECTS=$T`.
+
+### Action and expected outcome
+
+1. `/plan 9.2` → Phase 0 reaches §5.6.2a. It shows a dry-run table with rows for 9.2
+   only and `**Predates gate:** 9.1`, then **halts once**. Confirm it → the table is
+   written, Revision 1.
+2. The ledger phase block carries `- base: 9.2 svc <sha>` (§5.13 `--repo`).
+3. The task commits directly to `main`. At the CHECKPOINT, `/review` runs on
+   `<base>..HEAD` in `svc`, which is non-empty, and the report names that range. It is
+   not reported empty.
+4. `/verify 9.2`. Plant a failing deliverable row first (`finish-table.py add`, `check`
+   = `exit 1`). **Advisory:** 9.2 is marked Done and its index row carries
+   `⚠ verify advisory: 1 blocked (…)`. **Blocking** (re-run the status step with
+   `--blocking`): refused, the row is unchanged, the task is logged ❌ FAILED.
+5. `/plan 9.2 --skip-verify "env down"` → the §6.7 header shows `⚠ SKIPPED: env down`
+   and the index row carries `⚠ verify skipped: env down`.
+6. `plans-index.py validate` → conformant. 9.1's hand-written Done is accepted
+   (`predates-gate`).
+
+### Pass criteria
+
+- One halt for the table, never a second one in the same session.
+- No row owned by 9.1, and 9.1 never verified.
+- Every gate outcome reaches the index through `plans-index.py status`, never a hand edit.
+
+### Failure modes to catch
+
+- Self-heal drafts rows for a phase that already started (it would saddle a running scope with verification after the fact).
+- An empty range reported as "no findings".
+- Done written straight into the index, so `validate` flags it as "written by hand".
 
 ---
 

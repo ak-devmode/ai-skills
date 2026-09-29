@@ -1,6 +1,6 @@
 ---
 name: plan
-version: 3.8.2
+version: 3.9.0
 description: |
   Execute tasks from a structured plan document step by step, logging progress and
   stopping at human checkpoints. Plan files follow the naming convention *-PLAN.md
@@ -307,6 +307,30 @@ name signals "reference material, pull on demand." Common triggers:
 Log the list of sibling plans actually read in `closeout-prep.md §6 (Docs
 Loaded During Planning)` alongside the CLAUDE/ARCH/CROSS-REPO entries.
 
+5.6.2a **Self-heal: a scope with no `finish-conditions.md`.** Scopes created before the
+verification gate have no finish table, and without one `/verify` cannot run (§6.8).
+Draft one, and ask once:
+
+1. From the scope's Plans table (or its index rows), sort the phases into **started**
+   (Done, or with any task logged, including this one if it is resuming) and **not
+   started**.
+2. Dry-run the draft. Not-started phases get rows; started phases go under
+   `--predates`, so they own no rows and are never verified after the fact. A scope
+   already in flight is never asked to reconcile verification (Alex, 2026-09-29):
+   ```bash
+   ~/Projects/ai-skills/scripts/finish-table.py init --scope "$SCOPE_DIR" --dry-run \
+     --phase "N.3=<repo>,…" --phase "N.4" --predates "N.1,N.2" [--rows deliverables.jsonl]
+   ```
+   `N.P=repo,…` means the phase commits to those repos (read from the plan's Input and
+   Output paths); `N.P` alone means it commits nothing. Deliverable rows come from
+   `scope.md`'s phase sections (`/scope` §5.10 says how to write them).
+3. **Halt once.** Show the drafted table and ask the user to confirm or edit it. Then
+   write it by running the same command without `--dry-run`. Do not ask again this
+   session.
+4. If every phase has started, write the table anyway with every phase under
+   `--predates` and no `--phase` rows. That records that the scope predates the gate, and
+   nothing more is asked of it.
+
 5.7 **Branch detection** — Determine the working branch:
 - If the plan has a `**Branch:**` field: confirm with the user — "Plan specifies branch `<branch>`. Confirm this is correct before we proceed." Wait for confirmation before continuing.
 - If the plan has no `**Branch:**` field: derive a name as `feature/<plan-stem>` (e.g., `cashier-standards-PLAN.md` → `feature/cashier-standards`). Announce it: "No branch specified — will use `feature/<derived-name>`."
@@ -355,8 +379,15 @@ two-source grep. Re-derived per session; nothing is cached to disk.
 ledger lives in the scope folder (child plan) or the plan folder (standalone):
 
 ```bash
-~/Projects/ai-skills/scripts/ledger-init.sh "$LEDGER_DIR" --plan "$PLAN_FILE" --phase "{P}: {name}"   # --resumed after compaction
+~/Projects/ai-skills/scripts/ledger-init.sh "$LEDGER_DIR" --plan "$PLAN_FILE" --phase "{P}: {name}" \
+    --repo ~/Projects/<repo> [--repo …]   # --resumed after compaction
 ```
+
+Pass `--repo` for **every repo this plan commits to**. The script records each repo's HEAD
+as `- base: {N}.{P} <repo> <sha>` and keeps only the first one per repo, so a resumed
+phase never shrinks its range. That base is the start of the unit's revision range
+`base..HEAD`, which `/review` and `/verify` both take (§6.8). A repo first touched
+mid-phase gets its `--repo` before its first commit.
 
 It creates the ledger from the shared template if absent, otherwise appends a
 timestamped phase header — never overwrites — and reads the result back. Exit 4 means
@@ -392,7 +423,33 @@ Then proceed to the next task — keep going until you hit a HUMAN task, a CHECK
 ✅ Completed: N/M tasks
 ⏸️ Status: [Ready to execute / Waiting on human / Failed — needs review]
 🔗 Parent scope: [path or "standalone"]
+🔎 Verify: [advisory | blocking] · [N rows owned | predates the gate | no finish table] [· ⚠ SKIPPED: <reason>]
 ```
+
+6.8 **Review and verify every unit.** A unit is this plan (`{N}.{P}`). Its range, per
+repo, is `base..HEAD` with the base from the ledger (§5.13). Pass the range explicitly:
+on a direct-to-main repo a branch diff is empty by construction.
+
+1. **Review** — the stub's `Task {P}.R`. A pre-5.3 stub has no such task, so run this at
+   the CHECKPOINT for every repo whose range is non-empty. Run `/review` per repo with
+   `RANGE=<base>..HEAD` and `--scope <scope folder> --unit {N}.{P}`. **If the stub has a
+   Review task and every range is empty, the task is ❌ FAILED**, never a clean review:
+   the phase declared commits and none are in range. Disposition every finding ID. Fix it
+   in a commit that touches the file and record `fixed <sha>`, or record
+   `rejected <reason>`. After fixing any blocking finding, review the fix commits again.
+2. **Verify** — the stub's `Task {P}.V`, or the CHECKPOINT on a pre-5.3 stub. Run
+   `/verify {N}.{P}`. If the scope has no table, §5.6.2a runs first. A unit listed under
+   `**Predates gate:**` skips this step.
+3. **Mark Done only through the gate:**
+   `plans-index.py status <index> --num {N}.{P} --status "✅ Done ({date}) — …"`.
+   - **Advisory** (`GATE_MODE`, the default until five clean scopes): a block is
+     reported, the unit is marked Done, and the index row carries the
+     `⚠ verify advisory: …` marker. Tell the user what was blocked. Never soften it.
+   - **Blocking**: a refusal (exit 1) means the unit is not Done. Log it ❌ FAILED and stop.
+   - **`/plan … --skip-verify "<reason>"`** (the user's flag, never your own decision):
+     pass it through as `--skip-verify`. The reason goes into the §6.7 header and the
+     index row. A skip without a reason is refused.
+   Exit 3 means the gate could not evaluate. That is ❌ FAILED, never Done.
 
 ## 7. Pattern-First Rule
 
@@ -688,9 +745,10 @@ header.
 > writer, once leaked a 40-row untabled fragment into the WellMed index that was the
 > only registration for four scopes. The header check lives in code so it can refuse.
 
-For a **child plan** (per §2.3): update nothing here. Record completion in the
-scope `progress.md` (§11.5). The scope's index row changes only when the whole
-scope closes.
+For a **child plan** (per §2.3): its own `{N}.{P}` row goes to Done through
+`plans-index.py status`, which is the verification gate (§6.8). Nothing else in the
+index changes. Record completion in the scope `progress.md` (§11.5). The scope's own
+row changes only when the whole scope closes.
 
 For a **standalone plan** or a **closing scope**, move the row between tables to
 match what just happened on disk:

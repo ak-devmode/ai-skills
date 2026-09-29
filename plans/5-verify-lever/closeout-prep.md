@@ -358,3 +358,10 @@ Resumed/restarted phases append a SECOND block:
 - ai-skills · test: `scripts/tests/test_lever_candidates.py` (new), `test_judge.py`, `test_verdict_gate.py` — 3.3
 - ai-skills · doc: `closeout/SKILL.md` (1.4.0 §5.6), `verify/schemas/judge-output.schema.json`, `verify/prompts/judge.md`, `templates/verify-contracts.md` §4.9 — 3.3
 - §3: `lever-candidates.py` write + read-back ← `verify_lib.append_verified` / `plans-index.py status` landed-check
+- ai-skills · code: `scripts/verify-prereqs.sh`, `scripts/clone-behind.py` (new), `setup.sh` — 3.4
+- ai-skills · test: `scripts/tests/test_rollout.py` (new) — 3.4
+- ai-skills · doc: `README.md` (+ unplanned stale fixes), `ARCHITECTURE.md`, `CLAUDE.md`, `verify/SKILL.md` 0.3.0, `plan/SKILL.md` §6.7, `plans/5-verify-lever/artifacts/rollout-announcement-draft.md` — 3.4
+
+### §7 Docs Likely Affected (Phase 3)
+- `CLAUDE.md` §9.2 Recent work — update at scope closeout (scope 5 closes)
+- `ARCHITECTURE.md` §6.2 Active scope — scope 5 → closed at closeout

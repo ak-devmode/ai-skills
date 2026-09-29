@@ -1,7 +1,7 @@
 # Finish conditions — 5-verify-lever
 
 **Schema version:** verify/1
-**Revision:** 4
+**Revision:** 5
 **Scope:** ~/Projects/ai-skills/plans/5-verify-lever/scope.md
 
 One row per check. `check` is a shell command or the literal `judge`. A literal `|` in a
@@ -27,6 +27,13 @@ range is fixed: `8173b95..e3b74ec`.
 | p2-scope-deliverables | scope.md §4.2 deliverables landed as specified, against the plan as amended in progress.md "Plan 5.2 → Task Detail" (Task 2.4 is class B only; the class-A trial moved to test-suite T2) | 5.2 | B | judge | ai-skills | . | - | - | 2 | no | judge reason |
 | p2-no-overbuild | No abstraction Phase 2 did not need | 5.2 | B | judge | ai-skills | . | - | - | 2 | no | judge reason |
 | p2-rejections-justified | Every `/review` rejection recorded for 5.2 is right | 5.2 | B | judge | ai-skills | . | - | - | 2 | no | judge reason |
+| p3-tests-green | The script test suite passes at the end of Phase 3 | 5.3 | B | `python3 -m unittest discover scripts/tests` | ai-skills | . | - | 300 | 4 | no | runner record |
+| p3-fixtures-live | The planted-defect eval passes with the live judge (VERIFY_EVAL=1), including the new lever_id schema | 5.3 | B | `python3 -m unittest discover scripts/tests -p test_verify_fixtures.py` | ai-skills | . | VERIFY_EVAL=1 | 900 | 4 | no | runner record |
+| p3-names-resolve | Every identifier Phase 3 references is declared | 5.3 | B | `python3 scripts/resolve-identifiers.py --repo . --range $VERIFY_BASE..HEAD` | ai-skills | . | - | - | 4 | no | runner record |
+| p3-skills-lint | Every skill Phase 3 touched passes the accretion linter | 5.3 | B | `python3 scripts/lint-skill.py scope plan closeout verify review` | ai-skills | . | - | - | 4 | no | runner record |
+| p3-scope-deliverables | scope.md §4.3 deliverables landed as specified, against plan 5.3 as amended in progress.md (Decisions Log 2026-09-29 '5.3 design answers': Predates gate, flip at 5 with /closeout count, prereqs without live ping, lever_id; second sighting counted per scope) | 5.3 | B | judge | ai-skills | . | - | - | 2 | no | judge reason |
+| p3-no-overbuild | No abstraction Phase 3 did not need | 5.3 | B | judge | ai-skills | . | - | - | 2 | no | judge reason |
+| p3-rejections-justified | Every /review rejection recorded for 5.3 is right | 5.3 | B | judge | ai-skills | . | - | - | 2 | no | judge reason |
 
 ## Changelog
 
@@ -36,3 +43,4 @@ range is fixed: `8173b95..e3b74ec`.
 | 2 | 2026-09-26 | `names-resolve` resolves Phase 1's refs against today's declarations (`--decl-rev HEAD`): the dogfood's first run found `VERIFY_PROJECTS` undeclared, now declared in `.env.example` | Alex / Claude |
 | 3 | 2026-09-26 | Per the codex judge: `--decl-rev HEAD` moved the goalposts for a closed unit — reverted, so Phase 1 is judged against its own declarations (it fails; fixed in 5.2 `e4aaa0a`). `test-plan-followed` covers the whole scope's plan → owner 5.3 | Alex / Claude |
 | 4 | 2026-09-29 | Phase 2 (5.2) rows added: runner rows for the suite, names, lint, codex failure modes, review log and fixtures; judge rows for deliverables (plan as amended — Task 2.4 class B only, class-A trial moved to test-suite T2), over-build and rejections | Alex / Claude |
+| 5 | 2026-09-29 | Phase 3 (5.3) rows via finish-table.py add (its first real use): suite, live fixtures eval with VERIFY_EVAL=1, names, lint; judge rows for deliverables (plan as amended), over-build, rejections | Alex / Claude |

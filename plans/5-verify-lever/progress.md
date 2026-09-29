@@ -34,7 +34,7 @@
   first member = fail-loud sweep + lints (moved out of this scope, Alex accepted).
 - (2026-09-26) Invented-reality check built as a script in this scope (Alex: yes).
 - (2026-09-26) `/review` flags dirty comments (workaround / hack / TODO-as-justification).
-- (2026-09-26) clinic_3 in dev = temporary trial target; permanent = stood-up tenant per env.
+- (2026-09-26) clinic_3 in dev = temporary trial target; permanent = stood-up tenant per env. *(Superseded 2026-09-29: clinic_3 is not a dev tenant, and the class-A trial moved to test-suite T2 — see the 2026-09-29 entries.)*
 - (2026-09-26) Faithful-port rule lives in `/verify`, not global CLAUDE.md.
 - (2026-09-26) Brief's credentials redacted (`eaeb441`); brief moved to `artifacts/`.
 - (2026-09-26) CEO review: approach C — a deterministic row passes only on runner evidence; the codex judge may only downgrade. Required fail/inconclusive blocks; latest run per check decides; evidence bound to SHAs. Gate enforced by plans-index.py, advisory for 3 clean scopes then blocking. Non-codex judge → ⚠ in PLANS-INDEX (Alex's D3 idea).

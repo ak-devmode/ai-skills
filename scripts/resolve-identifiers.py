@@ -136,16 +136,19 @@ def shell_mask(line, strict=False):
 def shell_commands(line):
     """[(start, end)] of each simple command on the line, split only on separators the shell
     sees (never inside quotes, comments or substitutions)."""
-    syntax, cuts, prev = shell_mask(line, strict=True), [], 0
+    syntax, cuts, prev, before = shell_mask(line, strict=True), [], 0, ""
     for m in SH_SEP.finditer(syntax):
-        cuts.append((prev, m.start()))
-        prev = m.end()
-    cuts.append((prev, len(line.rstrip())))
+        cuts.append((prev, m.start(), before, m.group()))
+        prev, before = m.end(), m.group()
+    cuts.append((prev, len(line.rstrip()), before, ""))
     out = []
-    for a, b in cuts:
+    for a, b, sep_before, sep_after in cuts:
         a += SH_LEAD.match(syntax[a:b]).end()  # `then X=1` binds X; `echo then X=1` does not
+        # a backgrounded (`… &`) or piped (`… | …`) command runs in a subshell: its
+        # assignments never reach the script (5.3-r9-01)
+        sub = sep_after in ("&", "|") or sep_before == "|"
         if line[a:b].strip():
-            out.append((a, b))
+            out.append((a, b, sub))
     return out
 
 
@@ -168,9 +171,15 @@ def shell_binds(syntax):
                 continue
             if w.startswith("<"):
                 break
-            if re.match(r"^-[a-zA-Z]*[pdnNtui]$", w):
-                skip = True
-            elif not w.startswith("-") and re.match(r"^[A-Za-z_]\w*$", w):
+            if w.startswith("-") and len(w) > 1:
+                # grouped options, left to right: an operand letter takes the rest of the word,
+                # or the next word when it ends the group (`-rpd X`: p's operand is `d` — 5.3-r9-02)
+                opts = w[1:]
+                for k, ch in enumerate(opts):
+                    if ch in "pdnNtui":
+                        skip = k == len(opts) - 1
+                        break
+            elif re.match(r"^[A-Za-z_]\w*$", w):
                 names.append(w)
         return names
     kw = words[0] in SH_KEYWORDS
@@ -199,8 +208,8 @@ def shell_assigned(text):
         if is_comment(line):
             continue
         reads_mask, syntax = shell_mask(line), shell_mask(line, strict=True)
-        for a, b in shell_commands(line):
-            binds = shell_binds(syntax[a:b])
+        for a, b, sub in shell_commands(line):
+            binds = [] if sub else shell_binds(syntax[a:b])
             # within one command the reads happen first (a `for` list, a right-hand side);
             # a loop body is a later command, split off at `do`
             reads = {m.group(1) or m.group(2) for m in SH_USE.finditer(reads_mask[a:b])}

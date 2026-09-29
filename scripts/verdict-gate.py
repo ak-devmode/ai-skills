@@ -256,6 +256,10 @@ def evaluate(scope, unit, projects):
     return report, blocks, sorted(j for j in judges if j)
 
 
+# Blocks that mean "no complete verdict yet" — /closeout runs /verify for these, and only these.
+NEEDS_VERIFY = ("no final verdict", "an unfinished run is newer than the verdict")
+
+
 def closeout_view(a, table):
     """Every gated unit, blocks as failures. Output ends `verdict: PASS|FAILED …` and, when
     anything is off, `marker: ⚠ verify failed <ids>` (+ judge markers) — the text /closeout
@@ -268,7 +272,8 @@ def closeout_view(a, table):
         failed += [b[0] for b in blocks]
         msgs += [vl.message("FAIL", f"{u}: {what}", exp, found, where, cause, nxt, DOCS)
                  for _, what, exp, found, where, cause, nxt in blocks]
-        per.append({"unit": u, "blocks": [b[0] for b in blocks]})
+        per.append({"unit": u, "blocks": [{"id": b[0], "what": b[1], "cause": b[5]} for b in blocks],
+                    "needs_verify": any(b[1] in NEEDS_VERIFY for b in blocks)})
     markers = [f"⚠ judge: {j}" for j in sorted(judges) if not j.startswith("codex ")]
     if failed:
         markers.insert(0, f"⚠ verify failed {', '.join(failed)}")
@@ -280,7 +285,8 @@ def closeout_view(a, table):
     else:
         for p in per:
             print(f"{'FAIL' if p['blocks'] else 'pass'}  {p['unit']}  "
-                  f"{', '.join(p['blocks']) if p['blocks'] else 'every owned check passes'}")
+                  f"{', '.join(b['id'] for b in p['blocks']) if p['blocks'] else 'every owned check passes'}"
+                  + ("  (verdict missing or unfinished — run /verify)" if p["needs_verify"] else ""))
         for u in table["predates"]:
             print(f"n/a   {u}  predates the gate")
         for m in msgs:

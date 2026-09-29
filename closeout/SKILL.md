@@ -210,8 +210,9 @@ check nothing.
 S=~/Projects/ai-skills/scripts
 $S/verdict-gate.py --scope "$SCOPE" --all --json
 ```
-If a unit's blocks include `no final verdict` or `an unfinished run`, the verdict is
-missing or incomplete, so run `/verify <unit>` for it now, then run `--all` again. Never
+Each unit in the JSON carries `blocks` (`id`, `what`, `cause`) and `needs_verify`, which
+is true when a verdict is missing or a run is unfinished. For each unit with
+`needs_verify`, run `/verify <unit>` now, then run `--all` again. Never
 re-run `/verify` on a unit that has a complete failing verdict just to get a different
 answer. The verdict of record is the one that exists.
 

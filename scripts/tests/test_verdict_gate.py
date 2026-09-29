@@ -454,6 +454,18 @@ class TestPredatesAndCloseout(Fixture):
         self.assertIn("marker: ⚠ verify failed bad", p.stdout)
         self.assertIn("n/a   5.0  predates the gate", p.stdout)
 
+    def test_all_json_says_which_units_need_verify(self):
+        # 5.3-r1-04: closeout must be able to tell "missing verdict" from "failed verdict"
+        self.table_with([row("ok", "true"), row("bad", "exit 1", owner="5.2")])
+        self.ledger()
+        self.verify_unit("5.2", [self.v("bad", "fail")])
+        doc = json.loads(self.closeout("--json").stdout)
+        units = {u["unit"]: u for u in doc["units"]}
+        self.assertTrue(units["5.1"]["needs_verify"])
+        self.assertEqual(units["5.1"]["blocks"][0]["what"], "no final verdict")
+        self.assertFalse(units["5.2"]["needs_verify"])
+        self.assertEqual(units["5.2"]["blocks"][0]["id"], "bad")
+
     def test_all_passes_clean_with_codex(self):
         self.table_with([row("ok", "true")])
         self.ledger()

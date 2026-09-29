@@ -79,7 +79,7 @@ SH_BUILTIN = {"HOME", "PATH", "PWD", "OLDPWD", "USER", "LOGNAME", "SHELL", "TMPD
 SH_NAME = re.compile(r"^[A-Z][A-Z0-9_]*$")
 SH_ASSIGN_WORD = re.compile(r"^([A-Z][A-Z0-9_]*)\+?=")
 SH_KEYWORDS = {"export", "local", "readonly", "declare", "typeset"}
-SH_SEP = re.compile(r";|&&|\|\||\||(?<![<>&])&(?![&>])|\n")  # a lone `&` too, never `2>&1` (5.3-r8-02)
+SH_SEP = re.compile(r";|&&|\|\||\|&|\||(?<![<>&|])&(?![&>])|\n")  # a lone `&` too, never `2>&1` (5.3-r8-02)
 SH_LEAD = re.compile(r"^\s*(?:(?:then|do|else|elif|if|while|until|!|\{|\()\s+)*")  # only at a command's start
 
 
@@ -146,10 +146,17 @@ def shell_commands(line):
         a += SH_LEAD.match(syntax[a:b]).end()  # `then X=1` binds X; `echo then X=1` does not
         # a backgrounded (`… &`) or piped (`… | …`) command runs in a subshell: its
         # assignments never reach the script (5.3-r9-01)
-        sub = sep_after in ("&", "|") or sep_before == "|"
+        sub = sep_after in ("&", "|", "|&") or sep_before in ("|", "|&")
         if line[a:b].strip():
-            out.append((a, b, sub))
-    return out
+            out.append([a, b, sub, sep_after])
+    # `A=1 && B=2 &` backgrounds the whole AND/OR list, not just its last command (5.3-r10-01)
+    for k in range(len(out) - 1, -1, -1):
+        if out[k][2] and out[k][3] == "&":
+            j = k - 1
+            while j >= 0 and out[j][3] in ("&&", "||"):
+                out[j][2] = True
+                j -= 1
+    return [(a, b, sub) for a, b, sub, _ in out]
 
 
 def shell_binds(syntax):

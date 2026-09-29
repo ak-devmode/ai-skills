@@ -72,38 +72,85 @@ ENV_USE = [re.compile(p) for p in (
 # minus names the same script assigns (`NAME=`, `local|export|readonly NAME`, `read NAME`,
 # `for NAME in`) and the shell's own variables — what is left is read from the environment.
 SH_USE = re.compile(r"\$\{([A-Z][A-Z0-9_]*)(?=[}:#%/+=?^,@\[-])|\$([A-Z][A-Z0-9_]*)\b")
-SH_ASSIGN = [re.compile(p) for p in (
-    r"(?:^|[\s;(&|])(?:(?:export|local|readonly|declare(?:\s+-\w+)*)\s+)?([A-Z][A-Z0-9_]*)\+?=",
-    r"(?:^|[\s;(&|])(?:export|local|readonly|declare(?:\s+-\w+)*)\s+([A-Z][A-Z0-9_]*)\b",
-    r"\bfor\s+([A-Z][A-Z0-9_]*)\s+in\b",
-)]
-SH_READ = re.compile(r"\bread\s+(?:-\w+\s+)*((?:[A-Za-z_]\w*\s*)+)")
 SH_BUILTIN = {"HOME", "PATH", "PWD", "OLDPWD", "USER", "LOGNAME", "SHELL", "TMPDIR", "IFS", "LANG",
               "LC_ALL", "TERM", "HOSTNAME", "UID", "EUID", "PPID", "RANDOM", "LINENO", "SECONDS",
               "OSTYPE", "BASH_SOURCE", "BASH_VERSION", "BASHPID", "PIPESTATUS", "FUNCNAME", "OPTARG",
               "OPTIND", "REPLY", "COLUMNS", "LINES", "EDITOR", "PAGER"}
-SH_SQUOTE = re.compile(r"'[^']*'")
+# Where a command starts: line start, after ; & | ( {, or after then/do/else. Only there is
+# `NAME=` an assignment — anywhere else it is an argument's text (review 5.3-r6-02).
+SH_CMD = r"(?:^|[;&|({]\s*|\b(?:then|do|else)\s+)\s*"
+SH_ASSIGN = re.compile(SH_CMD + r"(?:(?:export|local|readonly|declare(?:\s+-\w+)*)\s+)?([A-Z][A-Z0-9_]*)\+?=")
+SH_DECLARE = re.compile(SH_CMD + r"(?:export|local|readonly|declare(?:\s+-\w+)*)\s+([A-Z][A-Z0-9_]*)\s*(?:$|[;&|])")
+SH_FOR = re.compile(SH_CMD + r"for\s+([A-Z][A-Z0-9_]*)\s+in\b")
+SH_READ = re.compile(SH_CMD + r"read\s+(?:-\w+\s+)*((?:[A-Za-z_]\w*\s*)+)")
+SH_END = re.compile(r";|&&|\|\||\||\bdo\b|$")
+SH_WORD_END = re.compile(r"\s|;|$")
+
+
+def shell_mask(line):
+    """(text, dq): single-quoted text and an unquoted `# comment` blanked to spaces, so
+    offsets still line up; dq = the double-quoted spans, where expansions still read but no
+    assignment or binding can start."""
+    out, dq, q, i = list(line), [], None, 0
+    while i < len(line):
+        c = line[i]
+        if q == "'":
+            if c == "'":
+                q = None
+            out[i] = " "
+        elif q == '"':
+            if c == "\\":
+                i += 1
+            elif c == '"':
+                q = None
+                dq[-1][1] = i
+        elif c == "'":
+            q, out[i] = "'", " "
+        elif c == '"':
+            q = '"'
+            dq.append([i, len(line)])
+        elif c == "#" and (i == 0 or line[i - 1] in " \t;"):
+            for j in range(i, len(line)):
+                out[j] = " "
+            break
+        i += 1
+    return "".join(out), dq
 
 
 def shell_assigned(text):
-    """Names the script sets before it ever reads them. In file order: a name read first is
-    an environment input even if assigned later, and `FOO=${FOO:-x}` reads FOO before it
-    sets it (review 5.3-r5-01)."""
+    """Names the script sets before it ever reads them, in the order the shell evaluates:
+    `FOO=${FOO:-x}` and `for F in "$F"` read F before they bind it (5.3-r5-01, r6-01);
+    `FOO=1; echo $FOO` binds before it reads (r6-03). A name read first is an environment
+    input even if the script assigns it later."""
     local, read_first = set(), set()
     for line in text.splitlines():
         if is_comment(line):
             continue
-        bare = SH_SQUOTE.sub("", line)
-        # `for N in …; do … $N` and `read N` bind before the rest of their line reads N;
-        # a plain `N=…$N…` reads its right-hand side first
-        binds = {m.group(1) for m in SH_ASSIGN[2].finditer(line)}
-        for m in SH_READ.finditer(line):
-            binds.update(m.group(1).split())
-        local |= {n for n in binds if n not in read_first}
-        uses = {m.group(1) or m.group(2) for m in SH_USE.finditer(bare)}
-        read_first |= {n for n in uses if n not in local}
-        sets = {m.group(1) for rx in SH_ASSIGN[:2] for m in rx.finditer(line)}
-        local |= {n for n in sets if n not in read_first}
+        masked, dq = shell_mask(line)
+        inq = lambda pos: any(a <= pos < b for a, b in dq)  # noqa: E731
+        events = []  # (pos, order, kind, name) — at one position a read precedes a bind
+        for m in SH_USE.finditer(masked):
+            events.append((m.start(), 0, "use", m.group(1) or m.group(2)))
+        for m in SH_ASSIGN.finditer(masked):
+            if not inq(m.start(1)):
+                # an assignment binds once its word ends — its right-hand side is read first
+                events.append((SH_WORD_END.search(masked, m.end()).start(), 1, "bind", m.group(1)))
+        for m in SH_DECLARE.finditer(masked):
+            if not inq(m.start(1)):
+                events.append((m.end(1), 1, "bind", m.group(1)))
+        for m in SH_FOR.finditer(masked):
+            if not inq(m.start(1)):
+                events.append((SH_END.search(masked, m.end()).start(), 1, "bind", m.group(1)))
+        for m in SH_READ.finditer(masked):
+            if not inq(m.start(1)):
+                stop = SH_END.search(masked, m.end()).start()
+                for n in m.group(1).split():
+                    events.append((stop, 1, "bind", n))
+        for _, _, kind, name in sorted(events):
+            if kind == "use" and name not in local:
+                read_first.add(name)
+            elif kind == "bind" and name not in read_first:
+                local.add(name)
     return local
 
 
@@ -264,7 +311,7 @@ def extract(files, full=None):
                     refs.append(ref("env", m.group(1), None, path, lineno))
             if path.endswith(".sh"):
                 seen = set()
-                for m in SH_USE.finditer(SH_SQUOTE.sub("", text)):
+                for m in SH_USE.finditer(shell_mask(text)[0]):
                     name = m.group(1) or m.group(2)
                     if name not in local and name not in SH_BUILTIN and name not in seen:
                         seen.add(name)

@@ -105,11 +105,17 @@ def main(argv):
         return 3
 
     blocked = {b["id"] for b in gb["blocks"]}
+    # A judge-caught defect counts only on an explicit `fail` from a codex judge plus a finding
+    # on that check — an inconclusive also blocks, but it is not a catch (review 5.2-r1-09).
+    failed = {v["check_id"] for v in rb.get("verdicts", []) if v.get("verdict") == "fail"}
+    named = {f.get("check_id") for f in rb.get("findings", [])}
     ok, lines = True, []
     for defect, (cid, how) in EXPECT.items():
-        hit = cid in blocked and (how != "judge" or jb.startswith("codex "))
+        hit = cid in blocked and (how != "judge" or (jb.startswith("codex ") and cid in failed and cid in named))
         if how == "judge" and cid in blocked and not jb.startswith("codex "):
             note = f"blocked only because the judge was absent ({jb}) — not a catch"
+        elif how == "judge" and cid in blocked and not hit:
+            note = "blocked, but the judge did not fail it with a finding — not a catch"
         else:
             note = ""
         ok &= hit

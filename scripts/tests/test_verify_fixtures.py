@@ -25,6 +25,31 @@ DETERMINISTIC = {"invented-env": "names-resolve", "under-rung": "export-runs",
 JUDGE_CAUGHT = {"over-build": "no-overbuild", "missing-evidence": "changelog-entry"}
 
 
+# A fake codex that judges well-formed but never commits: inconclusive on the bad fixture's
+# judge rows (with an over-build finding on no check), pass on everything in the control.
+INCONCLUSIVE_CODEX = r'''#!/usr/bin/env python3
+import json, sys
+a = sys.argv[1:]
+if a == ["--version"]:
+    print("codex-cli 9.9.9"); sys.exit(0)
+sys.stderr.write("--------\nmodel: gpt-fake-1\n--------\n")
+out = a[a.index("-o") + 1] if "-o" in a else None
+cd = a[a.index("-C") + 1] if "-C" in a else ""
+ids = ["names-resolve", "tests-pass", "export-runs", "no-overbuild", "changelog-entry"]
+bad = "/bad/" in cd + "/"
+doc = {"verdicts": [{"check_id": c, "rung_reached": 2 if c in ("no-overbuild", "changelog-entry") else 4,
+                     "verdict": "inconclusive" if bad and c in ("no-overbuild", "changelog-entry") else "pass",
+                     "reason": "fake"} for c in ids],
+       "findings": [{"check_id": "unowned", "lens": "over-build", "severity": "low", "where": "x:1",
+                     "text": "maybe"}] if bad else [],
+       "lever_candidates": [], "feature_map": "n/a"}
+if out:
+    with open(out, "w") as fh:
+        json.dump(doc if cd else {"verdicts": []}, fh)
+print("pong")
+'''
+
+
 def gate_blocks(info, judge_items=None, judge_line="none not configured"):
     """Runner → (judged) → finalize → gate on a built fixture; returns the blocked ids."""
     env = dict(os.environ, VERIFY_PROJECTS=info["projects"])
@@ -96,6 +121,20 @@ class TestDeterministicTier(unittest.TestCase):
                 timeout=300)
         self.assertEqual(p.returncode, 1, p.stdout + p.stderr)
         self.assertIn("No judge ran (none codex not installed)", p.stdout)
+        self.assertIn("EXPECTATIONS NOT MET", p.stdout)
+
+    def test_demo_check_fails_on_an_inconclusive_judge(self):
+        # 5.2-r1-09: a codex judge that answers inconclusive on the bad fixture's judge rows
+        # (and passes the control) blocks them — but that is not a catch, so --check fails.
+        fake = os.path.join(self.tmp.name, "codex")
+        with open(fake, "w") as fh:
+            fh.write(INCONCLUSIVE_CODEX)
+        os.chmod(fake, 0o755)
+        env = dict(os.environ, VERIFY_CODEX_BIN=fake)
+        p = run("verify/scripts/demo.py", "--check", "--keep", os.path.join(self.tmp.name, "demo"), env=env,
+                timeout=300)
+        self.assertEqual(p.returncode, 1, p.stdout + p.stderr)
+        self.assertIn("judge did not fail it with a finding", p.stdout)
         self.assertIn("EXPECTATIONS NOT MET", p.stdout)
 
 

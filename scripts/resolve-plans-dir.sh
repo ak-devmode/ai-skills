@@ -18,11 +18,15 @@ target="$(cd "$target" 2>/dev/null && pwd -P || echo "$target")"
 
 case "$target" in
   */Projects/pmg/*|*/Projects/pmg)             plans="$HOME/Projects/pmg/pmg-docs/plans" ;;
+  # IRIS is a standalone graph inside its own product repo — it must match before the
+  # wellmed catch-all, or its scopes land in kalpa-docs (kalpa-iris CLAUDE.md §3.2).
+  */Projects/wellmed/kalpa-iris/*|*/Projects/wellmed/kalpa-iris|*/.herdr/worktrees/kalpa-iris/*)
+                                               plans="$HOME/Projects/wellmed/kalpa-iris/iris-docs/plans" ;;
   */Projects/wellmed/*|*/Projects/wellmed)     plans="$HOME/Projects/wellmed/kalpa-docs/plans" ;;
   */Projects/ai-skills/*|*/Projects/ai-skills) plans="$HOME/Projects/ai-skills/plans" ;;
   *)
     echo "resolve-plans-dir: unrecognized project for '$target'" >&2
-    echo "  known: ~/Projects/{pmg,wellmed,ai-skills}. Ask the user where plans live." >&2
+    echo "  known: ~/Projects/{pmg,wellmed,wellmed/kalpa-iris,ai-skills}. Ask the user where plans live." >&2
     exit 3
     ;;
 esac

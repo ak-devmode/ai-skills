@@ -306,3 +306,16 @@ Resumed/restarted phases append a SECOND block:
 
 - base: 5.1 ai-skills 8173b959e6f6655e0438e8441aec84bc418cb374
   (retroactive: Phase 1 started at 8173b95 per progress.md; it predates `ledger-init.sh --repo`)
+
+---
+
+## Phase 2: /verify + /review on codex — review r1 fixes (resumed 2026-09-29T02:11:59Z after compaction)
+
+### §2 Files Changed (review 5.2-r1 fixes, 2026-09-29)
+- ai-skills · code: `scripts/resolve-identifiers.py`, `scripts/verify_lib.py` (authority none-judge, `schema_problems`), `scripts/verify-run.py`, `scripts/verdict-gate.py` (duplicate IDs, review marker), `review/scripts/review.py` (locked ID allocation, `review` records), `verify/scripts/judge.py`, `verify/scripts/demo.py`
+- ai-skills · test: `scripts/tests/test_{resolve_identifiers,verify_run,verdict_gate,review,judge,verify_fixtures}.py`
+- ai-skills · doc: `templates/verify-contracts.md` (§5.3, §6.0, §6.3), `verify/SKILL.md` 0.2.1 (§3.8 exit status), `plans/5-verify-lever/{progress,closeout-prep,finish-conditions}.md`
+
+### §11 Risk Flags (2026-09-29)
+- `codex-exec.py` misclassifies "workspace out of credits" as `not authed` / `exited 1` — the judge line's reason is wrong for a quota failure.
+- The finish-table rev 4 bump leaves 5.1's verdict "predating the table" (advisory; 5.1 already Done with ⚠).

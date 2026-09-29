@@ -97,8 +97,10 @@ style note, and the fix is never "document the exception".
 - **Never flatten the layers** (§4.5): base DICOM, AI annotation, human annotation stay
   separate and independently toggleable at read time. A write that burns an annotation
   into pixel data, or a read that cannot return the base alone, is a finding.
-- **Module boundary** (§4.3): one Go module per service. A `go.work`, a `replace`
-  pointing at another service, or an import across `services/*` is a finding.
+- **Module boundary** (§4.3): one Go module per service. An import, `require` or
+  `replace` from one `services/*` module to another is a finding. The repo's `go.work` is
+  intended (`ARCHITECTURE.md` §2) — and it resolves a cross-module import no `go.mod`
+  declares, so a green workspace build is not evidence the boundary held.
 - **SATU SEHAT emission** (§5.3–5.4): off by default, opt-in per tenant, throttled per
   tenant. Local storage and the local study lifecycle never wait on, or roll back on,
   their acceptance. The emission toggle never keys off a pricing tier (§4.8.2).

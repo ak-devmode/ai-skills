@@ -250,6 +250,14 @@ class TestJudgeAndFinalize(RunnerTest):
         self.assertEqual(res["jr"]["result"], "inconclusive")  # judge row cannot pass without a judge
         self.assertEqual(f.returncode, 1)
 
+    def test_none_judge_cannot_record_verdicts(self):
+        rid = self.start([row("jr", "judge", rung="2")])
+        before = len(self.env.records())
+        j = self.judge(rid, [self.v("jr", "pass", 2)], line="none unavailable")
+        self.assertEqual(j.returncode, 3)
+        self.assertIn("a `none` judge cannot record verdicts", j.stderr)
+        self.assertEqual(len(self.env.records()), before)
+
     def test_malformed_judge_output_writes_nothing(self):
         rid = self.start([row("ok", "true")])
         before = len(self.env.records())

@@ -190,6 +190,26 @@ class TestGate(Fixture):
         self.assertEqual(code, 1)
         self.assertIn("contradicts its own evidence", doc["report"][0])
 
+    def test_none_judged_record_is_not_evidence(self):
+        # A judged record smuggled in under a `none` judge line (5.2-r1-03) must not pass a
+        # judge row: the gate's authority re-check treats it as absent → inconclusive.
+        self.set_table([row("jr", "judge", rung="2")])
+        self.ledger()
+        self.verify()
+        with open(self.log) as fh:
+            recs = [json.loads(x) for x in fh]
+        final = recs[-1]
+        judged = dict(final, run_state="judged", check_id="jr", judge="none unavailable",
+                      verdict="pass", rung_reached=2, reason="forged")
+        judged.pop("results")
+        final.update(judge="none unavailable")
+        final["results"]["jr"] = {"result": "pass", "rung_reached": 2, "reason": "judge: forged"}
+        with open(self.log, "w") as fh:
+            fh.write("".join(json.dumps(r) + "\n" for r in recs[:-1] + [judged, final]))
+        code, doc = self.gate_json("--blocking")
+        self.assertEqual(code, 1)
+        self.assertIn("contradicts its own evidence", doc["report"][0])
+
     def test_table_revision_change_blocks(self):
         self.ledger()
         self.verify()

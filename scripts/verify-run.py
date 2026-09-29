@@ -222,6 +222,11 @@ def cmd_judged(a):
         raise vl.ContractError(vl.message("ERROR", "run is already final", "a pending run",
                                           f"run {a.run_id} has a final record", a.log, "tooling",
                                           "start a new run", DOCS))
+    if a.judge.startswith("none "):
+        raise vl.ContractError(vl.message("ERROR", "a `none` judge cannot record verdicts",
+                                          "`codex <model>` or `claude-fallback <reason>`", a.judge, "--judge",
+                                          "tooling", f"verify-run.py finalize --log {a.log} --run-id {a.run_id} "
+                                          f"--judge '{a.judge}'", f"{vl.CONTRACT} §4.6, §5.1"))
     pending = {r["check_id"] for r in recs if r["run_state"] == "pending"}
     try:
         with open(a.input, encoding="utf-8") as fh:

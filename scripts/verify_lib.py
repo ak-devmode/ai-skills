@@ -205,7 +205,11 @@ def read_jsonl(path):
 def authority(p, j):
     """§5.1 — final {result, rung_reached, reason} for one check, from its pending record `p`
     and its judged record `j` (or None). One implementation: verify-run.py finalizes with it
-    and verdict-gate.py re-checks every final result against it."""
+    and verdict-gate.py re-checks every final result against it. A judged record from a
+    `none …` judge is not evidence — the judge did not run — so it counts as absent
+    (review 5.2-r1-03)."""
+    if j is not None and str(j.get("judge", "")).startswith("none "):
+        j = None
     if p["command"] == "judge":
         if j is None:
             return {"result": "inconclusive", "rung_reached": 0, "reason": "judge row: no judge verdict"}

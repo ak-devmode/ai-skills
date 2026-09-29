@@ -373,7 +373,7 @@ Touches: scripts/{resolve-identifiers,verdict-gate,finish-table,lever-candidates
       `A=1; sleep 0 & echo $A` reports `A` as undeclared, because a line that backgrounds anything binds nothing
       (`resolve-identifiers.py` `shell_commands`). Fix: exclude only the backgrounded AND/OR list (back to the previous
       `;`/newline), and keep continued lines fail-closed. Needs one codex re-review. Deferred: Alex's codex quota was out (2026-09-29).
-- [ ] **Commits after review r12 were not codex-reviewed**: effort scaling (`2963216`) and the 5.3 closeout commits.
+- [x] **Dropped 2026-09-29 (Alex: "if we're done we're done").** **Commits after review r12 were not codex-reviewed**: effort scaling (`2963216`) and the 5.3 closeout commits.
       Codex quota was out; Alex said move on. Run `/review --scope plans/5-verify-lever --unit 5.3` on `01af243..<closeout HEAD>` when quota allows.
 - [ ] **15 undeclared env reads in older ai-skills shell scripts**, surfaced by the new shell scan over all history: `grafana-remediate/`
       (`GRAFANA_BASE/FROM/TO/TOKEN/TOKEN_SSM`, `ALARM_CW_HEARTBEAT/CW_NAMESPACE/HEARTBEAT_LOG/WT_MAX_AGE_S/WT_ROOT`, `FROM`),

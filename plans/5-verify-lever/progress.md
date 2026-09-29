@@ -593,3 +593,14 @@ Suite OK (2 skipped). Lint 0 ISSUE.
 - Pushed `main` (31 commits) before the announcement. Alex sent it.
 - **Lever built:** `resolve-identifiers.py` scans shell `$NAME` / `${NAME…}` outside single quotes, minus names the script assigns and the shell's own variables — `bcf8b7b`. The 5.3 range now finds and resolves `VERIFY_CODEX_BIN` (`.env.example:7`). Across all ai-skills history it flags 14 undeclared env reads in older shell scripts (grafana-remediate `GRAFANA_*`/`ALARM_*`, `GEMINI_API_KEY`, herdr's `HERDR_*`) — true by the rule, outside 5.3 → TO-DO at completion.
 - `finish-table.py add --replace` (amend a row in place) — used to amend `test-plan-followed` → rev 6.
+
+#### Dogfood: reviews 5.3-r5 … r12 (codex `gpt-6-sol`) — 19 more findings: 17 fixed, 2 rejected
+→ `artifacts/review-5.3-r{5..12}.md`. The new shell lever and `--replace` drew them. Each fix has a regression case that fails on the old code:
+- r5: self-defaulting `FOO=${FOO:-x}` and read-before-set (r5-01), `${X^^}` operators (r5-02) — `084aadb`; `--replace` no-op bumped the revision (r5-03) — `f47ce4c`; stale Resume Context / Human Steps (r5-04; my anchor-checked edit had refused a wrong anchor and written nothing) — `441e3e6`
+- r6: loop/read over its own name, `NAME=` in comments/quotes, assign-then-read on one line — `f26a1f1`
+- r7: quoted whitespace and `$(…)` in a value, quoted `do`/`;`, `then` as an argument, `A=1 B=2` — **rewritten** as a nesting-aware mask + commands split on real separators + word-level binds — `43fc098`
+- r8: a `read -p` prompt read as a name, a lone `&` — `772b7b4`; r9: backgrounded/piped assignments, grouped `read` options — `3e08d21`; r10: a backgrounded AND list, `|&` — `934f75a`
+- r11: pipelines inside a backgrounded list, continued lines → **fail closed**: a line that backgrounds anything or continues binds nothing — `075501a`, `01af243`
+- r12-01 **rejected**: it flags the false alarm r11's conservative fix accepts on purpose (r8-02 and r12-01 argue opposite sides). Fail-closed stands; the scan's documented scope is invented names, not shell dataflow (`1882964`)
+- Gate: 38/38 dispositioned across r1–r12; no `review:` or `rereview:` block.
+- The scan over all of ai-skills history reports 15 real undeclared env inputs in older scripts (grafana-remediate `GRAFANA_*`/`ALARM_*`/`FROM`, `GEMINI_API_KEY`, `HERDR_*`) → TO-DO at completion.

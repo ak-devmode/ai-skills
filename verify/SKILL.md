@@ -125,7 +125,7 @@ writes the one `final` line.
 
 3.8 **Gate and report.** `$V/judge.py report --scope $SCOPE --unit $UNIT --run-id $RUN`
 writes `artifacts/verify-$UNIT-report.md` and prints the gate verdict. Advisory mode is
-the default until three scopes pass cleanly: blocks are reported, the unit is not held.
+the default until five scopes pass cleanly: blocks are reported, the unit is not held.
 Its exit status is the gate's — `1` blocked, `3` the gate itself errored (the report says
 `GATE ERROR` and stderr carries the cause); report a `3`, never read it as a pass.
 

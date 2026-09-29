@@ -79,7 +79,7 @@ SH_BUILTIN = {"HOME", "PATH", "PWD", "OLDPWD", "USER", "LOGNAME", "SHELL", "TMPD
 SH_NAME = re.compile(r"^[A-Z][A-Z0-9_]*$")
 SH_ASSIGN_WORD = re.compile(r"^([A-Z][A-Z0-9_]*)\+?=")
 SH_KEYWORDS = {"export", "local", "readonly", "declare", "typeset"}
-SH_SEP = re.compile(r";|&&|\|\||\||\n")
+SH_SEP = re.compile(r";|&&|\|\||\||(?<![<>&])&(?![&>])|\n")  # a lone `&` too, never `2>&1` (5.3-r8-02)
 SH_LEAD = re.compile(r"^\s*(?:(?:then|do|else|elif|if|while|until|!|\{|\()\s+)*")  # only at a command's start
 
 
@@ -154,22 +154,30 @@ def shell_binds(syntax):
     stretch is one opaque word), or [] when it is not unambiguously a binding. Only whole
     commands count: every word an assignment (`A=1 B=2`), a declaration keyword over names
     or assignments (`export A B=1`), `for NAME in …`, or `read NAME…` (5.3-r7-03, r7-04)."""
-    words = re.sub(CTX + "+", "X", syntax).split()
+    # the opaque stand-in can never read as a name (a quoted `read -p` prompt is not `X` — 5.3-r8-01)
+    words = re.sub(CTX + "+", CTX, syntax).split()
     if not words:
         return []
     if words[0] == "for" and len(words) >= 3 and words[2] == "in" and SH_NAME.match(words[1]):
         return [words[1]]
     if words[0] == "read":
-        names = []
+        names, skip = [], False
         for w in words[1:]:
+            if skip:                      # the operand of -p -d -n -N -t -u -i (a prompt, a delimiter…)
+                skip = False
+                continue
             if w.startswith("<"):
                 break
-            if not w.startswith("-") and re.match(r"^[A-Za-z_]\w*$", w):
+            if re.match(r"^-[a-zA-Z]*[pdnNtui]$", w):
+                skip = True
+            elif not w.startswith("-") and re.match(r"^[A-Za-z_]\w*$", w):
                 names.append(w)
         return names
     kw = words[0] in SH_KEYWORDS
     names = []
     for w in (words[1:] if kw else words):
+        if re.match(r"^\d*[<>]", w):
+            continue  # a redirection (`2>&1`) is not a word of the command
         m = SH_ASSIGN_WORD.match(w)
         if m:
             names.append(m.group(1))

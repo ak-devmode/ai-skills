@@ -13,10 +13,10 @@
 
 ## Resume Context
 **Scope:** ~/Projects/ai-skills/plans/5-verify-lever/scope.md
-**Last action:** 5.2 Done (2026-09-29): 3 codex review rounds (16 findings, all fixed), `/verify` advisory with 2 blocks accepted by Alex
-**Next action:** `/plan 5.3` (Phase 3 — wiring, self-heal, rollout)
-**Open blockers:** closeout deferred to scope end (see TO-DO.md)
-**Key files changed:** 5.2 — `verify/` (skill, judge, fixtures, demo), `review/` 3.1.0 (rules, review.py), `scripts/codex-exec.py`; full list in `closeout-prep.md` Phase 2 block
+**Last action:** 5.3 all four tasks built. Codex review r1–r4 found 19; 16 fixed, 2 rejected, r3-03 corrected after the judge overruled my rejection. `/verify 5.3` advisory, 4 blocked. Stopped at the 3.4 review / Phase 3 CHECKPOINT (gate A).
+**Next action:** Alex: send the announcement (`artifacts/rollout-announcement-draft.md`); decide `test-plan-followed` and `p3-names-resolve` (Plan 5.3 → last session entry); say whether to push. Then re-run `/verify 5.3`, mark 5.3 Done through `plans-index.py status`, and run the scope closeout.
+**Open blockers:** Alex's review at gate A; closeout deferred to scope end (see TO-DO.md). Nothing pushed since `5f06a4c`.
+**Key files changed:** 5.3 — `scripts/{finish-table,lever-candidates,clone-behind}.py`, `scripts/verify-prereqs.sh`, gate `--all`/Predates/review coverage, `plans-index.py gate-count`, `/scope` 3.9.0, `/plan` 3.9.0, `/closeout` 1.4.0, `/verify` 0.3.0, ledger template, README §5. Full list in `closeout-prep.md` Phase 3 block.
 
 ---
 
@@ -74,7 +74,8 @@
 |------|--------|-------|
 | Approve the Phase 1 contracts (finish table, verdict, disposition log, feature map, adapter) | [x] Done 2026-09-26 | 5.1 exit gate |
 | Go/no-go after seeing a real `/verify` verdict (dogfood, class B) | [x] Done 2026-09-29 — go, advisory rollout | 5.2 exit gate; class-A trial moved to test-suite T2 |
-| Announce the ai-skills `git pull` to the team after rollout | [ ] Pending | 5.3 exit gate; CLAUDE.md §2.1 |
+| Announce the ai-skills `git pull` to the team after rollout | [ ] Pending — draft ready: `artifacts/rollout-announcement-draft.md` | 5.3 exit gate; CLAUDE.md §2.1 |
+| Flip `GATE_MODE` to blocking at 5 clean gated scopes | [ ] Pending — `/closeout` prints the count + REMINDER | Alex, 2026-09-29 |
 
 ---
 
@@ -84,7 +85,7 @@
 |---|-----------|-------|--------|-------|
 | 5.1 | 5.1-verify-lever-PLAN.md | Phase 1 — Contracts + deterministic scripts | Done | Gate A — approved 2026-09-26 |
 | 5.2 | 5.2-verify-lever-PLAN.md | Phase 2 — `/verify` + `/review` on codex | Done | Gate A — approved 2026-09-29; ⚠ verify advisory: 2 blocked |
-| 5.3 | 5.3-verify-lever-PLAN.md | Phase 3 — Wiring + self-heal + rollout | Ready to execute | Gate A |
+| 5.3 | 5.3-verify-lever-PLAN.md | Phase 3 — Wiring + self-heal + rollout | In progress — at gate A | Gate A; ⚠ verify advisory: 4 blocked (pending re-run) |
 
 ---
 
@@ -95,6 +96,9 @@
 - `artifacts/eng-review-2026-09-26.md` — eng review + codex outside voice, 16 accepted findings
 - `artifacts/eng-review-test-plan-2026-09-26.md` — test plan (edge cases + critical paths)
 - `artifacts/devex-review-2026-09-26.md` — DX triage review, persona, scorecard
+- `artifacts/review-5.3-r{1,2,3,4}.md` — codex reviews of 5.3 (19 findings, all dispositioned)
+- `artifacts/verify-5.3-report.md` — `/verify 5.3` verdict (advisory, 4 blocked)
+- `artifacts/rollout-announcement-draft.md` — team announcement, for Alex to send
 
 ---
 
@@ -473,9 +477,9 @@ so they live here; `/verify` of 5.2 judges against the plan *as amended here*):
 ## Plan 5.3: Wiring + self-heal + rollout
 
 ### Resume Context (Plan 5.3)
-**Last action:** Phase 0 done; Task Detail drafted, awaiting Alex's answers to the design questions
-**Next action:** Task 3.3a (ledger-template fix) once Alex confirms the outline
-**Open blockers:** Alex — design questions (session 2026-09-29)
+**Last action:** Tasks 3.1–3.3 done, 3.4 built. Review closed (r1–r4); `/verify 5.3` advisory, 4 blocked.
+**Next action:** Alex reviews 3.4 and the checkpoint. Then re-run `/verify 5.3` and mark Done via `plans-index.py status --num 5.3`.
+**Open blockers:** announcement not sent; `test-plan-followed` and `p3-names-resolve` need Alex's call
 
 ### Task Detail
 Deepened at start of run (`/markdown-style` §8.9.2). The plan file wins where they differ,
@@ -576,3 +580,10 @@ Suite OK (2 skipped). Lint 0 ISSUE.
 - r4-01 **rejected**: symlinked stamp — needs tampering inside `.git`, which could equally rewrite `refs/remotes/origin/main`; the non-tampering failure modes are fixed (r1-08, r3-01, r3-02)
 - r4-02 callers showed "that line" (singular) → every line — `20906ab`
 - Gate: every one of the 19 findings dispositioned; no `review:` / `rereview:` block (r4's range covers r3's blocking fix; r4-01 rejected, so nothing further to re-review). Suite OK.
+
+#### Dogfood: `/verify 5.3` — run `5.3-20260929T043417-d10d`, judge `codex gpt-6-sol`: ADVISORY, 4 of 8 blocked
+→ `artifacts/verify-5.3-report.md`. Pass: `p3-tests-green`, `p3-fixtures-live` (live-judge tier, `VERIFY_EVAL=1`), `p3-skills-lint`, `p3-no-overbuild`. Blocked:
+- `p3-rejections-justified` **fail — the judge was right.** My r3-03 rejection ("a concurrent session wrote it") didn't answer the claim, and the claim was true: `repo-graph-snapshot.sh:34` records local `HEAD`, so the TO-DO item's diagnosis was wrong. Corrected in `plans/TO-DO.md` (appended, author's text kept) and r3-03 re-dispositioned `fixed b0de705`. Clears on the re-run.
+- `p3-scope-deliverables` fail — the announcement is drafted, not sent. That's the gate-A human step; clears after Alex sends it.
+- `test-plan-followed` fail — the eng-review test plan's three-outcome class-A trial, which Alex moved to test-suite T2 on 2026-09-29. Needs Alex: amend the row (like `p2-scope-deliverables`) or accept the block.
+- `p3-names-resolve` inconclusive (judge downgrade) — the resolver found 0 references because it doesn't scan shell (`verify-prereqs.sh` reads `VERIFY_CODEX_BIN`, which is declared). Lever candidate `shell-env-identifier-scan`, first sighting. Needs Alex: build now or record.

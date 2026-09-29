@@ -466,3 +466,50 @@ so they live here; `/verify` of 5.2 judges against the plan *as amended here*):
   inconclusive (live-judge tier skipped) and `p2-scope-deliverables` fails (no `/browse` class-A step),
   so advisory, 2 blocked → `artifacts/verify-5.2-report.md`. Both accepted and amended by Alex
   (Decisions Log). Marked Done.
+
+---
+
+## Plan 5.3: Wiring + self-heal + rollout
+
+### Resume Context (Plan 5.3)
+**Last action:** Phase 0 done; Task Detail drafted, awaiting Alex's answers to the design questions
+**Next action:** Task 3.3a (ledger-template fix) once Alex confirms the outline
+**Open blockers:** Alex — design questions (session 2026-09-29)
+
+### Task Detail
+Deepened at start of run (`/markdown-style` §8.9.2). The plan file wins where they differ,
+so ask, except where the Decisions Log records a change Alex made.
+- **Order:** 3.3a ledger template first (it is standalone and every later ledger inherits it),
+  then 3.1 → 3.2 → 3.3 → 3.4.
+- **3.1 `/scope`** — new Step 5.10 writes `finish-conditions.md` through a script
+  (`scripts/finish-table.py init`, template + the standard rows of `verify/SKILL.md` §4 per
+  phase, then `add` for deliverable rows, each bumping Revision + a Changelog line — the
+  revision discipline is deterministic, CLAUDE.md §3.6.1). The plan-stub template gains
+  `Review` (commit-producing phases only) and `Verify` tasks before the CHECKPOINT; the
+  presence of the Review task is the phase's "this commits" declaration, which is what
+  makes an empty range a failure rather than an expected nothing. Eval rows set
+  `VERIFY_EVAL=1` (5.2 TO-DO).
+- **3.2 `/plan`** — §5.13 passes `--repo` for every repo the plan commits to; new section
+  for the Review task (explicit `base..HEAD`, `--scope/--unit`, dispose every ID) and the
+  Verify task (`/verify N.P`), then Done only via `plans-index.py status` (the gate).
+  `--skip-verify "<reason>"` passes through and shows in the §6.7 header. Self-heal in
+  Phase 0: no table → `finish-table.py init` draft from the scope's remaining phases + its
+  deliverables, one halt for Alex. Already-Done phases are marked as predating the gate so
+  `validate` doesn't flag them (see question 2). Recipe 4 in `plan/tests/verification-recipes.md`.
+- **3.3 `/closeout`** — new step after tests: `verdict-gate.py --all` over every unit;
+  missing/incomplete → `/verify` that unit; blocked → NOT HEALED, archive anyway, index
+  `✅ Done — ⚠ verify failed <ids>`, failed checks to TO-DO.md. Feature-map handoff only
+  when the scope has a product feature map; otherwise logged as skipped. Lever candidates
+  → `## Lever candidates` via a script that dedupes by key and counts a second sighting
+  only from a different scope or run.
+- **3.4 Rollout** — `setup.sh` prerequisite checks (warn, exit 0); `scripts/clone-behind.sh`
+  (one line when behind `origin/main`) called by `/verify` and `/plan`; README Verification
+  section; ARCHITECTURE/CLAUDE; fleet lint; announcement draft; herdr-free confirmation.
+- **Dogfood (Operating Contract #5):** finish table rev 5 adds 5.3's rows; `/review` on
+  `5f06a4c..HEAD` and `/verify 5.3` before Done.
+
+### Session: 2026-09-29 (Alex / Claude)
+- **Phase 0** ✅ DONE. Status Ready. `Executed by` stamped (Alex / Claude). Inputs resolve.
+  Repo Graph check exit 4 (prose-only section, single-repo scope; same as 5.1/5.2). Ledger
+  phase block appended with `base: 5.3 ai-skills 5f06a4c`. Branch `main`, in sync with
+  origin, clean. Sibling plans 5.1 and 5.2 read. No herdr worktree (Primary repo none).

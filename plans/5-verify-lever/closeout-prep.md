@@ -319,3 +319,20 @@ Resumed/restarted phases append a SECOND block:
 ### §11 Risk Flags (2026-09-29)
 - ~~`codex-exec.py` misclassifies "workspace out of credits" as `not authed` / `exited 1`.~~ **Resolved** in `0aefa7f`: it is now `none codex out of credits`, read from stdout and stderr, with quota checked first.
 - The finish-table rev 4 bump leaves 5.1's verdict "predating the table" (advisory; 5.1 already Done with ⚠).
+
+---
+
+## Phase 3: Wiring + self-heal + rollout (started 2026-09-29T03:25:24Z)
+
+- base: 5.3 ai-skills 5f06a4c830f932b2cd083750d3cacaa3c0c7b230
+
+### §6 Docs Loaded During Planning (Phase 3)
+- `CLAUDE.md`, `ARCHITECTURE.md` (headings), `CROSS-REPO.md` (repo root)
+- `plans/5-verify-lever/{scope,progress,finish-conditions}.md`, sibling plans 5.1 + 5.2
+- `verify/SKILL.md`, `review/SKILL.md` §1–2, `templates/verify-contracts.md`,
+  `templates/closeout-prep.md.template`, `templates/finish-conditions.md.template`,
+  `scope/SKILL.md` Steps 4/5/7/8, `scope/templates/plan-stub.md.template`,
+  `closeout/SKILL.md` §1–3, §13–14, `scripts/ledger-init.sh`, `setup.sh`, `README.md`
+
+### §11 Risk Flags (Phase 3)
+- Repo Graph freshness check exit 4 (prose-only section) — nothing was checked; single-repo scope, `main` == `origin/main` at `5f06a4c`.

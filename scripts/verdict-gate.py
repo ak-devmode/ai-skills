@@ -275,6 +275,14 @@ def closeout_view(a, table):
         per.append({"unit": u, "blocks": [{"id": b[0], "what": b[1], "cause": b[5]} for b in blocks],
                     "needs_verify": any(b[1] in NEEDS_VERIFY for b in blocks)})
     markers = [f"⚠ judge: {j}" for j in sorted(judges) if not j.startswith("codex ")]
+    if not units:
+        # Every phase predates the gate: nothing was verified, so this is not a pass
+        # (it must never count toward the blocking flip — review 5.3-r1-05).
+        doc = {"verdict": "ungated", "units": [], "predates": table["predates"], "failed": [], "marker": "",
+               "messages": []}
+        print(json.dumps(doc) if a.json else f"verdict: UNGATED (every phase predates the gate: "
+                                             f"{', '.join(table['predates']) or 'no rows'})")
+        return vl.EXIT_PASS
     if failed:
         markers.insert(0, f"⚠ verify failed {', '.join(failed)}")
     marker = " ".join(markers)

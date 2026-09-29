@@ -523,8 +523,11 @@ def discover(root: str, depth: int = 4) -> list[str]:
 
 
 def cmd_gate_count(args) -> int:
-    clean, dirty = [], []
+    clean, dirty, seen = [], [], set()
     for index in args.index + (discover(vl.PROJECTS) if args.discover else []):
+        if os.path.realpath(index) in seen:
+            continue  # an index passed explicitly and found by --discover counts once
+        seen.add(os.path.realpath(index))
         _, sections = parse(index)
         root = os.path.dirname(os.path.abspath(index))
         rows = [(s.kind, c) for s in sections if s.kind in ("active", "archived") for _, c in s.rows if len(c) > 2]
@@ -533,12 +536,23 @@ def cmd_gate_count(args) -> int:
             if kind != "archived" or not num.isdigit():
                 continue
             folder = cells[2].strip().strip("`").rstrip("/")
-            if not folder or not os.path.isfile(os.path.join(root, folder, "finish-conditions.md")):
+            scope = os.path.join(root, folder)
+            if not folder or not os.path.isfile(os.path.join(scope, "finish-conditions.md")):
                 continue
             mine = [c for _, c in rows if c[0].strip().strip("*") in (num,) or
                     c[0].strip().strip("*").startswith(num + ".")]
             label = f"{os.path.basename(os.path.dirname(root))} {num}"
-            (dirty if any("⚠" in c[1] for c in mine) else clean).append(label)
+            # Clean = the whole-scope gate passes on at least one gated unit, and no row carries
+            # a ⚠ — an ungated (all-predating) or unverified table never counts (5.3-r1-05).
+            p = subprocess.run([sys.executable, GATE, "--scope", scope, "--all", "--json"],
+                               capture_output=True, text=True)
+            try:
+                verdict = json.loads(p.stdout.strip().splitlines()[-1]).get("verdict")
+            except (ValueError, IndexError):
+                verdict = "error"
+            if verdict == "ungated":
+                continue
+            (clean if verdict == "pass" and not any("⚠" in c[1] for c in mine) else dirty).append(label)
     n, need = len(clean), vl.BLOCKING_AFTER
     print(f"clean gated scopes: {n}/{need}" + (f" ({', '.join(clean)})" if clean else "")
           + (f" · with ⚠: {', '.join(dirty)}" if dirty else ""))

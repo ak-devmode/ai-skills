@@ -474,12 +474,42 @@ class TestPredatesAndCloseout(Fixture):
         doc = json.loads(p.stdout)
         self.assertEqual((p.returncode, doc["verdict"], doc["marker"]), (0, "pass", ""))
 
+    def archived_scope(self, n, passing=True):
+        folder = os.path.join(self.plans, "archive", f"{n}-s")
+        os.makedirs(os.path.join(folder, "artifacts"))
+        unit = f"{n}.1"
+        with open(os.path.join(folder, "finish-conditions.md"), "w") as fh:
+            fh.write(f"# t\n\n**Schema version:** verify/1\n**Revision:** 1\n\n{HEADER}"
+                     + row("ok", "true" if passing else "exit 1", owner=unit))
+        log = os.path.join(folder, "artifacts", f"verify-{unit}.jsonl")
+        p = run("verify-run.py", "run", "--table", os.path.join(folder, "finish-conditions.md"), "--log", log,
+                "--owner", unit, env=self.env)
+        rid = p.stdout.split("run_id: ")[1].split()[0]
+        path = os.path.join(self.tmp.name, f"j{n}.json")
+        with open(path, "w") as fh:
+            json.dump([self.v("ok", "pass")], fh)
+        run("verify-run.py", "judged", "--log", log, "--run-id", rid, "--judge", "codex gpt-test", "--input", path,
+            env=self.env)
+        run("verify-run.py", "finalize", "--log", log, "--run-id", rid, env=self.env)
+
+    def test_gate_count_needs_a_passing_gated_scope(self):
+        # 5.3-r1-05: no ⚠ is not enough — an ungated or failing table never counts
+        ungated = os.path.join(self.plans, "archive", "7-s")
+        os.makedirs(ungated)
+        with open(os.path.join(ungated, "finish-conditions.md"), "w") as fh:
+            fh.write(f"# t\n\n**Schema version:** verify/1\n**Revision:** 1\n**Predates gate:** 7.1\n\n{HEADER}")
+        self.archived_scope(8, passing=False)
+        with open(self.index, "a") as fh:
+            fh.write("| 7 | ✅ Done | `archive/7-s/` | s | t |\n| 8 | ✅ Done | `archive/8-s/` | s | t |\n")
+        p = run("plans-index.py", "gate-count", self.index, "--discover", env=self.env)
+        self.assertIn("clean gated scopes: 0/5", p.stdout)
+        self.assertIn("with ⚠: projects 8", p.stdout)
+        self.assertEqual(p.stdout.count("projects 8"), 1)  # explicit + --discover counted once
+
     def test_gate_count_and_reminder_at_five(self):
         rows = ""
         for n in range(1, 7):
-            folder = os.path.join(self.plans, "archive", f"{n}-s")
-            os.makedirs(folder)
-            open(os.path.join(folder, "finish-conditions.md"), "w").close()
+            self.archived_scope(n)
             mark = " ⚠ verify advisory: 1 blocked (x)" if n == 6 else ""
             rows += (f"| {n} | ✅ Done | `archive/{n}-s/` | s | t |\n"
                      f"| {n}.1 | ✅ Done{mark} | `archive/{n}-s/` | p | t |\n")

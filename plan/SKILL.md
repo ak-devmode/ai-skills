@@ -440,6 +440,8 @@ on a direct-to-main repo a branch diff is empty by construction.
    the phase declared commits and none are in range. Disposition every finding ID. Fix it
    in a commit that touches the file and record `fixed <sha>`, or record
    `rejected <reason>`. After fixing any blocking finding, review the fix commits again.
+   The gate enforces this: a repo with commits in range and no covering review record
+   blocks the unit (`verify-contracts.md` §5.2.1).
 2. **Verify** — the stub's `Task {P}.V`, or the CHECKPOINT on a pre-5.3 stub. Run
    `/verify {N}.{P}`, adding `--no-commits` when the stub has no Review task. If the scope has no table, §5.6.2a runs first. A unit listed under
    `**Predates gate:**` skips this step.

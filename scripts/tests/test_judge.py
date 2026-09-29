@@ -144,6 +144,8 @@ class TestJudge(unittest.TestCase):
             # 5.2-r1-06: shape is enforced from the schema file, before anything lands
             "finding missing where/text": dict(findings=[{"check_id": "jr", "lens": "evidence", "severity": "low"}]),
             "malformed lever candidate": dict(lever_candidates=[{"check_id": "away"}]),
+            "lever on unknown check": dict(lever_candidates=[{"lever_id": "x-gap", "check_id": "zzz",
+                                                              "gap": "g", "lever": "l"}]),
             "lever_id not kebab": dict(lever_candidates=[{"lever_id": "Pinned SHA", "check_id": "away",
                                                           "gap": "g", "lever": "l"}]),
             "findings is null": dict(findings=None),

@@ -176,6 +176,9 @@ def validate(doc, check_ids):
     for c in doc["lever_candidates"]:
         if not vl.KEBAB.match(str(c.get("lever_id", ""))):
             problems.append(f"lever_id {c.get('lever_id')!r} is not kebab-case")
+        if c.get("check_id") not in set(check_ids):
+            # an invented check would enter TO-DO.md as `Touches: ?` and count later (5.3-r1-07)
+            problems.append(f"lever candidate names unknown check `{c.get('check_id')}`")
     if doc["feature_map"] not in ("clean", "changed", "blocked", "n/a"):
         problems.append(f"feature_map {doc['feature_map']!r}")
     return problems

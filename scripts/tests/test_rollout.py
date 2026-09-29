@@ -96,6 +96,15 @@ class CloneBehind(unittest.TestCase):
         self.assertEqual(len(p.stdout.splitlines()), 1)
         self.assertIn("is 1 commit(s) behind origin/main — run: git -C", p.stdout)
 
+    def test_a_fetch_of_another_branch_does_not_count_as_fresh(self):
+        # 5.3-r1-08: FETCH_HEAD is refreshed by any fetch; only a fetch of origin main counts
+        self.git(self.other, "push", "-q", "origin", "HEAD:side")
+        self.git(self.clone, "fetch", "-q", "origin", "side")
+        self.git(self.other, "commit", "-q", "--allow-empty", "-m", "b")
+        self.git(self.other, "push", "-q", "origin", "HEAD:main")
+        p = run("clone-behind.py", "--repo", self.clone, "--max-age", "3600")
+        self.assertIn("is 1 commit(s) behind origin/main", p.stdout)
+
     def test_unreachable_origin_says_unknown_not_nothing(self):
         self.git(self.clone, "remote", "set-url", "origin", os.path.join(self.tmp.name, "gone.git"))
         p = self.behind()

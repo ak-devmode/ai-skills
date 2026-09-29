@@ -3,8 +3,9 @@
 
 Approach: skills are consumed by symlink, so a teammate on a stale clone runs stale
 rules and produces verdicts against a superseded contract without knowing it (CLAUDE.md
-§2.1). `/verify` and `/plan` call this at start. It fetches at most once per
-`--max-age` seconds (FETCH_HEAD's mtime), with a timeout, then counts commits in
+§2.1). `/verify` and `/plan` call this at start. It fetches origin main at most once per
+`--max-age` seconds, timed by its own stamp in the git dir (not FETCH_HEAD, which any
+fetch of any branch refreshes — review 5.3-r1-08), with a timeout, then counts commits in
 HEAD..origin/main. Silent when current. It never blocks or fails the caller, but it is
 never silent about not knowing: a failed fetch prints one "freshness unknown" line.
 
@@ -41,8 +42,8 @@ def main(argv):
     if gitdir.returncode != 0:
         print(f"{name}: freshness unknown — not a git clone ({gitdir.stderr.strip()})")
         return 0
-    fetch_head = os.path.join(gitdir.stdout.strip(), "FETCH_HEAD")
-    stale = not os.path.exists(fetch_head) or time.time() - os.path.getmtime(fetch_head) > a.max_age
+    stamp = os.path.join(gitdir.stdout.strip(), "ai-skills-main-fetched")
+    stale = not os.path.exists(stamp) or time.time() - os.path.getmtime(stamp) > a.max_age
     if stale:
         try:
             f = git(a.repo, "fetch", "--quiet", "origin", "main", timeout=a.timeout)
@@ -52,6 +53,8 @@ def main(argv):
         if why:
             print(f"{name}: freshness unknown — fetch failed ({why})")
             return 0
+        with open(stamp, "w", encoding="utf-8") as fh:
+            fh.write(f"{int(time.time())}\n")
     n = git(a.repo, "rev-list", "--count", "HEAD..origin/main")
     if n.returncode != 0:
         print(f"{name}: freshness unknown — {n.stderr.strip() or 'no origin/main'}")

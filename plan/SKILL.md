@@ -324,16 +324,19 @@ Draft one, and ask once:
    `N.P=repo,…` means the phase commits to those repos (read from the plan's Input and
    Output paths); `N.P` alone means it commits nothing. Deliverable rows come from
    `scope.md`'s phase sections (`/scope` §5.10 says how to write them).
-3. **Halt once.** Show the drafted table and ask the user to confirm or edit it. Then
-   write it by running the same command without `--dry-run`. Do not ask again this
-   session.
+3. **Halt once.** Show the drafted rows in plain English, the way `/scope` §5.10.1 does,
+   and ask the user to confirm or edit them. On their yes, write the table by running the
+   same command without `--dry-run`, then `finish-table.py approve --scope "$SCOPE_DIR"
+   --by "<name>"` — that one yes is both the confirmation and the §5.6.2b approval. Do
+   not ask again this session.
 4. If every phase has started, write the table anyway with every phase under
    `--predates` and no `--phase` rows. That records that the scope predates the gate, and
    nothing more is asked of it.
 
 5.6.2b **An unapproved table stops the plan before its first task.** If
 `finish-conditions.md` has `**Approved:** pending` or names an older revision, show the
-rows the way `/scope` §5.10.1 does and ask (a table §5.6.2a just drafted included); approve only on the user's yes. A table with no
+rows the way `/scope` §5.10.1 does and ask; approve only on the user's yes. A table
+§5.6.2a just wrote was approved by that step's single question — never ask twice. A table with no
 `**Approved:**` line predates the checkpoint and does not stop anything.
 
 5.7 **Branch detection** — Determine the working branch:

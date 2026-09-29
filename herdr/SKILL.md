@@ -104,6 +104,13 @@ permission prompt (the auto-mode classifier blocks it, correctly). Fix it at
   it. Worktree checkouts under `~/.herdr/worktrees/` were all already trusted
   (7/7), so `/concurrency` has not hit it; a new untrusted cwd will. Start
   agents in a pre-trusted folder, as `/research` does with `~/.cache/research-lanes`. **WORKERS ONLY, never the driver.**
+  🔴 **Parent trust did not cover a plain `git worktree add` sibling (hit live
+  2026-09-29, WellMed 149.2).** `~/Projects/wellmed` was trusted, yet a lane in
+  `~/Projects/wellmed/wellmed-cashier.worktrees/fix-…` blocked on the dialog. Before
+  launch, pre-trust every worker cwd outside `~/.herdr/worktrees/` (the narrower
+  alternative below: load, set, atomic replace, read back) and remove those entries at
+  teardown. A worker already at the dialog: `agent send-keys <name> esc` cancels it
+  (exits, grants nothing), then pre-trust and re-`agent start` in the same pane.
 - Safe here *specifically* because each worker is sandboxed: isolated worktree,
   disjoint touch-set, never pushes/PRs/merges (not `/freeze` — its state is one
   global file; `/concurrency` §10). That is the "no human in the
@@ -191,6 +198,23 @@ curl both endpoint styles before touching account settings.
   the run/scope number only, never a role: a space named `128 driver` shows every
   pane in it, workers included, as a second "driver" (hit live 2026-08-24).
   Roles belong on panes (§2).
+- **A fresh tab's panes are not shells yet.** `agent start` straight after
+  `tab create` / `pane split` can fail `agent_pane_busy` ("not an available shell")
+  while zsh is still starting. Retry `agent start` into the **same** pane id, and do not
+  split again (5 of 8 on 2026-09-29).
+- **`agent prompt` right after `agent start` can paste without submitting.** The
+  text sits in the input box and the agent stays `idle` (8 of 13 lanes on
+  2026-09-29). After prompting, wait a few seconds; any worker still `idle` gets
+  `agent send-keys <name> enter`. That submits our own prompt; it does not answer a
+  permission dialog.
+- **Machine capacity is the real pane cap for build-heavy lanes.** 13 Opus lanes
+  all running Go lint and test baselines at once drove the 10-core MacBook Air to
+  load ~100 (RAM fine, CPU saturated) and made it sluggish for Alex (2026-09-29).
+  For CPU-bound lanes (Go/Node builds, DB suites), dispatch **≤ ~6 at once** on the
+  MBA and queue the rest, or stagger the starts. If a herd is already out, renice the
+  worker trees instead of killing them, because their later builds inherit the
+  priority. Walk the descendants of every `claude --dangerously-skip-permissions` pid
+  and `setpriority(+10)`. Do it in Python: a zsh loop over an unsplit pid list spins.
 
 ## 8. Supervision primitives (for reference; owned by the dispatching skill)
 

@@ -120,10 +120,14 @@ def main(argv):
             note = ""
         ok &= hit
         lines.append(f"  {'✓' if hit else '✗'} {defect:<20} → {cid:<16} ({how}){'  ' + note if note else ''}")
-    lens = {f.get("lens") for f in rb.get("findings", [])}
-    if jb.startswith("codex ") and "over-build" not in lens:
+    # The over-build catch must be one finding that is on `no-overbuild`, has the over-build
+    # lens and names the planted registry — not two unrelated findings (review 5.2-r2-02).
+    explained = any(f.get("check_id") == "no-overbuild" and f.get("lens") == "over-build"
+                    and "registry" in f"{f.get('where', '')} {f.get('text', '')}".lower()
+                    for f in rb.get("findings", []))
+    if jb.startswith("codex ") and not explained:
         ok = False
-        lines.append("  ✗ judge findings name no over-build — the no-overbuild verdict is unexplained")
+        lines.append("  ✗ no over-build finding on no-overbuild names the planted registry — the verdict is unexplained")
     control = gc["verdict"] == "pass" and jc.startswith("codex ")
     ok &= control
     print(f"bad fixture — judge: {jb} · gate: {gb['verdict'].upper()} ({len(gb['blocks'])} blocks)")

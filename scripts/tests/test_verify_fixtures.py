@@ -25,10 +25,12 @@ DETERMINISTIC = {"invented-env": "names-resolve", "under-rung": "export-runs",
 JUDGE_CAUGHT = {"over-build": "no-overbuild", "missing-evidence": "changelog-entry"}
 
 
-# A fake codex that judges well-formed but never commits: inconclusive on the bad fixture's
-# judge rows (with an over-build finding on no check), pass on everything in the control.
+# A fake codex whose answers are well formed but are not catches. FAKE_JUDGE=inconclusive
+# (default): inconclusive on the bad fixture's judge rows, plus an over-build finding on no
+# check. FAKE_JUDGE=split: fails both rows, but the over-build lens and the no-overbuild
+# finding are two unrelated findings. The control passes either way.
 INCONCLUSIVE_CODEX = r'''#!/usr/bin/env python3
-import json, sys
+import json, os, sys
 a = sys.argv[1:]
 if a == ["--version"]:
     print("codex-cli 9.9.9"); sys.exit(0)
@@ -37,11 +39,16 @@ out = a[a.index("-o") + 1] if "-o" in a else None
 cd = a[a.index("-C") + 1] if "-C" in a else ""
 ids = ["names-resolve", "tests-pass", "export-runs", "no-overbuild", "changelog-entry"]
 bad = "/bad/" in cd + "/"
+split = os.environ.get("FAKE_JUDGE") == "split"
+miss = "fail" if split else "inconclusive"
+stray = [{"check_id": "unowned", "lens": "over-build", "severity": "low", "where": "x:1", "text": "maybe"}]
+if split:
+    stray += [{"check_id": c, "lens": "evidence", "severity": "low", "where": "y:1", "text": "generic"}
+              for c in ("no-overbuild", "changelog-entry")]
 doc = {"verdicts": [{"check_id": c, "rung_reached": 2 if c in ("no-overbuild", "changelog-entry") else 4,
-                     "verdict": "inconclusive" if bad and c in ("no-overbuild", "changelog-entry") else "pass",
+                     "verdict": miss if bad and c in ("no-overbuild", "changelog-entry") else "pass",
                      "reason": "fake"} for c in ids],
-       "findings": [{"check_id": "unowned", "lens": "over-build", "severity": "low", "where": "x:1",
-                     "text": "maybe"}] if bad else [],
+       "findings": stray if bad else [],
        "lever_candidates": [], "feature_map": "n/a"}
 if out:
     with open(out, "w") as fh:
@@ -136,6 +143,12 @@ class TestDeterministicTier(unittest.TestCase):
         self.assertEqual(p.returncode, 1, p.stdout + p.stderr)
         self.assertIn("judge did not fail it with a finding", p.stdout)
         self.assertIn("EXPECTATIONS NOT MET", p.stdout)
+        # 5.2-r2-02: failing verdicts whose over-build lens and no-overbuild finding are
+        # two unrelated findings do not explain the planted registry.
+        split = run("verify/scripts/demo.py", "--check", "--keep", os.path.join(self.tmp.name, "demo2"),
+                    env=dict(env, FAKE_JUDGE="split"), timeout=300)
+        self.assertEqual(split.returncode, 1, split.stdout + split.stderr)
+        self.assertIn("names the planted registry", split.stdout)
 
 
 @unittest.skipUnless(os.environ.get("VERIFY_EVAL") == "1", "judge tier: set VERIFY_EVAL=1 (live codex calls)")

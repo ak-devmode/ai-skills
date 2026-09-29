@@ -253,9 +253,9 @@ plan file is unchanged; where this block and the plan differ, the plan wins, so 
 ## Plan 5.2: `/verify` skill + `/review` on codex
 
 ### Resume Context (Plan 5.2)
-**Last action:** Phase 2 CHECKPOINT approved by Alex (2026-09-29) — all 5.2 tasks done
-**Next action:** close 5.2 per Operating Contract #5 BEFORE marking Done: (1) codex `/review` on the ai-skills Phase 2 range `e3b74ec..HEAD` with `--scope plans/5-verify-lever --unit 5.2`, then disposition every finding via `review.py dispose`; (2) add 5.2 rows to `finish-conditions.md` (bump the revision) and `/verify` unit 5.2; (3) `plans-index.py status --num 5.2 --status "✅ Done …"` (the gate runs); (4) `/plan 5.3`
-**Open blockers:** None
+**Last action:** (2026-09-29) codex review 5.2-r1 → 9 findings, all fixed + dispositioned; finish-conditions rev 4 (5.2 rows); runner run `5.2-20260929T021032-cd55` — 6/6 runner rows pass, 3 judge rows pending
+**Next action:** once codex has credits: (1) re-review the fix range `c8c049b..HEAD` (review 5.2-r2) and disposition; (2) `/verify` 5.2 from §3.2 with run `5.2-20260929T021032-cd55` (or a fresh `run` if HEAD moved); (3) `plans-index.py status --num 5.2 --status "✅ Done …"`; (4) `/plan 5.3`
+**Open blockers:** codex workspace out of credits (Alex) — or Alex OKs the Claude fallback, which leaves `⚠ judge:` on 5.2 until a codex pass
 
 ### Task Detail
 Deepened at start of run (`/markdown-style` §8.9.2). Where this block and the plan differ,
@@ -423,3 +423,26 @@ so they live here; `/verify` of 5.2 judges against the plan *as amended here*):
   SSM values is a documented human step for agents. Needs Alex: target confirmation plus the
   secret in a local file outside all repos.
 - Suite: 93 OK, 2 skipped (live-judge tier).
+
+### Session: 2026-09-29 (Alex / Claude) — closing 5.2 (Operating Contract #5)
+- **Review 5.2-r1** (codex `gpt-6-astra`, `e3b74ec..HEAD`, 58 files): DO NOT SHIP, 5 blocking + 4 should-fix
+  → `artifacts/review-5.2-r1.md`. Alex: fix all 9; the leak is redacted in HEAD only (no history rewrite).
+  Each fix is its own commit with a regression test that fails on the old code (mutation-checked):
+  - r1-01 public-doc leak (tenant identity, env mapping) redacted — `bf210ec`
+  - r1-02 resolver group prefixes leaked across functions — `35f8914`
+  - r1-03 a `none` judge could pass a judge row — `56c01ae`
+  - r1-04 + r1-07 review-ID races / clean reviews reusing IDs; gate blocks duplicate IDs — `4f242fd`
+  - r1-05 `judge.py report` swallowed gate errors — `504b542` (`verify` 0.2.1)
+  - r1-06 answer writers didn't enforce their schemas — `3dac519` (`verify_lib.schema_problems`)
+  - r1-08 fallback-review ⚠ marker never set — `35384dc` (the dispose guard refused my first SHA,
+    which didn't touch the cited file; the claim text was made precise in the same commit)
+  - r1-09 demo eval counted an inconclusive judge as a catch — `3a6a1f2`
+  Gate coverage: 9/9 dispositioned. Suite 100 OK, 2 skipped. Live demo (real codex) after the
+  stricter eval: all 6 defects caught, control passes.
+- **Finish table rev 4** — 9 rows for 5.2 (6 runner, 3 judge). The revision bump makes 5.1's verdict
+  "predates the table" in the gate; 5.1 is already Done with its ⚠ advisory marker, so nothing changes in the index.
+- **Runner** `5.2-20260929T021032-cd55`: 6/6 runner rows pass; judge rows pending.
+- **Blocked: codex workspace out of credits.** The re-review (5.2-r2 on `c8c049b..HEAD`) returned
+  `none codex not authed`, and a direct `codex exec` printed "Your workspace is out of credits".
+  **Defect found:** `codex-exec.py` classifies out-of-credits as "not authed" (exec) or "exited 1"
+  (probe), so the reported cause is wrong.

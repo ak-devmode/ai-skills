@@ -348,3 +348,4 @@ Resumed/restarted phases append a SECOND block:
 ### §3 Patterns Followed (Phase 3)
 - `finish-table.py write_checked()` ← `verify_lib.append_verified` (write, read back through the consumer's parser, fail loud); restore-on-failure added because a table is rewritten, not appended
 - `plans-index.py cmd_gate_count()` ← `cmd_validate` section walk (same `parse()` + folder resolution as `run_gate`)
+- ai-skills · doc: `scope/SKILL.md` (3.9.0, §5.9, §5.10), `scope/templates/plan-stub.md.template`, `verify/SKILL.md` §4 — 3.1

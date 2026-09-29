@@ -27,6 +27,18 @@
 - **Output**: {files/artifacts produced}
 - **Acceptance**: {how to verify}
 
+### Task {P}.R: Review — delete this task if the phase produces no commits (/scope §5.9)
+- **Type**: AI
+- **Action**: `/review` on each repo's `base..HEAD` (base from `closeout-prep.md`), with
+  `--scope`/`--unit {N}.{P}`; disposition every finding ID (/plan §6.8)
+- **Acceptance**: range non-empty; every finding `fixed <sha>` or `rejected <reason>`
+
+### Task {P}.V: Verify
+- **Type**: AI
+- **Action**: `/verify {N}.{P}` — runs the rows this phase owns in `finish-conditions.md`;
+  mark Done only through `plans-index.py status` (/plan §6.8)
+- **Acceptance**: gate verdict recorded in `artifacts/verify-{N}.{P}-report.md`
+
 ---
 ### 🔲 CHECKPOINT: Phase {P} Complete
 **Gate**: {A human | B concurrency | C review/merge | D deploy/verify | E irreversible | F compliance}

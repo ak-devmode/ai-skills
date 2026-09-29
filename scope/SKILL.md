@@ -1,6 +1,6 @@
 ---
 name: scope
-version: 3.8.0
+version: 3.9.0
 description: |
   Task scoping, skill router, and progress tracker. Reads current context (git diff,
   branch, CLAUDE.md, open files), eliminates assumptions via two rounds of open-ended
@@ -678,6 +678,40 @@ seven-column row, which is the leak §5.8 exists to stop:
   --num "$N.$P" --status "📝 Draft ($(date +%F))" --folder "\`{N}-{slug}/\`" \
   --desc "Phase {P} — {phase description}" --creator "$(git config user.name)"
 ```
+
+**Every phase carries its verification tasks** — the template's `Review` and `Verify`
+tasks, before the CHECKPOINT. A phase that produces commits keeps both ("if there is a
+commit, review runs"). A phase with no commits (wiring inside a third-party app, a
+human-only step) deletes the `Review` task and keeps `Verify`. The Review task's
+presence is how `/plan` knows an empty revision range is a failure rather than
+expected nothing, so never leave it on a commit-less phase.
+
+### 5.10 Write `finish-conditions.md` — via the script, never by hand
+
+Every scope gets one, phased or atomic (an atomic scope is one unit, `N.1`). The
+verification contract (`templates/verify-contracts.md` §3) lives in its own file in the
+scope folder, never inside `scope.md`. One row per check, each owned by the phase
+that must pass it. The standard rows (`verify/SKILL.md` §4) come from the script. You
+supply the phase list and the rows for the scope's own deliverables:
+
+```bash
+~/Projects/ai-skills/scripts/finish-table.py init --scope "$PLANS_DIR/$N-{slug}" \
+  --phase "$N.1=wellmed/wellmed-cashier" --phase "$N.2" --phase "$N.3=wellmed/a,wellmed/b" \
+  [--test-plan-owner "$N.{last}"] [--rows extra.jsonl]
+```
+
+- `--phase N.P=repo,…` names the repos (paths under `~/Projects`) that the phase commits
+  to. `--phase N.P` alone means a commit-less phase, which gets verify-only rows.
+- `--test-plan-owner` adds `test-plan-followed` once a `/plan-eng-review` test plan exists.
+  If the review runs after this step, add the row then with `add`.
+- **Deliverable rows are the judgment part.** For each concrete deliverable in §4 of
+  `scope.md`, prefer a command that fails loud (rung 4: the repo's test suite, a lint, a
+  `curl` against the adapter) over a `judge` row (rung 2). Write them as JSONL objects with
+  the §3.2 columns, and let the script fill the defaults. Rows that run a live-model eval
+  tier set its env flag (e.g. `"env": "VERIFY_EVAL=1"`), or the runner skips the tier and
+  the check comes out inconclusive.
+- Later changes go through `finish-table.py add --rows F --change "…"`. It bumps the
+  Revision and logs the change, and a revision bump invalidates earlier verdicts (§5.2).
 
 ---
 

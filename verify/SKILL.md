@@ -127,8 +127,11 @@ Its exit status is the gate's — `1` blocked, `3` the gate itself errored (the 
 
 ## 4. Standard Rows
 
-These make the lenses checkable. `/scope` emits them into a finish table; `/plan`'s
-self-heal adds them to a drafted one. Owner = the unit.
+These make the lenses checkable. `scripts/finish-table.py init` writes them for each
+phase (`/scope` Step 5.10, and `/plan`'s self-heal), with check_ids prefixed `p<P>-`.
+Owner = the unit. A row that runs a live-model eval tier sets that tier's env flag
+(`VERIFY_EVAL=1` for this repo's fixtures), or the tier is skipped and the row ends
+inconclusive (5.2's `p2-fixtures`).
 
 | check_id | check | rung | when |
 |---|---|---|---|

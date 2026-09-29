@@ -1,6 +1,6 @@
 ---
 name: review
-version: 3.3.0
+version: 3.3.1
 description: |
   Pre-landing code review with codex as the gate: the opposing model family, headless
   and read-only, reviews an explicit revision range against gstack's review checklist,
@@ -183,7 +183,8 @@ dropped.
   `should-fix` and `note` go to the project's `TO-DO.md` and are recorded
   `dispose --deferred "<TO-DO item>"` — never `--rejected`, because a deferral is not a
   claim that the finding is wrong. Write the item to `TO-DO.md` first, carrying the finding
-  ID — `- [ ] [review <ID>] <what is left>`; the ID is the link. `dispose` refuses a deferral
+  ID as the item's leading marker — `- [ ] [review <ID>] <what is left>`; the marker is
+  the link, and an ID mentioned elsewhere on a line or a marker with no text is not. `dispose` refuses a deferral
   with no open item naming the ID, one from round 3 or earlier, and any blocking finding.
 - **Same place, three rounds.** A file drawing findings in each of the last three rounds
   is a design that is wrong, not a patch that is incomplete. Stop fixing it and raise it to

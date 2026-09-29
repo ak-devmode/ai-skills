@@ -54,8 +54,8 @@ def gate_mode(scope_dir):
 
 
 def todo_has_item(scope, finding_id, open_only):
-    """True when a TO-DO item line (`- [ ] …`, or also `- [x] …` unless open_only) carries
-    `finding_id` as a whole token, in the project's TO-DO.md — or, when not open_only, its
+    """True when a TO-DO item line (`- [ ] …`, or also `- [x] …` unless open_only) opens
+    with the marker `[review <finding_id>]` followed by the work left, in the project's TO-DO.md — or, when not open_only, its
     archive, where a closed item moves. The file is beside PLANS-INDEX.md, at most three
     levels above the scope. The ID is the link: free text can't tie an item to a finding,
     a substring matched an unrelated task and prose matched nothing real (review adhoc
@@ -64,7 +64,9 @@ def todo_has_item(scope, finding_id, open_only):
     if not finding_id:
         return False
     box = r"\[ \]" if open_only else r"\[[ xX]\]"
-    item = re.compile(rf"^\s*[-*] {box} .*(?<![\w.-]){re.escape(finding_id)}(?![\w.-])", re.M)
+    # the marker leads the item and text follows it: an ID merely mentioned in another
+    # task, or a bare marker with no work described, is not a follow-up (review adhoc-r4-01)
+    item = re.compile(rf"^\s*[-*] {box} (?:\*\*)?\[review {re.escape(finding_id)}\](?:\*\*)?[ \t]+\S", re.M)
     d = os.path.realpath(scope)
     for _ in range(3):
         d = os.path.dirname(d)

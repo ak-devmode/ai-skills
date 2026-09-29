@@ -305,8 +305,9 @@ class TestReview(unittest.TestCase):
         self.assertEqual(self.dispose("9.1-r4-02", "--deferred", "tenant filter").returncode, 1)  # no file
         with open(todo, "w") as fh:
             fh.write("Prose naming 9.1-r4-02 outside an item.\n- [x] [review 9.1-r4-03] closed already\n"
-                     "- [ ] [review 9.1-r4-020] a different finding\n- [ ] tenant filter, unlinked\n")
-        for why in ("prose", "closed", "longer ID", "unlinked"):
+                     "- [ ] [review 9.1-r4-020] a different finding\n- [ ] tenant filter, unlinked\n"
+                     "- [ ] unrelated task, see 9.1-r4-02 for context\n- [ ] [review 9.1-r4-02]\n")
+        for why in ("prose", "closed", "longer ID", "unlinked", "mentioned, not marked", "bare marker"):
             with self.subTest(why=why):
                 self.assertEqual(self.dispose("9.1-r4-02", "--deferred", "tenant filter").returncode, 1)
         self.assertEqual(self.dispose("9.1-r4-03", "--deferred", "comment").returncode, 1)  # only a closed item

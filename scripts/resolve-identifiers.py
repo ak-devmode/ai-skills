@@ -76,81 +76,128 @@ SH_BUILTIN = {"HOME", "PATH", "PWD", "OLDPWD", "USER", "LOGNAME", "SHELL", "TMPD
               "LC_ALL", "TERM", "HOSTNAME", "UID", "EUID", "PPID", "RANDOM", "LINENO", "SECONDS",
               "OSTYPE", "BASH_SOURCE", "BASH_VERSION", "BASHPID", "PIPESTATUS", "FUNCNAME", "OPTARG",
               "OPTIND", "REPLY", "COLUMNS", "LINES", "EDITOR", "PAGER"}
-# Where a command starts: line start, after ; & | ( {, or after then/do/else. Only there is
-# `NAME=` an assignment — anywhere else it is an argument's text (review 5.3-r6-02).
-SH_CMD = r"(?:^|[;&|({]\s*|\b(?:then|do|else)\s+)\s*"
-SH_ASSIGN = re.compile(SH_CMD + r"(?:(?:export|local|readonly|declare(?:\s+-\w+)*)\s+)?([A-Z][A-Z0-9_]*)\+?=")
-SH_DECLARE = re.compile(SH_CMD + r"(?:export|local|readonly|declare(?:\s+-\w+)*)\s+([A-Z][A-Z0-9_]*)\s*(?:$|[;&|])")
-SH_FOR = re.compile(SH_CMD + r"for\s+([A-Z][A-Z0-9_]*)\s+in\b")
-SH_READ = re.compile(SH_CMD + r"read\s+(?:-\w+\s+)*((?:[A-Za-z_]\w*\s*)+)")
-SH_END = re.compile(r";|&&|\|\||\||\bdo\b|$")
-SH_WORD_END = re.compile(r"\s|;|$")
+SH_NAME = re.compile(r"^[A-Z][A-Z0-9_]*$")
+SH_ASSIGN_WORD = re.compile(r"^([A-Z][A-Z0-9_]*)\+?=")
+SH_KEYWORDS = {"export", "local", "readonly", "declare", "typeset"}
+SH_SEP = re.compile(r";|&&|\|\||\||\n")
+SH_LEAD = re.compile(r"^\s*(?:(?:then|do|else|elif|if|while|until|!|\{|\()\s+)*")  # only at a command's start
 
 
-def shell_mask(line):
-    """(text, dq): single-quoted text and an unquoted `# comment` blanked to spaces, so
-    offsets still line up; dq = the double-quoted spans, where expansions still read but no
-    assignment or binding can start."""
-    out, dq, q, i = list(line), [], None, 0
+CTX = "\x01"  # fills quoted / substituted text in a strict mask: one opaque stretch per word
+
+
+def shell_mask(line, strict=False):
+    """The line with single-quoted text and an unquoted `# comment` blanked, offsets kept
+    (reads inside double quotes and substitutions stay visible). With `strict`, everything
+    quoted or inside `$(…)` / backticks becomes CTX — what is left is the syntax the shell
+    splits commands and words on (5.3-r7-02). Contexts nest, as in
+    `"$(cd "$(dirname "$0")" && pwd)"`."""
+    out, stack, i = list(line), [], 0     # stack of '"', '(' (a $(…) body), '`'
+    fill = CTX if strict else " "
+
+    def ctx(a, b):
+        if strict:
+            out[a:b] = [CTX] * (b - a)
+
     while i < len(line):
-        c = line[i]
-        if q == "'":
-            if c == "'":
-                q = None
-            out[i] = " "
-        elif q == '"':
-            if c == "\\":
-                i += 1
-            elif c == '"':
-                q = None
-                dq[-1][1] = i
-        elif c == "'":
-            q, out[i] = "'", " "
-        elif c == '"':
-            q = '"'
-            dq.append([i, len(line)])
-        elif c == "#" and (i == 0 or line[i - 1] in " \t;"):
-            for j in range(i, len(line)):
-                out[j] = " "
+        c, top = line[i], (stack[-1] if stack else None)
+        was = bool(stack)
+        step = 1
+        if top in ('"', "(", "`") and c == "\\":
+            step = 2
+        elif c == "'" and top != '"':
+            j = line.find("'", i + 1)
+            j = len(line) - 1 if j < 0 else j
+            out[i:j + 1] = [fill] * (j + 1 - i)   # single quotes: literal, never a read
+            i = j + 1
+            continue
+        elif top == '"' and c == '"':
+            stack.pop()
+        elif top == "`" and c == "`":
+            stack.pop()
+        elif top == "(" and c == ")":
+            stack.pop()
+        elif c == "$" and line[i + 1:i + 2] == "(":
+            stack.append("(")
+            step = 2
+        elif top == "(" and c == "(":
+            stack.append("(")
+        elif c == '"' and top != '"' or c == "`" and top != "`":
+            stack.append(c)
+        elif not stack and c == "#" and (i == 0 or line[i - 1] in " \t;"):
+            out[i:] = [" "] * (len(line) - i)
             break
-        i += 1
-    return "".join(out), dq
+        if was or stack:
+            ctx(i, min(i + step, len(line)))
+        i += step
+    return "".join(out)
+
+
+def shell_commands(line):
+    """[(start, end)] of each simple command on the line, split only on separators the shell
+    sees (never inside quotes, comments or substitutions)."""
+    syntax, cuts, prev = shell_mask(line, strict=True), [], 0
+    for m in SH_SEP.finditer(syntax):
+        cuts.append((prev, m.start()))
+        prev = m.end()
+    cuts.append((prev, len(line.rstrip())))
+    out = []
+    for a, b in cuts:
+        a += SH_LEAD.match(syntax[a:b]).end()  # `then X=1` binds X; `echo then X=1` does not
+        if line[a:b].strip():
+            out.append((a, b))
+    return out
+
+
+def shell_binds(syntax):
+    """Names one simple command binds, from its strict mask (each quoted or substituted
+    stretch is one opaque word), or [] when it is not unambiguously a binding. Only whole
+    commands count: every word an assignment (`A=1 B=2`), a declaration keyword over names
+    or assignments (`export A B=1`), `for NAME in …`, or `read NAME…` (5.3-r7-03, r7-04)."""
+    words = re.sub(CTX + "+", "X", syntax).split()
+    if not words:
+        return []
+    if words[0] == "for" and len(words) >= 3 and words[2] == "in" and SH_NAME.match(words[1]):
+        return [words[1]]
+    if words[0] == "read":
+        names = []
+        for w in words[1:]:
+            if w.startswith("<"):
+                break
+            if not w.startswith("-") and re.match(r"^[A-Za-z_]\w*$", w):
+                names.append(w)
+        return names
+    kw = words[0] in SH_KEYWORDS
+    names = []
+    for w in (words[1:] if kw else words):
+        m = SH_ASSIGN_WORD.match(w)
+        if m:
+            names.append(m.group(1))
+        elif kw and (SH_NAME.match(w) or w.startswith("-")):
+            names += [w] if SH_NAME.match(w) else []
+        else:
+            return []  # a command with a non-assignment word is not a binding (`echo then T=x`)
+    return names
 
 
 def shell_assigned(text):
-    """Names the script sets before it ever reads them, in the order the shell evaluates:
-    `FOO=${FOO:-x}` and `for F in "$F"` read F before they bind it (5.3-r5-01, r6-01);
-    `FOO=1; echo $FOO` binds before it reads (r6-03). A name read first is an environment
-    input even if the script assigns it later."""
+    """Names the script binds before it ever reads them, command by command in file order.
+    A command that reads a name and binds it (`FOO="a $FOO"`, `for V in "$V"`,
+    `read R <<< "$R"`) reads first. A name read first is an environment input even if the
+    script assigns it later. Anything the parser can't classify stays a read: this check
+    fails closed (5.3-r5-01 … r7-04)."""
     local, read_first = set(), set()
     for line in text.splitlines():
         if is_comment(line):
             continue
-        masked, dq = shell_mask(line)
-        inq = lambda pos: any(a <= pos < b for a, b in dq)  # noqa: E731
-        events = []  # (pos, order, kind, name) — at one position a read precedes a bind
-        for m in SH_USE.finditer(masked):
-            events.append((m.start(), 0, "use", m.group(1) or m.group(2)))
-        for m in SH_ASSIGN.finditer(masked):
-            if not inq(m.start(1)):
-                # an assignment binds once its word ends — its right-hand side is read first
-                events.append((SH_WORD_END.search(masked, m.end()).start(), 1, "bind", m.group(1)))
-        for m in SH_DECLARE.finditer(masked):
-            if not inq(m.start(1)):
-                events.append((m.end(1), 1, "bind", m.group(1)))
-        for m in SH_FOR.finditer(masked):
-            if not inq(m.start(1)):
-                events.append((SH_END.search(masked, m.end()).start(), 1, "bind", m.group(1)))
-        for m in SH_READ.finditer(masked):
-            if not inq(m.start(1)):
-                stop = SH_END.search(masked, m.end()).start()
-                for n in m.group(1).split():
-                    events.append((stop, 1, "bind", n))
-        for _, _, kind, name in sorted(events):
-            if kind == "use" and name not in local:
-                read_first.add(name)
-            elif kind == "bind" and name not in read_first:
-                local.add(name)
+        reads_mask, syntax = shell_mask(line), shell_mask(line, strict=True)
+        for a, b in shell_commands(line):
+            binds = shell_binds(syntax[a:b])
+            # within one command the reads happen first (a `for` list, a right-hand side);
+            # a loop body is a later command, split off at `do`
+            reads = {m.group(1) or m.group(2) for m in SH_USE.finditer(reads_mask[a:b])}
+            read_first |= {n for n in reads if n not in local}
+            local |= {n for n in binds if n not in read_first}
     return local
 
 
@@ -311,7 +358,7 @@ def extract(files, full=None):
                     refs.append(ref("env", m.group(1), None, path, lineno))
             if path.endswith(".sh"):
                 seen = set()
-                for m in SH_USE.finditer(shell_mask(text)[0]):
+                for m in SH_USE.finditer(shell_mask(text)):
                     name = m.group(1) or m.group(2)
                     if name not in local and name not in SH_BUILTIN and name not in seen:
                         seen.add(name)

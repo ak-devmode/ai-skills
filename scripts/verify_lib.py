@@ -26,7 +26,7 @@ GATE_MODE = "advisory"
 BLOCKING_AFTER = 5
 # §5.4.2: a graph can run blocking ahead of the fleet flip with a `**Gate mode:** blocking`
 # line in its PLANS-INDEX.md (kalpa-iris, 2026-09-29 — code nobody reads needs a gate that stops).
-GATE_MODE_LINE = re.compile(r"^\*\*Gate mode:\*\*\s*(blocking|advisory)\b", re.M)
+GATE_MODE_LINE = re.compile(r"^\*\*Gate mode:\*\*[ \t]*(.*?)[ \t]*$", re.M)
 # Finish-table `repo` cells are paths under this root (§3.2). Tests point it elsewhere.
 PROJECTS = os.environ.get("VERIFY_PROJECTS", os.path.expanduser("~/Projects"))
 
@@ -42,7 +42,14 @@ def gate_mode(scope_dir):
         if os.path.isfile(index):
             with open(index, encoding="utf-8") as fh:
                 m = GATE_MODE_LINE.search(fh.read())
-            return m.group(1) if m else GATE_MODE
+            if m is None:
+                return GATE_MODE
+            if m.group(1) not in ("blocking", "advisory"):
+                # a typo must never quietly downgrade a blocking graph (review adhoc-02)
+                raise ContractError(message(
+                    "ERROR", "the index declares an unknown gate mode", "**Gate mode:** blocking | advisory",
+                    repr(m.group(1)), index, "code", "fix the **Gate mode:** line", f"{CONTRACT} §5.4.2"))
+            return m.group(1)
     return GATE_MODE
 
 

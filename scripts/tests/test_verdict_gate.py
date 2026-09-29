@@ -418,6 +418,18 @@ class TestIndexEnforcement(Fixture):
         with open(self.index) as fh:
             return next(line for line in fh if line.startswith("| 5.1 "))
 
+    def test_malformed_gate_mode_refuses_done_instead_of_going_advisory(self):
+        self.set_table([row("bad", "exit 1")])
+        self.ledger()
+        self.verify()
+        with open(self.index, "a") as fh:
+            fh.write("\n**Gate mode:** blockng\n")
+        before = self.row51()
+        p = self.status()
+        self.assertNotEqual(p.returncode, 0, p.stdout)
+        self.assertIn("unknown gate mode", p.stderr)
+        self.assertEqual(self.row51(), before)
+
     def test_blocking_refuses_done(self):
         self.set_table([row("bad", "exit 1")])
         self.ledger()

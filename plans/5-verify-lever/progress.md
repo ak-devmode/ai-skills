@@ -14,7 +14,7 @@
 ## Resume Context
 **Scope:** ~/Projects/ai-skills/plans/5-verify-lever/scope.md
 **Last action:** Plan 5.1 complete, Phase 1 approved (2026-09-26)
-**Next action:** Plan 5.2 Task 2.4 part B — class-A trial, blocked on Alex (target + credential)
+**Next action:** Plan 5.2 Phase 2 CHECKPOINT (Alex) → then Plan 5.3 (wiring + self-heal + rollout)
 **Open blockers:** closeout deferred to scope end (see TO-DO.md)
 **Key files changed:** `scripts/plans-index.py` (70d1222 — unplanned fix, see Progress Log)
 
@@ -43,6 +43,7 @@
 - (2026-09-26) Disposition coverage is enforced by `verdict-gate.py`, not `/verify` judgment — so it can't drift.
 - (2026-09-26) Evidence from a dirty working tree is accepted: verification is pre-PR. Contract §5.2.
 - (2026-09-26) No `/clear` at the 5.1 → 5.2 boundary; proceed straight into Phase 2. Closeout deferred to scope end.
+- (2026-09-29) Class-A proof (Task 2.4 part B: the three-outcome trial) **moves to the kalpa-docs test-suite program, member T2 (WellMed adapter)**, together with a login/token CLI, as T2 deliverables (`test-suite-program/T2-wellmed-adapter/NOT-YET-SCOPED.md`, kalpa-docs `af2b8ac`). Scope 5 proves class B only. Credential model stays open (Alex: no skeleton key; scoped to test/demo DBs).
 
 ---
 
@@ -250,9 +251,9 @@ plan file is unchanged; where this block and the plan differ, the plan wins, so 
 ## Plan 5.2: `/verify` skill + `/review` on codex
 
 ### Resume Context (Plan 5.2)
-**Last action:** Task 2.4 part A done — dogfood verdict on 5.1 recorded (advisory, 4 blocked; defects fixed in 5.2)
-**Next action:** Task 2.4 part B — class-A trial: BLOCKED on Alex (clinic_3 is staging, not dev; login secret is a human step)
-**Open blockers:** Alex: confirm staging clinic_3 as the trial target + provide the gateway credential secret outside the repos
+**Last action:** Task 2.4 done (part A dogfood; part B moved to test-suite T2) — all 5.2 tasks done
+**Next action:** Phase 2 CHECKPOINT (gate A): Alex reads the dogfood verdict, go/no-go on advisory rollout
+**Open blockers:** None
 **Open blockers:** None
 
 ### Task Detail
@@ -377,7 +378,7 @@ the plan wins, so ask.
   repaired copies pass their row (285 s for the tier). Suite 91 OK, 2 skipped (live-judge
   tier, opt-in).
 
-#### Task 2.4: Dogfood + three-outcome trial — ⏸️ part A done · part B BLOCKED (Alex)
+#### Task 2.4: Dogfood + three-outcome trial — ✅ part A done · part B moved to test-suite T2 (Alex, 2026-09-29)
 - **Part A — `/verify` class B on Phase 1 (live codex `gpt-6-sol`).** Created
   `finish-conditions.md` (rev 3; the Phase 1 rows are retroactive) and a retroactive ledger
   base for 5.1 (`8173b95`). Three runs; the verdict of record is `5.1-20260926T100859-79e8`:

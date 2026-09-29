@@ -9,10 +9,13 @@ change, or evidence whose SHA sits outside the unit's `base..HEAD` (base = the S
 ledger-init.sh recorded at phase start; with no base, evidence must be at HEAD). Then
 §5.2.1: every review finding carries a disposition. A non-codex judge on a deciding
 verdict yields the `⚠ judge:` marker (§5.3). In advisory mode (§5.4) the same blocks are
-reported with exit 0 and an advisory marker; `--skip-verify` bypasses loudly.
+reported with exit 0 and an advisory marker; `--skip-verify` bypasses loudly. A unit the
+table lists under `**Predates gate:**` was Done before the gate existed: exempt, exit 0.
+`--all` is /closeout's view: every gated unit in the table, and any block is a failure
+whatever the mode — the scope cannot report HEALED on it (scope 5 §4.3).
 
-Usage:  verdict-gate.py --scope DIR --unit N.P [--advisory|--blocking] [--skip-verify REASON]
-                        [--projects DIR] [--json]
+Usage:  verdict-gate.py --scope DIR (--unit N.P | --all) [--advisory|--blocking]
+                        [--skip-verify REASON] [--projects DIR] [--json]
         paths: DIR/finish-conditions.md · DIR/artifacts/verify-<unit>.jsonl ·
                DIR/artifacts/review-<unit>.jsonl (optional) · DIR/closeout-prep.md (bases)
 Output: one line per owned check, a §10 message per block, then `verdict: …` and, when
@@ -215,10 +218,47 @@ def evaluate(scope, unit, projects):
     return report, blocks, sorted(j for j in judges if j)
 
 
+def closeout_view(a, table):
+    """Every gated unit, blocks as failures. Output ends `verdict: PASS|FAILED …` and, when
+    anything is off, `marker: ⚠ verify failed <ids>` (+ judge markers) — the text /closeout
+    puts on the archived index row."""
+    units = sorted({r["owner"].split("/")[0] for r in table["rows"]}, key=lambda u: [int(x) for x in u.split(".")])
+    per, failed, judges, msgs = [], [], set(), []
+    for u in units:
+        report, blocks, js = evaluate(a.scope, u, a.projects)
+        judges.update(js)
+        failed += [b[0] for b in blocks]
+        msgs += [vl.message("FAIL", f"{u}: {what}", exp, found, where, cause, nxt, DOCS)
+                 for _, what, exp, found, where, cause, nxt in blocks]
+        per.append({"unit": u, "blocks": [b[0] for b in blocks]})
+    markers = [f"⚠ judge: {j}" for j in sorted(judges) if not j.startswith("codex ")]
+    if failed:
+        markers.insert(0, f"⚠ verify failed {', '.join(failed)}")
+    marker = " ".join(markers)
+    verdict = "failed" if failed else "pass"
+    if a.json:
+        print(json.dumps({"verdict": verdict, "units": per, "predates": table["predates"],
+                          "failed": failed, "marker": marker, "messages": msgs}))
+    else:
+        for p in per:
+            print(f"{'FAIL' if p['blocks'] else 'pass'}  {p['unit']}  "
+                  f"{', '.join(p['blocks']) if p['blocks'] else 'every owned check passes'}")
+        for u in table["predates"]:
+            print(f"n/a   {u}  predates the gate")
+        for m in msgs:
+            print(m)
+        print(f"verdict: {verdict.upper()} (scope, {len(units)} gated unit(s), {len(failed)} failed check(s))")
+        if marker:
+            print(f"marker: {marker}")
+    return vl.EXIT_FAIL if failed else vl.EXIT_PASS
+
+
 def main(argv):
     ap = argparse.ArgumentParser(description="Verification gate (templates/verify-contracts.md §5).")
     ap.add_argument("--scope", required=True)
-    ap.add_argument("--unit", required=True)
+    target = ap.add_mutually_exclusive_group(required=True)
+    target.add_argument("--unit")
+    target.add_argument("--all", action="store_true")
     mode = ap.add_mutually_exclusive_group()
     mode.add_argument("--advisory", dest="mode", action="store_const", const="advisory")
     mode.add_argument("--blocking", dest="mode", action="store_const", const="blocking")
@@ -243,10 +283,18 @@ def main(argv):
         return vl.EXIT_PASS
 
     try:
+        table = vl.parse_table(os.path.join(a.scope, "finish-conditions.md"))
+        if a.all:
+            return closeout_view(a, table)
+        if a.unit in table["predates"]:
+            msg = f"{a.unit} predates the gate (finish-conditions.md **Predates gate:**) — exempt"
+            print(json.dumps({"verdict": "predates-gate", "unit": a.unit, "blocks": [], "marker": ""})
+                  if a.json else f"verdict: PREDATES GATE ({msg})")
+            return vl.EXIT_PASS
         report, blocks, judges = evaluate(a.scope, a.unit, a.projects)
     except vl.ContractError as exc:
         if a.json:
-            print(json.dumps({"verdict": "error", "unit": a.unit, "error": exc.msg}))
+            print(json.dumps({"verdict": "error", "unit": a.unit or "all", "error": exc.msg}))
         print(exc.msg, file=sys.stderr)
         return vl.EXIT_EVAL
 

@@ -61,8 +61,9 @@ is no threshold score — a rung-2 proof isn't blocked by a number, it is visibl
 
 ## 3. Finish-condition table — `finish-conditions.md`
 
-**Writer:** `/scope` (template `templates/finish-conditions.md.template`); on an older scope
-with none, `/plan` drafts it from the scope's deliverables and Alex confirms once.
+**Writer:** `/scope` (template `templates/finish-conditions.md.template`, through
+`scripts/finish-table.py`); on an older scope with none, `/plan` drafts it from the scope's
+deliverables and Alex confirms once.
 **Readers:** `verify-run.py` (executes rows), `verdict-gate.py` (evaluates rows), `/verify`
 (judges `judge` rows), `/closeout` (runs all rows).
 
@@ -70,6 +71,12 @@ Lives in the scope folder, never inside `scope.md` (a write-once design record).
 
 3.1 **Header fields:** `**Schema version:** verify/1` and `**Revision:** <integer>`. Every
 change to a row bumps the revision and adds a Changelog line (rev · date · change · by).
+Optional `**Predates gate:** <N.P>, …` names phases already Done when the table was
+created (self-heal on a running scope); they own no rows, `verdict-gate.py` reports them
+`predates-gate` and `plans-index.py validate` accepts their Done — a scope already in
+flight is never asked to reconcile verification after the fact (Alex, 2026-09-29).
+**Writer in practice:** `scripts/finish-table.py` (`init` with the standard rows per
+phase, `add` with the revision bump) — never typed by hand.
 
 3.2 **One row per check**, columns in this order:
 
@@ -192,10 +199,16 @@ unit has a `review` record (§6.0) with a non-codex reviewer, the gate reports
 base an ancestor of the fallback's base, the fallback's head an ancestor of the codex head.
 A record without resolved `shas` cannot prove coverage and keeps the marker.
 
-5.4 **Advisory mode** (the default until three real scopes pass cleanly): the gate prints
+5.4 **Advisory mode** (the default until five real scopes pass cleanly — Alex, 2026-09-29;
+`plans-index.py gate-count`, printed by `/closeout`, counts them and says when to flip
+`GATE_MODE`): the gate prints
 the same result and the same marker, and exits `0` with `ADVISORY` on the verdict line
 instead of blocking. `--skip-verify "<reason>"` bypasses the gate and is written into the
 verdict header and the index status.
+
+5.4.1 **Closeout view** — `verdict-gate.py --all` evaluates every gated unit in the table.
+Any block is a failure whatever the mode: the scope cannot report HEALED, it still
+archives, and its index row carries the printed `⚠ verify failed <check_ids>` marker.
 
 5.5 **Exit codes** for every script in this contract: `0` pass · `1` blocked / failed ·
 `2` usage · `3` could not evaluate (missing or malformed input, git error) — never read as

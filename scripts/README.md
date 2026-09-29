@@ -13,7 +13,7 @@ already caused real data loss. Prose cannot enforce itself — the same reasonin
 |---|---|---|
 | `resolve-plans-dir.sh` | A `case` block copy-pasted into 5 skills | /scope, /plan, /prd, /closeout, /repo-cleanup |
 | `claim-scope-number.sh` | "read the index, find the highest, increment" — **raced; scope 110 collided** | /scope §5.2 |
-| `plans-index.py` | "append a row" with no header written — **leaked 40 untabled rows** | /scope §5.8, /plan §11.4, /closeout §13, /repo-cleanup §6; `status` runs the verdict gate before Done, `validate` catches a hand-edited Done |
+| `plans-index.py` | "append a row" with no header written — **leaked 40 untabled rows** | /scope §5.8, /plan §11.4, /closeout §13, /repo-cleanup §6; `status` runs the verdict gate before Done, `validate` catches a hand-edited Done, `gate-count` counts clean gated scopes toward the blocking flip |
 | `repo-graph-snapshot.sh` | /scope §0.5.2's serial per-repo walk | /scope §0.5.2 |
 | `edit-guard.py` | `python3 - <<PY` string-replaces that **no-op silently** | any scripted multi-file edit |
 | `plans-folder.sh` | hand-run `mkdir`/`mv` sweep copied into two skills | /plan §2.5, /scope §5.6–5.7 |
@@ -27,7 +27,8 @@ already caused real data loss. Prose cannot enforce itself — the same reasonin
 | `lint-skill.py` | eyeballing SKILL.md quality — CLAUDE.md §6 said "no linter currently" while the skills accreted past obey-able size | any skill edit; `/scope`, `/plan`, `/closeout` bodies |
 | `resolve-identifiers.py` | grepping for a name and calling it declared — comment, fixture and sibling-service hits read as real | `/verify` + `/review` local-maxima lens (scope 5 Phase 2) |
 | `verify-run.py` | "it passed" as a claim — runs each finish-table row in its declared context and is the only writer of the verdict log | `/verify`, `/plan` checkpoints, `/closeout` (scope 5) |
-| `verdict-gate.py` | "verify ran, so it's done" — applies §5 to the latest final verdict per owned check (range, rung, revision, disposition coverage); advisory until 3 clean scopes | `plans-index.py status`/`validate`, `/plan`, `/closeout` |
+| `verdict-gate.py` | "verify ran, so it's done" — applies §5 to the latest final verdict per owned check (range, rung, revision, disposition coverage); `--all` is /closeout's whole-scope view; `**Predates gate:**` phases exempt; advisory until 5 clean scopes | `plans-index.py status`/`validate`, `/plan`, `/closeout` |
+| `finish-table.py` | a finish table typed by hand — standard rows per phase, Revision + Changelog on every change, read back through the runner's parser | /scope Step 5.10, /plan §5.6.2a self-heal |
 | `verify_lib.py` | (library, not a CLI) one table parser, message formatter and verified JSONL appender for the verify scripts | `verify-run.py`, `verdict-gate.py`, `resolve-identifiers.py` |
 
 **Tests:** `python3 -m unittest discover scripts/tests` from the repo root (stdlib only,
@@ -51,6 +52,7 @@ by `test_entrypoint.py`'s compile check.
     plans-index.py add  <index> --num --status --folder --desc [--creator] [--dry-run]
     plans-index.py move <index> --num --to {active,archived} [--folder] [--status] [--dry-run]
     plans-index.py status <index> --num --status [--skip-verify R] [--blocking|--advisory] [--dry-run]
+    plans-index.py gate-count <index>...  stdout: `clean gated scopes: N/5`, + REMINDER line at 5 · exit 0
       exit: 0 written · 1 gate BLOCKED (row untouched) or write did not land · 2 usage · 3 gate could not evaluate
 
     plans-folder.sh <plans-dir> <folder-name> [--slug S] [--move FILE]... [--dry-run]
@@ -66,8 +68,11 @@ by `test_entrypoint.py`'s compile check.
       exit: 0 all resolved · 1 unresolved or unsupported · 2 usage · 3 git error / empty range
     verify-run.py run|judged|finalize ...  (templates/verify-contracts.md §4)
       exit: 0 runner rows passed / recorded · 1 a row failed or refused · 2 usage · 3 malformed input / write did not land
-    verdict-gate.py --scope DIR --unit N.P [--advisory|--blocking] [--skip-verify R] [--json]
-      exit: 0 pass / advisory / skipped · 1 blocked · 2 usage · 3 could not evaluate
+    verdict-gate.py --scope DIR (--unit N.P | --all) [--advisory|--blocking] [--skip-verify R] [--json]
+      exit: 0 pass / advisory / skipped / predates-gate · 1 blocked (--all: any block) · 2 usage · 3 could not evaluate
+    finish-table.py init --scope DIR --phase N.P[=repo,...]... [--rows F] [--test-plan-owner N.P] [--predates N.P,...]
+    finish-table.py add  --scope DIR --rows F --change TEXT
+      exit: 0 written · 2 usage · 3 refused (exists / missing / would not parse — nothing written)
     dispatch-log.py --scope --task --status {dispatched,done,blocked,failed} [--seat --branch --worktree --pane --tail --log]
       exit: 0 written + read back · 1 did not land · 2 usage
     herdr-pane.sh name <pane> <task> <seat> [--source SKILL]  |  herdr-pane.sh helper [--cwd DIR]

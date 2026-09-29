@@ -20,8 +20,10 @@ RESULTS = ("pass", "fail", "inconclusive", "verified-unreachable")
 ORDER = {"fail": 0, "inconclusive": 1, "verified-unreachable": 2, "pass": 3}  # §5.1
 EXIT_PASS, EXIT_FAIL, EXIT_USAGE, EXIT_EVAL = 0, 1, 2, 3                     # §5.5
 JUDGE_LINE = re.compile(r"^(codex|claude-fallback|none) \S.*$")               # §4.6
-# §5.4: advisory until three real scopes pass cleanly — then Alex flips this to "blocking".
+# §5.4: advisory until BLOCKING_AFTER real scopes pass cleanly — then Alex flips this to
+# "blocking". `plans-index.py gate-count` (printed by /closeout) is the reminder.
 GATE_MODE = "advisory"
+BLOCKING_AFTER = 5
 # Finish-table `repo` cells are paths under this root (§3.2). Tests point it elsewhere.
 PROJECTS = os.environ.get("VERIFY_PROJECTS", os.path.expanduser("~/Projects"))
 
@@ -95,16 +97,23 @@ def _cells(line):
 
 
 def parse_table(path):
-    """Return {"revision": int, "rows": [dict], "path": path}. Raises ContractError."""
-    docs = f"{CONTRACT} §3"
+    """Return {"revision": int, "predates": [unit], "rows": [dict], "path": path}.
+    Raises ContractError."""
     try:
         with open(path, encoding="utf-8") as fh:
-            lines = fh.read().splitlines()
+            text = fh.read()
     except OSError as exc:
         raise ContractError(message("ERROR", "cannot read the finish-condition table",
                                     "a readable finish-conditions.md", str(exc), path, "tooling",
-                                    "create it from templates/finish-conditions.md.template", docs))
+                                    "create it with scripts/finish-table.py init", f"{CONTRACT} §3"))
+    return parse_table_text(text, path)
+
+
+def parse_table_text(text, path):
+    docs = f"{CONTRACT} §3"
+    lines = text.splitlines()
     schema = rev = None
+    predates = []
     for line in lines:
         m = re.match(r"^\*\*Schema version:\*\*\s*(\S+)", line)
         if m:
@@ -112,11 +121,17 @@ def parse_table(path):
         m = re.match(r"^\*\*Revision:\*\*\s*(\S+)", line)
         if m:
             rev = m.group(1)
+        m = re.match(r"^\*\*Predates gate:\*\*\s*(.*)$", line)
+        if m:
+            predates = [u.strip() for u in m.group(1).split(",") if u.strip()]
     errors = []
     if schema != SCHEMA:
         errors.append(("header", f"**Schema version:** {SCHEMA}", schema or "missing"))
     if not (rev or "").isdigit():
         errors.append(("header", "**Revision:** <integer>", rev or "missing"))
+    for u in predates:
+        if not re.match(r"^\d+\.\d+$", u):
+            errors.append(("header", "**Predates gate:** plan numbers `N.P`, comma-separated", u))
 
     rows, header_at = [], None
     for i, line in enumerate(lines):
@@ -156,7 +171,12 @@ def parse_table(path):
         r["env"] = {} if r["env"] == "-" else dict(kv.split("=", 1) for kv in shlex.split(r["env"]))
         r["unreachable_ok"] = r["unreachable_ok"].startswith("yes")
         r["is_judge"] = r["check"] == "judge"
-    return {"revision": int(rev), "rows": rows, "path": path}
+    owned = [u for u in predates if select(rows, u)]
+    if owned:
+        raise ContractError(message("ERROR", "a phase that predates the gate owns rows",
+                                    "no rows owned by a **Predates gate:** phase", ", ".join(owned),
+                                    path, "code", "drop the rows or the phase from **Predates gate:**", docs))
+    return {"revision": int(rev), "predates": predates, "rows": rows, "path": path}
 
 
 def _validate_row(r, where):

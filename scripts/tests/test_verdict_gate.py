@@ -356,5 +356,85 @@ class TestIndexEnforcement(Fixture):
         self.assertIn("gate not run", p.stderr)
 
 
+class TestPredatesAndCloseout(Fixture):
+    """Scope 5.3: running scopes never reconcile verify (Predates gate), /closeout's --all
+    view, and the clean-scope count toward the blocking flip."""
+
+    def table_with(self, rows, predates=None):
+        head = f"**Predates gate:** {predates}\n" if predates else ""
+        with open(self.table, "w") as fh:
+            fh.write(f"# t\n\n**Schema version:** verify/1\n**Revision:** 1\n{head}\n{HEADER}{''.join(rows)}\n")
+
+    def verify_unit(self, unit, judge_items):
+        log = os.path.join(self.scope, "artifacts", f"verify-{unit}.jsonl")
+        p = run("verify-run.py", "run", "--table", self.table, "--log", log, "--owner", unit, env=self.env)
+        rid = p.stdout.split("run_id: ")[1].split()[0]
+        path = os.path.join(self.tmp.name, f"j-{unit}.json")
+        with open(path, "w") as fh:
+            json.dump(judge_items, fh)
+        run("verify-run.py", "judged", "--log", log, "--run-id", rid, "--judge", "codex gpt-test",
+            "--input", path, env=self.env)
+        run("verify-run.py", "finalize", "--log", log, "--run-id", rid, env=self.env)
+
+    def test_predating_phase_is_exempt_and_validate_accepts_its_done(self):
+        self.table_with([row("later", "true", owner="5.2")], predates="5.1")
+        code, doc = self.gate_json("--blocking")
+        self.assertEqual((code, doc["verdict"]), (0, "predates-gate"))
+        with open(self.index) as fh:
+            text = fh.read()
+        with open(self.index, "w") as fh:
+            fh.write(text.replace("| 5.1 | 🔄 In progress |", "| 5.1 | ✅ Done (before the gate) |"))
+        self.assertEqual(run("plans-index.py", "validate", self.index, env=self.env).returncode, 0)
+
+    def test_predating_phase_that_owns_rows_is_malformed(self):
+        self.table_with([row("ok", "true")], predates="5.1")
+        p = self.gate()
+        self.assertEqual(p.returncode, 3)
+        self.assertIn("predates the gate owns rows", p.stderr)
+
+    def closeout(self, *extra):
+        return run("verdict-gate.py", "--scope", self.scope, "--all", *extra, env=self.env)
+
+    def test_all_fails_on_any_block_even_in_advisory(self):
+        self.table_with([row("ok", "true"), row("bad", "exit 1", owner="5.2")], predates="5.0")
+        self.ledger()
+        self.verify_unit("5.1", [self.v("ok", "pass")])
+        self.verify_unit("5.2", [self.v("bad", "fail")])
+        p = self.closeout("--advisory")
+        self.assertEqual(p.returncode, 1, p.stdout + p.stderr)
+        self.assertIn("marker: ⚠ verify failed bad", p.stdout)
+        self.assertIn("n/a   5.0  predates the gate", p.stdout)
+
+    def test_all_passes_clean_with_codex(self):
+        self.table_with([row("ok", "true")])
+        self.ledger()
+        self.verify_unit("5.1", [self.v("ok", "pass")])
+        p = self.closeout("--json")
+        doc = json.loads(p.stdout)
+        self.assertEqual((p.returncode, doc["verdict"], doc["marker"]), (0, "pass", ""))
+
+    def test_gate_count_and_reminder_at_five(self):
+        rows = ""
+        for n in range(1, 7):
+            folder = os.path.join(self.plans, "archive", f"{n}-s")
+            os.makedirs(folder)
+            open(os.path.join(folder, "finish-conditions.md"), "w").close()
+            mark = " ⚠ verify advisory: 1 blocked (x)" if n == 6 else ""
+            rows += (f"| {n} | ✅ Done | `archive/{n}-s/` | s | t |\n"
+                     f"| {n}.1 | ✅ Done{mark} | `archive/{n}-s/` | p | t |\n")
+        with open(self.index, "a") as fh:
+            fh.write(rows)
+        p = run("plans-index.py", "gate-count", self.index, env=self.env)
+        self.assertEqual(p.returncode, 0, p.stderr)
+        self.assertIn("clean gated scopes: 5/5", p.stdout)
+        self.assertIn("with ⚠: projects 6", p.stdout)
+        self.assertIn("REMINDER", p.stdout)
+        with open(self.index, "w") as fh:
+            fh.write(INDEX + rows.replace("| 2.1 | ✅ Done |", "| 2.1 | ✅ Done ⚠ judge: none x |"))
+        p = run("plans-index.py", "gate-count", self.index, env=self.env)
+        self.assertIn("clean gated scopes: 4/5", p.stdout)
+        self.assertNotIn("REMINDER", p.stdout)
+
+
 if __name__ == "__main__":
     unittest.main()

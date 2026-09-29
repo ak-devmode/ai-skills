@@ -341,3 +341,10 @@ Resumed/restarted phases append a SECOND block:
 - ai-skills · doc: `templates/closeout-prep.md.template`, `templates/examples/closeout-prep.md` (new) — 3.3a
 - ai-skills · code: `scripts/ledger-init.sh` — 3.3a EXAMPLE-marker refusal
 - ai-skills · test: `scripts/tests/test_contracts.py` — 3.3a ledger tests
+- ai-skills · code: `scripts/finish-table.py` (new), `scripts/verify_lib.py`, `scripts/verdict-gate.py`, `scripts/plans-index.py` — 3.1–3.3 script layer
+- ai-skills · test: `scripts/tests/test_finish_table.py` (new), `scripts/tests/test_verdict_gate.py`
+- ai-skills · doc: `scripts/README.md`, `templates/verify-contracts.md` §3.1/§5.4/§5.4.1
+
+### §3 Patterns Followed (Phase 3)
+- `finish-table.py write_checked()` ← `verify_lib.append_verified` (write, read back through the consumer's parser, fail loud); restore-on-failure added because a table is rewritten, not appended
+- `plans-index.py cmd_gate_count()` ← `cmd_validate` section walk (same `parse()` + folder resolution as `run_gate`)

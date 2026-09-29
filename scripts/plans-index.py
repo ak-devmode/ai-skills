@@ -18,13 +18,20 @@ Commands:
     add <index> --num --status --folder --desc [--creator]
     move <index> --num --to {active,archived} [--folder] [--status]
     status <index> --num --status [--skip-verify REASON] [--blocking|--advisory]
+    gate-count <index> [<index> ...] clean gated scopes toward the blocking flip
 
 Verification gate (templates/verify-contracts.md §5): `status` runs verdict-gate.py
 before writing a Done status on a phase row (`N.P`) whose scope folder has a
 finish-conditions.md — refusing in blocking mode, appending the gate's ⚠ marker
 otherwise. `validate` fails on a Done phase row in such a scope that has neither a
 passing gate nor a visible ⚠ advisory/skip marker: a Done written by hand. Scopes
-without a finish table predate the gate and are exempt until /plan self-heals them.
+without a finish table predate the gate and are exempt until /plan self-heals them;
+phases the table lists under `**Predates gate:**` stay exempt after it.
+
+`gate-count` counts *clean gated scopes* across the given indexes: an archived scope
+whose folder has a finish-conditions.md and whose scope row and phase rows carry no ⚠
+marker. /closeout prints it; at vl.BLOCKING_AFTER it adds the reminder to flip
+vl.GATE_MODE to blocking (Alex, 2026-09-29: flip at 5).
 
 Stdlib only. Never rewrites a row it was not asked to touch.
 """
@@ -287,7 +294,7 @@ def cmd_validate(args) -> int:
             if code == 3:
                 issues.append(f"phase {num} (L{ln+1}) is Done but its gate could not evaluate: "
                               f"{err.strip().splitlines()[0] if err.strip() else doc}")
-            elif doc.get("verdict") == "pass" or "⚠ verify skipped" in status or (
+            elif doc.get("verdict") in ("pass", "predates-gate") or "⚠ verify skipped" in status or (
                     doc.get("verdict") == "advisory" and "⚠ verify advisory" in status):
                 continue
             else:
@@ -500,6 +507,34 @@ def cmd_status(args) -> int:
     return 0
 
 
+# ----------------------------------------------------------------- gate-count
+
+def cmd_gate_count(args) -> int:
+    clean, dirty = [], []
+    for index in args.index:
+        _, sections = parse(index)
+        root = os.path.dirname(os.path.abspath(index))
+        rows = [(s.kind, c) for s in sections if s.kind in ("active", "archived") for _, c in s.rows if len(c) > 2]
+        for kind, cells in rows:
+            num = cells[0].strip().strip("*")
+            if kind != "archived" or not num.isdigit():
+                continue
+            folder = cells[2].strip().strip("`").rstrip("/")
+            if not folder or not os.path.isfile(os.path.join(root, folder, "finish-conditions.md")):
+                continue
+            mine = [c for _, c in rows if c[0].strip().strip("*") in (num,) or
+                    c[0].strip().strip("*").startswith(num + ".")]
+            label = f"{os.path.basename(os.path.dirname(root))} {num}"
+            (dirty if any("⚠" in c[1] for c in mine) else clean).append(label)
+    n, need = len(clean), vl.BLOCKING_AFTER
+    print(f"clean gated scopes: {n}/{need}" + (f" ({', '.join(clean)})" if clean else "")
+          + (f" · with ⚠: {', '.join(dirty)}" if dirty else ""))
+    if n >= need and vl.GATE_MODE == "advisory":
+        print(f"REMINDER: {n} clean gated scopes — flip GATE_MODE to \"blocking\" in "
+              f"scripts/verify_lib.py (Alex's call; verify-contracts.md §5.4)")
+    return 0
+
+
 def write(path: str, lines: list[str], dry_run: bool) -> None:
     if dry_run:
         print("(--dry-run: not written)", file=sys.stderr)
@@ -528,6 +563,8 @@ def main() -> int:
     m.add_argument("--folder"); m.add_argument("--status")
     m.add_argument("--dry-run", action="store_true"); m.set_defaults(fn=cmd_move)
 
+    gc = sub.add_parser("gate-count"); gc.add_argument("index", nargs="+"); gc.set_defaults(fn=cmd_gate_count)
+
     st = sub.add_parser("status")
     st.add_argument("index"); st.add_argument("--num", type=row_num, required=True)
     st.add_argument("--status", required=True); st.add_argument("--skip-verify", metavar="REASON")
@@ -537,9 +574,10 @@ def main() -> int:
     st.add_argument("--dry-run", action="store_true"); st.set_defaults(fn=cmd_status)
 
     args = p.parse_args()
-    if not os.path.isfile(args.index):
-        print(f"plans-index: no such file: {args.index}", file=sys.stderr)
-        return 2
+    for index in (args.index if isinstance(args.index, list) else [args.index]):
+        if not os.path.isfile(index):
+            print(f"plans-index: no such file: {index}", file=sys.stderr)
+            return 2
     return args.fn(args)
 
 

@@ -127,6 +127,17 @@ class FinishTable(unittest.TestCase):
         self.assertIn("| p1-names-resolve |", p.stdout)
         self.assertFalse(os.path.exists(self.table))
 
+    def test_all_started_scope_gets_a_rowless_table(self):
+        # 5.3-r1-01: /plan §5.6.2a writes every phase under --predates, no --phase
+        p = self.ft("init", "--predates", "9.1,9.2")
+        self.assertEqual(p.returncode, 0, p.stderr)
+        t = vl.parse_table(self.table)
+        self.assertEqual((t["rows"], t["predates"]), ([], ["9.1", "9.2"]))
+
+    def test_init_with_nothing_is_usage(self):
+        self.assertEqual(self.ft("init").returncode, 2)
+        self.assertFalse(os.path.exists(self.table))
+
     def test_bad_phase_is_usage(self):
         self.assertEqual(self.ft("init", "--phase", "one").returncode, 2)
 

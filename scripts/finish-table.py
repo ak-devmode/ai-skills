@@ -18,7 +18,7 @@ Extra rows: JSONL, one object per row with the §3.2 columns. Defaults: class B,
          class A, evidence `judge reason` / `runner record`.
 
 Usage:
-  finish-table.py init --scope DIR --phase SPEC ... [--rows FILE] [--test-plan-owner N.P]
+  finish-table.py init --scope DIR [--phase SPEC ...] [--rows FILE] [--test-plan-owner N.P]
                        [--predates N.P,...] [--by NAME] [--dry-run]
   finish-table.py add  --scope DIR --rows FILE --change TEXT [--by NAME] [--dry-run]
     --predates  phases already started (Done or in progress) before the table existed;
@@ -156,6 +156,10 @@ def cmd_init(a):
     if os.path.exists(path):
         return fail("finish-conditions.md already exists", "no table (init creates one)", path, path,
                     f"finish-table.py add --scope {a.scope} --rows <file> --change \"…\"")
+    if not a.phase and not a.predates:
+        return fail("init needs --phase or --predates", "at least one phase to gate, or the started phases "
+                    "of a scope that predates the gate", "neither", "--phase / --predates",
+                    "pass --phase N.P[=repo,…] and/or --predates N.P,…", code=vl.EXIT_USAGE)
     home = plans_repo(a.scope, a.projects)
     rows, units = [], []
     for spec in a.phase:
@@ -227,7 +231,7 @@ def main(argv):
                                                       text=True).stdout.strip() + " / Claude")
         s.add_argument("--projects", default=vl.PROJECTS)
         s.add_argument("--dry-run", action="store_true")
-    sub.choices["init"].add_argument("--phase", action="append", required=True)
+    sub.choices["init"].add_argument("--phase", action="append", default=[])
     sub.choices["init"].add_argument("--test-plan-owner")
     sub.choices["init"].add_argument("--predates")
     sub.choices["add"].add_argument("--change", required=True)

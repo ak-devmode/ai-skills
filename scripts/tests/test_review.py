@@ -353,6 +353,21 @@ class TestReview(unittest.TestCase):
         run(REVIEW, "accept", "--scope", self.scope, "--unit", "9.1", "--by", "Alex", env=self.env)
         self.assertNotIn("review-acceptance", ids())
 
+    def test_accept_waits_for_the_log_lock(self):
+        import fcntl
+        import time
+        self.record()
+        for fid in ("9.1-r1-01", "9.1-r1-02", "9.1-r1-03"):
+            self.dispose(fid, "--rejected", "x")
+        cmd = [sys.executable, script(REVIEW), "accept", "--scope", self.scope, "--unit", "9.1", "--by", "Alex"]
+        with open(self.log, "a") as held:
+            fcntl.flock(held, fcntl.LOCK_EX)
+            proc = subprocess.Popen(cmd, env=self.env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            time.sleep(1.0)
+            self.assertIsNone(proc.poll(), "accept wrote while another writer held the log")
+        out, errs = proc.communicate(timeout=30)
+        self.assertEqual(proc.returncode, 0, errs)
+
     def test_convergence_signals(self):
         for _ in range(3):
             p = self.record()

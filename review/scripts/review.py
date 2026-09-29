@@ -24,6 +24,7 @@ Exit:   0 ok · 1 disposition refused · 2 usage · 3 could not evaluate (empty 
 """
 
 import argparse
+import contextlib
 import datetime
 import fcntl
 import json
@@ -329,11 +330,29 @@ def todo_file(scope):
 
 # ---------- accept -----------------------------------------------------------------
 
+@contextlib.contextmanager
+def log_lock(log):
+    """The review log's exclusive lock — the same one `record` takes. Every writer that
+    reads the log and then appends holds it across both, so no record can land between
+    what was checked and what was written (review adhoc-04)."""
+    with open(log, "a") as fh:
+        fcntl.flock(fh, fcntl.LOCK_EX)
+        yield
+
+
 def cmd_accept(a):
     """Record the user's acceptance of every disposition so far (§6.4). Refused while any
     finding lacks one — the user accepts outcomes, not an open list."""
     log = os.path.join(a.scope, "artifacts", f"review-{a.unit}.jsonl")
-    recs = vl.read_jsonl(log) if os.path.exists(log) else []
+    if not os.path.exists(log):
+        return err("nothing to accept", "a review log with findings", "no review log", log,
+                   "no acceptance is needed without a review", code=vl.EXIT_USAGE)
+    with log_lock(log):
+        return _accept(a, log)
+
+
+def _accept(a, log):
+    recs = vl.read_jsonl(log)
     findings = [r["finding_id"] for r in recs if r.get("record") == "finding"]
     latest = {r["finding_id"]: r["disposition"] for r in recs if r.get("record") == "disposition"}
     open_ids = [f for f in findings if f not in latest]
@@ -358,6 +377,14 @@ def cmd_accept(a):
 
 def cmd_dispose(a):
     log = os.path.join(a.scope, "artifacts", f"review-{a.unit}.jsonl")
+    if not os.path.exists(log):
+        return err(f"no review log for {a.unit}", "a log written by review.py record", "none", log,
+                   "run the review with --scope/--unit first", code=vl.EXIT_USAGE)
+    with log_lock(log):
+        return _dispose(a, log)
+
+
+def _dispose(a, log):
     recs = vl.read_jsonl(log)
     f = next((r for r in recs if r.get("record") == "finding" and r.get("finding_id") == a.finding), None)
     if f is None:

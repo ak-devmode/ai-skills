@@ -365,3 +365,17 @@ Touches: scripts/repo-graph-check.py · /plan §5.6.1 · /scope Repo Graph snaps
       So the snapshot and the checker agree on local HEAD. The defect is the label, or the local checkouts
       scope 149 snapshotted differing from those its /plan later read. Before fixing, decide which ref
       the contract means, then make the writer, the column label and `repo-graph-check.py` all use it.
+
+## Wiring + self-heal + rollout (Plan 5.3)
+Source: plans/5-verify-lever/progress.md (## Plan 5.3)
+Touches: scripts/{resolve-identifiers,verdict-gate,finish-table,lever-candidates,clone-behind,plans-index,verify_lib}.py · review/ · verify/ · scope/ · plan/ · closeout/
+- [ ] **Shell env scan: false alarm on a backgrounding line** (review 5.3-r12-01, rejected; `/verify 5.3` judged the rejection wrong).
+      `A=1; sleep 0 & echo $A` reports `A` as undeclared, because a line that backgrounds anything binds nothing
+      (`resolve-identifiers.py` `shell_commands`). Fix: exclude only the backgrounded AND/OR list (back to the previous
+      `;`/newline), and keep continued lines fail-closed. Needs one codex re-review. Deferred: Alex's codex quota was out (2026-09-29).
+- [ ] **Commits after review r12 were not codex-reviewed**: effort scaling (`2963216`) and the 5.3 closeout commits.
+      Codex quota was out; Alex said move on. Run `/review --scope plans/5-verify-lever --unit 5.3` on `01af243..<closeout HEAD>` when quota allows.
+- [ ] **15 undeclared env reads in older ai-skills shell scripts**, surfaced by the new shell scan over all history: `grafana-remediate/`
+      (`GRAFANA_BASE/FROM/TO/TOKEN/TOKEN_SSM`, `ALARM_CW_HEARTBEAT/CW_NAMESPACE/HEARTBEAT_LOG/WT_MAX_AGE_S/WT_ROOT`, `FROM`),
+      `GEMINI_API_KEY`, and herdr's `HERDR_ENV`/`HERDR_WORKSPACE_ID`. Declare them in `.env.example`, or mark them as
+      provided by the platform. `python3 scripts/resolve-identifiers.py --repo . --range <root>..HEAD` lists them.

@@ -1,0 +1,79 @@
+{
+  "verdicts": [
+    {
+      "check_id": "test-plan-followed",
+      "verdict": "pass",
+      "rung_reached": 2,
+      "reason": "The tests cover the listed judge failure modes, gate decisions, stale evidence, public class-A evidence refusal, runner timeout, and planted-defect fixtures. The three-outcome live trial is excluded by the recorded amendment."
+    },
+    {
+      "check_id": "p3-tests-green",
+      "verdict": "pass",
+      "rung_reached": 4,
+      "reason": "The runner executed the full script suite at the specified SHA: 150 tests, exit 0."
+    },
+    {
+      "check_id": "p3-fixtures-live",
+      "verdict": "pass",
+      "rung_reached": 4,
+      "reason": "VERIFY_EVAL=1 was set; the runner executed all 10 fixture tests without skips. The live tests require a codex judge, named planted-defect findings, and a passing control. Schema validation is exercised by the suite."
+    },
+    {
+      "check_id": "p3-names-resolve",
+      "verdict": "pass",
+      "rung_reached": 4,
+      "reason": "The pinned-range runner resolved its detected Phase 3 environment reference and exited 0; inspection found no additional undeclared Phase 3 identifiers."
+    },
+    {
+      "check_id": "p3-skills-lint",
+      "verdict": "pass",
+      "rung_reached": 4,
+      "reason": "The runner linted all five touched skills and reported zero issues."
+    },
+    {
+      "check_id": "p3-scope-deliverables",
+      "verdict": "inconclusive",
+      "rung_reached": 2,
+      "reason": "The Phase 3 code and documentation deliverables are present, but the team announcement has only a draft and a progress-log claim that Alex sent it. No independent delivery evidence is available."
+    },
+    {
+      "check_id": "p3-no-overbuild",
+      "verdict": "pass",
+      "rung_reached": 2,
+      "reason": "The new scripts implement the requested table writer, gate count, lever tracking, prerequisite check, and stale-clone warning. The shell scanner follows the later explicit lever decision; no unnecessary registry or parallel framework was found."
+    },
+    {
+      "check_id": "p3-rejections-justified",
+      "verdict": "fail",
+      "rung_reached": 3,
+      "reason": "All 35 fixed dispositions touch their finding files, and all three rejections were reviewed. Rejection 5.3-r12-01 dismisses a reproducible false failure for valid shell assignments."
+    }
+  ],
+  "findings": [
+    {
+      "check_id": "p3-scope-deliverables",
+      "lens": "evidence",
+      "severity": "medium",
+      "where": "plans/5-verify-lever/artifacts/rollout-announcement-draft.md:1; plans/5-verify-lever/progress.md:593",
+      "text": "The artifact explicitly says it is a draft and nothing there has been posted. The progress log says Alex sent the announcement, but that claim alone does not establish the rollout deliverable."
+    },
+    {
+      "check_id": "p3-rejections-justified",
+      "lens": "rejection-audit",
+      "severity": "medium",
+      "where": "plans/5-verify-lever/artifacts/review-5.3.jsonl, finding 5.3-r12-01; scripts/resolve-identifiers.py:152",
+      "text": "The rejected finding is correct: shell_assigned('A=1; sleep 0 & echo $A\\n') returns an empty set although A is assigned in the foreground before its read. The line-wide rule can therefore block a valid script as an undeclared environment read. Calling that deliberate fail-closed behavior does not make the rejection justified."
+    }
+  ],
+  "lever_candidates": [
+    {
+      "lever_id": "external-announcement-receipt",
+      "check_id": "p3-scope-deliverables",
+      "gap": "The rollout announcement's delivery cannot be checked from the repository artifacts.",
+      "lever": "Attach a dated link or delivery receipt for the sent team announcement to the scope artifacts."
+    }
+  ],
+  "feature_map": "n/a",
+  "judge": "codex gpt-6-sol",
+  "run_id": "5.3-20260929T065028-d319"
+}

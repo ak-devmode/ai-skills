@@ -13,9 +13,9 @@
 
 ## Resume Context
 **Scope:** ~/Projects/ai-skills/plans/5-verify-lever/scope.md
-**Last action:** 5.3 all four tasks built. Codex review r1–r4 found 19; 16 fixed, 2 rejected, r3-03 corrected after the judge overruled my rejection. `/verify 5.3` advisory, 4 blocked. Stopped at the 3.4 review / Phase 3 CHECKPOINT (gate A).
-**Next action:** Gate A answered (pushed, announcement sent, test-plan row amended, shell lever built). Close review r5, re-run `/verify 5.3`, mark 5.3 Done through `plans-index.py status`, then `/closeout` for scope 5.
-**Open blockers:** none. `main` was pushed at the announcement; later commits are local until the closeout push.
+**Last action:** 5.3 Done (2026-09-29): review r1–r12 (38 findings; 35 fixed, 3 rejected), `/verify 5.3` advisory with 2 blocks Alex accepted, codex effort scaling added. All plans complete.
+**Next action:** `/closeout` for scope 5 (running now), then archive
+**Open blockers:** none. 3 TO-DOs from 5.3 are in `plans/TO-DO.md` ("Wiring + self-heal + rollout (Plan 5.3)").
 **Key files changed:** 5.3 — `scripts/{finish-table,lever-candidates,clone-behind}.py`, `scripts/verify-prereqs.sh`, gate `--all`/Predates/review coverage, `plans-index.py gate-count`, `/scope` 3.9.0, `/plan` 3.9.0, `/closeout` 1.4.0, `/verify` 0.3.0, ledger template, README §5. Full list in `closeout-prep.md` Phase 3 block.
 
 ---
@@ -50,6 +50,7 @@
 - (2026-09-29) **5.2 `/verify` blocks accepted (Alex).** (a) `p2-fixtures` inconclusive: its row runs without `VERIFY_EVAL=1`, so the live-judge tier is skipped. Not re-run now; **fixture rows must set `VERIFY_EVAL=1` from here on** (TO-DO → 5.3's standard rows). (b) `p2-scope-deliverables` fail on class A via `/browse`: **amended.** Class A runs through adapter commands in runner rows; browser driving belongs to the test-suite T2 WellMed adapter, not to `/verify` (its judge only reads disk and git). (c) Review r3's fix `7ffd7e5` was not re-reviewed by codex; Alex accepted its fixed + tested disposition. 5.2 marked Done with the advisory marker.
 - (2026-09-29) **5.3 design answers (Alex).** (1) Scopes already running are never asked to reconcile verify: self-heal writes `**Predates gate:** <done phases>` into the drafted table (`validate` exempts them) and drafts rows only for phases not yet started — "don't give the team a bad taste before they try it". (2) `/closeout` prints a running count of clean gated scopes; **the advisory → blocking flip is at 5, not 3**, and the count line is the reminder to flip `GATE_MODE`. (3) Fresh-clone walkthrough under a throwaway `HOME`, validated. (4) `setup.sh` checks codex installed + logged in only; the live ping stays in `/verify --demo`. (5) Lever candidates carry a required `lever_id` slug (automatic ones `<check_id>-<result>`); second sighting = same `lever_id` from a different scope or run.
 - (2026-09-29) **Gate-A answers for 5.3 (Alex):** push `main` (done, before the announcement); amend `test-plan-followed` to exclude the class-A trial moved to T2 (finish table rev 6, via `finish-table.py add --replace`); **build the shell env-var lever now**; announcement sent; re-run `/verify 5.3`, mark Done, run the scope closeout.
+- (2026-09-29) **Closing 5.3 (Alex: "we need to finish this").** `p3-scope-deliverables` block accepted: Alex's word that the announcement went out is the evidence, and no receipt is to be stored. `p3-rejections-justified` block accepted: the r12-01 false alarm → TO-DO (codex quota out until 15:30). **Codex effort scales with the diff** (`verify_lib.effort_for`: ≤80 lines/≤4 files low, ≤500/≤15 medium, else high; commit-less medium), chosen over capping re-review rounds or gating the live eval. 5.3 Done with the advisory marker. Commits after r12 are not codex-reviewed → TO-DO.
 
 ---
 
@@ -65,6 +66,7 @@
 | 2026-09-26 | /plan-devex-review | Done | Triage. Getting started 3→8 (setup warns, `/verify --demo`, README section), errors 4→8 (message contract with cause class), stale-clone warning → `artifacts/devex-review-2026-09-26.md` |
 | 2026-09-26 | Unplanned fix | Done | `scripts/plans-index.py`: `add` accepts per-plan `N.P` numbers; duplicate check compares the exact `#` cell (70d1222). Found by /scope §5.9 — stub rows were refused as non-integer |
 | 2026-09-26 | /plan | Done | 5.1-verify-lever-PLAN.md complete — contracts spec + templates, resolve-identifiers.py, verify-run.py, verdict-gate.py, plans-index status/validate, ledger-init base SHA; 62 tests. Alex approved at gate A. TODOs extracted to TO-DO.md (closeout deferral only) |
+| 2026-09-29 | /plan | Done | 5.3-verify-lever-PLAN.md complete — /scope finish tables, /plan review+verify+self-heal, /closeout Step 3a, ledger template, rollout (setup checks, stale-clone line, README), shell env lever, codex effort scaling; review r1–r12 (38 findings dispositioned), /verify advisory 2 blocked (accepted). TODOs extracted to TO-DO.md |
 | 2026-09-29 | /plan | Done | 5.2-verify-lever-PLAN.md complete — /verify, /review 3.1.0 on codex, fixtures + `--demo`, codex model family `sol`; own review r1–r3 (16 findings fixed) and /verify advisory, 2 blocked (Alex accepted). TODOs extracted to TO-DO.md |
 
 ---
@@ -86,7 +88,7 @@
 |---|-----------|-------|--------|-------|
 | 5.1 | 5.1-verify-lever-PLAN.md | Phase 1 — Contracts + deterministic scripts | Done | Gate A — approved 2026-09-26 |
 | 5.2 | 5.2-verify-lever-PLAN.md | Phase 2 — `/verify` + `/review` on codex | Done | Gate A — approved 2026-09-29; ⚠ verify advisory: 2 blocked |
-| 5.3 | 5.3-verify-lever-PLAN.md | Phase 3 — Wiring + self-heal + rollout | In progress — at gate A | Gate A; ⚠ verify advisory: 4 blocked (pending re-run) |
+| 5.3 | 5.3-verify-lever-PLAN.md | Phase 3 — Wiring + self-heal + rollout | Done | Gate A — approved 2026-09-29; ⚠ verify advisory: 2 blocked (accepted) |
 
 ---
 
@@ -478,9 +480,9 @@ so they live here; `/verify` of 5.2 judges against the plan *as amended here*):
 ## Plan 5.3: Wiring + self-heal + rollout
 
 ### Resume Context (Plan 5.3)
-**Last action:** Tasks 3.1–3.3 done, 3.4 built. Review closed (r1–r4); `/verify 5.3` advisory, 4 blocked.
-**Next action:** close review r5 → re-run `/verify 5.3` → mark Done via `plans-index.py status --num 5.3`
-**Open blockers:** none (gate A answered 2026-09-29)
+**Last action:** Plan complete — 4/4 tasks done; marked Done through the gate (⚠ verify advisory: 2 blocked, accepted by Alex)
+**Next action:** none — scope closeout
+**Open blockers:** None
 
 ### Task Detail
 Deepened at start of run (`/markdown-style` §8.9.2). The plan file wins where they differ,
@@ -604,3 +606,8 @@ Suite OK (2 skipped). Lint 0 ISSUE.
 - r12-01 **rejected**: it flags the false alarm r11's conservative fix accepts on purpose (r8-02 and r12-01 argue opposite sides). Fail-closed stands; the scan's documented scope is invented names, not shell dataflow (`1882964`)
 - Gate: 38/38 dispositioned across r1–r12; no `review:` or `rereview:` block.
 - The scan over all of ai-skills history reports 15 real undeclared env inputs in older scripts (grafana-remediate `GRAFANA_*`/`ALARM_*`/`FROM`, `GEMINI_API_KEY`, `HERDR_*`) → TO-DO at completion.
+
+#### Plan 5.3 complete — 2026-09-29
+- 4/4 tasks done. 5.3 marked Done through `plans-index.py status` → `⚠ verify advisory: 2 blocked (p3-scope-deliverables, p3-rejections-justified)`, both accepted by Alex. `validate` conformant.
+- **Codex effort scaling** (Alex: "scale effort on complexity"): `review.py prepare` and `judge.py prepare` print `effort:` from `git diff --shortstat` of the unit's range; the skills pass it to `codex-exec.py exec --effort` — `2963216`. `/review` 3.2.0, `/verify` 0.4.0. Not codex-reviewed (quota) → TO-DO.
+- TODOs → `plans/TO-DO.md` "Wiring + self-heal + rollout (Plan 5.3)": 3 items, each checked against HEAD.

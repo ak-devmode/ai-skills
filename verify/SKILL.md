@@ -54,7 +54,7 @@ each caught by name, and a clean control that passes. Nothing else in this skill
 prints `No judge ran`, say so first and give its fix line; the deterministic half still ran.
 
 2.0.1 **Stale clone.** First, run `python3 ~/Projects/ai-skills/scripts/clone-behind.py`.
-If it prints a line, show that line to the user before anything else. It never blocks.
+Show every line it prints to the user before anything else. It never blocks.
 
 2.1 **Unit** — a plan number (`5.1`). The scope folder holds `finish-conditions.md`,
 `closeout-prep.md` (base SHAs) and `artifacts/`. Resolve the plans dir with

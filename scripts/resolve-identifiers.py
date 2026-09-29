@@ -68,6 +68,33 @@ ENV_USE = [re.compile(p) for p in (
     r"\b(?:os\.)?getenv\(\s*['\"]([A-Z][A-Z0-9_]*)['\"]",
     r"\benv\(\s*['\"]([A-Z][A-Z0-9_]*)['\"]",
 )]
+# Shell (5.3 lever `shell-env-identifier-scan`): `$NAME` / `${NAME…}` outside single quotes,
+# minus names the same script assigns (`NAME=`, `local|export|readonly NAME`, `read NAME`,
+# `for NAME in`) and the shell's own variables — what is left is read from the environment.
+SH_USE = re.compile(r"\$\{([A-Z][A-Z0-9_]*)(?=[}:#%/+=?-])|\$([A-Z][A-Z0-9_]*)\b")
+SH_ASSIGN = [re.compile(p) for p in (
+    r"(?:^|[\s;(&|])(?:(?:export|local|readonly|declare(?:\s+-\w+)*)\s+)?([A-Z][A-Z0-9_]*)\+?=",
+    r"(?:^|[\s;(&|])(?:export|local|readonly|declare(?:\s+-\w+)*)\s+([A-Z][A-Z0-9_]*)\b",
+    r"\bfor\s+([A-Z][A-Z0-9_]*)\s+in\b",
+)]
+SH_READ = re.compile(r"\bread\s+(?:-\w+\s+)*((?:[A-Za-z_]\w*\s*)+)")
+SH_BUILTIN = {"HOME", "PATH", "PWD", "OLDPWD", "USER", "LOGNAME", "SHELL", "TMPDIR", "IFS", "LANG",
+              "LC_ALL", "TERM", "HOSTNAME", "UID", "EUID", "PPID", "RANDOM", "LINENO", "SECONDS",
+              "OSTYPE", "BASH_SOURCE", "BASH_VERSION", "BASHPID", "PIPESTATUS", "FUNCNAME", "OPTARG",
+              "OPTIND", "REPLY", "COLUMNS", "LINES", "EDITOR", "PAGER"}
+SH_SQUOTE = re.compile(r"'[^']*'")
+
+
+def shell_assigned(text):
+    names = set()
+    for line in text.splitlines():
+        for rx in SH_ASSIGN:
+            names.update(m.group(1) for m in rx.finditer(line))
+        for m in SH_READ.finditer(line):
+            names.update(m.group(1).split())
+    return names
+
+
 ENV_DECL_FILE = re.compile(r"(^|/)(\.env(\.[\w-]+)?\.(example|sample|template|dist)"
                            r"|[\w-]+\.env\.example|(docker-)?compose[\w.-]*\.ya?ml)$")
 ENV_DECL_LINE = re.compile(r"^\s*(?:export\s+|-\s*)?([A-Z][A-Z0-9_]*)\s*[:=]")
@@ -208,11 +235,14 @@ def added_lines(repo, base, head):
     return files
 
 
-def extract(files):
+def extract(files, full=None):
+    """`full` maps a shell script's path to its whole text at HEAD, so a name assigned on an
+    unchanged line still counts as local rather than an environment read."""
     refs = []
     for path, lines in files.items():
         if not is_source(path) or TEST_FILE.search(path):
             continue
+        local = shell_assigned((full or {}).get(path, "")) if path.endswith(".sh") else set()
         open_msg = None  # (message, depth) for a Go literal opened on an added line
         for lineno, text in lines:
             if is_comment(text):
@@ -220,6 +250,13 @@ def extract(files):
             for rx in ENV_USE:
                 for m in rx.finditer(text):
                     refs.append(ref("env", m.group(1), None, path, lineno))
+            if path.endswith(".sh"):
+                seen = set()
+                for m in SH_USE.finditer(SH_SQUOTE.sub("", text)):
+                    name = m.group(1) or m.group(2)
+                    if name not in local and name not in SH_BUILTIN and name not in seen:
+                        seen.add(name)
+                        refs.append(ref("env", name, None, path, lineno))
             if SSM_HINT.search(text):
                 for rx in (SSM_LITERAL, SSM_FLAG):
                     for m in rx.finditer(text):
@@ -505,7 +542,9 @@ def main(argv):
                               "check the unit's base SHA — an empty range is a failure, not a clean pass"),
                       file=sys.stderr)
                 return 3
-            refs, rev = extract(files), a.decl_rev or head
+            sh = [p for p in files if p.endswith(".sh") and is_source(p)]
+            full = Tree(a.repo, head).read(sh) if sh else {}
+            refs, rev = extract(files, full), a.decl_rev or head
         else:
             refs, rev = [], a.rev
             with open(a.ids, encoding="utf-8") as fh:

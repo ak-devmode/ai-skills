@@ -93,6 +93,16 @@ CASES = [
      {".env.example": "ROOT_VAR=1\n"},
      {"services/b/main.go": "package b\nvar v = os.Getenv(\"ROOT_VAR\")\n"},
      0, r"resolved 1", "ROOT_VAR"),
+    # shell (5.3 lever shell-env-identifier-scan)
+    ("shell env read undeclared fails",
+     {".env.example": "REAL_VAR=1\n"},
+     {"bin/run.sh": "#!/bin/sh\necho \"${SH_FAKE:-x}\" $REAL_VAR\n"},
+     1, r"found 2 · resolved 1 · unresolved 1", "env `SH_FAKE` does not resolve"),
+    ("shell: names the script assigns, single-quoted text and shell variables are not env reads",
+     {"bin/run.sh": "#!/bin/sh\nOUT=/tmp/x\nlocal N=1\n"},
+     {"bin/run.sh": "#!/bin/sh\nOUT=/tmp/x\nlocal N=1\nfor F in a b; do echo $F; done\n"
+                    "read -r LINE\necho \"$OUT $N $HOME $PATH $LINE\" 'awk $NOT_ENV'\n"},
+     0, r"found 0 · resolved 0", ""),
     ("use inside a comment is not a reference",
      {},
      {"src/app.ts": "// process.env.GHOST is mentioned here only\nconst y = 1;\n"},

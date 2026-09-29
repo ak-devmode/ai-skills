@@ -78,6 +78,13 @@ flight is never asked to reconcile verification after the fact (Alex, 2026-09-29
 **Writer in practice:** `scripts/finish-table.py` (`init` with the standard rows per
 phase, `add` with the revision bump) — never typed by hand.
 
+3.1.1 **`**Approved:**`** — the human checkpoint on the table (Alex, 2026-09-29). `init`
+writes `pending`; `finish-table.py approve --by <name>` writes `rev <N> — <who>, <date>`,
+run only on the user's explicit yes after they have read the rows in plain English; `add`
+resets it to `pending`, because a changed table is a new promise. The gate blocks
+(`table-approval`) while the line names anything but the current revision. A table with no
+`**Approved:**` line predates the checkpoint and is exempt — from both this and §6.4.
+
 3.2 **One row per check**, columns in this order:
 
 | Column | Value |
@@ -268,6 +275,12 @@ decides. A `finding_id` carried by two findings blocks — one disposition must 
 otherwise, at write time. Nothing silently
 dismissed, nothing silently dropped. A re-review mints a new `review_id`; the old findings
 stay.
+
+6.4 **`acceptance`** records — the human checkpoint on review outcomes: `schema` · `ts` ·
+`by` · `findings` · `fixed` · `rejected` · `deferred`. Written by `review.py accept --by
+<name>` on the user's yes, refused while any finding lacks a disposition. Under a table
+with an `**Approved:**` line (§3.1.1), the gate blocks (`review-acceptance`) when a
+`finding` or `disposition` record follows the last acceptance — a new round reopens it.
 
 ---
 

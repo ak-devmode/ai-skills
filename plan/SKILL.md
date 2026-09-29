@@ -331,6 +331,11 @@ Draft one, and ask once:
    `--predates` and no `--phase` rows. That records that the scope predates the gate, and
    nothing more is asked of it.
 
+5.6.2b **An unapproved table stops the plan before its first task.** If
+`finish-conditions.md` has `**Approved:** pending` or names an older revision, show the
+rows the way `/scope` §5.10.1 does and ask (a table §5.6.2a just drafted included); approve only on the user's yes. A table with no
+`**Approved:**` line predates the checkpoint and does not stop anything.
+
 5.7 **Branch detection** — Determine the working branch:
 - If the plan has a `**Branch:**` field: confirm with the user — "Plan specifies branch `<branch>`. Confirm this is correct before we proceed." Wait for confirmation before continuing.
 - If the plan has no `**Branch:**` field: derive a name as `feature/<plan-stem>` (e.g., `cashier-standards-PLAN.md` → `feature/cashier-standards`). Announce it: "No branch specified — will use `feature/<derived-name>`."
@@ -439,9 +444,17 @@ on a direct-to-main repo a branch diff is empty by construction.
    Review task and every range is empty, the task is ❌ FAILED**, never a clean review:
    the phase declared commits and none are in range. Disposition every finding ID. Fix it
    in a commit that touches the file and record `fixed <sha>`, or record
-   `rejected <reason>`. After fixing any blocking finding, review the fix commits again.
-   The gate enforces this: a repo with commits in range and no covering review record
-   blocks the unit (`verify-contracts.md` §5.2.1).
+   `rejected <reason>` — or, past round 3, `deferred "<TO-DO item>"` for a non-blocking
+   finding (`/review` §5.1; act on every `[CONVERGENCE]` line). After fixing any blocking
+   finding, review the fix commits again. The gate enforces this: a repo with commits in
+   range and no covering review record blocks the unit (`verify-contracts.md` §5.2.1).
+   **Human checkpoint — review outcomes.** Once every ID is dispositioned, stop and show
+   the user, in plain English: what each blocking finding was and how it was fixed, every
+   rejection with its reason, every deferral with its TO-DO line. On their explicit yes,
+   `review.py accept --scope <scope> --unit {N}.{P} --by "<name>"`. Never accept on their
+   behalf. Under an approved finish table the gate blocks without it (§6.4); a later round
+   with findings reopens it.
+   The table's own approval happens before work starts (§5.6.2b).
 2. **Verify** — the stub's `Task {P}.V`, or the CHECKPOINT on a pre-5.3 stub. Run
    `/verify {N}.{P}`, adding `--no-commits` when the stub has no Review task. If the scope has no table, §5.6.2a runs first. A unit listed under
    `**Predates gate:**` skips this step.

@@ -296,6 +296,41 @@ class TestReview(unittest.TestCase):
                                  "disposition": "deferred", "sha": None, "reason": "later", "by": "t"}) + "\n")
         self.assertIn("deferred", gate.coverage_blocks(self.log)[0][0][1])
 
+    def test_accept_needs_every_disposition_and_a_new_finding_reopens(self):
+        self.record()
+        accept = lambda: run(REVIEW, "accept", "--scope", self.scope, "--unit", "9.1", "--by", "Alex", env=self.env)
+        gate = load("verdict-gate.py")
+        self.assertEqual(accept().returncode, 1)  # open findings
+        self.dispose("9.1-r1-01", "--rejected", "x")
+        self.dispose("9.1-r1-02", "--deferred", "TO-DO: y")
+        self.dispose("9.1-r1-03", "--rejected", "z")
+        self.assertFalse(gate.accepted(self.log))
+        p = accept()
+        self.assertEqual(p.returncode, 0, p.stderr)
+        self.assertIn("2 rejected, 1 deferred", p.stdout)
+        self.assertTrue(gate.accepted(self.log))
+        self.record()
+        self.assertFalse(gate.accepted(self.log))
+
+    def test_gate_requires_acceptance_only_under_an_approved_table(self):
+        gate = load("verdict-gate.py")
+        table = os.path.join(self.scope, "finish-conditions.md")
+        body = ("\n\n| check_id | deliverable | owner | class | check | repo | dir | env | timeout | rung | "
+                "unreachable_ok | evidence |\n|---|---|---|---|---|---|---|---|---|---|---|---|\n"
+                "| ok | x | 9.1 | B | `true` | wellmed/svc | . | - | - | 4 | no | ev |\n")
+        self.record()
+        for fid in ("9.1-r1-01", "9.1-r1-02", "9.1-r1-03"):
+            self.dispose(fid, "--rejected", "x")
+        ids = lambda: [b[0] for b in gate.evaluate(self.scope, "9.1", self.projects)[1]]
+        with open(table, "w") as fh:
+            fh.write("**Schema version:** verify/1\n**Revision:** 1" + body)  # legacy: exempt
+        self.assertNotIn("review-acceptance", ids())
+        with open(table, "w") as fh:
+            fh.write("**Schema version:** verify/1\n**Revision:** 1\n**Approved:** rev 1 — Alex, 2026-09-29" + body)
+        self.assertIn("review-acceptance", ids())
+        run(REVIEW, "accept", "--scope", self.scope, "--unit", "9.1", "--by", "Alex", env=self.env)
+        self.assertNotIn("review-acceptance", ids())
+
     def test_convergence_signals(self):
         for _ in range(3):
             p = self.record()

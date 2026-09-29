@@ -130,7 +130,7 @@ def parse_table(path):
 def parse_table_text(text, path):
     docs = f"{CONTRACT} §3"
     lines = text.splitlines()
-    schema = rev = None
+    schema = rev = approved = None
     predates = []
     for line in lines:
         m = re.match(r"^\*\*Schema version:\*\*\s*(\S+)", line)
@@ -142,7 +142,19 @@ def parse_table_text(text, path):
         m = re.match(r"^\*\*Predates gate:\*\*\s*(.*)$", line)
         if m:
             predates = [u.strip() for u in m.group(1).split(",") if u.strip()]
+        m = re.match(r"^\*\*Approved:\*\*\s*(.*)$", line)
+        if m:
+            approved = m.group(1).strip()
     errors = []
+    # §3.5 human checkpoint: `pending`, or `rev N — <who>, <date>`. No line = a table that
+    # predates the checkpoint (exempt).
+    approved_rev = None
+    if approved is not None and approved != "pending":
+        m = re.match(r"^rev (\d+) — \S.*$", approved)
+        if m:
+            approved_rev = int(m.group(1))
+        else:
+            errors.append(("header", "**Approved:** pending | rev <N> — <who>, <date>", approved))
     if schema != SCHEMA:
         errors.append(("header", f"**Schema version:** {SCHEMA}", schema or "missing"))
     if not (rev or "").isdigit():
@@ -194,7 +206,8 @@ def parse_table_text(text, path):
         raise ContractError(message("ERROR", "a phase that predates the gate owns rows",
                                     "no rows owned by a **Predates gate:** phase", ", ".join(owned),
                                     path, "code", "drop the rows or the phase from **Predates gate:**", docs))
-    return {"revision": int(rev), "predates": predates, "rows": rows, "path": path}
+    return {"revision": int(rev), "predates": predates, "rows": rows, "path": path,
+            "approval": None if approved is None else ("pending" if approved_rev is None else approved_rev)}
 
 
 def _validate_row(r, where):

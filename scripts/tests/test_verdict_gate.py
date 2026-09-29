@@ -248,6 +248,21 @@ class TestGate(Fixture):
         self.assertIn("BLOCKED", p.stdout)
         self.assertEqual(self.gate("--advisory").returncode, 0)  # an explicit flag still wins
 
+    def test_unapproved_table_blocks_and_legacy_table_is_exempt(self):
+        self.ledger()
+        self.verify("codex gpt-test", [self.v("ok", "pass")])
+        self.assertEqual(self.gate("--blocking").returncode, 0)  # no **Approved:** line: predates §3.5
+        with open(self.table) as fh:
+            text = fh.read()
+        with open(self.table, "w") as fh:
+            fh.write(text.replace("**Revision:** 1\n", "**Revision:** 1\n**Approved:** pending\n"))
+        code, doc = self.gate_json("--blocking")
+        self.assertEqual(code, 1)
+        self.assertEqual([b["id"] for b in doc["blocks"]], ["table-approval"])
+        with open(self.table, "w") as fh:
+            fh.write(text.replace("**Revision:** 1\n", "**Revision:** 1\n**Approved:** rev 1 — Alex, 2026-09-29\n"))
+        self.assertEqual(self.gate("--blocking").returncode, 0)
+
     def test_skip_verify_needs_a_reason(self):
         self.assertEqual(self.gate("--skip-verify", "  ").returncode, 2)
         code, doc = self.gate_json("--skip-verify", "codex down for the day")

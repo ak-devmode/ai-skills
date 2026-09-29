@@ -82,6 +82,17 @@ def coverage_blocks(review_log):
     return blocks, len(findings)
 
 
+def accepted(review_log):
+    """§6.4: the log's last finding/disposition is followed by an `acceptance` record."""
+    last = None
+    for r in vl.read_jsonl(review_log):
+        if r.get("record") in ("finding", "disposition"):
+            last = "open"
+        elif r.get("record") == "acceptance" and str(r.get("by") or "").strip():
+            last = "accepted"
+    return last == "accepted"
+
+
 def fallback_markers(review_log, projects):
     """`review <reviewer>` for each fallback review no later codex review covers (review/SKILL.md
     §3). Covered = same repo, codex base an ancestor of the fallback's base, fallback head an
@@ -200,6 +211,13 @@ def evaluate(scope, unit, projects):
                                           f"at least one row whose owner is {unit} or {unit}/…", "0 rows",
                                           table["path"], "code", "add the unit's rows, bump Revision",
                                           f"{vl.CONTRACT} §3.4"))
+    appr = table.get("approval")
+    if appr is not None and appr != table["revision"]:
+        found = "pending" if appr == "pending" else f"rev {appr} approved, table is rev {table['revision']}"
+        blocks.append(("table-approval", "the finish table's current revision is not approved by a human",
+                       f"**Approved:** rev {table['revision']} — <who>, <date>", found, table["path"], "code",
+                       f"show the user the rows; on their yes: finish-table.py approve --scope {scope} --by <name>"))
+        report.append("BLOCK  table-approval  finish table not approved")
     heads = {}
     for row in owned:
         cid = row["check_id"]
@@ -287,6 +305,14 @@ def evaluate(scope, unit, projects):
         for fid, what, exp, found, where, cause in cov:
             blocks.append((fid, what, exp, found, where, cause, "record the disposition through /review's log writer"))
             report.append(f"BLOCK  {fid}  {what}")
+        if appr is not None and n and not cov and not accepted(review):
+            # §6.4 — a table under the human checkpoint puts review outcomes there too
+            blocks.append(("review-acceptance", "review outcomes not accepted by a human since the last "
+                           "finding or disposition", "an `acceptance` record after every finding and disposition",
+                           "none, or an older one", review, "code",
+                           f"show the user the outcomes; on their yes: review.py accept --scope {scope} "
+                           f"--unit {unit} --by <name>"))
+            report.append("BLOCK  review-acceptance  review outcomes not accepted")
         report.append(f"review {n} finding(s), {n - len(cov)} dispositioned")
         for line in fallback_markers(review, projects):
             judges.add(line)

@@ -168,7 +168,9 @@ $RV dispose --scope $SCOPE --unit $UNIT --finding <ID> --rejected "<why the find
 ```
 
 `--fixed` is refused unless that commit touches the finding's file; `--rejected` is refused
-without a reason. `verdict-gate.py` refuses Done while any ID lacks one, and `/verify`
+without a reason. When every ID has one, the user's yes is recorded with
+`$RV accept --scope $SCOPE --unit $UNIT --by "<name>"` (`verify-contracts.md` §6.4) —
+never on their behalf. `verdict-gate.py` refuses Done while any ID lacks one, and `/verify`
 audits whether each rejection was *right*. Nothing silently dismissed, nothing silently
 dropped.
 

@@ -17,6 +17,7 @@ Usage:
   review.py record  --repo PATH --range BASE..HEAD --reviewer LINE --input FILE
                     [--scope DIR --unit N.P] [--passes TEXT]
   review.py dispose --scope DIR --unit N.P --finding ID (--fixed SHA | --rejected REASON | --deferred TODO) [--by NAME]
+  review.py accept  --scope DIR --unit N.P --by NAME     (the user's yes to the outcomes, §6.4)
 Output: prepare prints `prompt:`, `schema:`, `passes:`; record prints the report path (or the
         report, with no scope); dispose prints the disposition.
 Exit:   0 ok · 1 disposition refused · 2 usage · 3 could not evaluate (empty range, malformed answer)
@@ -313,6 +314,33 @@ def build(a, doc, ordered, key, n, review_id):
     return [review] + records, findings, report
 
 
+# ---------- accept -----------------------------------------------------------------
+
+def cmd_accept(a):
+    """Record the user's acceptance of every disposition so far (§6.4). Refused while any
+    finding lacks one — the user accepts outcomes, not an open list."""
+    log = os.path.join(a.scope, "artifacts", f"review-{a.unit}.jsonl")
+    recs = vl.read_jsonl(log) if os.path.exists(log) else []
+    findings = [r["finding_id"] for r in recs if r.get("record") == "finding"]
+    latest = {r["finding_id"]: r["disposition"] for r in recs if r.get("record") == "disposition"}
+    open_ids = [f for f in findings if f not in latest]
+    if not findings:
+        return err("nothing to accept", "a review log with findings", "no findings", log,
+                   "no acceptance is needed for a clean review", code=vl.EXIT_USAGE)
+    if open_ids:
+        return err(f"{len(open_ids)} finding(s) have no disposition", "every finding dispositioned first",
+                   ", ".join(open_ids[:6]), log, "dispose them, then accept", cause="code", code=vl.EXIT_FAIL)
+    if not a.by.strip():
+        return err("accept needs --by", "the person accepting", "empty", "--by", "--by \"<name>\"",
+                   code=vl.EXIT_USAGE)
+    counts = {k: sum(1 for f in findings if latest[f] == k) for k in ("fixed", "rejected", "deferred")}
+    vl.append_verified(log, [{"schema": vl.SCHEMA, "ts": now(), "record": "acceptance", "by": a.by.strip(),
+                              "findings": len(findings), **counts}])
+    print(f"{a.unit}: outcomes accepted by {a.by.strip()} — {len(findings)} findings "
+          f"({counts['fixed']} fixed, {counts['rejected']} rejected, {counts['deferred']} deferred)")
+    return vl.EXIT_PASS
+
+
 # ---------- dispose ----------------------------------------------------------------
 
 def cmd_dispose(a):
@@ -383,6 +411,10 @@ def main(argv):
     x.add_argument("--rejected", metavar="REASON")
     x.add_argument("--deferred", metavar="TODO", help="non-blocking only: the TO-DO item that carries it")
     d.add_argument("--by")
+    c = sub.add_parser("accept")
+    c.add_argument("--scope", required=True)
+    c.add_argument("--unit", required=True)
+    c.add_argument("--by", required=True)
     try:
         a = ap.parse_args(argv)
     except SystemExit as exc:
@@ -391,7 +423,7 @@ def main(argv):
         return err("--scope and --unit go together", "both or neither", "one of them", "record",
                    "pass both to log findings for dispositions", code=vl.EXIT_USAGE)
     try:
-        return {"prepare": cmd_prepare, "record": cmd_record, "dispose": cmd_dispose}[a.cmd](a)
+        return {"prepare": cmd_prepare, "record": cmd_record, "dispose": cmd_dispose, "accept": cmd_accept}[a.cmd](a)
     except vl.ContractError as exc:
         print(exc.msg, file=sys.stderr)
         return vl.EXIT_EVAL

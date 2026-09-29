@@ -560,3 +560,11 @@ so ask, except where the Decisions Log records a change Alex made.
 - r1-08 `FETCH_HEAD` refreshed by any fetch → own stamp for the origin-main fetch — `98f01c2`
 - r1-09 `/verify` still said three clean scopes → five — `4e4cfe2`
 Suite OK (2 skipped). Lint 0 ISSUE.
+
+#### Dogfood: review 5.3-r2 (codex `gpt-6-sol`, the r1 fixes `5e5d3a2..530874f`) — 3 blocking + 2 should-fix → 4 fixed, 1 rejected
+→ `artifacts/review-5.3-r2.md`
+- r2-01 **rejected**: its fix ("record a base, require zero commits" for a commit-less unit) would fail every commit-less phase, whose judge rows sit in the docs repo that always carries progress commits; code repos are visible only through declared `--repo` bases, and `--no-commits` already refuses when a declared base has commits
+- r2-02 git failure counted as zero commits → a block — `c1cd4f3`
+- r2-03 review coverage accepted a discarded-branch head, and nothing enforced "review the fixes of blocking findings again" → reviewed head must be on HEAD's history; every blocking finding's `fixed <sha>` must sit inside a later review — `c1cd4f3` (contract §5.2.1 updated). Real data: 5.2 and 5.3 clear it
+- r2-04 unwritable stamp crashed clone-behind → caught; the stamp only rate-limits — `568cd65`
+- r2-05 `--predates " , "` passed the empty check → parsed first — `0c6047f`

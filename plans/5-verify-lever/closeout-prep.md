@@ -317,5 +317,5 @@ Resumed/restarted phases append a SECOND block:
 - ai-skills · doc: `templates/verify-contracts.md` (§5.3, §6.0, §6.3), `verify/SKILL.md` 0.2.1 (§3.8 exit status), `plans/5-verify-lever/{progress,closeout-prep,finish-conditions}.md`
 
 ### §11 Risk Flags (2026-09-29)
-- `codex-exec.py` misclassifies "workspace out of credits" as `not authed` / `exited 1` — the judge line's reason is wrong for a quota failure.
+- ~~`codex-exec.py` misclassifies "workspace out of credits" as `not authed` / `exited 1`.~~ **Resolved** in `0aefa7f`: it is now `none codex out of credits`, read from stdout and stderr, with quota checked first.
 - The finish-table rev 4 bump leaves 5.1's verdict "predating the table" (advisory; 5.1 already Done with ⚠).

@@ -187,8 +187,10 @@ was *right*, never whether one was recorded.
 5.3 **Judge marker.** When the deciding `final` record's judge line is not `codex …`, the
 gate reports `⚠ judge: <line>` and `plans-index.py status` appends it to the phase's index
 status. A later final run with a codex judge clears it. The same holds for review: when the
-unit's latest `review` record (§6.0) has a non-codex reviewer, the gate reports
-`⚠ judge: review <line>` until a codex re-review.
+unit has a `review` record (§6.0) with a non-codex reviewer, the gate reports
+`⚠ judge: review <line>` until a later codex review *covers* it: same repo, the codex
+base an ancestor of the fallback's base, the fallback's head an ancestor of the codex head.
+A record without resolved `shas` cannot prove coverage and keeps the marker.
 
 5.4 **Advisory mode** (the default until three real scopes pass cleanly): the gate prints
 the same result and the same marker, and exits `0` with `ADVISORY` on the verdict line
@@ -211,8 +213,9 @@ rejection's reasoning.
 Every record carries `record`: `review`, `finding` or `disposition`.
 
 6.0 **`review`** records — one per `record` call, written even when there are no findings:
-`schema` · `ts` · `review_id` · `reviewer` (judge line, §4.6) · `range` · `passes` ·
-`findings` (count) · `verdict`. `review.py` allocates the `review_id` and appends under an
+`schema` · `ts` · `review_id` · `reviewer` (judge line, §4.6) · `range` · `shas`
+(`{base, head}`, the range resolved to commits at record time) · `passes` · `findings`
+(count) · `verdict`. `review.py` allocates the `review_id` and appends under an
 exclusive lock on the log, so concurrent or clean reviews never share an ID.
 
 6.1 **`finding`** records keep the reviewer's raw output: `schema` · `ts` · `review_id`

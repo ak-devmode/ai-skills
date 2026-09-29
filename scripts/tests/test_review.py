@@ -176,6 +176,28 @@ class TestReview(unittest.TestCase):
         self.record(findings=[], verdict="SHIP")
         self.assertEqual(gate.evaluate(self.scope, "9.1", self.projects)[2], [])
 
+    def test_only_a_covering_codex_review_clears_a_fallback(self):
+        # 5.2-r2-01: a codex review of a narrower range leaves the fallback-reviewed commits
+        # without codex, so the marker stays; a covering one clears it.
+        gate = load("verdict-gate.py")
+        with open(os.path.join(self.repo, "c.sh"), "w") as fh:
+            fh.write("echo c\n")
+        git(self.repo, "add", "-A")
+        git(self.repo, "commit", "-q", "-m", "more")
+        wide, narrow = self.rng(self.repo), "HEAD~1..HEAD"
+
+        def review(reviewer, rng):
+            p = run(REVIEW, "record", "--repo", self.repo, "--range", rng, "--reviewer", reviewer, "--input",
+                    self.answer(findings=[], verdict="SHIP"), "--scope", self.scope, "--unit", "9.1", env=self.env)
+            self.assertEqual(p.returncode, 0, p.stderr)
+
+        review("claude-fallback codex out of credits", wide)
+        review("codex gpt-test", narrow)
+        marks = gate.fallback_markers(self.log, self.projects)
+        self.assertEqual(marks, ["review claude-fallback codex out of credits"])
+        review("codex gpt-test", wide)
+        self.assertEqual(gate.fallback_markers(self.log, self.projects), [])
+
     def test_fallback_reviewer_is_degraded_in_the_header(self):
         self.record(reviewer="claude-fallback codex not authed")
         report = read(os.path.join(self.scope, "artifacts", "review-9.1-r1.md"))

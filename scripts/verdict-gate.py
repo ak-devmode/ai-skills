@@ -74,6 +74,36 @@ def coverage_blocks(review_log):
     return blocks, len(findings)
 
 
+def fallback_markers(review_log, projects):
+    """`review <reviewer>` for each fallback review no later codex review covers (review/SKILL.md
+    §3). Covered = same repo, codex base an ancestor of the fallback's base, fallback head an
+    ancestor of codex head (review 5.2-r2-01). Records without resolved `shas` cannot prove
+    coverage, so they keep the marker; logs predating `review` records use the latest
+    finding's reviewer."""
+    recs = vl.read_jsonl(review_log)
+    reviews = [r for r in recs if r.get("record") == "review"]
+    if not reviews:
+        f = [r for r in recs if r.get("record") == "finding"]
+        return [f"review {f[-1].get('reviewer', 'unrecorded')}"] if f and not \
+            str(f[-1].get("reviewer", "")).startswith("codex ") else []
+
+    def covers(c, f):
+        (repo, _), = f["range"].items()
+        cs, fs = c.get("shas") or {}, f.get("shas") or {}
+        path = os.path.join(projects, repo)
+        return (repo in c.get("range", {}) and all(cs.get(k) and fs.get(k) for k in ("base", "head"))
+                and git_ok(path, "merge-base", "--is-ancestor", cs["base"], fs["base"])
+                and git_ok(path, "merge-base", "--is-ancestor", fs["head"], cs["head"]))
+
+    out = []
+    for i, f in enumerate(reviews):
+        if str(f.get("reviewer", "")).startswith("codex "):
+            continue
+        if not any(str(c.get("reviewer", "")).startswith("codex ") and covers(c, f) for c in reviews[i + 1:]):
+            out.append(f"review {f.get('reviewer', 'unrecorded')}")
+    return out
+
+
 def evidence_line(pend):
     """The one output line that says why: the first [FAIL]/[BLOCK]/[ERROR] line, else the last
     non-empty line of the runner's output_tail (§10: actual values, not adjectives)."""
@@ -180,14 +210,8 @@ def evaluate(scope, unit, projects):
             blocks.append((fid, what, exp, found, where, cause, "record the disposition through /review's log writer"))
             report.append(f"BLOCK  {fid}  {what}")
         report.append(f"review {n} finding(s), {n - len(cov)} dispositioned")
-        # The latest review decides the review marker: a fallback review carries ⚠ until a
-        # codex re-review clears it (review/SKILL.md §3, review 5.2-r1-08). Logs predating
-        # `review` records fall back to the latest finding's reviewer.
-        recs = vl.read_jsonl(review)
-        latest = [r for r in recs if r.get("record") == "review"] or \
-                 [r for r in recs if r.get("record") == "finding"]
-        if latest and not str(latest[-1].get("reviewer", "")).startswith("codex "):
-            judges.add(f"review {latest[-1].get('reviewer', 'unrecorded')}")
+        for line in fallback_markers(review, projects):
+            judges.add(line)
     return report, blocks, sorted(j for j in judges if j)
 
 

@@ -232,8 +232,12 @@ def build(a, doc, ordered, key, n, review_id):
                       f"`review.py dispose --scope <scope> --unit {a.unit or '<unit>'} --finding <ID> "
                       "(--fixed <sha> | --rejected \"<reason>\")`"]
     report = "\n".join(render(doc, findings, header)) + "\n"
+    # The range as resolved commits, so the gate can tell which commits a review covered
+    # (`HEAD` in `range` means nothing later — review 5.2-r2-01).
+    base, head = a.range.split("..")
+    shas = {k: git(a.repo, "rev-parse", "--verify", f"{v}^{{commit}}")[1] for k, v in (("base", base), ("head", head))}
     review = {"schema": vl.SCHEMA, "ts": ts, "record": "review", "review_id": review_id, "reviewer": a.reviewer,
-              "range": {key: a.range}, "passes": a.passes or "", "findings": len(findings),
+              "range": {key: a.range}, "shas": shas, "passes": a.passes or "", "findings": len(findings),
               "verdict": doc["verdict"]}
     return [review] + records, findings, report
 

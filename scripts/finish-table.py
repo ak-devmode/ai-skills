@@ -156,7 +156,8 @@ def cmd_init(a):
     if os.path.exists(path):
         return fail("finish-conditions.md already exists", "no table (init creates one)", path, path,
                     f"finish-table.py add --scope {a.scope} --rows <file> --change \"…\"")
-    if not a.phase and not a.predates:
+    predates = [u.strip() for u in (a.predates or "").split(",") if u.strip()]
+    if not a.phase and not predates:
         return fail("init needs --phase or --predates", "at least one phase to gate, or the started phases "
                     "of a scope that predates the gate", "neither", "--phase / --predates",
                     "pass --phase N.P[=repo,…] and/or --predates N.P,…", code=vl.EXIT_USAGE)
@@ -179,7 +180,6 @@ def cmd_init(a):
                          repo=home or rows[0]["repo"],
                          deliverable="The /plan-eng-review test plan's edge cases and critical paths are covered"))
     rows = [complete(r) for r in rows] + read_rows(a.rows)
-    predates = [u.strip() for u in (a.predates or "").split(",") if u.strip()]
     bad = [u for u in predates if not UNIT.match(u) or u in units]
     if bad:
         return fail("bad --predates", "started phases `N.P`, none of them also a --phase", ", ".join(bad),

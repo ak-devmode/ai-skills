@@ -136,6 +136,7 @@ class FinishTable(unittest.TestCase):
 
     def test_init_with_nothing_is_usage(self):
         self.assertEqual(self.ft("init").returncode, 2)
+        self.assertEqual(self.ft("init", "--predates", " , ").returncode, 2)  # 5.3-r2-05
         self.assertFalse(os.path.exists(self.table))
 
     def test_bad_phase_is_usage(self):

@@ -353,3 +353,9 @@ Touches: verify/ · review/ · scripts/{codex-exec,verify-run,verdict-gate,verif
       (Alex, 2026-09-29) — add it to kalpa-docs `plans/test-suite-program/T2-wellmed-adapter/NOT-YET-SCOPED.md`
       when T2 is scoped.
 - [ ] Run /closeout for plan 5.2 — deferred to scope end (fold into the scope-level closeout after 5.3).
+
+## repo-graph-check.py false DRIFT — found by WellMed scope 149 (2026-09-29)
+Source: ~/Projects/wellmed/kalpa-docs/plans/149-fail-loud-sweep/closeout-prep.md §11
+Touches: scripts/repo-graph-check.py · /plan §5.6.1 · /scope Repo Graph snapshot
+
+- [ ] **VERIFIED STILL TRUE 2026-09-29:** **`repo-graph-check.py` compares the snapshot SHA to local `HEAD`, but `/scope` records `origin/<trunk>`** (the WellMed Repo Graph column is literally "HEAD SHA (origin/develop)"). A local checkout a few commits behind its remote reads every repo as `diverged` → exit 3 → /plan STOPs. Scope 149's Phase 0 reported all 14 repos diverged; checked against `origin/<trunk>`, every recorded SHA was an ancestor (9 unchanged, 4 advanced). Fix: resolve the snapshot's column (origin/trunk) — `git fetch` then compare to `origin/<trunk>` — and keep local-HEAD/dirty as a separate advisory line.

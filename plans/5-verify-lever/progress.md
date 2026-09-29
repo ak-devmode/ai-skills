@@ -16,7 +16,7 @@
 **Last action:** 5.2 Done (2026-09-29): 3 codex review rounds (16 findings, all fixed), `/verify` advisory with 2 blocks accepted by Alex
 **Next action:** `/plan 5.3` (Phase 3 — wiring, self-heal, rollout)
 **Open blockers:** closeout deferred to scope end (see TO-DO.md)
-**Key files changed:** 5.2 — `verify/` (skill, judge, fixtures, demo), `review/` 3.0.0 (rules, review.py), `scripts/codex-exec.py`; full list in `closeout-prep.md` Phase 2 block
+**Key files changed:** 5.2 — `verify/` (skill, judge, fixtures, demo), `review/` 3.1.0 (rules, review.py), `scripts/codex-exec.py`; full list in `closeout-prep.md` Phase 2 block
 
 ---
 

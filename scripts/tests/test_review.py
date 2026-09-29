@@ -170,7 +170,12 @@ class TestReview(unittest.TestCase):
                                "group": "", "text": "x", "fix": ""}]),
                dict(findings=[{"file": "a.sh", "line": 1, "severity": "meh", "category": "engine",
                                "group": "", "text": "x", "fix": ""}]),
-               dict(verdict="LGTM")]
+               dict(verdict="LGTM"),
+               # 5.2-r1-06: containers and required fields come from the schema file
+               dict(findings=None), dict(findings={}), dict(findings=["a.sh:2 bad"]),
+               dict(findings=[{"file": "a.sh", "line": 1, "severity": "note", "category": "engine",
+                               "text": "x"}]),
+               dict(cannot_do="everything")]
         for over in bad:
             with self.subTest(over=over):
                 p = self.record(**over)

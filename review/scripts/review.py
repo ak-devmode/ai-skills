@@ -135,10 +135,8 @@ def cmd_prepare(a):
 # ---------- record -----------------------------------------------------------------
 
 def validate(doc):
-    if not isinstance(doc, dict):
-        return ["answer is not a JSON object"]
-    problems = [f"missing `{k}`" for k in ("findings", "checked_clear", "not_applicable", "cannot_do", "verdict")
-                if k not in doc]
+    with open(SCHEMA, encoding="utf-8") as fh:
+        problems = vl.schema_problems(doc, json.load(fh))
     if problems:
         return problems
     for i, f in enumerate(doc["findings"], 1):

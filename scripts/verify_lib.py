@@ -48,6 +48,39 @@ class ContractError(Exception):
         self.msg = msg
 
 
+# ---------- answer schemas -----------------------------------------------------------
+
+_TYPES = {"object": dict, "array": list, "string": str}
+
+
+def schema_problems(doc, schema, path="answer"):
+    """Problems with `doc` against the JSON Schema subset our answer schemas use — type,
+    required, additionalProperties: false, enum, items. Both answer writers (review.py,
+    judge.py) run this before any semantic check, so a wrong container or a missing field
+    is exit 3 and never a crash or a partial write (review 5.2-r1-06)."""
+    t = schema.get("type")
+    if t == "integer":
+        if not isinstance(doc, int) or isinstance(doc, bool):
+            return [f"{path} is not an integer"]
+    elif t in _TYPES and not isinstance(doc, _TYPES[t]):
+        return [f"{path} is not a{'n' if t[0] in 'ao' else ''} {t}"]
+    if "enum" in schema and doc not in schema["enum"]:
+        return [f"{path} {doc!r} is not one of {schema['enum']}"]
+    out = []
+    if t == "object":
+        props = schema.get("properties", {})
+        out += [f"{path} is missing `{k}`" for k in schema.get("required", []) if k not in doc]
+        if schema.get("additionalProperties") is False:
+            out += [f"{path} has unknown field `{k}`" for k in doc if k not in props]
+        for k, sub in props.items():
+            if k in doc:
+                out += schema_problems(doc[k], sub, f"{path}.{k}")
+    elif t == "array" and "items" in schema:
+        for i, item in enumerate(doc):
+            out += schema_problems(item, schema["items"], f"{path}[{i}]")
+    return out
+
+
 # ---------- §3 finish-condition table ----------------------------------------------
 
 def _cells(line):

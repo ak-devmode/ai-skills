@@ -126,6 +126,11 @@ class TestJudge(unittest.TestCase):
             "finding on unknown check": dict(findings=[{"check_id": "nope", "lens": "evidence", "severity": "low",
                                                         "where": "x", "text": "y"}]),
             "bad feature_map": dict(feature_map="fine"),
+            # 5.2-r1-06: shape is enforced from the schema file, before anything lands
+            "finding missing where/text": dict(findings=[{"check_id": "jr", "lens": "evidence", "severity": "low"}]),
+            "malformed lever candidate": dict(lever_candidates=[{"check_id": "away"}]),
+            "findings is null": dict(findings=None),
+            "verdicts is an object": dict(verdicts={}),
         }
         for name, over in cases.items():
             with self.subTest(case=name):

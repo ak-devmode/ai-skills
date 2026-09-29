@@ -102,7 +102,10 @@ def build(root, variant="bad"):
     rng = {REPO_KEY: f"{base}..{head}"}
     finding = {"schema": "verify/1", "ts": "2026-09-26T00:00:00Z", "record": "finding", "review_id": f"{UNIT}-r1",
                "reviewer": "codex fixture", "range": rng, "category": "engine", "group": "", "severity": "note", "fix": ""}
-    recs = [dict(finding, finding_id=f"{UNIT}-r1-01", file="notes/export.py", line=1, text="module docstring vague"),
+    review = {"schema": "verify/1", "ts": "2026-09-26T00:00:00Z", "record": "review", "review_id": f"{UNIT}-r1",
+              "reviewer": "codex fixture", "range": rng, "shas": {"base": base, "head": head},
+              "passes": "engine ✓ · domain n/a · lenses ✓", "findings": 3, "verdict": "SHIP"}
+    recs = [review, dict(finding, finding_id=f"{UNIT}-r1-01", file="notes/export.py", line=1, text="module docstring vague"),
             dict(finding, finding_id=f"{UNIT}-r1-02", file="notes/store.py", line=5, text="store is global state"),
             dict(finding, finding_id=f"{UNIT}-r1-03", file="notes/store.py", line=9, text="add() returns a count")]
     disp = {"schema": "verify/1", "ts": "2026-09-26T00:01:00Z", "record": "disposition", "by": "fixture"}

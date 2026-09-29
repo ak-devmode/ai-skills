@@ -197,8 +197,10 @@ item flips to `BUILD NOW`, once.
 pre-PR, on the working tree the author is about to commit — so evidence with `dirty: true`
 passes. The flag stays on the record so a reader can see it; it is not a block.
 
-5.2.1 **Per unit, the gate also blocks when** `artifacts/review-<unit>.jsonl` exists and
-breaks §6.3: a `finding_id` with no disposition, a `fixed` without `sha`, or a `rejected`
+5.2.1 **Per unit, the gate also blocks when** a repo with a recorded base has commits in
+`base..HEAD` but no `review` record (§6.0) names that repo and covers the unit's start
+(its base at or before the unit's base, its head after it) — a unit that commits must be
+reviewed (review 5.3-r1-03); or when `artifacts/review-<unit>.jsonl` breaks §6.3: a `finding_id` with no disposition, a `fixed` without `sha`, or a `rejected`
 without `reason`. Deterministic, so the gate owns it — `/verify` judges whether a rejection
 was *right*, never whether one was recorded.
 

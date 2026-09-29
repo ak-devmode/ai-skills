@@ -268,6 +268,55 @@ class TestGate(Fixture):
         self.assertEqual(p.returncode, 3)
 
 
+class TestReviewRequired(Fixture):
+    """5.3-r1-03: a unit with commits in range cannot pass without a /review covering it."""
+
+    def review_record(self, base, head):
+        rec = {"schema": "verify/1", "ts": "t", "record": "review", "review_id": "5.1-r1",
+               "reviewer": "codex gpt-test", "range": {"svc": f"{base}..{head}"},
+               "shas": {"base": base, "head": head}, "passes": "p", "findings": 0, "verdict": "SHIP"}
+        with open(os.path.join(self.scope, "artifacts", "review-5.1.jsonl"), "a") as fh:
+            fh.write(json.dumps(rec) + "\n")
+
+    def setUp(self):
+        super().setUp()
+        self.ledger()
+        self.b = git(self.svc, "rev-parse", "HEAD")
+        git(self.svc, "commit", "-q", "--allow-empty", "-m", "unit work")
+        self.h = git(self.svc, "rev-parse", "HEAD")
+
+    def test_unreviewed_commits_block(self):
+        self.verify("codex gpt-test", [self.v("ok", "pass")])
+        code, doc = self.gate_json("--blocking")
+        self.assertEqual(code, 1)
+        self.assertIn("review:svc", [b["id"] for b in doc["blocks"]])
+
+    def test_covering_review_passes_even_after_later_commits(self):
+        self.review_record(self.b, self.h)
+        git(self.svc, "commit", "-q", "--allow-empty", "-m", "progress note")
+        self.verify("codex gpt-test", [self.v("ok", "pass")])
+        code, doc = self.gate_json("--blocking")
+        self.assertEqual((code, doc["verdict"]), (0, "pass"), doc)
+
+    def test_legacy_log_with_findings_only_still_counts(self):
+        rec = {"schema": "verify/1", "ts": "t", "record": "finding", "review_id": "5.1-r1", "finding_id": "5.1-r1-01",
+               "reviewer": "codex gpt-test", "range": {"svc": f"{self.b}..{self.h}"}, "file": "a", "line": 1}
+        disp = {"schema": "verify/1", "ts": "t", "record": "disposition", "finding_id": "5.1-r1-01",
+                "disposition": "rejected", "reason": "fine", "by": "t"}
+        with open(os.path.join(self.scope, "artifacts", "review-5.1.jsonl"), "w") as fh:
+            fh.write(json.dumps(rec) + "\n" + json.dumps(disp) + "\n")
+        self.verify("codex gpt-test", [self.v("ok", "pass")])
+        code, doc = self.gate_json("--blocking")
+        self.assertEqual(code, 0, doc)
+
+    def test_review_that_starts_after_the_base_does_not_cover(self):
+        git(self.svc, "commit", "-q", "--allow-empty", "-m", "more")
+        self.review_record(self.h, git(self.svc, "rev-parse", "HEAD"))
+        self.verify("codex gpt-test", [self.v("ok", "pass")])
+        code, doc = self.gate_json("--blocking")
+        self.assertIn("review:svc", [b["id"] for b in doc["blocks"]])
+
+
 class TestLedgerBase(Fixture):
     def test_base_recorded_once(self):
         first = self.ledger()

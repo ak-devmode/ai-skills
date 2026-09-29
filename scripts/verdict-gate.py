@@ -107,6 +107,40 @@ def fallback_markers(review_log, projects):
     return out
 
 
+def review_presence_blocks(review_log, base, projects):
+    """§5.2.1 — a unit with commits must have been reviewed (review 5.3-r1-03). For every repo
+    whose ledger base has commits in base..HEAD, some `review` record must name that repo and
+    cover the unit's start: its base an ancestor of (or equal to) the unit's base, its head a
+    descendant of the base. Later commits (fixes, progress notes) don't force a re-review; a
+    unit with no reviewed commits at all can't pass as reviewed."""
+    recs = vl.read_jsonl(review_log) if os.path.exists(review_log) else []
+    reviews = [r for r in recs if r.get("record") == "review"]
+    # Logs from before `review` records existed (§6.0) carry the range on each finding.
+    for f in recs:
+        if f.get("record") == "finding" and not any(r.get("review_id") == f.get("review_id") for r in reviews):
+            for repo_, rng in (f.get("range") or {}).items():
+                fb, _, fh = rng.partition("..")
+                if fb and fh:
+                    reviews.append({"review_id": f.get("review_id"), "range": {repo_: rng},
+                                    "shas": {"base": fb, "head": fh}})
+    blocks = []
+    for repo, b in sorted(base.items()):
+        path = os.path.join(projects, repo)
+        n = git_out(path, "rev-list", "--count", f"{b}..HEAD")
+        if n in (None, "0"):
+            continue
+        ok = any(repo in r.get("range", {}) and (r.get("shas") or {}).get("head")
+                 and git_ok(path, "merge-base", "--is-ancestor", r["shas"]["base"], b)
+                 and git_ok(path, "merge-base", "--is-ancestor", b, r["shas"]["head"])
+                 and r["shas"]["head"] != b for r in reviews)
+        if not ok:
+            blocks.append((f"review:{repo}", "commits in range were never reviewed",
+                           f"a /review record covering {b[:10]}.. in {repo}",
+                           f"{n} commit(s) in {b[:10]}..HEAD, {len(reviews)} review record(s), none covering it",
+                           f"{review_log} · {repo}", "code"))
+    return blocks
+
+
 def evidence_line(pend):
     """The one output line that says why: the first [FAIL]/[BLOCK]/[ERROR] line, else the last
     non-empty line of the runner's output_tail (§10: actual values, not adjectives)."""
@@ -207,6 +241,10 @@ def evaluate(scope, unit, projects):
         report.append(f"pass   {cid}  {res['result']} · rung {res['rung_reached']}/{row['rung']} · "
                       f"{final.get('judge')}")
     review = os.path.join(scope, "artifacts", f"review-{unit}.jsonl")
+    for bid, what, exp, found, where, cause in review_presence_blocks(review, base, projects):
+        blocks.append((bid, what, exp, found, where, cause,
+                       f"/review --scope {scope} --unit {unit} on the unit's base..HEAD"))
+        report.append(f"BLOCK  {bid}  {what}")
     if os.path.exists(review):
         cov, n = coverage_blocks(review)
         for fid, what, exp, found, where, cause in cov:

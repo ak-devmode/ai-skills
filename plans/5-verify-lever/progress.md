@@ -14,8 +14,8 @@
 ## Resume Context
 **Scope:** ~/Projects/ai-skills/plans/5-verify-lever/scope.md
 **Last action:** 5.3 all four tasks built. Codex review r1–r4 found 19; 16 fixed, 2 rejected, r3-03 corrected after the judge overruled my rejection. `/verify 5.3` advisory, 4 blocked. Stopped at the 3.4 review / Phase 3 CHECKPOINT (gate A).
-**Next action:** Alex: send the announcement (`artifacts/rollout-announcement-draft.md`); decide `test-plan-followed` and `p3-names-resolve` (Plan 5.3 → last session entry); say whether to push. Then re-run `/verify 5.3`, mark 5.3 Done through `plans-index.py status`, and run the scope closeout.
-**Open blockers:** Alex's review at gate A; closeout deferred to scope end (see TO-DO.md). Nothing pushed since `5f06a4c`.
+**Next action:** Gate A answered (pushed, announcement sent, test-plan row amended, shell lever built). Close review r5, re-run `/verify 5.3`, mark 5.3 Done through `plans-index.py status`, then `/closeout` for scope 5.
+**Open blockers:** none. `main` was pushed at the announcement; later commits are local until the closeout push.
 **Key files changed:** 5.3 — `scripts/{finish-table,lever-candidates,clone-behind}.py`, `scripts/verify-prereqs.sh`, gate `--all`/Predates/review coverage, `plans-index.py gate-count`, `/scope` 3.9.0, `/plan` 3.9.0, `/closeout` 1.4.0, `/verify` 0.3.0, ledger template, README §5. Full list in `closeout-prep.md` Phase 3 block.
 
 ---
@@ -49,6 +49,7 @@
 - (2026-09-29) **Codex model is a family, `sol`, not codex's default** (Alex; supersedes the 2026-09-26 "no pinned model" in scope.md §4.2 / plan 5.2 Task 2.1). The unpinned default had drifted from `gpt-6-sol` to `gpt-6-astra` (frontier) and ran at effort `high`, which burned the workspace's credits. `codex-exec.py` now resolves `VERIFY_CODEX_MODEL` (default `sol`) from codex's model cache to the current `*-sol` slug and follows retirement upgrades. Unresolvable, or a banner naming another model, is `none …`. Effort stays `high` (Alex), since that is what the spike and the demos ran on.
 - (2026-09-29) **5.2 `/verify` blocks accepted (Alex).** (a) `p2-fixtures` inconclusive: its row runs without `VERIFY_EVAL=1`, so the live-judge tier is skipped. Not re-run now; **fixture rows must set `VERIFY_EVAL=1` from here on** (TO-DO → 5.3's standard rows). (b) `p2-scope-deliverables` fail on class A via `/browse`: **amended.** Class A runs through adapter commands in runner rows; browser driving belongs to the test-suite T2 WellMed adapter, not to `/verify` (its judge only reads disk and git). (c) Review r3's fix `7ffd7e5` was not re-reviewed by codex; Alex accepted its fixed + tested disposition. 5.2 marked Done with the advisory marker.
 - (2026-09-29) **5.3 design answers (Alex).** (1) Scopes already running are never asked to reconcile verify: self-heal writes `**Predates gate:** <done phases>` into the drafted table (`validate` exempts them) and drafts rows only for phases not yet started — "don't give the team a bad taste before they try it". (2) `/closeout` prints a running count of clean gated scopes; **the advisory → blocking flip is at 5, not 3**, and the count line is the reminder to flip `GATE_MODE`. (3) Fresh-clone walkthrough under a throwaway `HOME`, validated. (4) `setup.sh` checks codex installed + logged in only; the live ping stays in `/verify --demo`. (5) Lever candidates carry a required `lever_id` slug (automatic ones `<check_id>-<result>`); second sighting = same `lever_id` from a different scope or run.
+- (2026-09-29) **Gate-A answers for 5.3 (Alex):** push `main` (done, before the announcement); amend `test-plan-followed` to exclude the class-A trial moved to T2 (finish table rev 6, via `finish-table.py add --replace`); **build the shell env-var lever now**; announcement sent; re-run `/verify 5.3`, mark Done, run the scope closeout.
 
 ---
 
@@ -74,7 +75,7 @@
 |------|--------|-------|
 | Approve the Phase 1 contracts (finish table, verdict, disposition log, feature map, adapter) | [x] Done 2026-09-26 | 5.1 exit gate |
 | Go/no-go after seeing a real `/verify` verdict (dogfood, class B) | [x] Done 2026-09-29 — go, advisory rollout | 5.2 exit gate; class-A trial moved to test-suite T2 |
-| Announce the ai-skills `git pull` to the team after rollout | [ ] Pending — draft ready: `artifacts/rollout-announcement-draft.md` | 5.3 exit gate; CLAUDE.md §2.1 |
+| Announce the ai-skills `git pull` to the team after rollout | [x] Done 2026-09-29 — Alex sent it (after the push) | 5.3 exit gate; CLAUDE.md §2.1 |
 | Flip `GATE_MODE` to blocking at 5 clean gated scopes | [ ] Pending — `/closeout` prints the count + REMINDER | Alex, 2026-09-29 |
 
 ---
@@ -478,8 +479,8 @@ so they live here; `/verify` of 5.2 judges against the plan *as amended here*):
 
 ### Resume Context (Plan 5.3)
 **Last action:** Tasks 3.1–3.3 done, 3.4 built. Review closed (r1–r4); `/verify 5.3` advisory, 4 blocked.
-**Next action:** Alex reviews 3.4 and the checkpoint. Then re-run `/verify 5.3` and mark Done via `plans-index.py status --num 5.3`.
-**Open blockers:** announcement not sent; `test-plan-followed` and `p3-names-resolve` need Alex's call
+**Next action:** close review r5 → re-run `/verify 5.3` → mark Done via `plans-index.py status --num 5.3`
+**Open blockers:** none (gate A answered 2026-09-29)
 
 ### Task Detail
 Deepened at start of run (`/markdown-style` §8.9.2). The plan file wins where they differ,

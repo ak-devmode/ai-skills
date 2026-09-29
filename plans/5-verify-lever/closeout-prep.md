@@ -336,3 +336,8 @@ Resumed/restarted phases append a SECOND block:
 
 ### §11 Risk Flags (Phase 3)
 - Repo Graph freshness check exit 4 (prose-only section) — nothing was checked; single-repo scope, `main` == `origin/main` at `5f06a4c`.
+
+### §2 Files Changed (Phase 3)
+- ai-skills · doc: `templates/closeout-prep.md.template`, `templates/examples/closeout-prep.md` (new) — 3.3a
+- ai-skills · code: `scripts/ledger-init.sh` — 3.3a EXAMPLE-marker refusal
+- ai-skills · test: `scripts/tests/test_contracts.py` — 3.3a ledger tests

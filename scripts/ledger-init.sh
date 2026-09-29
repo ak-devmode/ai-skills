@@ -58,6 +58,11 @@ else
       -e "s|{{ISO_TIMESTAMP}}|$ts|g" "$tmpl" > "$ledger"
   grep -q "^\*\*Schema version:\*\*" "$ledger" || { echo "ledger-init: $ledger missing schema line after copy" >&2; exit 1; }
   if grep -q '{{PHASE_NAME}}' "$ledger"; then echo "ledger-init: template phase seed not filled" >&2; exit 1; fi
+  # A ledger that opens with worked examples reads to /closeout as real entries.
+  if grep -q 'EXAMPLE' "$ledger"; then
+    rm -f "$ledger"
+    echo "ledger-init: the template carries an EXAMPLE marker — examples belong in templates/examples/closeout-prep.md (cause: tooling; next: fix $tmpl)" >&2; exit 1
+  fi
   echo "created: $ledger"
 fi
 

@@ -1,6 +1,6 @@
 ---
 name: verify
-version: 0.2.1
+version: 0.3.0
 description: |
   Independent verification of a unit of scoped work. A deterministic runner executes
   every finish-condition row the unit owns and records evidence; a judge from the
@@ -52,6 +52,9 @@ bad case can't happen · 4 ran a script that fails loud · 5 reproduced in the r
 ≥ 900 s) and present its output as-is: six planted defects (`verify/tests/fixtures/notes/README.md`),
 each caught by name, and a clean control that passes. Nothing else in this skill runs. If it
 prints `No judge ran`, say so first and give its fix line; the deterministic half still ran.
+
+2.0.1 **Stale clone.** First, run `python3 ~/Projects/ai-skills/scripts/clone-behind.py`.
+If it prints a line, show that line to the user before anything else. It never blocks.
 
 2.1 **Unit** — a plan number (`5.1`). The scope folder holds `finish-conditions.md`,
 `closeout-prep.md` (base SHAs) and `artifacts/`. Resolve the plans dir with

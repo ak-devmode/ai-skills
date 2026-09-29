@@ -28,9 +28,13 @@ start to understand which skills exist and how they fit together.
 - `scope/` — scoping, skill router, progress tracker. Phases are bounded by work
   gates (A–F), never by context-window size.
 - `plan/` — execution engine for `*-PLAN.md`: progress logging, ledger, human
-  checkpoints; `/clear` suggested only at human/deploy/irreversible gates.
+  checkpoints; `/clear` suggested only at human/deploy/irreversible gates. Every unit
+  is reviewed (commit-producing) and verified, and marked Done only through the gate
+  (§6.8); a scope with no finish table self-heals (§5.6.2a).
 - `closeout/` — local self-heal + mandatory archive (Step 11 → /plan §11, gated by
   `closeout/scripts/verify-archive.sh`). Step 8 runs trio sync via /cross-repo-init.
+  Step 3a checks the whole scope's verdict (`verdict-gate.py --all`): a failure means
+  NOT HEALED, the scope still archives, and lever candidates go to TO-DO.md.
 - `closeout-extended/` — /closeout per CROSS-REPO.md neighbour, in ephemeral
   worktrees; never commits or pushes.
 - `cross-repo-init/` — bootstrap + maintenance of the trio (CROSS-REPO.md,
@@ -79,7 +83,9 @@ start to understand which skills exist and how they fit together.
   freshness gate, ledger bootstrap, dispatch log, herdr pane identity, branch
   survey, guarded edits, the accretion linter (`lint-skill.py`), and the
   verification toolchain (`resolve-identifiers.py`, `verify-run.py`,
-  `verdict-gate.py`, `codex-exec.py`, `verify_lib.py`). Contracts and exit codes:
+  `verdict-gate.py`, `codex-exec.py`, `verify_lib.py`, `finish-table.py`,
+  `lever-candidates.py`) and onboarding checks (`verify-prereqs.sh`, run by
+  `setup.sh`; `clone-behind.py`, run by /verify and /plan). Contracts and exit codes:
   `scripts/README.md`; tests: `python3 -m unittest discover scripts/tests`.
 
 ### 1.5 Repo-local planning state
@@ -129,7 +135,10 @@ start to understand which skills exist and how they fit together.
 
 Cross-skill invocation: `/closeout` invokes `/cross-repo-init` (Step 8,
 trio sync) and `/plan` §11 archive logic (Step 11) — not re-implementing
-either. `/closeout-extended` invokes `/closeout` per neighbor repo and
+either. Verification runs through the same chain: `/scope` writes
+`finish-conditions.md` (`finish-table.py`), `/plan` calls `/review` + `/verify` per
+unit and writes Done through `plans-index.py status`, `/closeout` calls `/verify` for
+any unit still missing a verdict. `/closeout-extended` invokes `/closeout` per neighbor repo and
 inherits the trio sync. `/scope` references the full skill catalog by name.
 
 ---
@@ -218,22 +227,22 @@ graphs.
      in §1. Plus: contracts (frontmatter, conventions) that have evolved
      past what older skills follow. -->
 
-### 6.1 Skill catalog status (2026-09-25)
+### 6.1 Skill catalog status (2026-09-29)
 
 | Skill | Version | Notes |
 |---|---|---|
-| `plan` | 3.8.2 | Scripts for folder, stamp, Repo Graph gate, ledger; stub detail goes in progress.md. |
-| `scope` | 3.8.0 | Step 0 = `context-gather.sh`; stub index rows via `plans-index.py`. |
-| `closeout` | 1.3.0 | Memory steps follow harness conventions; residual verify owned by /plan §11.1. |
+| `plan` | 3.9.0 | Review + verify per unit, Done through the gate; self-heal with `Predates gate`; ledger `--repo` bases. |
+| `scope` | 3.9.0 | Step 5.10 writes `finish-conditions.md`; stubs carry Review/Verify tasks. |
+| `closeout` | 1.4.0 | Step 3a verdict (`--all`), lever candidates, feature-map handoff, clean-scope count. |
 | `closeout-extended` | 1.0.1 | |
 | `cross-repo-init` | 1.5.0 | Branch survey = `repo-survey.sh`; CLAUDE template no longer writes memory paths. |
 | `markdown-style` | 1.3.1 | Child plans have no own progress file; Draft→Ready is the go signal; stub deepening lands in progress.md. |
 | `prd` | 1.1.0 | Step 0 = `context-gather.sh`. |
 | `concurrency` | 0.5.0 | Dedup'd against herdr; pane naming + dispatch log via scripts. |
 | `herdr` | 0.1.5 | Opus seat = 5.5 (`opus[1m]`). |
-| `review` | 3.0.0 | codex gate; rules extracted to `review/rules/`; dispositions enforced. |
+| `review` | 3.1.0 | codex gate; rules extracted to `review/rules/`; dispositions enforced. |
 | `ready-to-clear` | 1.1.0 | |
-| `verify` | 0.2.0 | New (scope 5). Advisory gate until 3 clean scopes; `--demo` on the planted-defect fixture. |
+| `verify` | 0.3.0 | Scope 5. Advisory gate until 5 clean scopes; `--demo` on the planted-defect fixture; stale-clone line. |
 | `kalpa-*` | unversioned | Flattened 2026-08-09. |
 
 ### 6.2 Active scope

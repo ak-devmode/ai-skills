@@ -195,7 +195,8 @@ verify/tests/fixtures/notes/    — the planted-defect fixture (6 defects, clean
 templates/verify-contracts.md   — verification contracts: finish table, verdict log, gate, dispositions
 kalpa-*/SKILL.md                — WellMed/Kalpa project skills (flat, namespaced — §3.8)
 member-record-amend/SKILL.md    — PMG Padma Care record-edit skill
-templates/closeout-prep.md.template   — ledger schema (shared by /plan + /closeout)
+templates/closeout-prep.md.template   — ledger schema (shared by /plan + /closeout); starts empty
+templates/examples/             — filled examples of every template (never copied into output)
 scripts/README.md               — contracts + exit codes for the shared scripts
 scripts/resolve-plans-dir.sh    — plans-dir resolution (one owner, 5 callers)
 scripts/claim-scope-number.sh   — scope numbering, race-defensive across 4 sources
@@ -214,7 +215,11 @@ scripts/resolve-identifiers.py  — invented-reality check: env/SSM/proto/route 
 scripts/verify-run.py           — verification runner; sole writer of the verdict log
 scripts/verdict-gate.py         — may this unit be marked Done? (plans-index.py status/validate call it)
 scripts/codex-exec.py           — codex headless probe + exec; honest `none <reason>` judge lines
-scripts/verify_lib.py           — shared table parser, §10 messages, verified JSONL append
+scripts/verify_lib.py           — shared table parser, §10 messages, verified JSONL append, levers()
+scripts/finish-table.py         — finish-conditions.md writer: standard rows per phase, Revision + Changelog
+scripts/lever-candidates.py     — /closeout: lever candidates → TO-DO.md, second sighting = another scope
+scripts/verify-prereqs.sh       — setup.sh step 4: Python + codex checks, warns, always exit 0
+scripts/clone-behind.py         — one line when this clone is behind origin/main (/verify, /plan)
 scripts/tests/                  — stdlib unittest suite for the scripts (CLAUDE.md §6 Test:)
 plans/PLANS-INDEX.md            — local plans tracking ai-skills development
 plans/<scope>/                  — active scope folders

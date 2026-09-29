@@ -425,6 +425,9 @@ Then proceed to the next task — keep going until you hit a HUMAN task, a CHECK
 🔗 Parent scope: [path or "standalone"]
 🔎 Verify: [advisory | blocking] · [N rows owned | predates the gate | no finish table] [· ⚠ SKIPPED: <reason>]
 ```
+Before printing it, run `python3 ~/Projects/ai-skills/scripts/clone-behind.py`. If it
+prints a line, put that line above the summary. Skills are read through symlinks, so a
+stale clone runs superseded rules.
 
 6.8 **Review and verify every unit.** A unit is this plan (`{N}.{P}`). Its range, per
 repo, is `base..HEAD` with the base from the ledger (§5.13). Pass the range explicitly:

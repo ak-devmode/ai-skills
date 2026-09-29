@@ -213,6 +213,12 @@ done
 [ "$collisions" -eq 0 ] && echo "   none"
 
 echo ""
+
+# --- verification prerequisites: warn, never fail the pull (scope 5.3) ---
+echo "4. Checking verification prerequisites (/review, /verify)..."
+bash "$AI_SKILLS_DIR/scripts/verify-prereqs.sh" || echo "   !! prerequisite check itself failed — see above; setup continues"
+
+echo ""
 echo "=== Done ==="
 echo ""
 echo "Installed skills by source:"

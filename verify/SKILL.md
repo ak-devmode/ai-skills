@@ -1,6 +1,6 @@
 ---
 name: verify
-version: 0.3.0
+version: 0.4.0
 description: |
   Independent verification of a unit of scoped work. A deterministic runner executes
   every finish-condition row the unit owns and records evidence; a judge from the
@@ -91,7 +91,8 @@ failed rows are recorded as evidence. Exit 3 (malformed table) or a class-A plac
 refusal *is* a stop — report it with its message.
 
 3.2 **Render the judge prompt.** `$V/judge.py prepare --scope $SCOPE --unit $UNIT
---run-id $RUN [--range …]` → prints `prompt:` and `schema:` paths; the prompt's directory
+--run-id $RUN [--range …]` → prints `prompt:` and `schema:` paths and an `effort:` line
+(`$EFFORT`, scaled to the unit's diff); the prompt's directory
 is the scratch `$WORK` for this run (`OUT=$WORK/answer-$RUN.json`). Exit 3 (no range,
 empty range) is a stop.
 
@@ -101,7 +102,7 @@ Never reuse an earlier probe result, and never use gstack's probe (it caches fai
 
 3.4 **codex judges.**
 ```bash
-$S/codex-exec.py exec --prompt $PROMPT --schema $SCHEMA --out $OUT --cd $SCOPE --timeout 600
+$S/codex-exec.py exec --prompt $PROMPT --schema $SCHEMA --out $OUT --cd $SCOPE --timeout 600 --effort $EFFORT
 ```
 Bash tool timeout above 600 s. Last stdout line `codex <model>` → record with that exact
 line (§3.6). `none <reason>` → §3.5 with that reason.

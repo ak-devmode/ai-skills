@@ -240,9 +240,9 @@ graphs.
 | `prd` | 1.1.0 | Step 0 = `context-gather.sh`. |
 | `concurrency` | 0.5.0 | Dedup'd against herdr; pane naming + dispatch log via scripts. |
 | `herdr` | 0.1.5 | Opus seat = 5.5 (`opus[1m]`). |
-| `review` | 3.1.0 | codex gate; rules extracted to `review/rules/`; dispositions enforced. |
+| `review` | 3.2.0 | codex gate; rules extracted to `review/rules/`; dispositions enforced. |
 | `ready-to-clear` | 1.1.0 | |
-| `verify` | 0.3.0 | Scope 5. Advisory gate until 5 clean scopes; `--demo` on the planted-defect fixture; stale-clone line. |
+| `verify` | 0.4.0 | Scope 5. Advisory gate until 5 clean scopes; codex effort scales with the diff; `--demo` on the planted-defect fixture; stale-clone line. |
 | `kalpa-*` | unversioned | Flattened 2026-08-09. |
 
 ### 6.2 Active scope

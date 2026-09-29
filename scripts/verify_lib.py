@@ -278,6 +278,32 @@ def authority(p, j):
 
 KEBAB = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
 
+# codex reasoning effort scales with the size of what it reads (Alex, 2026-09-29): a one-commit
+# re-review at `high` is what drained a 5-hour window in scope 5.3 (12 review rounds, all high).
+EFFORT_TIERS = ((80, 4, "low"), (500, 15, "medium"))   # (max changed lines, max files, effort)
+
+
+def effort_for(stats):
+    """`(effort, why)` for a list of (files, lines) diffs — one per repo range. Past every
+    tier, `high`. An empty list (a commit-less unit) is `medium`: it reads evidence, not a diff."""
+    if not stats:
+        return "medium", "no diff (commit-less unit)"
+    files, lines = sum(f for f, _ in stats), sum(n for _, n in stats)
+    why = f"{files} file(s), {lines} changed line(s)"
+    for max_lines, max_files, level in EFFORT_TIERS:
+        if lines <= max_lines and files <= max_files:
+            return level, why
+    return "high", why
+
+
+def diff_stat(path, rng):
+    """(files, changed lines) for `rng` in the repo at `path`, from `git diff --shortstat`."""
+    import subprocess
+    p = subprocess.run(["git", "-C", path, "diff", "--shortstat", rng], capture_output=True, text=True)
+    nums = [int(x) for x in re.findall(r"(\d+) (?:files? changed|insertions?|deletions?)", p.stdout)]
+    files = nums[0] if nums else 0
+    return files, sum(nums[1:])
+
 
 def levers(final, raw):
     """§4.9 lever candidates for one final run: the judge's (from its raw output `raw`),

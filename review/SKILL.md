@@ -1,6 +1,6 @@
 ---
 name: review
-version: 3.1.0
+version: 3.2.0
 description: |
   Pre-landing code review with codex as the gate: the opposing model family, headless
   and read-only, reviews an explicit revision range against gstack's review checklist,
@@ -71,15 +71,16 @@ REPO=<repo>; RANGE=<BASE>..HEAD
 ## 2. The Gate — codex
 
 2.1 **Render.** `$RV prepare --repo $REPO --range $RANGE [--kalpa-only|--engine-only]` →
-prints `prompt:`, `schema:`, a `passes:` line and a `range:` line — the range resolved to
-full SHAs, which the prompt uses; keep all four, and pass that `range:` to §2.4.
+prints `prompt:`, `schema:`, a `passes:` line, a `range:` line — the range resolved to
+full SHAs, which the prompt uses — and an `effort:` line; keep all five, pass that `range:`
+to §2.4 and that effort to §2.3.
 
 2.2 **Probe, fresh.** `$S/codex-exec.py probe` — last line `codex <model>` → §2.3;
 `none <reason>` → §3. Never reuse an earlier probe, never gstack's (it caches failures).
 
 2.3 **Review.** Bash tool timeout above 900 s:
 ```bash
-$S/codex-exec.py exec --prompt $PROMPT --schema $SCHEMA --out $WORK/answer.json --cd $REPO --timeout 900
+$S/codex-exec.py exec --prompt $PROMPT --schema $SCHEMA --out $WORK/answer.json --cd $REPO --timeout 900 --effort $EFFORT
 ```
 The prompt's directory is `$WORK`. Last line `codex <model>` → §2.4 with that exact line as
 the reviewer. `none <reason>` → §3 with that reason.

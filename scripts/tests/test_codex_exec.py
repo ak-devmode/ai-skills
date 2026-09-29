@@ -156,5 +156,17 @@ class TestCodexExec(unittest.TestCase):
         self.assertFalse(os.path.exists(self.out))
 
 
+class TestEffortScaling(unittest.TestCase):
+    """Effort scales with what codex reads (Alex, 2026-09-29)."""
+
+    def test_tiers(self):
+        vl = load("verify_lib.py")
+        cases = [([], "medium"), ([(1, 12)], "low"), ([(4, 80)], "low"), ([(5, 20)], "medium"),
+                 ([(10, 310)], "medium"), ([(3, 300), (3, 300)], "high"), ([(56, 3344)], "high")]
+        for stats, want in cases:
+            with self.subTest(stats=stats):
+                self.assertEqual(vl.effort_for(stats)[0], want)
+
+
 if __name__ == "__main__":
     unittest.main()

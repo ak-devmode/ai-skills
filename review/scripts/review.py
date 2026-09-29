@@ -146,7 +146,9 @@ def cmd_prepare(a):
     prompt = os.path.join(out_dir, "review-prompt.md")
     with open(prompt, "w", encoding="utf-8") as fh:
         fh.write(text)
-    print(f"prompt: {prompt}\nschema: {SCHEMA}\npasses: {' · '.join(passes)}\nrange: {a.range}")
+    effort, why = vl.effort_for([vl.diff_stat(a.repo, a.range)])
+    print(f"prompt: {prompt}\nschema: {SCHEMA}\npasses: {' · '.join(passes)}\nrange: {a.range}\n"
+          f"effort: {effort} ({why})")
     return vl.EXIT_PASS
 
 

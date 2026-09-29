@@ -83,7 +83,7 @@ def cmd_prepare(a):
     overrides = dict(r.split("=", 1) for r in a.range)
     base = vl.bases(p["ledger"], a.unit)
     repos = sorted({r["repo"] for r in pend})
-    ranges = []
+    ranges, stats = [], []
     for repo in repos:
         path = os.path.join(a.projects, repo)
         head = git_head(path)
@@ -119,6 +119,7 @@ def cmd_prepare(a):
                        f"{rng} has 0 commits", repo,
                        "an empty range is a failure, not a clean pass — check the base SHA", cause="code")
         ranges.append(f"  - `{path}`: `{rng}` ({n.stdout.strip()} commits)")
+        stats.append(vl.diff_stat(path, rng))
     by_id = {r["check_id"]: r for r in table["rows"]}
     checks = []
     for r in pend:
@@ -141,7 +142,8 @@ def cmd_prepare(a):
     prompt = os.path.join(out_dir, f"judge-{a.run_id}.md")
     with open(prompt, "w", encoding="utf-8") as fh:
         fh.write(text)
-    print(f"prompt: {prompt}\nschema: {SCHEMA}")
+    effort, why = vl.effort_for(stats)
+    print(f"prompt: {prompt}\nschema: {SCHEMA}\neffort: {effort} ({why})")
     return vl.EXIT_PASS
 
 

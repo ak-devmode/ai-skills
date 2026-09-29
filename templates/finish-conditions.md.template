@@ -5,6 +5,7 @@
 
 **Schema version:** verify/1
 **Revision:** 1
+**Approved:** pending
 **Scope:** {{SCOPE_PATH}}
 
 One row per check. `check` is a shell command or the literal `judge`. A literal `|` in a

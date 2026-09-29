@@ -87,10 +87,15 @@ class TestReview(unittest.TestCase):
 
     # ---- prepare
     def test_prepare_selects_rules_by_project(self):
-        cases = [(self.repo, (), "domain ✓ (wellmed)", "apply all groups"),
+        iris = self.mkrepo("wellmed/kalpa-iris")
+        wt = os.path.join(self.tmp.name, "herdr-wt")
+        git(iris, "worktree", "add", "-q", wt)
+        cases = [(self.repo, (), "domain ✓ (wellmed)", "apply §3.1–§3.8"),
+                 (iris, (), "domain ✓ (iris)", "never §3.3/§3.4"),
+                 (wt, (), "domain ✓ (iris)", "never §3.3/§3.4"),
                  (self.generic, (), "domain n/a — generic repo", None),
                  (self.repo, ("--engine-only",), "domain SKIPPED (--engine-only)", None),
-                 (self.repo, ("--kalpa-only",), "engine SKIPPED (--kalpa-only)", "apply all groups")]
+                 (self.repo, ("--kalpa-only",), "engine SKIPPED (--kalpa-only)", "apply §3.1–§3.8")]
         for repo, flags, passes, rule in cases:
             with self.subTest(repo=repo, flags=flags):
                 p = run(REVIEW, "prepare", "--repo", repo, "--range", self.rng(repo), *flags, env=self.env)
@@ -276,6 +281,103 @@ class TestReview(unittest.TestCase):
         self.assertEqual(len(gate.coverage_blocks(self.log)[0]), 1)
         self.assertEqual(self.dispose("9.1-r1-03", "--rejected", "comment is accurate").returncode, 0)
         self.assertEqual(gate.coverage_blocks(self.log), ([], 3))
+
+    def test_worktree_review_is_keyed_by_the_primary_checkout(self):
+        wt = os.path.join(self.tmp.name, "herdr-wt-rec")
+        git(self.repo, "worktree", "add", "-q", wt)
+        p = run(REVIEW, "record", "--repo", wt, "--range", self.rng(wt), "--reviewer", "codex gpt-test",
+                "--input", self.answer(), "--scope", self.scope, "--unit", "9.1", "--passes", "p", env=self.env)
+        self.assertEqual(p.returncode, 0, p.stderr)
+        self.assertEqual(list(self.findings()[0]["range"]), ["wellmed/svc"])
+        with open(os.path.join(wt, "a.sh"), "w") as fh:
+            fh.write("#!/bin/sh\nset -e\ncurl x\n")
+        git(wt, "add", "-A")
+        git(wt, "commit", "-q", "-m", "fix in the worktree")
+        self.assertEqual(self.dispose("9.1-r1-01", "--fixed", git(wt, "rev-parse", "HEAD")).returncode, 0)
+
+    def test_deferred_only_past_the_round_cap_with_a_written_todo(self):
+        gate = load("verdict-gate.py")
+        self.record()
+        self.assertEqual(self.dispose("9.1-r1-02", "--deferred", "TO-DO: early").returncode, 1)  # round 1
+        for _ in range(3):
+            self.record()
+        todo = os.path.join(os.path.dirname(self.scope), "TO-DO.md")
+        self.assertEqual(self.dispose("9.1-r4-02", "--deferred", "TO-DO: tenant filter").returncode, 1)  # no file
+        with open(todo, "w") as fh:
+            fh.write("- [ ] TO-DO: tenant filter\n- [ ] TO-DO: comment\n")
+        self.assertEqual(self.dispose("9.1-r4-01", "--deferred", "TO-DO: tenant filter").returncode, 1)  # blocking
+        self.assertEqual(self.dispose("9.1-r4-02", "--deferred", "  ").returncode, 1)
+        self.assertEqual(self.dispose("9.1-r4-02", "--deferred", "TO-DO: not written").returncode, 1)
+        self.assertEqual(self.dispose("9.1-r4-02", "--deferred", "TO-DO: tenant filter").returncode, 0)
+        self.assertEqual(self.dispose("9.1-r4-03", "--deferred", "TO-DO: comment").returncode, 0)
+        r4 = [b[0] for b in gate.coverage_blocks(self.log)[0] if b[0].startswith("9.1-r4-")]
+        self.assertEqual(r4, ["9.1-r4-01"])
+        # a hand-written deferral of the blocking finding still blocks
+        with open(self.log, "a") as fh:
+            fh.write(json.dumps({"schema": "verify/1", "ts": "t", "record": "disposition", "finding_id": "9.1-r4-01",
+                                 "disposition": "deferred", "sha": None, "reason": "later", "by": "t"}) + "\n")
+        self.assertTrue(any(b[0] == "9.1-r4-01" and "deferred" in b[1] for b in gate.coverage_blocks(self.log)[0]))
+
+    def test_accept_needs_every_disposition_and_a_new_finding_reopens(self):
+        self.record()
+        accept = lambda: run(REVIEW, "accept", "--scope", self.scope, "--unit", "9.1", "--by", "Alex", env=self.env)
+        gate = load("verdict-gate.py")
+        self.assertEqual(accept().returncode, 1)  # open findings
+        self.dispose("9.1-r1-01", "--rejected", "x")
+        self.dispose("9.1-r1-02", "--rejected", "y")
+        self.dispose("9.1-r1-03", "--rejected", "z")
+        self.assertFalse(gate.accepted(self.log))
+        p = accept()
+        self.assertEqual(p.returncode, 0, p.stderr)
+        self.assertIn("0 fixed, 3 rejected, 0 deferred", p.stdout)
+        self.assertTrue(gate.accepted(self.log))
+        self.record()
+        self.assertFalse(gate.accepted(self.log))
+
+    def test_gate_requires_acceptance_only_under_an_approved_table(self):
+        gate = load("verdict-gate.py")
+        table = os.path.join(self.scope, "finish-conditions.md")
+        body = ("\n\n| check_id | deliverable | owner | class | check | repo | dir | env | timeout | rung | "
+                "unreachable_ok | evidence |\n|---|---|---|---|---|---|---|---|---|---|---|---|\n"
+                "| ok | x | 9.1 | B | `true` | wellmed/svc | . | - | - | 4 | no | ev |\n")
+        self.record()
+        for fid in ("9.1-r1-01", "9.1-r1-02", "9.1-r1-03"):
+            self.dispose(fid, "--rejected", "x")
+        ids = lambda: [b[0] for b in gate.evaluate(self.scope, "9.1", self.projects)[1]]
+        with open(table, "w") as fh:
+            fh.write("**Schema version:** verify/1\n**Revision:** 1" + body)  # legacy: exempt
+        self.assertNotIn("review-acceptance", ids())
+        with open(table, "w") as fh:
+            fh.write("**Schema version:** verify/1\n**Revision:** 1\n**Approved:** rev 1 — Alex, 2026-09-29" + body)
+        self.assertIn("review-acceptance", ids())
+        run(REVIEW, "accept", "--scope", self.scope, "--unit", "9.1", "--by", "Alex", env=self.env)
+        self.assertNotIn("review-acceptance", ids())
+
+    def test_accept_waits_for_the_log_lock(self):
+        import fcntl
+        import time
+        self.record()
+        for fid in ("9.1-r1-01", "9.1-r1-02", "9.1-r1-03"):
+            self.dispose(fid, "--rejected", "x")
+        cmd = [sys.executable, script(REVIEW), "accept", "--scope", self.scope, "--unit", "9.1", "--by", "Alex"]
+        with open(self.log, "a") as held:
+            fcntl.flock(held, fcntl.LOCK_EX)
+            proc = subprocess.Popen(cmd, env=self.env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            time.sleep(1.0)
+            self.assertIsNone(proc.poll(), "accept wrote while another writer held the log")
+        out, errs = proc.communicate(timeout=30)
+        self.assertEqual(proc.returncode, 0, errs)
+
+    def test_convergence_signals(self):
+        for _ in range(3):
+            p = self.record()
+            self.assertEqual(p.returncode, 0, p.stderr)
+        self.assertIn("[CONVERGENCE] a.sh drew findings in each of the last 3 rounds", p.stdout)
+        self.assertIn("[CONVERGENCE] b.go", p.stdout)
+        self.assertNotIn("round 3 >", p.stdout)
+        p = self.record(findings=[])
+        self.assertIn("[CONVERGENCE] round 4 > 3", p.stdout)
+        self.assertNotIn("drew findings", p.stdout)  # a clean round breaks the streak
 
 
 if __name__ == "__main__":

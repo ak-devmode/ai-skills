@@ -1,6 +1,6 @@
 ---
 name: plan
-version: 3.9.0
+version: 3.10.0
 description: |
   Execute tasks from a structured plan document step by step, logging progress and
   stopping at human checkpoints. Plan files follow the naming convention *-PLAN.md
@@ -324,12 +324,20 @@ Draft one, and ask once:
    `N.P=repo,…` means the phase commits to those repos (read from the plan's Input and
    Output paths); `N.P` alone means it commits nothing. Deliverable rows come from
    `scope.md`'s phase sections (`/scope` §5.10 says how to write them).
-3. **Halt once.** Show the drafted table and ask the user to confirm or edit it. Then
-   write it by running the same command without `--dry-run`. Do not ask again this
-   session.
+3. **Halt once.** Show the drafted rows in plain English, the way `/scope` §5.10.1 does,
+   and ask the user to confirm or edit them. On their yes, write the table by running the
+   same command without `--dry-run`, then `finish-table.py approve --scope "$SCOPE_DIR"
+   --by "<name>"` — that one yes is both the confirmation and the §5.6.2b approval. Do
+   not ask again this session.
 4. If every phase has started, write the table anyway with every phase under
    `--predates` and no `--phase` rows. That records that the scope predates the gate, and
    nothing more is asked of it.
+
+5.6.2b **An unapproved table stops the plan before its first task.** If
+`finish-conditions.md` has `**Approved:** pending` or names an older revision, show the
+rows the way `/scope` §5.10.1 does and ask; approve only on the user's yes. A table
+§5.6.2a just wrote was approved by that step's single question — never ask twice. A table with no
+`**Approved:**` line predates the checkpoint and does not stop anything.
 
 5.7 **Branch detection** — Determine the working branch:
 - If the plan has a `**Branch:**` field: confirm with the user — "Plan specifies branch `<branch>`. Confirm this is correct before we proceed." Wait for confirmation before continuing.
@@ -439,14 +447,24 @@ on a direct-to-main repo a branch diff is empty by construction.
    Review task and every range is empty, the task is ❌ FAILED**, never a clean review:
    the phase declared commits and none are in range. Disposition every finding ID. Fix it
    in a commit that touches the file and record `fixed <sha>`, or record
-   `rejected <reason>`. After fixing any blocking finding, review the fix commits again.
-   The gate enforces this: a repo with commits in range and no covering review record
-   blocks the unit (`verify-contracts.md` §5.2.1).
+   `rejected <reason>` — or, past round 3, `deferred "<TO-DO item>"` for a non-blocking
+   finding (`/review` §5.1; act on every `[CONVERGENCE]` line). After fixing any blocking
+   finding, review the fix commits again. The gate enforces this: a repo with commits in
+   range and no covering review record blocks the unit (`verify-contracts.md` §5.2.1).
+   **Human checkpoint — review outcomes.** Once every ID is dispositioned, stop and show
+   the user, in plain English: what each blocking finding was and how it was fixed, every
+   rejection with its reason, every deferral with its TO-DO line. On their explicit yes,
+   `review.py accept --scope <scope> --unit {N}.{P} --by "<name>"`. Never accept on their
+   behalf. Under an approved finish table the gate blocks without it (§6.4); a later round
+   with findings reopens it.
+   The table's own approval happens before work starts (§5.6.2b).
 2. **Verify** — the stub's `Task {P}.V`, or the CHECKPOINT on a pre-5.3 stub. Run
    `/verify {N}.{P}`, adding `--no-commits` when the stub has no Review task. If the scope has no table, §5.6.2a runs first. A unit listed under
    `**Predates gate:**` skips this step.
 3. **Mark Done only through the gate:**
    `plans-index.py status <index> --num {N}.{P} --status "✅ Done ({date}) — …"`.
+   - The mode comes from the index's `**Gate mode:**` line, else `GATE_MODE`
+     (`verify-contracts.md` §5.4.2 — kalpa-iris is blocking).
    - **Advisory** (`GATE_MODE`, the default until five clean scopes): a block is
      reported, the unit is marked Done, and the index row carries the
      `⚠ verify advisory: …` marker. Tell the user what was blocked. Never soften it.

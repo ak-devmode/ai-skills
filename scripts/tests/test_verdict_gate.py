@@ -236,6 +236,33 @@ class TestGate(Fixture):
         self.assertIn("ADVISORY", p.stdout)
         self.assertIn("marker: ⚠ judge: none not configured ⚠ verify advisory: 1 blocked (bad)", p.stdout)
 
+    def test_index_gate_mode_line_makes_the_default_blocking(self):
+        self.set_table([row("bad", "exit 1")])
+        self.ledger()
+        self.verify()
+        self.assertEqual(self.gate().returncode, 0)  # fleet default: advisory
+        with open(self.index, "a") as fh:
+            fh.write("\n**Gate mode:** blocking\n")
+        p = self.gate()
+        self.assertEqual(p.returncode, 1, p.stdout)
+        self.assertIn("BLOCKED", p.stdout)
+        self.assertEqual(self.gate("--advisory").returncode, 0)  # an explicit flag still wins
+
+    def test_unapproved_table_blocks_and_legacy_table_is_exempt(self):
+        self.ledger()
+        self.verify("codex gpt-test", [self.v("ok", "pass")])
+        self.assertEqual(self.gate("--blocking").returncode, 0)  # no **Approved:** line: predates §3.5
+        with open(self.table) as fh:
+            text = fh.read()
+        with open(self.table, "w") as fh:
+            fh.write(text.replace("**Revision:** 1\n", "**Revision:** 1\n**Approved:** pending\n"))
+        code, doc = self.gate_json("--blocking")
+        self.assertEqual(code, 1)
+        self.assertEqual([b["id"] for b in doc["blocks"]], ["table-approval"])
+        with open(self.table, "w") as fh:
+            fh.write(text.replace("**Revision:** 1\n", "**Revision:** 1\n**Approved:** rev 1 — Alex, 2026-09-29\n"))
+        self.assertEqual(self.gate("--blocking").returncode, 0)
+
     def test_skip_verify_needs_a_reason(self):
         self.assertEqual(self.gate("--skip-verify", "  ").returncode, 2)
         code, doc = self.gate_json("--skip-verify", "codex down for the day")
@@ -390,6 +417,18 @@ class TestIndexEnforcement(Fixture):
     def row51(self):
         with open(self.index) as fh:
             return next(line for line in fh if line.startswith("| 5.1 "))
+
+    def test_malformed_gate_mode_refuses_done_instead_of_going_advisory(self):
+        self.set_table([row("bad", "exit 1")])
+        self.ledger()
+        self.verify()
+        with open(self.index, "a") as fh:
+            fh.write("\n**Gate mode:** blockng\n")
+        before = self.row51()
+        p = self.status()
+        self.assertNotEqual(p.returncode, 0, p.stdout)
+        self.assertIn("unknown gate mode", p.stderr)
+        self.assertEqual(self.row51(), before)
 
     def test_blocking_refuses_done(self):
         self.set_table([row("bad", "exit 1")])

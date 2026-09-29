@@ -16,13 +16,15 @@ Usage:
   review.py prepare --repo PATH --range BASE..HEAD [--kalpa-only | --engine-only] [--out-dir DIR]
   review.py record  --repo PATH --range BASE..HEAD --reviewer LINE --input FILE
                     [--scope DIR --unit N.P] [--passes TEXT]
-  review.py dispose --scope DIR --unit N.P --finding ID (--fixed SHA | --rejected REASON) [--by NAME]
+  review.py dispose --scope DIR --unit N.P --finding ID (--fixed SHA | --rejected REASON | --deferred TODO) [--by NAME]
+  review.py accept  --scope DIR --unit N.P --by NAME     (the user's yes to the outcomes, §6.4)
 Output: prepare prints `prompt:`, `schema:`, `passes:`; record prints the report path (or the
         report, with no scope); dispose prints the disposition.
 Exit:   0 ok · 1 disposition refused · 2 usage · 3 could not evaluate (empty range, malformed answer)
 """
 
 import argparse
+import contextlib
 import datetime
 import fcntl
 import json
@@ -45,8 +47,16 @@ LENSES = os.path.join(SKILL, "rules", "lenses.md")
 ENGINE = os.path.expanduser("~/.claude/skills/gstack/review/checklist.md")
 DOCS = f"{vl.CONTRACT} §6 · review/SKILL.md"
 SEVERITIES = ("blocking", "should-fix", "note")
+# SKILL.md §5.1 convergence: past this many rounds on one unit, only blocking findings are
+# fixed in the loop; a file drawing findings REPEAT rounds running is a design problem.
+ROUND_CAP, REPEAT = 3, 3
 CATEGORIES = ("engine", "domain", "local-maxima", "silent-failure", "dirty-comment", "doc-claim", "fail-open")
-GROUPS = {"wellmed": "all groups (§3.1–§3.8)", "pmg": "§3.1, §3.5, §3.6, §3.7 only"}
+GROUPS = {"wellmed": "§3.1–§3.8", "pmg": "§3.1, §3.5, §3.6, §3.7 only",
+          "iris": "§3.1, §3.2, §3.5, §3.6 (module paths + parameterized queries only), §3.7, §3.8, §3.9 — "
+                  "never §3.3/§3.4, which are WellMed ADRs IRIS does not inherit"}
+# Standalone graphs that live under another project's directory. Matched before the
+# top-level project, so kalpa-iris never inherits WellMed's ADR checks (IRIS CLAUDE.md §3.1).
+SUBPROJECTS = {"wellmed/kalpa-iris": "iris"}
 
 
 def now():
@@ -69,8 +79,19 @@ def repo_key(repo):
     return os.path.basename(os.path.realpath(repo)) if rel.startswith("..") else rel
 
 
+def main_worktree(repo):
+    """The primary checkout behind `repo` — a herdr worktree under ~/.herdr/worktrees/ sits
+    outside ~/Projects, so its own path cannot say which project it belongs to."""
+    code, common, _ = git(repo, "rev-parse", "--path-format=absolute", "--git-common-dir")
+    return os.path.dirname(common) if code == 0 and common else repo
+
+
 def project(repo):
-    top = repo_key(repo).split("/")[0]
+    key = repo_key(main_worktree(repo))
+    for prefix, name in SUBPROJECTS.items():
+        if key == prefix or key.startswith(prefix + "/"):
+            return name
+    top = key.split("/")[0]
     return top if top in GROUPS else "generic"
 
 
@@ -214,7 +235,9 @@ def cmd_record(a):
         return err("review answer is malformed — nothing recorded", "findings with file:line, severity and "
                    "category per review/schemas/review-output.schema.json", "; ".join(problems[:6]), a.input,
                    "re-run the reviewer; if codex keeps failing, run the Claude fallback (review/SKILL.md §3)")
-    key = repo_key(a.repo)
+    # the primary checkout's key, never a worktree's directory name: the gate and
+    # `dispose --fixed` look the repo up under ~/Projects (review adhoc-01)
+    key = repo_key(main_worktree(a.repo))
     rank = {s: i for i, s in enumerate(SEVERITIES)}
     ordered = sorted(doc["findings"], key=lambda f: rank[f["severity"]])
     if not (a.scope and a.unit):
@@ -238,7 +261,34 @@ def cmd_record(a):
         with open(out, "w", encoding="utf-8") as fh:
             fh.write(report)
     print(f"review {review_id}: {len(findings)} finding(s) logged -> {log}\nreport: {out}\nverdict: {doc['verdict']}")
+    for line in convergence(vl.read_jsonl(log), a.unit):
+        print(line)
     return vl.EXIT_PASS
+
+
+def convergence(recs, unit):
+    """SKILL.md §5.1 signals for the latest round of `unit`: [CONVERGENCE] lines, or none.
+    A loop that keeps finding edge cases in one place is patching a design that is wrong
+    (5.3 ran 12 rounds on one heuristic, two findings ending on opposite sides)."""
+    rounds = {}
+    for r in recs:
+        m = re.match(rf"^{re.escape(unit)}-r(\d+)$", str(r.get("review_id", "")))
+        if m and r.get("record") == "finding":
+            rounds.setdefault(int(m.group(1)), set()).add(r["file"])
+        elif m:
+            rounds.setdefault(int(m.group(1)), set())
+    if not rounds:
+        return []
+    last, out = max(rounds), []
+    if last > ROUND_CAP:
+        out.append(f"[CONVERGENCE] round {last} > {ROUND_CAP}: fix blocking findings only; defer should-fix/note "
+                   "with `dispose --deferred \"<TO-DO item>\"` (review/SKILL.md §5.1)")
+    window = [rounds.get(n, set()) for n in range(last - REPEAT + 1, last + 1)]
+    if last >= REPEAT:
+        for f in sorted(set.intersection(*window)):
+            out.append(f"[CONVERGENCE] {f} drew findings in each of the last {REPEAT} rounds: stop patching — "
+                       "raise it to the user as a design finding (replace, narrow, or cut) before another fix")
+    return out
 
 
 def build(a, doc, ordered, key, n, review_id):
@@ -256,7 +306,7 @@ def build(a, doc, ordered, key, n, review_id):
               f"**Review:** `{review_id}` · **Reviewer:** {a.reviewer} · **Passes:** {a.passes or 'unrecorded'}"] \
         + degraded + [f"**Findings:** {len(findings)} — every ID needs a disposition: "
                       f"`review.py dispose --scope <scope> --unit {a.unit or '<unit>'} --finding <ID> "
-                      "(--fixed <sha> | --rejected \"<reason>\")`"]
+                      "(--fixed <sha> | --rejected \"<reason>\" | --deferred \"<TO-DO>\")`"]
     report = "\n".join(render(doc, findings, header)) + "\n"
     # record only accepts the immutable range, so it is the commits the reviewer saw
     # (review 5.2-r2-01, -r3-01).
@@ -267,10 +317,74 @@ def build(a, doc, ordered, key, n, review_id):
     return [review] + records, findings, report
 
 
+def todo_file(scope):
+    """The project's TO-DO.md: beside PLANS-INDEX.md, at most three levels above the scope
+    (plans/{N}/, plans/archive/{N}/, plans/{program}/archive/{N}/)."""
+    d = os.path.realpath(scope)
+    for _ in range(3):
+        d = os.path.dirname(d)
+        if os.path.isfile(os.path.join(d, "TO-DO.md")):
+            return os.path.join(d, "TO-DO.md")
+    return None
+
+
+# ---------- accept -----------------------------------------------------------------
+
+@contextlib.contextmanager
+def log_lock(log):
+    """The review log's exclusive lock — the same one `record` takes. Every writer that
+    reads the log and then appends holds it across both, so no record can land between
+    what was checked and what was written (review adhoc-04)."""
+    with open(log, "a") as fh:
+        fcntl.flock(fh, fcntl.LOCK_EX)
+        yield
+
+
+def cmd_accept(a):
+    """Record the user's acceptance of every disposition so far (§6.4). Refused while any
+    finding lacks one — the user accepts outcomes, not an open list."""
+    log = os.path.join(a.scope, "artifacts", f"review-{a.unit}.jsonl")
+    if not os.path.exists(log):
+        return err("nothing to accept", "a review log with findings", "no review log", log,
+                   "no acceptance is needed without a review", code=vl.EXIT_USAGE)
+    with log_lock(log):
+        return _accept(a, log)
+
+
+def _accept(a, log):
+    recs = vl.read_jsonl(log)
+    findings = [r["finding_id"] for r in recs if r.get("record") == "finding"]
+    latest = {r["finding_id"]: r["disposition"] for r in recs if r.get("record") == "disposition"}
+    open_ids = [f for f in findings if f not in latest]
+    if not findings:
+        return err("nothing to accept", "a review log with findings", "no findings", log,
+                   "no acceptance is needed for a clean review", code=vl.EXIT_USAGE)
+    if open_ids:
+        return err(f"{len(open_ids)} finding(s) have no disposition", "every finding dispositioned first",
+                   ", ".join(open_ids[:6]), log, "dispose them, then accept", cause="code", code=vl.EXIT_FAIL)
+    if not a.by.strip():
+        return err("accept needs --by", "the person accepting", "empty", "--by", "--by \"<name>\"",
+                   code=vl.EXIT_USAGE)
+    counts = {k: sum(1 for f in findings if latest[f] == k) for k in ("fixed", "rejected", "deferred")}
+    vl.append_verified(log, [{"schema": vl.SCHEMA, "ts": now(), "record": "acceptance", "by": a.by.strip(),
+                              "findings": len(findings), **counts}])
+    print(f"{a.unit}: outcomes accepted by {a.by.strip()} — {len(findings)} findings "
+          f"({counts['fixed']} fixed, {counts['rejected']} rejected, {counts['deferred']} deferred)")
+    return vl.EXIT_PASS
+
+
 # ---------- dispose ----------------------------------------------------------------
 
 def cmd_dispose(a):
     log = os.path.join(a.scope, "artifacts", f"review-{a.unit}.jsonl")
+    if not os.path.exists(log):
+        return err(f"no review log for {a.unit}", "a log written by review.py record", "none", log,
+                   "run the review with --scope/--unit first", code=vl.EXIT_USAGE)
+    with log_lock(log):
+        return _dispose(a, log)
+
+
+def _dispose(a, log):
     recs = vl.read_jsonl(log)
     f = next((r for r in recs if r.get("record") == "finding" and r.get("finding_id") == a.finding), None)
     if f is None:
@@ -291,14 +405,39 @@ def cmd_dispose(a):
     if a.rejected is not None and not a.rejected.strip():
         return err("`rejected` needs a reason", "the reason the finding is wrong", "empty", a.finding,
                    "--rejected \"<why the finding is wrong>\"", cause="code", code=vl.EXIT_FAIL)
+    if a.deferred is not None:
+        if not a.deferred.strip():
+            return err("`deferred` needs the TO-DO item", "the TO-DO entry that carries it", "empty", a.finding,
+                       "--deferred \"<TO-DO item>\"", cause="code", code=vl.EXIT_FAIL)
+        if f.get("severity") == "blocking":
+            return err("a blocking finding cannot be deferred", "`--fixed <sha>` or `--rejected \"<why>\"`",
+                       "severity blocking", a.finding, "fix it, or reject it with the reason it is wrong",
+                       cause="code", code=vl.EXIT_FAIL)
+        # SKILL.md §5.1: deferral is the round cap's release valve, not a way to skip a
+        # finding early, and the follow-up must exist (review adhoc-03)
+        m = re.search(r"-r(\d+)$", str(f.get("review_id", "")))
+        rnd = int(m.group(1)) if m else 0
+        if rnd <= ROUND_CAP:
+            return err(f"deferral before the round cap (round {rnd} ≤ {ROUND_CAP})",
+                       f"a finding from round {ROUND_CAP + 1} or later", f"round {rnd}", a.finding,
+                       "fix it, or reject it with the reason it is wrong", cause="code", code=vl.EXIT_FAIL)
+        todo = todo_file(a.scope)
+        text = open(todo, encoding="utf-8").read() if todo else ""
+        if a.deferred.strip() not in text:
+            return err("the deferral's TO-DO item is not in TO-DO.md", "the exact item text, already written to "
+                       "the project's TO-DO.md", a.deferred.strip()[:120], todo or f"no TO-DO.md above {a.scope}",
+                       "write the item to TO-DO.md first, then pass its exact text", cause="code",
+                       code=vl.EXIT_FAIL)
     by = a.by
     if not by:
         rc, name, _ = git(a.scope, "config", "user.name")
         by = f"{name or 'unknown'} / Claude"
+    kind = "fixed" if a.fixed else ("deferred" if a.deferred is not None else "rejected")
+    reason = a.deferred if kind == "deferred" else a.rejected
     rec = {"schema": vl.SCHEMA, "ts": now(), "record": "disposition", "finding_id": a.finding,
-           "disposition": "fixed" if a.fixed else "rejected", "sha": a.fixed, "reason": a.rejected, "by": by}
+           "disposition": kind, "sha": a.fixed, "reason": reason, "by": by}
     vl.append_verified(log, [rec])
-    print(f"{a.finding}: {rec['disposition']} {a.fixed or a.rejected}")
+    print(f"{a.finding}: {rec['disposition']} {a.fixed or reason}")
     return vl.EXIT_PASS
 
 
@@ -325,7 +464,12 @@ def main(argv):
     x = d.add_mutually_exclusive_group(required=True)
     x.add_argument("--fixed", metavar="SHA")
     x.add_argument("--rejected", metavar="REASON")
+    x.add_argument("--deferred", metavar="TODO", help="non-blocking only: the TO-DO item that carries it")
     d.add_argument("--by")
+    c = sub.add_parser("accept")
+    c.add_argument("--scope", required=True)
+    c.add_argument("--unit", required=True)
+    c.add_argument("--by", required=True)
     try:
         a = ap.parse_args(argv)
     except SystemExit as exc:
@@ -334,7 +478,7 @@ def main(argv):
         return err("--scope and --unit go together", "both or neither", "one of them", "record",
                    "pass both to log findings for dispositions", code=vl.EXIT_USAGE)
     try:
-        return {"prepare": cmd_prepare, "record": cmd_record, "dispose": cmd_dispose}[a.cmd](a)
+        return {"prepare": cmd_prepare, "record": cmd_record, "dispose": cmd_dispose, "accept": cmd_accept}[a.cmd](a)
     except vl.ContractError as exc:
         print(exc.msg, file=sys.stderr)
         return vl.EXIT_EVAL

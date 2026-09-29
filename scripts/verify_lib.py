@@ -24,8 +24,33 @@ JUDGE_LINE = re.compile(r"^(codex|claude-fallback|none) \S.*$")               # 
 # "blocking". `plans-index.py gate-count` (printed by /closeout) is the reminder.
 GATE_MODE = "advisory"
 BLOCKING_AFTER = 5
+# §5.4.2: a graph can run blocking ahead of the fleet flip with a `**Gate mode:** blocking`
+# line in its PLANS-INDEX.md (kalpa-iris, 2026-09-29 — code nobody reads needs a gate that stops).
+GATE_MODE_LINE = re.compile(r"^\*\*Gate mode:\*\*[ \t]*(.*?)[ \t]*$", re.M)
 # Finish-table `repo` cells are paths under this root (§3.2). Tests point it elsewhere.
 PROJECTS = os.environ.get("VERIFY_PROJECTS", os.path.expanduser("~/Projects"))
+
+
+def gate_mode(scope_dir):
+    """The mode the gate runs in for this scope: the nearest PLANS-INDEX.md's
+    `**Gate mode:**` line, else GATE_MODE. Walks up at most three levels, which covers
+    plans/{N}/, plans/archive/{N}/ and plans/{program}/archive/{N}/."""
+    d = os.path.realpath(scope_dir)
+    for _ in range(3):
+        d = os.path.dirname(d)
+        index = os.path.join(d, "PLANS-INDEX.md")
+        if os.path.isfile(index):
+            with open(index, encoding="utf-8") as fh:
+                m = GATE_MODE_LINE.search(fh.read())
+            if m is None:
+                return GATE_MODE
+            if m.group(1) not in ("blocking", "advisory"):
+                # a typo must never quietly downgrade a blocking graph (review adhoc-02)
+                raise ContractError(message(
+                    "ERROR", "the index declares an unknown gate mode", "**Gate mode:** blocking | advisory",
+                    repr(m.group(1)), index, "code", "fix the **Gate mode:** line", f"{CONTRACT} §5.4.2"))
+            return m.group(1)
+    return GATE_MODE
 
 
 # ---------- §10 message contract ---------------------------------------------------
@@ -112,7 +137,7 @@ def parse_table(path):
 def parse_table_text(text, path):
     docs = f"{CONTRACT} §3"
     lines = text.splitlines()
-    schema = rev = None
+    schema = rev = approved = None
     predates = []
     for line in lines:
         m = re.match(r"^\*\*Schema version:\*\*\s*(\S+)", line)
@@ -124,7 +149,19 @@ def parse_table_text(text, path):
         m = re.match(r"^\*\*Predates gate:\*\*\s*(.*)$", line)
         if m:
             predates = [u.strip() for u in m.group(1).split(",") if u.strip()]
+        m = re.match(r"^\*\*Approved:\*\*\s*(.*)$", line)
+        if m:
+            approved = m.group(1).strip()
     errors = []
+    # §3.5 human checkpoint: `pending`, or `rev N — <who>, <date>`. No line = a table that
+    # predates the checkpoint (exempt).
+    approved_rev = None
+    if approved is not None and approved != "pending":
+        m = re.match(r"^rev (\d+) — \S.*$", approved)
+        if m:
+            approved_rev = int(m.group(1))
+        else:
+            errors.append(("header", "**Approved:** pending | rev <N> — <who>, <date>", approved))
     if schema != SCHEMA:
         errors.append(("header", f"**Schema version:** {SCHEMA}", schema or "missing"))
     if not (rev or "").isdigit():
@@ -176,7 +213,8 @@ def parse_table_text(text, path):
         raise ContractError(message("ERROR", "a phase that predates the gate owns rows",
                                     "no rows owned by a **Predates gate:** phase", ", ".join(owned),
                                     path, "code", "drop the rows or the phase from **Predates gate:**", docs))
-    return {"revision": int(rev), "predates": predates, "rows": rows, "path": path}
+    return {"revision": int(rev), "predates": predates, "rows": rows, "path": path,
+            "approval": None if approved is None else ("pending" if approved_rev is None else approved_rev)}
 
 
 def _validate_row(r, where):

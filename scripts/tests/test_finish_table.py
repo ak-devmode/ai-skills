@@ -157,6 +157,29 @@ class FinishTable(unittest.TestCase):
         t = vl.parse_table(self.table)
         self.assertEqual((t["rows"], t["predates"]), ([], ["9.1", "9.2"]))
 
+    def test_approval_is_pending_until_approved_and_reset_by_a_change(self):
+        self.assertEqual(self.ft("init", "--phase", "9.1=team/svc").returncode, 0)
+        self.assertEqual(vl.parse_table(self.table)["approval"], "pending")
+        p = self.ft("approve")
+        self.assertEqual(p.returncode, 0, p.stderr)
+        self.assertEqual(vl.parse_table(self.table)["approval"], 1)
+        rows = os.path.join(self.tmp.name, "r.jsonl")
+        with open(rows, "w") as fh:
+            fh.write(json.dumps({"check_id": "more", "deliverable": "d", "owner": "9.1", "check": "true",
+                                 "repo": "team/svc"}) + "\n")
+        self.assertEqual(self.ft("add", "--rows", rows, "--change", "more").returncode, 0)
+        t = vl.parse_table(self.table)
+        self.assertEqual((t["revision"], t["approval"]), (2, "pending"))
+
+    def test_malformed_approval_is_a_contract_error(self):
+        self.assertEqual(self.ft("init", "--phase", "9.1=team/svc").returncode, 0)
+        with open(self.table) as fh:
+            text = fh.read()
+        with open(self.table, "w") as fh:
+            fh.write(text.replace("**Approved:** pending", "**Approved:** yes"))
+        with self.assertRaises(vl.ContractError):
+            vl.parse_table(self.table)
+
     def test_init_with_nothing_is_usage(self):
         self.assertEqual(self.ft("init").returncode, 2)
         self.assertEqual(self.ft("init", "--predates", " , ").returncode, 2)  # 5.3-r2-05

@@ -71,10 +71,26 @@ def coverage_blocks(review_log):
         elif d.get("disposition") == "rejected" and not str(d.get("reason") or "").strip():
             blocks.append((fid, "`rejected` disposition without a reason", "the reason the finding is wrong",
                            "reason missing", where, "code"))
-        elif d.get("disposition") not in ("fixed", "rejected"):
-            blocks.append((fid, "unknown disposition", "`fixed` or `rejected`", repr(d.get("disposition")),
-                           where, "tooling"))
+        elif d.get("disposition") == "deferred" and (f.get("severity") == "blocking"
+                                                     or not str(d.get("reason") or "").strip()):
+            blocks.append((fid, "`deferred` disposition on a blocking finding or without its TO-DO item",
+                           "a non-blocking finding and the TO-DO entry that carries it",
+                           f"severity {f.get('severity')}, reason {d.get('reason')!r}", where, "code"))
+        elif d.get("disposition") not in ("fixed", "rejected", "deferred"):
+            blocks.append((fid, "unknown disposition", "`fixed`, `rejected` or `deferred`",
+                           repr(d.get("disposition")), where, "tooling"))
     return blocks, len(findings)
+
+
+def accepted(review_log):
+    """§6.4: the log's last finding/disposition is followed by an `acceptance` record."""
+    last = None
+    for r in vl.read_jsonl(review_log):
+        if r.get("record") in ("finding", "disposition"):
+            last = "open"
+        elif r.get("record") == "acceptance" and str(r.get("by") or "").strip():
+            last = "accepted"
+    return last == "accepted"
 
 
 def fallback_markers(review_log, projects):
@@ -195,6 +211,13 @@ def evaluate(scope, unit, projects):
                                           f"at least one row whose owner is {unit} or {unit}/…", "0 rows",
                                           table["path"], "code", "add the unit's rows, bump Revision",
                                           f"{vl.CONTRACT} §3.4"))
+    appr = table.get("approval")
+    if appr is not None and appr != table["revision"]:
+        found = "pending" if appr == "pending" else f"rev {appr} approved, table is rev {table['revision']}"
+        blocks.append(("table-approval", "the finish table's current revision is not approved by a human",
+                       f"**Approved:** rev {table['revision']} — <who>, <date>", found, table["path"], "code",
+                       f"show the user the rows; on their yes: finish-table.py approve --scope {scope} --by <name>"))
+        report.append("BLOCK  table-approval  finish table not approved")
     heads = {}
     for row in owned:
         cid = row["check_id"]
@@ -282,6 +305,14 @@ def evaluate(scope, unit, projects):
         for fid, what, exp, found, where, cause in cov:
             blocks.append((fid, what, exp, found, where, cause, "record the disposition through /review's log writer"))
             report.append(f"BLOCK  {fid}  {what}")
+        if appr is not None and n and not cov and not accepted(review):
+            # §6.4 — a table under the human checkpoint puts review outcomes there too
+            blocks.append(("review-acceptance", "review outcomes not accepted by a human since the last "
+                           "finding or disposition", "an `acceptance` record after every finding and disposition",
+                           "none, or an older one", review, "code",
+                           f"show the user the outcomes; on their yes: review.py accept --scope {scope} "
+                           f"--unit {unit} --by <name>"))
+            report.append("BLOCK  review-acceptance  review outcomes not accepted")
         report.append(f"review {n} finding(s), {n - len(cov)} dispositioned")
         for line in fallback_markers(review, projects):
             judges.add(line)
@@ -353,7 +384,11 @@ def main(argv):
         a = ap.parse_args(argv)
     except SystemExit as exc:
         return vl.EXIT_USAGE if exc.code else vl.EXIT_PASS
-    a.mode = a.mode or vl.GATE_MODE
+    try:
+        a.mode = a.mode or vl.gate_mode(a.scope)
+    except vl.ContractError as exc:
+        print(exc.msg, file=sys.stderr)
+        return vl.EXIT_EVAL
 
     if a.skip_verify is not None:
         if not a.skip_verify.strip():

@@ -78,6 +78,13 @@ flight is never asked to reconcile verification after the fact (Alex, 2026-09-29
 **Writer in practice:** `scripts/finish-table.py` (`init` with the standard rows per
 phase, `add` with the revision bump) — never typed by hand.
 
+3.1.1 **`**Approved:**`** — the human checkpoint on the table (Alex, 2026-09-29). `init`
+writes `pending`; `finish-table.py approve --by <name>` writes `rev <N> — <who>, <date>`,
+run only on the user's explicit yes after they have read the rows in plain English; `add`
+resets it to `pending`, because a changed table is a new promise. The gate blocks
+(`table-approval`) while the line names anything but the current revision. A table with no
+`**Approved:**` line predates the checkpoint and is exempt — from both this and §6.4.
+
 3.2 **One row per check**, columns in this order:
 
 | Column | Value |
@@ -225,6 +232,12 @@ verdict header and the index status.
 Any block is a failure whatever the mode: the scope cannot report HEALED, it still
 archives, and its index row carries the printed `⚠ verify failed <check_ids>` marker.
 
+5.4.2 **Per-graph override** — a `**Gate mode:** blocking` (or `advisory`) line in a graph's
+`PLANS-INDEX.md` sets the default for every scope under it; an explicit `--blocking` /
+`--advisory` flag still wins. kalpa-iris runs blocking from its first scope (Alex,
+2026-09-29): its code is not read by a human, so an advisory gate there is a report
+nobody reads.
+
 5.5 **Exit codes** for every script in this contract: `0` pass · `1` blocked / failed ·
 `2` usage · `3` could not evaluate (missing or malformed input, git error) — never read as
 pass.
@@ -254,7 +267,7 @@ exclusive lock on the log, so concurrent or clean reviews never share an ID.
 `text` · `fix`. IDs are assigned in severity order.
 
 6.2 **`disposition`** records: `schema` · `ts` · `finding_id` · `disposition`
-(`fixed | rejected`) · `sha` (required for `fixed`) · `reason` (required for `rejected`) ·
+(`fixed | rejected | deferred`) · `sha` (required for `fixed`) · `reason` (required for `rejected`; for `deferred`, the exact text of an item already in the project's `TO-DO.md` — never on a `blocking` finding or before round 4, `review/SKILL.md` §5.1) ·
 `by`.
 
 6.3 **Coverage rule.** Every `finding_id` has at least one disposition; the latest one
@@ -262,6 +275,12 @@ decides. A `finding_id` carried by two findings blocks — one disposition must 
 otherwise, at write time. Nothing silently
 dismissed, nothing silently dropped. A re-review mints a new `review_id`; the old findings
 stay.
+
+6.4 **`acceptance`** records — the human checkpoint on review outcomes: `schema` · `ts` ·
+`by` · `findings` · `fixed` · `rejected` · `deferred`. Written by `review.py accept --by
+<name>` on the user's yes, refused while any finding lacks a disposition. Under a table
+with an `**Approved:**` line (§3.1.1), the gate blocks (`review-acceptance`) when a
+`finding` or `disposition` record follows the last acceptance — a new round reopens it.
 
 ---
 

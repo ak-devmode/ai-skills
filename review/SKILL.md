@@ -1,15 +1,17 @@
 ---
 name: review
-version: 3.2.0
+version: 3.3.0
 description: |
   Pre-landing code review with codex as the gate: the opposing model family, headless
   and read-only, reviews an explicit revision range against gstack's review checklist,
-  the Kalpa/PMG domain rules (SATU SEHAT + FHIR, ADR conformance, table write-ownership,
-  tenant isolation, PHI/credential leakage, stack footguns) and the lenses every repo
-  gets — fail-open verification, silent failure, local maxima, dirty comments, doc
-  claims. Every finding is logged under a stable ID and must be dispositioned (fixed in
-  a commit that touches it, or rejected with a reason) before the unit can be marked
-  Done. When codex cannot run, a Claude pass (gstack's engine + the same rules) is the
+  the domain rules per project (WellMed: SATU SEHAT + FHIR, ADR conformance, table
+  write-ownership; IRIS: its own invariants, never WellMed's ADRs; PMG; shared: tenant
+  isolation, PHI/credential leakage, stack footguns) and the lenses every repo gets —
+  fail-open verification, silent failure, local maxima, dirty comments, doc claims.
+  Every finding is logged under a stable ID and must be dispositioned (fixed in a commit
+  that touches it, rejected with a reason, or — past round 3, non-blocking — deferred to
+  a written TO-DO item); the loop stops on [CONVERGENCE] signals, and the user's yes to
+  the outcomes is recorded with `accept` before the unit can be marked Done. When codex cannot run, a Claude pass (gstack's engine + the same rules) is the
   fallback, and the report says so in its header.
 
   Use when asked to "review", "review this PR", "review the diff", "pre-landing
@@ -52,9 +54,11 @@ and `scripts/codex-exec.py`. This file is the procedure; it never restates a rul
 diff is empty by construction — which is exactly why the range is explicit.
 `review.py prepare` exits 3 on an empty range; report it, don't work around it.
 
-1.2 **Project** is detected from the repo path (`review.py` does it): `~/Projects/wellmed/*`
-→ all domain groups · `~/Projects/pmg/*` → §3.1, §3.5, §3.6, §3.7 · anything else →
-domain checks `n/a` (never invented).
+1.2 **Project** is detected from the repo path — a worktree's primary checkout
+(`review.py` does it): `~/Projects/wellmed/kalpa-iris` → the IRIS groups, never
+WellMed's ADR checks · `~/Projects/wellmed/*` → all WellMed groups · `~/Projects/pmg/*`
+→ §3.1, §3.5, §3.6, §3.7 · anything else → domain checks `n/a` (never invented).
+`rules/domain.md` lists the groups per project.
 
 1.3 **Scope and unit.** When the work belongs to a `/plan` unit, pass `--scope <scope
 folder> --unit <N.P>` to `record` so findings are logged to
@@ -166,9 +170,29 @@ $RV dispose --scope $SCOPE --unit $UNIT --finding <ID> --rejected "<why the find
 ```
 
 `--fixed` is refused unless that commit touches the finding's file; `--rejected` is refused
-without a reason. `verdict-gate.py` refuses Done while any ID lacks one, and `/verify`
+without a reason. When every ID has one, the user's yes is recorded with
+`$RV accept --scope $SCOPE --unit $UNIT --by "<name>"` (`verify-contracts.md` §6.4) —
+never on their behalf. `verdict-gate.py` refuses Done while any ID lacks one, and `/verify`
 audits whether each rejection was *right*. Nothing silently dismissed, nothing silently
 dropped.
+
+5.1 **Convergence — a review loop must end.** Every repo, every unit. `record` prints a
+`[CONVERGENCE]` line when either trips; act on it, don't re-run past it.
+
+- **Round cap.** Past round 3 of one unit, only `blocking` findings are fixed in the loop.
+  `should-fix` and `note` go to the project's `TO-DO.md` and are recorded
+  `dispose --deferred "<TO-DO item>"` — never `--rejected`, because a deferral is not a
+  claim that the finding is wrong. Write the item to `TO-DO.md` first: `dispose` refuses a
+  deferral whose text is not in it, one from round 3 or earlier, and any blocking finding.
+- **Same place, three rounds.** A file drawing findings in each of the last three rounds
+  is a design that is wrong, not a patch that is incomplete. Stop fixing it and raise it to
+  the user as one design finding: replace it, narrow what it promises, or cut it.
+- **Findings that argue opposite sides** (fixing one reopens another) mean the contract is
+  ambiguous. Stop and ask which side the user wants; don't pick one and reject the other.
+
+Why: scope 5.3 ran twelve rounds, eight of them patching one heuristic shell scanner,
+ending with two findings on opposite sides — the local-maxima failure this skill exists
+to catch, inside the skill. Review outcomes are a human checkpoint (`/plan` §6.8).
 
 ---
 

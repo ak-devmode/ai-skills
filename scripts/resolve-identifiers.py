@@ -202,7 +202,14 @@ def shell_assigned(text):
     A command that reads a name and binds it (`FOO="a $FOO"`, `for V in "$V"`,
     `read R <<< "$R"`) reads first. A name read first is an environment input even if the
     script assigns it later. Anything the parser can't classify stays a read: this check
-    fails closed (5.3-r5-01 … r7-04)."""
+    fails closed (5.3-r5-01 … r9-02).
+
+    Scope — what this is for: the invented-reality lens asks whether an environment name
+    the diff reads is declared *somewhere*, i.e. was looked up rather than assumed. A name
+    the script itself assigns (before reading it) is the script's own and not invented,
+    whether or not that assignment runs on every path. Shell dataflow — conditional
+    branches, functions never called, `( … )` subshells — is deliberately not modeled; only
+    the two syntactic subshell forms, `… &` and pipelines, are excluded (5.3-r9-01)."""
     local, read_first = set(), set()
     for line in text.splitlines():
         if is_comment(line):

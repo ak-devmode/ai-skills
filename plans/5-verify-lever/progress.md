@@ -13,8 +13,8 @@
 
 ## Resume Context
 **Scope:** ~/Projects/ai-skills/plans/5-verify-lever/scope.md
-**Last action:** Phase 2 checkpoint approved (2026-09-29); 5.2 not Done, pending its own review + verify
-**Next action:** finish 5.2's own review + verify (see Plan 5.2 Resume Context), mark 5.2 Done, then `/plan 5.3`
+**Last action:** 5.2 Done (2026-09-29): 3 codex review rounds (16 findings, all fixed), `/verify` advisory with 2 blocks accepted by Alex
+**Next action:** `/plan 5.3` (Phase 3 — wiring, self-heal, rollout)
 **Open blockers:** closeout deferred to scope end (see TO-DO.md)
 **Key files changed:** 5.2 — `verify/` (skill, judge, fixtures, demo), `review/` 3.0.0 (rules, review.py), `scripts/codex-exec.py`; full list in `closeout-prep.md` Phase 2 block
 
@@ -47,6 +47,7 @@
 - (2026-09-29) A dev-tenant identity question was resolved; the per-env tenant allowlist is recorded in test-suite T2 (private), and the tenant-identity-in-header TO-DO is in kalpa-docs `plans/TO-DO.md` (section "Tenant identity is invisible in the app"). *(Redacted 2026-09-29 per review 5.2-r1-01: tenant specifics belong in the private test-suite, Operating Contract #4.)*
 - (2026-09-29) Class-A proof (Task 2.4 part B: the three-outcome trial) **moves to the kalpa-docs test-suite program, member T2 (WellMed adapter)**, together with a login/token CLI, as T2 deliverables (kalpa-docs `plans/test-suite-program/T2-wellmed-adapter/NOT-YET-SCOPED.md`; committed there, and pushing kalpa-docs is Alex's call because its `main` carries another session's work. Check with `git -C ~/Projects/wellmed/kalpa-docs status -sb`). Scope 5 proves class B only. Credential model stays open (Alex: no skeleton key; scoped to test/demo DBs).
 - (2026-09-29) **Codex model is a family, `sol`, not codex's default** (Alex; supersedes the 2026-09-26 "no pinned model" in scope.md §4.2 / plan 5.2 Task 2.1). The unpinned default had drifted from `gpt-6-sol` to `gpt-6-astra` (frontier) and ran at effort `high`, which burned the workspace's credits. `codex-exec.py` now resolves `VERIFY_CODEX_MODEL` (default `sol`) from codex's model cache to the current `*-sol` slug and follows retirement upgrades. Unresolvable, or a banner naming another model, is `none …`. Effort stays `high` (Alex), since that is what the spike and the demos ran on.
+- (2026-09-29) **5.2 `/verify` blocks accepted (Alex).** (a) `p2-fixtures` inconclusive: its row runs without `VERIFY_EVAL=1`, so the live-judge tier is skipped. Not re-run now; **fixture rows must set `VERIFY_EVAL=1` from here on** (TO-DO → 5.3's standard rows). (b) `p2-scope-deliverables` fail on class A via `/browse`: **amended.** Class A runs through adapter commands in runner rows; browser driving belongs to the test-suite T2 WellMed adapter, not to `/verify` (its judge only reads disk and git). (c) Review r3's fix `7ffd7e5` was not re-reviewed by codex; Alex accepted its fixed + tested disposition. 5.2 marked Done with the advisory marker.
 
 ---
 
@@ -62,6 +63,7 @@
 | 2026-09-26 | /plan-devex-review | Done | Triage. Getting started 3→8 (setup warns, `/verify --demo`, README section), errors 4→8 (message contract with cause class), stale-clone warning → `artifacts/devex-review-2026-09-26.md` |
 | 2026-09-26 | Unplanned fix | Done | `scripts/plans-index.py`: `add` accepts per-plan `N.P` numbers; duplicate check compares the exact `#` cell (70d1222). Found by /scope §5.9 — stub rows were refused as non-integer |
 | 2026-09-26 | /plan | Done | 5.1-verify-lever-PLAN.md complete — contracts spec + templates, resolve-identifiers.py, verify-run.py, verdict-gate.py, plans-index status/validate, ledger-init base SHA; 62 tests. Alex approved at gate A. TODOs extracted to TO-DO.md (closeout deferral only) |
+| 2026-09-29 | /plan | Done | 5.2-verify-lever-PLAN.md complete — /verify, /review 3.1.0 on codex, fixtures + `--demo`, codex model family `sol`; own review r1–r3 (16 findings fixed) and /verify advisory, 2 blocked (Alex accepted). TODOs extracted to TO-DO.md |
 
 ---
 
@@ -80,7 +82,7 @@
 | # | Plan File | Phase | Status | Notes |
 |---|-----------|-------|--------|-------|
 | 5.1 | 5.1-verify-lever-PLAN.md | Phase 1 — Contracts + deterministic scripts | Done | Gate A — approved 2026-09-26 |
-| 5.2 | 5.2-verify-lever-PLAN.md | Phase 2 — `/verify` + `/review` on codex | In progress — checkpoint approved 2026-09-29; own review + verify pending | Gate A |
+| 5.2 | 5.2-verify-lever-PLAN.md | Phase 2 — `/verify` + `/review` on codex | Done | Gate A — approved 2026-09-29; ⚠ verify advisory: 2 blocked |
 | 5.3 | 5.3-verify-lever-PLAN.md | Phase 3 — Wiring + self-heal + rollout | Ready to execute | Gate A |
 
 ---
@@ -254,9 +256,9 @@ plan file is unchanged; where this block and the plan differ, the plan wins, so 
 ## Plan 5.2: `/verify` skill + `/review` on codex
 
 ### Resume Context (Plan 5.2)
-**Last action:** (2026-09-29) codex review 5.2-r1 → 9 findings, all fixed + dispositioned; finish-conditions rev 4 (5.2 rows); runner run `5.2-20260929T021032-cd55` — 6/6 runner rows pass, 3 judge rows pending
-**Next action:** once codex has credits: (1) re-review the fix range `c8c049b..HEAD` (review 5.2-r2) and disposition; (2) `/verify` 5.2 from §3.2 with run `5.2-20260929T021032-cd55` (or a fresh `run` if HEAD moved); (3) `plans-index.py status --num 5.2 --status "✅ Done …"`; (4) `/plan 5.3`
-**Open blockers:** codex workspace out of credits (Alex) — or Alex OKs the Claude fallback, which leaves `⚠ judge:` on 5.2 until a codex pass
+**Last action:** Plan complete — 4/4 tasks done; own review + /verify run; marked Done (Alex, 2026-09-29)
+**Next action:** none — continues in Plan 5.3
+**Open blockers:** None
 
 ### Task Detail
 Deepened at start of run (`/markdown-style` §8.9.2). Where this block and the plan differ,
@@ -297,6 +299,8 @@ so they live here; `/verify` of 5.2 judges against the plan *as amended here*):
 - **2.2–2.4** — detail written when each starts.
 - **Model (amendment, Alex, 2026-09-29):** Task 2.1's "no pinned model" is replaced by a model
   family (`sol`) resolved from codex's cache. See the Decisions Log.
+- **Class A (amendment, Alex, 2026-09-29):** scope §4.2's "drives the product through the adapter +
+  `/browse`" is narrowed for 5.2 to adapter commands in runner rows; `/browse` driving is T2's.
 
 ### Session: 2026-09-26 (Alex / Claude, continued)
 - **Phase 0** ✅ DONE. Status is Ready. `Executed by` was stamped. The ledger phase block
@@ -454,3 +458,11 @@ so they live here; `/verify` of 5.2 judges against the plan *as amended here*):
   `0aefa7f`. Live probe: `codex gpt-6-sol`.
   Blocked on Alex: `.env.example` is permission-denied to the agent, so `VERIFY_CODEX_MODEL` and
   `CODEX_HOME` are not declared yet; the resolver flags both (`p2-names-resolve` would fail).
+- **Reviews 5.2-r2 / r3** (codex `gpt-6-sol`): r2 found 5 in the r1 fixes, and r3 found 2 in r2's
+  coverage fix (immutable SHAs). All were fixed with regression tests that fail on the old code:
+  `5136307` `5d0629e` `63f353b` `f4db4b0` `26eed12` `7ffd7e5`. `/review` is now 3.1.0 (`record`
+  requires the immutable range from `prepare`). `.env.example` has the two new variables (Alex, `df9f218`).
+- **/verify 5.2** run `5.2-20260929T031136-b3a2`, judge `codex gpt-6-sol`: 7/9 pass. `p2-fixtures` is
+  inconclusive (live-judge tier skipped) and `p2-scope-deliverables` fails (no `/browse` class-A step),
+  so advisory, 2 blocked → `artifacts/verify-5.2-report.md`. Both accepted and amended by Alex
+  (Decisions Log). Marked Done.

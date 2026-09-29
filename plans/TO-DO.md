@@ -342,3 +342,14 @@ Touches: scripts/{resolve-identifiers,verify-run,verdict-gate,plans-index}.py ·
       5.2); fold into the scope-level closeout after 5.3.
 Nothing else deferred: the pending wiring (`ledger-init.sh --repo` from /plan §5.13,
 advisory → blocking flip) is planned work in 5.3 Tasks 3.2/3.4, not a residual.
+
+## /verify skill + /review on codex (Plan 5.2)
+Source: plans/5-verify-lever/progress.md (## Plan 5.2)
+Touches: verify/ · review/ · scripts/{codex-exec,verify-run,verdict-gate,verify_lib}.py · templates/verify-contracts.md · plans/5-verify-lever/finish-conditions.md
+- [ ] Fixture/eval finish rows set `VERIFY_EVAL=1` in their `env` cell so the live-judge tier runs
+      under the runner — `/verify` 5.2 found `p2-fixtures` inconclusive without it (Alex: skip now,
+      use from now on). Natural home: 5.3's standard rows that `/scope` emits (`verify/SKILL.md` §4).
+- [ ] Class-A browser driving (`/browse`) is a T2 WellMed-adapter deliverable, not `/verify`'s
+      (Alex, 2026-09-29) — add it to kalpa-docs `plans/test-suite-program/T2-wellmed-adapter/NOT-YET-SCOPED.md`
+      when T2 is scoped.
+- [ ] Run /closeout for plan 5.2 — deferred to scope end (fold into the scope-level closeout after 5.3).

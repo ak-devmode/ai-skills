@@ -230,11 +230,13 @@ CLAUDE.md
 ## 5. Environment variables
 
 Skills run inside Claude Code's session and inherit its environment. No SSM,
-no API keys managed at this layer. The verification scripts read three optional
+no API keys managed at this layer. The verification scripts read five optional
 overrides, declared in `.env.example` (so `resolve-identifiers.py` can resolve
 them): `VERIFY_PROJECTS` (root for finish-table `repo` cells, default
-`~/Projects`), `VERIFY_CODEX_BIN` (codex binary; tests use fakes), `VERIFY_EVAL`
-(`1` runs the live-judge eval tier in `scripts/tests`).
+`~/Projects`), `VERIFY_CODEX_BIN` (codex binary; tests use fakes),
+`VERIFY_CODEX_MODEL` (codex model family or exact slug, default `sol` — resolved
+from codex's model cache so it tracks new versions), `CODEX_HOME` (codex's own home,
+default `~/.codex`), `VERIFY_EVAL` (`1` runs the live-judge eval tier in `scripts/tests`).
 
 ---
 

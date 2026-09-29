@@ -133,9 +133,11 @@ else `null`) · `command` · `exit_code` (`null` if not run) · `duration_s` · 
 `check_id → {result, rung_reached, reason}` computed by the §5.1 authority rule.
 
 4.6 **Judge line** — exactly one of `codex <model codex reported>` ·
-`claude-fallback <reason>` · `none <reason>`. No model is pinned. Every codex failure mode
-(not installed, not authed, model unusable, timeout, empty, refusal, malformed output) ends
-as a non-codex line.
+`claude-fallback <reason>` · `none <reason>`. The model is a family (`VERIFY_CODEX_MODEL`,
+default `sol`) resolved on every call from codex's own model list to its current slug,
+following retirement upgrades — never codex's floating default. Every codex failure mode
+(not installed, not authed, out of credits, model unusable or unresolved, a different model
+than requested, timeout, empty, refusal, malformed output) ends as a non-codex line.
 
 4.7 **Results:** `pass | fail | inconclusive | verified-unreachable`. The runner maps exit
 codes: `0` pass · `1` fail · `2` inconclusive (usage/config) · `3` verified-unreachable ·

@@ -130,7 +130,7 @@ class TestDeterministicTier(unittest.TestCase):
         with open(fake, "w") as fh:
             fh.write(INCONCLUSIVE_CODEX)
         os.chmod(fake, 0o755)
-        env = dict(os.environ, VERIFY_CODEX_BIN=fake)
+        env = dict(os.environ, VERIFY_CODEX_BIN=fake, VERIFY_CODEX_MODEL="gpt-fake-1")
         p = run("verify/scripts/demo.py", "--check", "--keep", os.path.join(self.tmp.name, "demo"), env=env,
                 timeout=300)
         self.assertEqual(p.returncode, 1, p.stdout + p.stderr)

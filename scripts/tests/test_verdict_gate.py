@@ -434,6 +434,9 @@ class TestPredatesAndCloseout(Fixture):
         p = run("plans-index.py", "gate-count", self.index, env=self.env)
         self.assertIn("clean gated scopes: 4/5", p.stdout)
         self.assertNotIn("REMINDER", p.stdout)
+        # --discover finds the index under VERIFY_PROJECTS by itself
+        p = run("plans-index.py", "gate-count", "--discover", env=self.env)
+        self.assertIn("clean gated scopes: 4/5", p.stdout)
 
 
 if __name__ == "__main__":

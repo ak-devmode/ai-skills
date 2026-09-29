@@ -1,6 +1,6 @@
 ---
 name: closeout
-version: 1.3.0
+version: 1.4.0
 description: |
   Local repo self-heal after a /plan run. Consumes closeout-prep.md and leaves the
   repo healthier than /plan found it: re-runs tests, spot-checks pattern references,
@@ -52,6 +52,7 @@ so running /closeout twice on a healed repo produces no diff on the second pass.
   Step 1  Read closeout-prep.md → LEDGER-LESS MODE if absent (never halt)
   Step 2  Verify scope/plan branch is checked out
   Step 3  Run local test suite (--skip-tests bypasses, with loud flag)
+  Step 3a Verification verdict: gate --all, /verify what's missing, levers, feature map (§5.6)
   Step 4  §3 spot-check: do referenced patterns still exist at file:line?
   Step 5  §4 triage: surface "fold into <source>" recommendations
   Step 6  §7 doc drift edits (two-pass: grep-all + LLM-review CLAUDE/ARCH)
@@ -195,6 +196,50 @@ and proceed. The summary's §1 will surface this prominently.
 
 5.5 If `--dry-run`, skip command execution and log "test command detected: `{cmd}` —
 not run in dry-run."
+
+5.6 **Step 3a — Verification verdict** (scope 5). Runs in ledger-less mode too: the
+verdict lives in `finish-conditions.md` and `artifacts/verify-*.jsonl`, not in the ledger.
+
+5.6.1 **No `finish-conditions.md`:** the scope predates the gate. Log
+`verify: n/a — no finish table` and move on. Do not self-heal at closeout: every phase
+has already started, so a drafted table would list them all as predating the gate and
+check nothing.
+
+5.6.2 **Whole-scope view, every row:**
+```bash
+S=~/Projects/ai-skills/scripts
+$S/verdict-gate.py --scope "$SCOPE" --all --json
+```
+If a unit's blocks include `no final verdict` or `an unfinished run`, the verdict is
+missing or incomplete, so run `/verify <unit>` for it now, then run `--all` again. Never
+re-run `/verify` on a unit that has a complete failing verdict just to get a different
+answer. The verdict of record is the one that exists.
+
+5.6.3 **Failed** (exit 1, in any mode, including advisory): the run cannot report HEALED.
+- Health line: `NOT HEALED — verify failed <check_ids>`.
+- **The scope still archives** (§13.0). The index row's status is `✅ Done ({date})`
+  followed by the `marker:` that `--all` printed (`⚠ verify failed <ids>`, plus any
+  `⚠ judge:` marker).
+- Each failed check goes to `TO-DO.md` under the scope's section, as
+  `- [ ] verify failed: <check_id> (<unit>) — <reason from the report>`, verified
+  against the trunk first like every residual (§13.0a).
+Exit 3 means the gate could not evaluate. Report it in the header and treat it as failed.
+
+5.6.4 **Lever candidates** — every scope, pass or fail:
+```bash
+$S/lever-candidates.py --scope "$SCOPE" --todo "$PLANS_DIR/TO-DO.md"
+```
+It dedupes by `lever_id` and counts a second sighting only from a different scope, so
+re-running closeout adds nothing. Relay each `SECOND SIGHTING: … — build the lever now`
+line into the summary's Flags: that is when a lever gets scoped.
+
+5.6.5 **Feature-map handoff** — only when the scope's product has a feature map, i.e. a
+judge answer's `feature_map` is not `n/a`. Write
+`artifacts/feature-map-handoff-<unit>.md` from `templates/feature-map-handoff.md.template`:
+the result (`clean | changed | blocked`, from the judge) and the change list (the judge's
+`unowned` findings). **Never edit the private test-suite repo from here.** The handoff is
+applied there, or by `/closeout-extended`. For a scope with no feature map, log
+`feature map: n/a`.
 
 ## 6. Step 4 — §3 Spot-Check
 
@@ -636,6 +681,7 @@ skip the gate and note "archive gate not run (dry-run)."
   [✓] 1  Ledger read: {N} files, {M} patterns followed, {K} patterns created
   [✓] 2  Branch: {branch}
   [✓] 3  Tests: PASSED | FAILED ({N} failing) | SKIPPED (--skip-tests)
+  [✓] 3a Verify: PASS | FAILED ({check_ids}) | n/a (no finish table) · levers: {N} new, {S} second sighting
   [✓] 4  §3 spot-check: {N} verified, {S} stale references flagged
   [✓] 5  §4 triage: {A} accepted, {F} fold-into edits proposed, {D} deferred to /closeout-extended
   [✓] 6  Doc drift: {N} docs edited ({L} CLAUDE/README/docs)
@@ -662,6 +708,7 @@ skip the gate and note "archive gate not run (dry-run)."
 
 📋 TODOs extracted: {N} items → {plans_dir}/TO-DO.md
 📊 PLANS-INDEX: Plan {N} → Done
+🔎 {output of `plans-index.py gate-count --discover`: "clean gated scopes: N/5 …", and its REMINDER line when present}
 
 Next:
   - Review the diff: `git diff`

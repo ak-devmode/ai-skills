@@ -129,6 +129,8 @@ class TestJudge(unittest.TestCase):
             # 5.2-r1-06: shape is enforced from the schema file, before anything lands
             "finding missing where/text": dict(findings=[{"check_id": "jr", "lens": "evidence", "severity": "low"}]),
             "malformed lever candidate": dict(lever_candidates=[{"check_id": "away"}]),
+            "lever_id not kebab": dict(lever_candidates=[{"lever_id": "Pinned SHA", "check_id": "away",
+                                                          "gap": "g", "lever": "l"}]),
             "findings is null": dict(findings=None),
             "verdicts is an object": dict(verdicts={}),
         }
@@ -151,7 +153,8 @@ class TestJudge(unittest.TestCase):
         self.assertIn("**Judge:** claude-fallback codex not authed", text)
         self.assertIn("| jr | pass | 2/2 |", text)
         self.assertIn("**low** · over-build · `jr`", text)
-        self.assertIn("- `away` — gap:", text)  # unreachable row is always a lever candidate
+        # an unreachable row is always a lever candidate, keyed for a cross-scope match
+        self.assertIn("- `away` — `away-verified-unreachable` · gap:", text)
         self.assertIn("⚠ judge: claude-fallback codex not authed", text)
 
     def test_report_propagates_a_gate_error(self):

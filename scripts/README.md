@@ -52,7 +52,7 @@ by `test_entrypoint.py`'s compile check.
     plans-index.py add  <index> --num --status --folder --desc [--creator] [--dry-run]
     plans-index.py move <index> --num --to {active,archived} [--folder] [--status] [--dry-run]
     plans-index.py status <index> --num --status [--skip-verify R] [--blocking|--advisory] [--dry-run]
-    plans-index.py gate-count <index>...  stdout: `clean gated scopes: N/5`, + REMINDER line at 5 · exit 0
+    plans-index.py gate-count [<index>...] [--discover]  stdout: `clean gated scopes: N/5`, + REMINDER line at 5 · exit 0
       exit: 0 written · 1 gate BLOCKED (row untouched) or write did not land · 2 usage · 3 gate could not evaluate
 
     plans-folder.sh <plans-dir> <folder-name> [--slug S] [--move FILE]... [--dry-run]

@@ -155,6 +155,17 @@ inconclusive `not executable: <why>` · any other non-zero → fail.
 that contains it is the check's verdict. A fixed failure clears by re-running; nothing is
 edited.
 
+4.9 **Lever candidates.** Each final run yields candidates: the judge's
+(`lever_candidates`, each with a kebab-case `lever_id` naming the *kind* of gap), plus one
+automatic candidate per `inconclusive` / `verified-unreachable` check the judge left
+unnamed, keyed `<check_id minus its p<P>- prefix>-<result>` (`verify_lib.levers`, the one
+implementation). `/closeout` records them through `scripts/lever-candidates.py` in a
+`## Lever candidates` section of the project's `plans/TO-DO.md`: one item per `lever_id`
+with `Touches:` and a `Sighting: <docs repo>/<scope> · run <run_id> · <date>` line each.
+The same scope and run twice is a no-op. Another run of the same scope adds a line but
+never counts. The same `lever_id` from a **different scope** is the second sighting: the
+item flips to `BUILD NOW`, once.
+
 ---
 
 ## 5. Gate semantics — `verdict-gate.py`

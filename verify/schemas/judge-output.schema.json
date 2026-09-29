@@ -40,8 +40,9 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["check_id", "gap", "lever"],
+        "required": ["lever_id", "check_id", "gap", "lever"],
         "properties": {
+          "lever_id": {"type": "string"},
           "check_id": {"type": "string"},
           "gap": {"type": "string"},
           "lever": {"type": "string"}

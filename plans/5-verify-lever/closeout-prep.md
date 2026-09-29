@@ -354,3 +354,7 @@ Resumed/restarted phases append a SECOND block:
 
 ### §11 Risk Flags (Phase 3, 3.2)
 - Self-heal's one halt and its phase classification are prose (the script takes the lists it is given). First real exercise will be the first pre-gate scope `/plan` resumes; watch that it classifies an in-progress phase as started.
+- ai-skills · code: `scripts/lever-candidates.py` (new), `scripts/verify_lib.py` (`levers`), `verify/scripts/judge.py`, `scripts/plans-index.py` (`--discover`) — 3.3
+- ai-skills · test: `scripts/tests/test_lever_candidates.py` (new), `test_judge.py`, `test_verdict_gate.py` — 3.3
+- ai-skills · doc: `closeout/SKILL.md` (1.4.0 §5.6), `verify/schemas/judge-output.schema.json`, `verify/prompts/judge.md`, `templates/verify-contracts.md` §4.9 — 3.3
+- §3: `lever-candidates.py` write + read-back ← `verify_lib.append_verified` / `plans-index.py status` landed-check

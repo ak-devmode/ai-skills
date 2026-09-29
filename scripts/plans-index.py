@@ -18,7 +18,7 @@ Commands:
     add <index> --num --status --folder --desc [--creator]
     move <index> --num --to {active,archived} [--folder] [--status]
     status <index> --num --status [--skip-verify REASON] [--blocking|--advisory]
-    gate-count <index> [<index> ...] clean gated scopes toward the blocking flip
+    gate-count [<index> ...] [--discover]  clean gated scopes toward the blocking flip
 
 Verification gate (templates/verify-contracts.md §5): `status` runs verdict-gate.py
 before writing a Done status on a phase row (`N.P`) whose scope folder has a
@@ -509,9 +509,22 @@ def cmd_status(args) -> int:
 
 # ----------------------------------------------------------------- gate-count
 
+def discover(root: str, depth: int = 4) -> list[str]:
+    """Every live `plans/PLANS-INDEX.md` under root, at most `depth` levels down — the
+    docs repos on this machine (ai-skills, kalpa-docs, pmg-docs, iris-docs, …)."""
+    found = []
+    root = os.path.abspath(root)
+    for d, dirs, files in os.walk(root):
+        level = d[len(root):].count(os.sep)
+        dirs[:] = [x for x in dirs if x not in (".git", "node_modules", "archive") and level < depth]
+        if os.path.basename(d) == "plans" and "PLANS-INDEX.md" in files:
+            found.append(os.path.join(d, "PLANS-INDEX.md"))
+    return sorted(found)
+
+
 def cmd_gate_count(args) -> int:
     clean, dirty = [], []
-    for index in args.index:
+    for index in args.index + (discover(vl.PROJECTS) if args.discover else []):
         _, sections = parse(index)
         root = os.path.dirname(os.path.abspath(index))
         rows = [(s.kind, c) for s in sections if s.kind in ("active", "archived") for _, c in s.rows if len(c) > 2]
@@ -563,7 +576,9 @@ def main() -> int:
     m.add_argument("--folder"); m.add_argument("--status")
     m.add_argument("--dry-run", action="store_true"); m.set_defaults(fn=cmd_move)
 
-    gc = sub.add_parser("gate-count"); gc.add_argument("index", nargs="+"); gc.set_defaults(fn=cmd_gate_count)
+    gc = sub.add_parser("gate-count"); gc.add_argument("index", nargs="*")
+    gc.add_argument("--discover", action="store_true", help="also every plans/PLANS-INDEX.md under VERIFY_PROJECTS")
+    gc.set_defaults(fn=cmd_gate_count)
 
     st = sub.add_parser("status")
     st.add_argument("index"); st.add_argument("--num", type=row_num, required=True)

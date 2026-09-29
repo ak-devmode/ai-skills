@@ -276,6 +276,28 @@ def authority(p, j):
             "reason": f"runner: {p['reason']}; judge concurs"}
 
 
+KEBAB = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
+
+
+def levers(final, raw):
+    """§4.9 lever candidates for one final run: the judge's (from its raw output `raw`),
+    plus one automatic candidate per inconclusive / unreachable check the judge left
+    unnamed — keyed `<check_id minus its p<P>- phase prefix>-<result>`, so the same
+    standard row failing the same way in another scope matches. One implementation:
+    judge.py report renders it, lever-candidates.py records it."""
+    def key(cid):
+        res = final["results"].get(cid, {}).get("result", "judged")
+        return f"{re.sub(r'^p[0-9]+-', '', cid)}-{res}"
+
+    # A judge answer recorded before `lever_id` was required (scope 5.3) gets the automatic key.
+    out = {c["check_id"]: {"lever_id": key(c["check_id"]), **c} for c in raw.get("lever_candidates", [])}
+    for cid, res in final["results"].items():
+        if res["result"] in ("inconclusive", "verified-unreachable") and cid not in out:
+            out[cid] = {"lever_id": key(cid), "check_id": cid, "gap": res["reason"],
+                        "lever": "(judge named none — decide at /closeout)"}
+    return list(out.values())
+
+
 def _tail(path, n):
     with open(path, encoding="utf-8") as fh:
         return [json.loads(x) for x in fh.read().splitlines() if x.strip()][-n:]

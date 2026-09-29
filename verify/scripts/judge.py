@@ -159,6 +159,9 @@ def validate(doc, check_ids):
             problems.append(f"finding lens {f.get('lens')!r}")
         if f.get("severity") not in ("high", "medium", "low"):
             problems.append(f"finding severity {f.get('severity')!r}")
+    for c in doc["lever_candidates"]:
+        if not vl.KEBAB.match(str(c.get("lever_id", ""))):
+            problems.append(f"lever_id {c.get('lever_id')!r} is not kebab-case")
     if doc["feature_map"] not in ("clean", "changed", "blocked", "n/a"):
         problems.append(f"feature_map {doc['feature_map']!r}")
     return problems
@@ -235,14 +238,10 @@ def cmd_report(a):
     for sev in ("high", "medium", "low"):
         for f in [f for f in findings if f["severity"] == sev]:
             lines.append(f"- **{sev}** · {f['lens']} · `{f['check_id']}` · {f['where']} — {f['text']}")
-    levers = {c["check_id"]: c for c in raw.get("lever_candidates", [])}
-    for cid, res in final["results"].items():
-        if res["result"] in ("inconclusive", "verified-unreachable") and cid not in levers:
-            levers[cid] = {"check_id": cid, "gap": res["reason"], "lever": "(judge named none — decide at /closeout)"}
     lines += ["", "## 3. Lever candidates", "",
-              "Recorded, not built: a lever is built on the second sighting (verify-contracts.md §4)."]
-    lines += [f"- `{c['check_id']}` — gap: {c['gap']} · lever: {c['lever']} · run `{a.run_id}`"
-              for c in levers.values()] or ["None."]
+              "Recorded, not built: a lever is built on the second sighting (verify-contracts.md §4.9)."]
+    lines += [f"- `{c['check_id']}` — `{c['lever_id']}` · gap: {c['gap']} · lever: {c['lever']} · run `{a.run_id}`"
+              for c in vl.levers(final, raw)] or ["None."]
     lines += ["", "## 4. Feature map", "", f"`{raw.get('feature_map', 'n/a')}`", ""]
     out = os.path.join(p["art"], f"verify-{a.unit}-report.md")
     with open(out, "w", encoding="utf-8") as fh:

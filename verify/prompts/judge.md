@@ -45,7 +45,10 @@ check yourself, whether each finish condition below is actually met.
   against the wrong repo/dir/SHA.
 
 **Lever candidates:** for every check that ends `inconclusive` or `verified-unreachable`,
-name the gap and the smallest tool that would have made it checkable.
+name the gap and the smallest tool that would have made it checkable. Give each a
+`lever_id`: a short kebab-case slug for the *kind* of gap, not for this scope
+(`live-judge-tier-skipped`, `pinned-sha-runner`), so the same gap seen in another scope
+carries the same slug — that match is what counts as a second sighting.
 
 **feature_map:** `n/a` unless the scope has a product feature map; otherwise `clean`
 (nothing to update), `changed` (list the changes as findings with check_id `unowned`), or

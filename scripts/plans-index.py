@@ -390,6 +390,9 @@ def cmd_move(args) -> int:
         if cells and scope_num(cells[0]) == args.num:
             found = (ln, cells)
             break
+    already = any(c and scope_num(c[0]) == args.num for _, c in dst.rows)
+    if found is None and args.with_plans and already:
+        return move_plan_rows(args, lines, src, dst)  # the scope row moved earlier; bring its plans
     if found is None:
         print(f"plans-index: scope {args.num} not found in the {src_kind} table.",
               file=sys.stderr)
@@ -422,6 +425,36 @@ def cmd_move(args) -> int:
     write(args.index, lines, args.dry_run)
     print(f"moved scope {args.num}: {src_kind} -> {args.to}")
     print(row)
+    if args.with_plans:
+        lines, sections = parse(args.index)
+        src = next(s for s in sections if s.kind == src_kind and s.header)
+        dst = next(s for s in sections if s.kind == args.to and s.header)
+        return move_plan_rows(args, lines, src, dst)
+    return 0
+
+
+def move_plan_rows(args, lines, src, dst) -> int:
+    """`--with-plans`: the scope's `N.P` rows follow it, repointed to --folder when given, so
+    the archive gate finds no child row still pointing at the live folder."""
+    plans = [(ln, c) for ln, c in src.rows
+             if c and sub_num(c[0]) and c[0].strip().strip("*").split(".")[0] == str(args.num)]
+    if not plans:
+        print(f"no {args.num}.P rows in the source table")
+        return 0
+    rows = []
+    for _, c in plans:
+        c = (c + [""] * len(CANONICAL))[: len(CANONICAL)]
+        if args.folder:
+            c[2] = args.folder
+        rows.append(build_row(*c))
+    for ln, _ in sorted(plans, reverse=True):
+        del lines[ln]
+    # the scope's own row (it is in the destination table, the only place it now appears)
+    at = next(i for i, l in enumerate(lines) if l.startswith("|") and scope_num(l.split("|")[1]) == args.num)
+    lines[at + 1:at + 1] = rows
+    write(args.index, lines, args.dry_run)
+    for r in rows:
+        print(r)
     return 0
 
 
@@ -588,6 +621,7 @@ def main() -> int:
     m.add_argument("index"); m.add_argument("--num", type=int, required=True)
     m.add_argument("--to", choices=["active", "archived"], required=True)
     m.add_argument("--folder"); m.add_argument("--status")
+    m.add_argument("--with-plans", action="store_true", help="also move the scope's N.P rows")
     m.add_argument("--dry-run", action="store_true"); m.set_defaults(fn=cmd_move)
 
     gc = sub.add_parser("gate-count"); gc.add_argument("index", nargs="*")

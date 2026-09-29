@@ -12,10 +12,10 @@
    and its phases through `/verify`.
 
 ## Resume Context
-**Scope:** ~/Projects/ai-skills/plans/5-verify-lever/scope.md
+**Scope:** ~/Projects/ai-skills/plans/archive/5-verify-lever/scope.md
 **Last action:** 5.3 Done (2026-09-29): review r1–r12 (38 findings; 35 fixed, 3 rejected), `/verify 5.3` advisory with 2 blocks Alex accepted, codex effort scaling added. All plans complete.
-**Next action:** `/closeout` for scope 5 (running now), then archive
-**Open blockers:** none. 3 TO-DOs from 5.3 are in `plans/TO-DO.md` ("Wiring + self-heal + rollout (Plan 5.3)").
+**Next action:** none — scope closed and archived 2026-09-29 (NOT HEALED: verify failed, see TO-DO.md "scope closeout (Scope 5)")
+**Open blockers:** none. Residuals in `plans/TO-DO.md`: "Wiring + self-heal + rollout (Plan 5.3)" and "/verify + the verification lever — scope closeout (Scope 5)".
 **Key files changed:** 5.3 — `scripts/{finish-table,lever-candidates,clone-behind}.py`, `scripts/verify-prereqs.sh`, gate `--all`/Predates/review coverage, `plans-index.py gate-count`, `/scope` 3.9.0, `/plan` 3.9.0, `/closeout` 1.4.0, `/verify` 0.3.0, ledger template, README §5. Full list in `closeout-prep.md` Phase 3 block.
 
 ---
@@ -66,6 +66,7 @@
 | 2026-09-26 | /plan-devex-review | Done | Triage. Getting started 3→8 (setup warns, `/verify --demo`, README section), errors 4→8 (message contract with cause class), stale-clone warning → `artifacts/devex-review-2026-09-26.md` |
 | 2026-09-26 | Unplanned fix | Done | `scripts/plans-index.py`: `add` accepts per-plan `N.P` numbers; duplicate check compares the exact `#` cell (70d1222). Found by /scope §5.9 — stub rows were refused as non-integer |
 | 2026-09-26 | /plan | Done | 5.1-verify-lever-PLAN.md complete — contracts spec + templates, resolve-identifiers.py, verify-run.py, verdict-gate.py, plans-index status/validate, ledger-init base SHA; 62 tests. Alex approved at gate A. TODOs extracted to TO-DO.md (closeout deferral only) |
+| 2026-09-29 | /closeout | Done — NOT HEALED | Scope archived to `archive/5-verify-lever/`. Tests green; `verdict-gate --all` FAILED 18 checks (15 are the table-revision artifact → TO-DO), 3 lever candidates recorded; CLAUDE §9.2 / ARCHITECTURE §6.2–6.3 / scripts README refreshed; `plans-index.py move --with-plans` added so phase rows follow the scope row |
 | 2026-09-29 | /plan | Done | 5.3-verify-lever-PLAN.md complete — /scope finish tables, /plan review+verify+self-heal, /closeout Step 3a, ledger template, rollout (setup checks, stale-clone line, README), shell env lever, codex effort scaling; review r1–r12 (38 findings dispositioned), /verify advisory 2 blocked (accepted). TODOs extracted to TO-DO.md |
 | 2026-09-29 | /plan | Done | 5.2-verify-lever-PLAN.md complete — /verify, /review 3.1.0 on codex, fixtures + `--demo`, codex model family `sol`; own review r1–r3 (16 findings fixed) and /verify advisory, 2 blocked (Alex accepted). TODOs extracted to TO-DO.md |
 

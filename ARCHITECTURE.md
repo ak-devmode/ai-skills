@@ -247,11 +247,17 @@ graphs.
 
 ### 6.2 Active scope
 
-- Scope 5 (verify-lever) per `plans/PLANS-INDEX.md`. Closed recently: scope 6
-  (research-lanes, 2026-09-26) and scope 2 (skills-relook, 2026-09-25) — see
-  `plans/archive/`.
+- None active in `plans/PLANS-INDEX.md`. Closed recently: scope 5 (verify-lever,
+  2026-09-29), scope 6 (research-lanes, 2026-09-26) and scope 2 (skills-relook,
+  2026-09-25) — see `plans/archive/`.
 
 ### 6.3 Known gaps
+
+- A finish-table revision bump invalidates **every** unit's verdict, not just the rows
+  that changed: adding a later phase's rows made 5.1/5.2 read "predates the current
+  finish table" at scope 5's closeout (`plans/TO-DO.md`).
+- The verification gate is advisory until 5 clean gated scopes (`plans-index.py
+  gate-count`); the switch is `GATE_MODE` in `scripts/verify_lib.py`.
 
 - Paraphrased cross-skill duplicates are invisible to `lint-skill.py`; the
   semantic eval pass is deferred to a second sighting of drift (`plans/TO-DO.md`).

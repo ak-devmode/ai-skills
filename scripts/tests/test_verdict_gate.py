@@ -441,6 +441,19 @@ class TestIndexEnforcement(Fixture):
         self.assertIn("⚠ verify skipped: env down", self.row51())
         self.assertEqual(self.validate().returncode, 0)
 
+    def test_move_with_plans_brings_the_phase_rows(self):
+        # 5.3 closeout: child rows follow the scope row and are repointed
+        os.makedirs(os.path.join(self.plans, "archive", "5-x"))
+        p = run("plans-index.py", "move", self.index, "--num", "5", "--to", "archived",
+                "--folder", "archive/5-x/", "--with-plans", env=self.env)
+        self.assertEqual(p.returncode, 0, p.stderr)
+        with open(self.index) as fh:
+            text = fh.read()
+        archived = text.split("## Completed / Archived")[1]
+        self.assertIn("| 5 |", archived)
+        self.assertIn("| 5.1 | 🔄 In progress | archive/5-x/ |", archived)
+        self.assertNotIn("| 5.1 ", text.split("## Completed / Archived")[0])
+
     def test_scope_without_table_is_exempt(self):
         os.remove(self.table)
         p = self.status()

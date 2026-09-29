@@ -211,7 +211,7 @@ scripts/dispatch-log.py         — /concurrency JSONL dispatch log, read-back v
 scripts/herdr-pane.sh           — herdr pane identity (rename + metadata) + helper split
 scripts/repo-survey.sh          — /cross-repo-init default/survey branch + MERGED/SQUASHED/LIVE
 scripts/lint-skill.py           — accretion linter for SKILL.md (dup-number/frontmatter/stale-name fail; growth/duplicate/size advise)
-scripts/resolve-identifiers.py  — invented-reality check: env/SSM/proto/route refs vs declarations
+scripts/resolve-identifiers.py  — invented-reality check: env (incl. shell `$NAME`)/SSM/proto/route refs vs declarations
 scripts/verify-run.py           — verification runner; sole writer of the verdict log
 scripts/verdict-gate.py         — may this unit be marked Done? (plans-index.py status/validate call it)
 scripts/codex-exec.py           — codex headless probe + exec; honest `none <reason>` judge lines
@@ -316,7 +316,14 @@ is distinct from `~/Projects/pmg/pmg-docs/plans/` and
 `~/Projects/wellmed/kalpa-docs/plans/` (which track work in those
 projects). `scripts/resolve-plans-dir.sh` resolves it for `/scope` and `/plan`.
 
-9.2 **Recent work:** `plans/archive/6-research-lanes/` (closed 2026-09-26) — `/research`
+9.2 **Recent work:** `plans/archive/5-verify-lever/` (closed 2026-09-29) — the
+verification lever: `/verify` (deterministic runner + codex judge that can only
+downgrade, evidence rungs, verdict gate enforced through `plans-index.py`), `/review` on
+codex with every finding dispositioned, both wired into `/scope` (finish tables),
+`/plan` (review + verify per unit, self-heal with `Predates gate`) and `/closeout`
+(whole-scope verdict, lever candidates, clean-scope count toward the blocking flip at
+5). Advisory mode; codex effort scales with the diff. Before that,
+`plans/archive/6-research-lanes/` (closed 2026-09-26) — `/research`
 pane mode: one visible Sonnet lane per angle in a fresh herdr tab plus an independent
 verify lane, driven by `research/scripts/lanes.py`; now the default, Workflow mode
 offered. Before that, `plans/archive/2-skills-relook/` (closed 2026-09-25) — the

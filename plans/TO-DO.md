@@ -310,7 +310,7 @@ Touches: scripts/lint-skill.py · all SKILL.md
 ## research-lanes — /research pane mode (Scope 6, Plan 6.1)
 Source: plans/archive/6-research-lanes/progress.md (Plan 6.1)
 Touches: research/SKILL.md · research/scripts/lanes.py · templates/closeout-prep.md.template · scripts/ledger-init.sh
-- [ ] **Closeout ledger template ships fake example entries.** `templates/closeout-prep.md.template`
+- [x] **Done 2026-09-29 (plan 5.3 Task 3.3a, `4037593`).** **Closeout ledger template ships fake example entries.** `templates/closeout-prep.md.template`
       carries worked examples (Chatwoot webhook, `validateWebhookSignature`, SSM token assumptions)
       as section *bodies*, not inside HTML comments, and `scripts/ledger-init.sh` copies it whole —
       so every new ledger opens with invented §3/§4/§5/§8/§10/§11 entries a /closeout could read as
@@ -338,21 +338,21 @@ Touches: plan/SKILL.md §11.3 · closeout/SKILL.md §13 · plans/archive/{2,4,6}
 ## Contracts + deterministic scripts (Plan 5.1)
 Source: plans/5-verify-lever/progress.md (## Plan 5.1)
 Touches: scripts/{resolve-identifiers,verify-run,verdict-gate,plans-index}.py · scripts/ledger-init.sh · templates/verify-contracts.md
-- [ ] Run /closeout for plan 5.1 — deferred at completion on 2026-09-26 (Alex: straight into
-      5.2); fold into the scope-level closeout after 5.3.
+- [x] Run /closeout for plan 5.1 — deferred at completion on 2026-09-26 (Alex: straight into
+      5.2); fold into the scope-level closeout after 5.3. **Done 2026-09-29 (scope closeout).**
 Nothing else deferred: the pending wiring (`ledger-init.sh --repo` from /plan §5.13,
 advisory → blocking flip) is planned work in 5.3 Tasks 3.2/3.4, not a residual.
 
 ## /verify skill + /review on codex (Plan 5.2)
 Source: plans/5-verify-lever/progress.md (## Plan 5.2)
 Touches: verify/ · review/ · scripts/{codex-exec,verify-run,verdict-gate,verify_lib}.py · templates/verify-contracts.md · plans/5-verify-lever/finish-conditions.md
-- [ ] Fixture/eval finish rows set `VERIFY_EVAL=1` in their `env` cell so the live-judge tier runs
+- [x] **Done 2026-09-29 (5.3: `/verify` §4 + `/scope` §5.10 rule; `p3-fixtures-live` uses it).** Fixture/eval finish rows set `VERIFY_EVAL=1` in their `env` cell so the live-judge tier runs
       under the runner — `/verify` 5.2 found `p2-fixtures` inconclusive without it (Alex: skip now,
       use from now on). Natural home: 5.3's standard rows that `/scope` emits (`verify/SKILL.md` §4).
 - [ ] Class-A browser driving (`/browse`) is a T2 WellMed-adapter deliverable, not `/verify`'s
       (Alex, 2026-09-29) — add it to kalpa-docs `plans/test-suite-program/T2-wellmed-adapter/NOT-YET-SCOPED.md`
       when T2 is scoped.
-- [ ] Run /closeout for plan 5.2 — deferred to scope end (fold into the scope-level closeout after 5.3).
+- [x] Run /closeout for plan 5.2 — deferred to scope end (fold into the scope-level closeout after 5.3). **Done 2026-09-29 (scope closeout).**
 
 ## repo-graph-check.py false DRIFT — found by WellMed scope 149 (2026-09-29)
 Source: ~/Projects/wellmed/kalpa-docs/plans/149-fail-loud-sweep/closeout-prep.md §11
@@ -379,3 +379,34 @@ Touches: scripts/{resolve-identifiers,verdict-gate,finish-table,lever-candidates
       (`GRAFANA_BASE/FROM/TO/TOKEN/TOKEN_SSM`, `ALARM_CW_HEARTBEAT/CW_NAMESPACE/HEARTBEAT_LOG/WT_MAX_AGE_S/WT_ROOT`, `FROM`),
       `GEMINI_API_KEY`, and herdr's `HERDR_ENV`/`HERDR_WORKSPACE_ID`. Declare them in `.env.example`, or mark them as
       provided by the platform. `python3 scripts/resolve-identifiers.py --repo . --range <root>..HEAD` lists them.
+
+## Lever candidates
+
+<!-- Written by scripts/lever-candidates.py (verify-contracts.md §4.9). One item per
+     lever_id; a lever is built on its second sighting, from a different scope. -->
+- [ ] **`scripts-tests-green-inconclusive`** — Run the unittest entrypoint in an isolated disposable checkout of e3b74ec and retain its exit code and output. · gap: The available test run used a later, dirty revision.
+      Touches: ai-skills · scripts-tests-green
+      Sighting: ai-skills/5-verify-lever · run 5.1-20260926T100859-79e8 · 2026-09-29
+- [ ] **`fixtures-inconclusive`** — Run the existing fixture test entrypoint with VERIFY_EVAL=1 and retain its exit status and output against ac3869d. · gap: The recorded fixture run skipped the live-judge cases, leaving two planted defects and their repaired copies unverified at the final SHA.
+      Touches: ai-skills · p2-fixtures
+      Sighting: ai-skills/5-verify-lever · run 5.2-20260929T031136-b3a2 · 2026-09-29
+- [ ] **`external-announcement-receipt`** — Attach a dated link or delivery receipt for the sent team announcement to the scope artifacts. · gap: The rollout announcement's delivery cannot be checked from the repository artifacts.
+      Touches: ai-skills · p3-scope-deliverables
+      Sighting: ai-skills/5-verify-lever · run 5.3-20260929T065028-d319 · 2026-09-29
+
+
+## /verify + the verification lever — scope closeout (Scope 5)
+Source: plans/archive/5-verify-lever/progress.md · `verdict-gate.py --scope plans/archive/5-verify-lever --all`
+Touches: scripts/verdict-gate.py · scripts/verify_lib.py · scripts/finish-table.py · templates/verify-contracts.md §5.2
+- [ ] **A finish-table revision bump invalidates every unit's verdict** (`verdict-gate.py`: "verdict predates the current
+      finish table"). Adding 5.3's rows (rev 5, 6) made 15 complete 5.1/5.2 checks read as failed at closeout. Fix: bind a
+      verdict to the revision of the rows *it owns* (e.g. a per-row revision, or the changelog's last change touching that
+      owner), so appending a later phase's rows doesn't expire earlier phases. This is the main reason scope 5 archived `⚠ verify failed`.
+- [ ] verify failed at closeout (all complete verdicts; none re-run, per closeout §5.6.2):
+      - 15 × "verdict predates the current finish table" — 5.1: scripts-tests-green, names-resolve, contracts-generate-clean,
+        gate-semantics-tested, scope-deliverables, no-overbuild · 5.2: p2-tests-green, p2-names-resolve, p2-skills-lint,
+        p2-codex-failure-modes, p2-review-log, p2-fixtures, p2-scope-deliverables, p2-no-overbuild, p2-rejections-justified (item above)
+      - `review:ai-skills` (5.1): 5.1's commits were never codex-reviewed (the owned miss in the Decisions Log, 2026-09-29)
+      - `p3-scope-deliverables` (5.3): inconclusive, no delivery receipt for the announcement (Alex: his word is the evidence; accepted)
+      - `p3-rejections-justified` (5.3): the r12-01 rejection (see "Shell env scan: false alarm" under Plan 5.3 above)
+- [x] Run /closeout for plans 5.1 and 5.2 — folded into this scope closeout (2026-09-29)

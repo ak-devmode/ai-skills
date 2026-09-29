@@ -12,6 +12,7 @@ never silent about not knowing: a failed fetch prints one "freshness unknown" li
 Usage:  clone-behind.py [--repo DIR] [--max-age SECONDS] [--timeout SECONDS]
         --repo defaults to the ai-skills clone this script lives in
 Output: nothing when current; otherwise one line (plus one if the fetch stamp can't be written).
+        Callers show every line (/plan §6.7, /verify §2.0.1).
 Exit:   0 always · 2 usage
 """
 

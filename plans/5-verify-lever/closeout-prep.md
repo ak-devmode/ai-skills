@@ -266,7 +266,7 @@ Resumed/restarted phases append a SECOND block:
 - herdr pane present (`w14:p4`) but Primary repo = none → §5.8.1 worktree + driver rename skipped.
 - Gate accepts evidence recorded on a dirty tree (`dirty: true`) — Alex decided 2026-09-26 this is correct (pre-PR model); now stated in contract §5.2.
 - Retroactive verification of a closed unit runs its runner rows at today's HEAD, and the judge rightly downgrades them to inconclusive. A runner `--at <sha>` (pinned worktree) is the lever; first sighting, recorded, not built.
-- The trial target in scope/plan ("dev clinic_3") is wrong: clinic_3 is staging tenant 6. The test-suite has no clinic_3 credentials, contrary to the brief. Class-A trial blocked on Alex.
+- The trial target in scope/plan ("dev clinic_3") is wrong: clinic_3 is not a dev tenant (env mapping redacted per review 5.2-r1-01). The test-suite has no clinic_3 credentials, contrary to the brief. Class-A trial blocked on Alex.
 - `ledger-init.sh --repo` isn't passed by /plan §5.13 yet (5.3 Task 3.2). Until then units have no base, and the gate requires evidence at HEAD, which is strict and not unsafe.
 
 ---

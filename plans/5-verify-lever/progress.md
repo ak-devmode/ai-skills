@@ -44,7 +44,7 @@
 - (2026-09-26) Evidence from a dirty working tree is accepted: verification is pre-PR. Contract §5.2.
 - (2026-09-26) No `/clear` at the 5.1 → 5.2 boundary; proceed straight into Phase 2. Closeout deferred to scope end.
 - (2026-09-29) Phase 2 approved at gate A (Alex). **Miss, owned:** Operating Contract #5 (this scope's Phase 2+ commits through the codex `/review` gate, its phases through `/verify`) was not applied to ai-skills' own 5.2 commits. `/review` ran only on the WellMed branch. So 5.2 is not marked Done until both run; the next session does that first. `plans-index.py status` would refuse Done anyway, since 5.2 owns no finish-table rows yet and the gate exits 3.
-- (2026-09-29) Dev tenant 4 is "WellMed" `clinic_4` (a working dev tenant); the staging-only "clinic_4 = real patients" note was misapplied to a dev token. Per-env allowlist is recorded in test-suite T2; the tenant-identity-in-header TO-DO is in kalpa-docs `plans/TO-DO.md` (section "Tenant identity is invisible in the app").
+- (2026-09-29) A dev-tenant identity question was resolved; the per-env tenant allowlist is recorded in test-suite T2 (private), and the tenant-identity-in-header TO-DO is in kalpa-docs `plans/TO-DO.md` (section "Tenant identity is invisible in the app"). *(Redacted 2026-09-29 per review 5.2-r1-01: tenant specifics belong in the private test-suite, Operating Contract #4.)*
 - (2026-09-29) Class-A proof (Task 2.4 part B: the three-outcome trial) **moves to the kalpa-docs test-suite program, member T2 (WellMed adapter)**, together with a login/token CLI, as T2 deliverables (kalpa-docs `plans/test-suite-program/T2-wellmed-adapter/NOT-YET-SCOPED.md`; committed there, and pushing kalpa-docs is Alex's call because its `main` carries another session's work. Check with `git -C ~/Projects/wellmed/kalpa-docs status -sb`). Scope 5 proves class B only. Credential model stays open (Alex: no skeleton key; scoped to test/demo DBs).
 
 ---
@@ -266,7 +266,7 @@ so they live here; `/verify` of 5.2 judges against the plan *as amended here*):
 - **Task 2.4 Acceptance is class B only** (Alex, 2026-09-29). "All three trial outcomes observed
   through the runner" on "dev clinic_3" is **removed from 5.2**, and the class-A trial is a
   deliverable of kalpa-docs `plans/test-suite-program/T2-wellmed-adapter/NOT-YET-SCOPED.md`.
-  (The target was also wrong: `clinic_3` is staging tenant 6; dev has none.) The 5.2 finish rows
+  (The target was also wrong: `clinic_3` is not a dev tenant.) The 5.2 finish rows
   record this exemption.
 - **The plan file's `Status: Ready to execute` is left as written.** Execution state lives in
   this file and the index. A fresh `/plan 5.2` resumes from the Resume Context above, not from
@@ -417,9 +417,9 @@ so they live here; `/verify` of 5.2 judges against the plan *as amended here*):
 - *(Superseded 2026-09-29: part B moved to test-suite T2 — see the Decisions Log. The record
   below is kept as it was written.)*
 - **Part B — class-A trial: BLOCKED, two plan↔reality mismatches** (Operating Contract #1):
-  `clinic_3` is **staging** tenant 6, not dev (kalpa-docs scope 89 artifacts); and the login
-  needs the staging gateway's credential secret, which is **not** in the test-suite
-  (`/wellmed/testsuite/*` in SSM is empty, and the repo has no clinic_3 reference). Reading
+  `clinic_3` is not a dev tenant (kalpa-docs scope 89 artifacts); and the login needs a
+  gateway credential secret that is **not** in the test-suite (details in the private
+  test-suite; redacted per review 5.2-r1-01). Reading
   SSM values is a documented human step for agents. Needs Alex: target confirmation plus the
   secret in a local file outside all repos.
 - Suite: 93 OK, 2 skipped (live-judge tier).

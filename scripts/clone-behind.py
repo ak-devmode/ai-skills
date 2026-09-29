@@ -11,7 +11,7 @@ never silent about not knowing: a failed fetch prints one "freshness unknown" li
 
 Usage:  clone-behind.py [--repo DIR] [--max-age SECONDS] [--timeout SECONDS]
         --repo defaults to the ai-skills clone this script lives in
-Output: nothing when current; otherwise exactly one line.
+Output: nothing when current; otherwise one line (plus one if the fetch stamp can't be written).
 Exit:   0 always · 2 usage
 """
 
@@ -43,7 +43,8 @@ def main(argv):
         print(f"{name}: freshness unknown — not a git clone ({gitdir.stderr.strip()})")
         return 0
     stamp = os.path.join(gitdir.stdout.strip(), "ai-skills-main-fetched")
-    stale = not os.path.exists(stamp) or time.time() - os.path.getmtime(stamp) > a.max_age
+    # only a regular file is evidence of a fetch; anything else at that path is not (5.3-r3-01)
+    stale = not os.path.isfile(stamp) or time.time() - os.path.getmtime(stamp) > a.max_age
     if stale:
         try:
             f = git(a.repo, "fetch", "--quiet", "origin", "main", timeout=a.timeout)
@@ -56,8 +57,9 @@ def main(argv):
         try:
             with open(stamp, "w", encoding="utf-8") as fh:
                 fh.write(f"{int(time.time())}\n")
-        except OSError:
-            pass  # the stamp only rate-limits fetches; without it the next call fetches again (5.3-r2-04)
+        except OSError as exc:
+            # the fetch succeeded, so still report freshness below — but say the rate limit is off (5.3-r3-02)
+            print(f"{name}: fetch stamp not writable ({exc.strerror}: {stamp}) — every call will fetch")
     n = git(a.repo, "rev-list", "--count", "HEAD..origin/main")
     if n.returncode != 0:
         print(f"{name}: freshness unknown — {n.stderr.strip() or 'no origin/main'}")

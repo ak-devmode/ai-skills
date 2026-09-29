@@ -110,9 +110,11 @@ class CloneBehind(unittest.TestCase):
         self.git(self.other, "commit", "-q", "--allow-empty", "-m", "b")
         self.git(self.other, "push", "-q", "origin", "HEAD:main")
         os.makedirs(os.path.join(self.clone, ".git", "ai-skills-main-fetched"))  # a dir: open() fails
-        p = self.behind()
+        # default max-age: a directory is not evidence of a fresh fetch (5.3-r3-01)
+        p = run("clone-behind.py", "--repo", self.clone)
         self.assertEqual(p.returncode, 0, p.stderr)
         self.assertIn("is 1 commit(s) behind", p.stdout)
+        self.assertIn("fetch stamp not writable", p.stdout)  # 5.3-r3-02: said, not swallowed
 
     def test_unreachable_origin_says_unknown_not_nothing(self):
         self.git(self.clone, "remote", "set-url", "origin", os.path.join(self.tmp.name, "gone.git"))

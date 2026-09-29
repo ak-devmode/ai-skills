@@ -13,10 +13,10 @@
 
 ## Resume Context
 **Scope:** ~/Projects/ai-skills/plans/5-verify-lever/scope.md
-**Last action:** Plan 5.1 complete, Phase 1 approved (2026-09-26)
+**Last action:** Phase 2 checkpoint approved (2026-09-29); 5.2 not Done, pending its own review + verify
 **Next action:** finish 5.2's own review + verify (see Plan 5.2 Resume Context), mark 5.2 Done, then `/plan 5.3`
 **Open blockers:** closeout deferred to scope end (see TO-DO.md)
-**Key files changed:** `scripts/plans-index.py` (70d1222 — unplanned fix, see Progress Log)
+**Key files changed:** 5.2 — `verify/` (skill, judge, fixtures, demo), `review/` 3.0.0 (rules, review.py), `scripts/codex-exec.py`; full list in `closeout-prep.md` Phase 2 block
 
 ---
 
@@ -44,8 +44,8 @@
 - (2026-09-26) Evidence from a dirty working tree is accepted: verification is pre-PR. Contract §5.2.
 - (2026-09-26) No `/clear` at the 5.1 → 5.2 boundary; proceed straight into Phase 2. Closeout deferred to scope end.
 - (2026-09-29) Phase 2 approved at gate A (Alex). **Miss, owned:** Operating Contract #5 (this scope's Phase 2+ commits through the codex `/review` gate, its phases through `/verify`) was not applied to ai-skills' own 5.2 commits. `/review` ran only on the WellMed branch. So 5.2 is not marked Done until both run; the next session does that first. `plans-index.py status` would refuse Done anyway, since 5.2 owns no finish-table rows yet and the gate exits 3.
-- (2026-09-29) Dev tenant 4 is "WellMed" `clinic_4` (a working dev tenant); the staging-only "clinic_4 = real patients" note was misapplied to a dev token. Per-env allowlist is recorded in test-suite T2; the tenant-identity-in-header TO-DO is in kalpa-docs (`d4bf8dd`).
-- (2026-09-29) Class-A proof (Task 2.4 part B: the three-outcome trial) **moves to the kalpa-docs test-suite program, member T2 (WellMed adapter)**, together with a login/token CLI, as T2 deliverables (`test-suite-program/T2-wellmed-adapter/NOT-YET-SCOPED.md`, kalpa-docs `af2b8ac`). Scope 5 proves class B only. Credential model stays open (Alex: no skeleton key; scoped to test/demo DBs).
+- (2026-09-29) Dev tenant 4 is "WellMed" `clinic_4` (a working dev tenant); the staging-only "clinic_4 = real patients" note was misapplied to a dev token. Per-env allowlist is recorded in test-suite T2; the tenant-identity-in-header TO-DO is in kalpa-docs `plans/TO-DO.md` (section "Tenant identity is invisible in the app").
+- (2026-09-29) Class-A proof (Task 2.4 part B: the three-outcome trial) **moves to the kalpa-docs test-suite program, member T2 (WellMed adapter)**, together with a login/token CLI, as T2 deliverables (kalpa-docs `plans/test-suite-program/T2-wellmed-adapter/NOT-YET-SCOPED.md`; committed there, and pushing kalpa-docs is Alex's call because its `main` carries another session's work. Check with `git -C ~/Projects/wellmed/kalpa-docs status -sb`). Scope 5 proves class B only. Credential model stays open (Alex: no skeleton key; scoped to test/demo DBs).
 
 ---
 
@@ -68,8 +68,8 @@
 
 | Step | Status | Notes |
 |------|--------|-------|
-| Approve the Phase 1 contracts (finish table, verdict, disposition log, feature map, adapter) | [ ] Pending | 5.1 exit gate |
-| Go/no-go after seeing a real `/verify` verdict (dogfood + clinic_3) | [ ] Pending | 5.2 exit gate |
+| Approve the Phase 1 contracts (finish table, verdict, disposition log, feature map, adapter) | [x] Done 2026-09-26 | 5.1 exit gate |
+| Go/no-go after seeing a real `/verify` verdict (dogfood, class B) | [x] Done 2026-09-29 — go, advisory rollout | 5.2 exit gate; class-A trial moved to test-suite T2 |
 | Announce the ai-skills `git pull` to the team after rollout | [ ] Pending | 5.3 exit gate; CLAUDE.md §2.1 |
 
 ---
@@ -79,7 +79,7 @@
 | # | Plan File | Phase | Status | Notes |
 |---|-----------|-------|--------|-------|
 | 5.1 | 5.1-verify-lever-PLAN.md | Phase 1 — Contracts + deterministic scripts | Done | Gate A — approved 2026-09-26 |
-| 5.2 | 5.2-verify-lever-PLAN.md | Phase 2 — `/verify` + `/review` on codex | Ready to execute | Gate A |
+| 5.2 | 5.2-verify-lever-PLAN.md | Phase 2 — `/verify` + `/review` on codex | In progress — checkpoint approved 2026-09-29; own review + verify pending | Gate A |
 | 5.3 | 5.3-verify-lever-PLAN.md | Phase 3 — Wiring + self-heal + rollout | Ready to execute | Gate A |
 
 ---
@@ -256,11 +256,21 @@ plan file is unchanged; where this block and the plan differ, the plan wins, so 
 **Last action:** Phase 2 CHECKPOINT approved by Alex (2026-09-29) — all 5.2 tasks done
 **Next action:** close 5.2 per Operating Contract #5 BEFORE marking Done: (1) codex `/review` on the ai-skills Phase 2 range `e3b74ec..HEAD` with `--scope plans/5-verify-lever --unit 5.2`, then disposition every finding via `review.py dispose`; (2) add 5.2 rows to `finish-conditions.md` (bump the revision) and `/verify` unit 5.2; (3) `plans-index.py status --num 5.2 --status "✅ Done …"` (the gate runs); (4) `/plan 5.3`
 **Open blockers:** None
-**Open blockers:** None
 
 ### Task Detail
 Deepened at start of run (`/markdown-style` §8.9.2). Where this block and the plan differ,
-the plan wins, so ask.
+the plan wins, so ask — **except where the Decisions Log records a change Alex made**.
+
+**Alex-approved deviations from the plan file** (the plan file is never edited, `/plan` §8.1,
+so they live here; `/verify` of 5.2 judges against the plan *as amended here*):
+- **Task 2.4 Acceptance is class B only** (Alex, 2026-09-29). "All three trial outcomes observed
+  through the runner" on "dev clinic_3" is **removed from 5.2**, and the class-A trial is a
+  deliverable of kalpa-docs `plans/test-suite-program/T2-wellmed-adapter/NOT-YET-SCOPED.md`.
+  (The target was also wrong: `clinic_3` is staging tenant 6; dev has none.) The 5.2 finish rows
+  record this exemption.
+- **The plan file's `Status: Ready to execute` is left as written.** Execution state lives in
+  this file and the index. A fresh `/plan 5.2` resumes from the Resume Context above, not from
+  Phase 0.
 - **2.1** — how codex gets called is shared with 2.2's `/review`, so it's a shared script:
   `scripts/codex-exec.py`.
   - `probe` runs `codex --version`, then a `codex exec` ping with stdin closed (without that,
@@ -344,8 +354,9 @@ the plan wins, so ask.
 #### Unplanned (Alex-directed): fix the 6 spike findings in the private infra repo
 - Alex, at the Task 2.2 review: "don't TO-DO them — fix them." All 6 were verified before
   fixing, against current `develop` and live data (read-only), and all 6 were real. Fixed on
-  a local branch in the private infra repo, 4 commits, **not pushed** (landing is Alex's
-  call). Details stay in that repo's commit messages; this public repo gets classes only:
+  a branch in the private infra repo, 4 commits (**superseded 2026-09-29:** pushed, PR opened
+  against `develop` with Alex's OK; merge and deploy are Alex's).
+   Details stay in that repo's commit messages; this public repo gets classes only:
   3 dashboard fail-open queries (a slot-unaware liveness panel reading a service
   permanently DOWN; empty-vector fallbacks reading green on missing telemetry; a
   vanished-job blind spot), 1 fail-open deploy verification (`rsync | sed` without
@@ -403,6 +414,8 @@ the plan wins, so ask.
 - **Index enforcement on real data:** with the table present, `plans-index.py validate`
   flagged 5.1's hand-written Done. `status` then wrote `⚠ verify advisory: 4 blocked (…)`,
   and validate is conformant again.
+- *(Superseded 2026-09-29: part B moved to test-suite T2 — see the Decisions Log. The record
+  below is kept as it was written.)*
 - **Part B — class-A trial: BLOCKED, two plan↔reality mismatches** (Operating Contract #1):
   `clinic_3` is **staging** tenant 6, not dev (kalpa-docs scope 89 artifacts); and the login
   needs the staging gateway's credential secret, which is **not** in the test-suite

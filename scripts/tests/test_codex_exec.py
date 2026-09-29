@@ -92,7 +92,8 @@ class TestCodexExec(unittest.TestCase):
             json.dump({"models": models}, fh)
         cx = load("codex-exec.py")
         cases = [(None, "gpt-9-sol"), ("sol", "gpt-9-sol"), ("luna", "gpt-9-luna"),
-                 ("gpt-9-astra", "gpt-9-astra"), ("gpt-7-sol", "gpt-7-sol"), ("terra", None)]
+                 ("gpt-9-astra", "gpt-9-astra"), ("gpt-7-sol", "gpt-7-sol"), ("terra", None),
+                 ("gpt-8-luna", "gpt-8-luna")]  # an exact slug is never upgraded (5.2-r2-03)
         for want, slug in cases:
             with self.subTest(want=want):
                 env = {"CODEX_HOME": self.tmp.name, **({"VERIFY_CODEX_MODEL": want} if want else {})}

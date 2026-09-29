@@ -54,8 +54,9 @@ def model_from(stderr):
 
 
 def resolve_model():
-    """(slug, None) or (None, fail-args). An exact slug is used as given; a family resolves to
-    the best-priority listed `*-<family>` model in codex's cache, then follows `upgrade`."""
+    """(slug, None) or (None, fail-args). An exact slug is used as given, never upgraded (an
+    override means exactly that — review 5.2-r2-03); a family resolves to the best-priority
+    listed `*-<family>` model in codex's cache, then follows `upgrade`."""
     want = os.environ.get("VERIFY_CODEX_MODEL") or "sol"
     cache = os.path.join(os.environ.get("CODEX_HOME") or os.path.expanduser("~/.codex"), "models_cache.json")
     why = f"{cache}: no models listed"
@@ -64,9 +65,9 @@ def resolve_model():
             models = {m["slug"]: m for m in json.load(fh)["models"]}
     except (OSError, ValueError, KeyError, TypeError) as exc:
         models, why = {}, f"{cache}: {exc}"
-    if want not in models and re.search(r"\d", want):
-        return want, None  # an explicit slug codex may know even if the cache doesn't
-    slug = want if want in models else min(
+    if want in models or re.search(r"\d", want):
+        return want, None  # an explicit slug, used as given even if the cache doesn't know it
+    slug = min(
         (s for s, m in models.items() if s.endswith(f"-{want}") and m.get("visibility") == "list"),
         key=lambda s: models[s].get("priority", 99), default=None)
     for _ in range(5):

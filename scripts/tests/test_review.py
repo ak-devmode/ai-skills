@@ -55,8 +55,10 @@ class TestReview(unittest.TestCase):
         git(path, "commit", "-q", "-m", "work")
         return path
 
-    def rng(self, repo):
-        return f"{git(repo, 'rev-list', '--max-parents=0', 'HEAD')}..HEAD"
+    def rng(self, repo, base=None):
+        """The immutable range `record` requires: full SHAs, never `HEAD`."""
+        base = base or git(repo, "rev-list", "--max-parents=0", "HEAD")
+        return f"{git(repo, 'rev-parse', base)}..{git(repo, 'rev-parse', 'HEAD')}"
 
     def answer(self, **over):
         doc = {"findings": [
@@ -125,6 +127,22 @@ class TestReview(unittest.TestCase):
             self.assertIn(needle, report)
         self.assertNotIn("DEGRADED", report)
 
+    def test_range_is_immutable_from_prepare_to_record(self):
+        # 5.2-r3-01/-02: prepare resolves the range; record refuses a symbolic one, and an
+        # unresolvable side is an error, never an empty SHA.
+        root = git(self.repo, "rev-list", "--max-parents=0", "HEAD")
+        p = run(REVIEW, "prepare", "--repo", self.repo, "--range", f"{root}..HEAD", env=self.env)
+        self.assertEqual(p.returncode, 0, p.stderr)
+        self.assertIn(f"range: {self.rng(self.repo)}", p.stdout)
+        self.assertIn(self.rng(self.repo), read(p.stdout.split("prompt: ")[1].split()[0]))
+        sym = run(REVIEW, "record", "--repo", self.repo, "--range", f"{root}..HEAD", "--reviewer", "codex gpt-test",
+                  "--input", self.answer(), "--scope", self.scope, "--unit", "9.1", env=self.env)
+        self.assertEqual(sym.returncode, 2, sym.stderr)
+        self.assertIn("immutable range prepare printed", sym.stderr)
+        self.assertFalse(os.path.exists(self.log))
+        rr = load("review/scripts/review.py")
+        self.assertEqual(rr.resolve_range(self.repo, f"{root}..nosuchref")[0], None)
+
     def test_clean_reviews_reserve_distinct_ids(self):
         # 5.2-r1-07: a zero-finding review still writes a `review` record, so the next one
         # doesn't reuse its ID; and a missing artifacts dir is created, not a crash.
@@ -184,7 +202,7 @@ class TestReview(unittest.TestCase):
             fh.write("echo c\n")
         git(self.repo, "add", "-A")
         git(self.repo, "commit", "-q", "-m", "more")
-        wide, narrow = self.rng(self.repo), "HEAD~1..HEAD"
+        wide, narrow = self.rng(self.repo), self.rng(self.repo, "HEAD~1")
 
         def review(reviewer, rng):
             p = run(REVIEW, "record", "--repo", self.repo, "--range", rng, "--reviewer", reviewer, "--input",

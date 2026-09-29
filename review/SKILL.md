@@ -1,6 +1,6 @@
 ---
 name: review
-version: 3.0.0
+version: 3.1.0
 description: |
   Pre-landing code review with codex as the gate: the opposing model family, headless
   and read-only, reviews an explicit revision range against gstack's review checklist,
@@ -71,7 +71,8 @@ REPO=<repo>; RANGE=<BASE>..HEAD
 ## 2. The Gate — codex
 
 2.1 **Render.** `$RV prepare --repo $REPO --range $RANGE [--kalpa-only|--engine-only]` →
-prints `prompt:`, `schema:`, and a `passes:` line; keep all three.
+prints `prompt:`, `schema:`, a `passes:` line and a `range:` line — the range resolved to
+full SHAs, which the prompt uses; keep all four, and pass that `range:` to §2.4.
 
 2.2 **Probe, fresh.** `$S/codex-exec.py probe` — last line `codex <model>` → §2.3;
 `none <reason>` → §3. Never reuse an earlier probe, never gstack's (it caches failures).
@@ -83,7 +84,7 @@ $S/codex-exec.py exec --prompt $PROMPT --schema $SCHEMA --out $WORK/answer.json 
 The prompt's directory is `$WORK`. Last line `codex <model>` → §2.4 with that exact line as
 the reviewer. `none <reason>` → §3 with that reason.
 
-2.4 **Record.** `$RV record --repo $REPO --range $RANGE --reviewer "<line>" --input
+2.4 **Record.** `$RV record --repo $REPO --range <the range: line> --reviewer "<line>" --input
 $WORK/answer.json --passes "<passes line>" [--scope $SCOPE --unit $UNIT]`. It assigns
 `<unit>-r<n>-NN` IDs in severity order, appends the raw findings, and writes
 `artifacts/review-<unit>-r<n>.md` — including **what the review did not cover** (codex's

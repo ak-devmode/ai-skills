@@ -89,10 +89,28 @@ def count_range(repo, rng):
     return int(out), None
 
 
+def resolve_range(repo, rng):
+    """(`<base sha>..<head sha>`, None), or (None, a §10 error code). prepare renders the prompt
+    with this immutable range and record requires it, so a commit landing mid-review can't be
+    logged as reviewed (review 5.2-r3-01); a failed rev-parse is an error, never an empty SHA
+    (5.2-r3-02)."""
+    shas = []
+    for side in rng.split(".."):
+        rc, sha, e = git(repo, "rev-parse", "--verify", f"{side}^{{commit}}")
+        if rc != 0 or not re.fullmatch(r"[0-9a-f]{40}", sha):
+            return None, err(f"`{side}` does not resolve to a commit in {repo}", "a commit SHA",
+                             e[:200] or repr(sha), repo, f"git -C {repo} rev-parse {side}", cause="environment")
+        shas.append(sha)
+    return "..".join(shas), None
+
+
 # ---------- prepare ----------------------------------------------------------------
 
 def cmd_prepare(a):
     n, code = count_range(a.repo, a.range)
+    if code is not None:
+        return code
+    a.range, code = resolve_range(a.repo, a.range)
     if code is not None:
         return code
     proj = project(a.repo)
@@ -128,7 +146,7 @@ def cmd_prepare(a):
     prompt = os.path.join(out_dir, "review-prompt.md")
     with open(prompt, "w", encoding="utf-8") as fh:
         fh.write(text)
-    print(f"prompt: {prompt}\nschema: {SCHEMA}\npasses: {' · '.join(passes)}")
+    print(f"prompt: {prompt}\nschema: {SCHEMA}\npasses: {' · '.join(passes)}\nrange: {a.range}")
     return vl.EXIT_PASS
 
 
@@ -175,6 +193,12 @@ def cmd_record(a):
     n, code = count_range(a.repo, a.range)
     if code is not None:
         return code
+    fixed, code = resolve_range(a.repo, a.range)
+    if code is not None:
+        return code
+    if fixed != a.range:
+        return err("record needs the immutable range prepare printed", "`<base sha>..<head sha>` (full SHAs)",
+                   a.range, "--range", "pass the `range:` line from `review.py prepare`", code=vl.EXIT_USAGE)
     if not vl.JUDGE_LINE.match(a.reviewer):
         return err("reviewer line is malformed", "`codex <model>` / `claude-fallback <reason>` / `none <reason>`",
                    a.reviewer, "--reviewer", "pass the line codex-exec.py printed", code=vl.EXIT_USAGE)
@@ -232,10 +256,9 @@ def build(a, doc, ordered, key, n, review_id):
                       f"`review.py dispose --scope <scope> --unit {a.unit or '<unit>'} --finding <ID> "
                       "(--fixed <sha> | --rejected \"<reason>\")`"]
     report = "\n".join(render(doc, findings, header)) + "\n"
-    # The range as resolved commits, so the gate can tell which commits a review covered
-    # (`HEAD` in `range` means nothing later — review 5.2-r2-01).
-    base, head = a.range.split("..")
-    shas = {k: git(a.repo, "rev-parse", "--verify", f"{v}^{{commit}}")[1] for k, v in (("base", base), ("head", head))}
+    # record only accepts the immutable range, so it is the commits the reviewer saw
+    # (review 5.2-r2-01, -r3-01).
+    shas = dict(zip(("base", "head"), a.range.split("..")))
     review = {"schema": vl.SCHEMA, "ts": ts, "record": "review", "review_id": review_id, "reviewer": a.reviewer,
               "range": {key: a.range}, "shas": shas, "passes": a.passes or "", "findings": len(findings),
               "verdict": doc["verdict"]}

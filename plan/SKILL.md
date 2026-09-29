@@ -441,7 +441,7 @@ on a direct-to-main repo a branch diff is empty by construction.
    in a commit that touches the file and record `fixed <sha>`, or record
    `rejected <reason>`. After fixing any blocking finding, review the fix commits again.
 2. **Verify** — the stub's `Task {P}.V`, or the CHECKPOINT on a pre-5.3 stub. Run
-   `/verify {N}.{P}`. If the scope has no table, §5.6.2a runs first. A unit listed under
+   `/verify {N}.{P}`, adding `--no-commits` when the stub has no Review task. If the scope has no table, §5.6.2a runs first. A unit listed under
    `**Predates gate:**` skips this step.
 3. **Mark Done only through the gate:**
    `plans-index.py status <index> --num {N}.{P} --status "✅ Done ({date}) — …"`.

@@ -684,7 +684,9 @@ tasks, before the CHECKPOINT. A phase that produces commits keeps both ("if ther
 commit, review runs"). A phase with no commits (wiring inside a third-party app, a
 human-only step) deletes the `Review` task and keeps `Verify`. The Review task's
 presence is how `/plan` knows an empty revision range is a failure rather than
-expected nothing, so never leave it on a commit-less phase.
+expected nothing, so never leave it on a commit-less phase. Its absence is also what
+makes `/verify` judge the phase with `--no-commits`, from runner evidence alone
+(`verify/SKILL.md` §2.3).
 
 ### 5.10 Write `finish-conditions.md` — via the script, never by hand
 

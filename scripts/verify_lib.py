@@ -53,6 +53,31 @@ def gate_mode(scope_dir):
     return GATE_MODE
 
 
+def todo_has_item(scope, text, open_only):
+    """True when `text` sits on a TO-DO item line (`- [ ] …`, or also `- [x] …` unless
+    open_only) in the project's TO-DO.md — or, when not open_only, its archive, where a
+    closed item moves. The file is beside PLANS-INDEX.md, at most three levels above the
+    scope. A mention in prose is not an item (review adhoc-r2-01)."""
+    text = text.strip()
+    if not text:
+        return False
+    box = r"\[ \]" if open_only else r"\[[ xX]\]"
+    item = re.compile(rf"^\s*[-*] {box} .*{re.escape(text)}", re.M)
+    d = os.path.realpath(scope)
+    for _ in range(3):
+        d = os.path.dirname(d)
+        todo = os.path.join(d, "TO-DO.md")
+        if os.path.isfile(todo):
+            files = [todo] + ([] if open_only else [os.path.join(d, "archive", "TO-DO-archive.md")])
+            for f in files:
+                if os.path.isfile(f):
+                    with open(f, encoding="utf-8") as fh:
+                        if item.search(fh.read()):
+                            return True
+            return False
+    return False
+
+
 # ---------- §10 message contract ---------------------------------------------------
 
 def message(level, what, expected, found, where, cause, nxt, docs):

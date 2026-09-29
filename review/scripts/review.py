@@ -317,17 +317,6 @@ def build(a, doc, ordered, key, n, review_id):
     return [review] + records, findings, report
 
 
-def todo_file(scope):
-    """The project's TO-DO.md: beside PLANS-INDEX.md, at most three levels above the scope
-    (plans/{N}/, plans/archive/{N}/, plans/{program}/archive/{N}/)."""
-    d = os.path.realpath(scope)
-    for _ in range(3):
-        d = os.path.dirname(d)
-        if os.path.isfile(os.path.join(d, "TO-DO.md")):
-            return os.path.join(d, "TO-DO.md")
-    return None
-
-
 # ---------- accept -----------------------------------------------------------------
 
 @contextlib.contextmanager
@@ -421,12 +410,11 @@ def _dispose(a, log):
             return err(f"deferral before the round cap (round {rnd} ≤ {ROUND_CAP})",
                        f"a finding from round {ROUND_CAP + 1} or later", f"round {rnd}", a.finding,
                        "fix it, or reject it with the reason it is wrong", cause="code", code=vl.EXIT_FAIL)
-        todo = todo_file(a.scope)
-        text = open(todo, encoding="utf-8").read() if todo else ""
-        if a.deferred.strip() not in text:
-            return err("the deferral's TO-DO item is not in TO-DO.md", "the exact item text, already written to "
-                       "the project's TO-DO.md", a.deferred.strip()[:120], todo or f"no TO-DO.md above {a.scope}",
-                       "write the item to TO-DO.md first, then pass its exact text", cause="code",
+        if not vl.todo_has_item(a.scope, a.deferred, open_only=True):
+            return err("the deferral's TO-DO item is not an open item in TO-DO.md",
+                       "text from an unchecked `- [ ]` item line in the project's TO-DO.md",
+                       a.deferred.strip()[:120], f"TO-DO.md above {a.scope}",
+                       "write the item to TO-DO.md first, then pass text from its first line", cause="code",
                        code=vl.EXIT_FAIL)
     by = a.by
     if not by:

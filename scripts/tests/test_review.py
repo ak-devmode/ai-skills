@@ -304,7 +304,10 @@ class TestReview(unittest.TestCase):
         todo = os.path.join(os.path.dirname(self.scope), "TO-DO.md")
         self.assertEqual(self.dispose("9.1-r4-02", "--deferred", "TO-DO: tenant filter").returncode, 1)  # no file
         with open(todo, "w") as fh:
-            fh.write("- [ ] TO-DO: tenant filter\n- [ ] TO-DO: comment\n")
+            fh.write("Prose mentioning TO-DO: in prose only.\n- [x] TO-DO: already closed\n"
+                     "- [ ] TO-DO: tenant filter\n- [ ] TO-DO: comment\n")
+        self.assertEqual(self.dispose("9.1-r4-02", "--deferred", "TO-DO: in prose only").returncode, 1)
+        self.assertEqual(self.dispose("9.1-r4-02", "--deferred", "TO-DO: already closed").returncode, 1)
         self.assertEqual(self.dispose("9.1-r4-01", "--deferred", "TO-DO: tenant filter").returncode, 1)  # blocking
         self.assertEqual(self.dispose("9.1-r4-02", "--deferred", "  ").returncode, 1)
         self.assertEqual(self.dispose("9.1-r4-02", "--deferred", "TO-DO: not written").returncode, 1)
@@ -312,6 +315,18 @@ class TestReview(unittest.TestCase):
         self.assertEqual(self.dispose("9.1-r4-03", "--deferred", "TO-DO: comment").returncode, 0)
         r4 = [b[0] for b in gate.coverage_blocks(self.log)[0] if b[0].startswith("9.1-r4-")]
         self.assertEqual(r4, ["9.1-r4-01"])
+        # closing the item into the archive keeps the deferral valid; deleting it does not
+        os.makedirs(os.path.join(os.path.dirname(self.scope), "archive"), exist_ok=True)
+        with open(os.path.join(os.path.dirname(self.scope), "archive", "TO-DO-archive.md"), "w") as fh:
+            fh.write("- [x] TO-DO: comment — done\n")
+        with open(todo, "w") as fh:
+            fh.write("- [ ] TO-DO: tenant filter\n")
+        r4 = [b[0] for b in gate.coverage_blocks(self.log)[0] if b[0].startswith("9.1-r4-")]
+        self.assertEqual(r4, ["9.1-r4-01"])
+        with open(todo, "w") as fh:
+            fh.write("")
+        r4 = [b[0] for b in gate.coverage_blocks(self.log)[0] if b[0].startswith("9.1-r4-")]
+        self.assertEqual(r4, ["9.1-r4-01", "9.1-r4-02"])
         # a hand-written deferral of the blocking finding still blocks
         with open(self.log, "a") as fh:
             fh.write(json.dumps({"schema": "verify/1", "ts": "t", "record": "disposition", "finding_id": "9.1-r4-01",

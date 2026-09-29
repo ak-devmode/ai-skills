@@ -14,7 +14,7 @@
 ## Resume Context
 **Scope:** ~/Projects/ai-skills/plans/5-verify-lever/scope.md
 **Last action:** Plan 5.1 complete, Phase 1 approved (2026-09-26)
-**Next action:** Plan 5.2 Phase 2 CHECKPOINT (Alex) → then Plan 5.3 (wiring + self-heal + rollout)
+**Next action:** finish 5.2's own review + verify (see Plan 5.2 Resume Context), mark 5.2 Done, then `/plan 5.3`
 **Open blockers:** closeout deferred to scope end (see TO-DO.md)
 **Key files changed:** `scripts/plans-index.py` (70d1222 — unplanned fix, see Progress Log)
 
@@ -43,6 +43,8 @@
 - (2026-09-26) Disposition coverage is enforced by `verdict-gate.py`, not `/verify` judgment — so it can't drift.
 - (2026-09-26) Evidence from a dirty working tree is accepted: verification is pre-PR. Contract §5.2.
 - (2026-09-26) No `/clear` at the 5.1 → 5.2 boundary; proceed straight into Phase 2. Closeout deferred to scope end.
+- (2026-09-29) Phase 2 approved at gate A (Alex). **Miss, owned:** Operating Contract #5 (this scope's Phase 2+ commits through the codex `/review` gate, its phases through `/verify`) was not applied to ai-skills' own 5.2 commits. `/review` ran only on the WellMed branch. So 5.2 is not marked Done until both run; the next session does that first. `plans-index.py status` would refuse Done anyway, since 5.2 owns no finish-table rows yet and the gate exits 3.
+- (2026-09-29) Dev tenant 4 is "WellMed" `clinic_4` (a working dev tenant); the staging-only "clinic_4 = real patients" note was misapplied to a dev token. Per-env allowlist is recorded in test-suite T2; the tenant-identity-in-header TO-DO is in kalpa-docs (`d4bf8dd`).
 - (2026-09-29) Class-A proof (Task 2.4 part B: the three-outcome trial) **moves to the kalpa-docs test-suite program, member T2 (WellMed adapter)**, together with a login/token CLI, as T2 deliverables (`test-suite-program/T2-wellmed-adapter/NOT-YET-SCOPED.md`, kalpa-docs `af2b8ac`). Scope 5 proves class B only. Credential model stays open (Alex: no skeleton key; scoped to test/demo DBs).
 
 ---
@@ -251,8 +253,8 @@ plan file is unchanged; where this block and the plan differ, the plan wins, so 
 ## Plan 5.2: `/verify` skill + `/review` on codex
 
 ### Resume Context (Plan 5.2)
-**Last action:** Task 2.4 done (part A dogfood; part B moved to test-suite T2) — all 5.2 tasks done
-**Next action:** Phase 2 CHECKPOINT (gate A): Alex reads the dogfood verdict, go/no-go on advisory rollout
+**Last action:** Phase 2 CHECKPOINT approved by Alex (2026-09-29) — all 5.2 tasks done
+**Next action:** close 5.2 per Operating Contract #5 BEFORE marking Done: (1) codex `/review` on the ai-skills Phase 2 range `e3b74ec..HEAD` with `--scope plans/5-verify-lever --unit 5.2`, then disposition every finding via `review.py dispose`; (2) add 5.2 rows to `finish-conditions.md` (bump the revision) and `/verify` unit 5.2; (3) `plans-index.py status --num 5.2 --status "✅ Done …"` (the gate runs); (4) `/plan 5.3`
 **Open blockers:** None
 **Open blockers:** None
 

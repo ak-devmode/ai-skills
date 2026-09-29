@@ -282,6 +282,19 @@ class TestReview(unittest.TestCase):
         self.assertEqual(self.dispose("9.1-r1-03", "--rejected", "comment is accurate").returncode, 0)
         self.assertEqual(gate.coverage_blocks(self.log), ([], 3))
 
+    def test_worktree_review_is_keyed_by_the_primary_checkout(self):
+        wt = os.path.join(self.tmp.name, "herdr-wt-rec")
+        git(self.repo, "worktree", "add", "-q", wt)
+        p = run(REVIEW, "record", "--repo", wt, "--range", self.rng(wt), "--reviewer", "codex gpt-test",
+                "--input", self.answer(), "--scope", self.scope, "--unit", "9.1", "--passes", "p", env=self.env)
+        self.assertEqual(p.returncode, 0, p.stderr)
+        self.assertEqual(list(self.findings()[0]["range"]), ["wellmed/svc"])
+        with open(os.path.join(wt, "a.sh"), "w") as fh:
+            fh.write("#!/bin/sh\nset -e\ncurl x\n")
+        git(wt, "add", "-A")
+        git(wt, "commit", "-q", "-m", "fix in the worktree")
+        self.assertEqual(self.dispose("9.1-r1-01", "--fixed", git(wt, "rev-parse", "HEAD")).returncode, 0)
+
     def test_deferred_only_for_non_blocking_with_a_todo(self):
         self.record()
         gate = load("verdict-gate.py")

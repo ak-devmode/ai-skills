@@ -234,7 +234,9 @@ def cmd_record(a):
         return err("review answer is malformed — nothing recorded", "findings with file:line, severity and "
                    "category per review/schemas/review-output.schema.json", "; ".join(problems[:6]), a.input,
                    "re-run the reviewer; if codex keeps failing, run the Claude fallback (review/SKILL.md §3)")
-    key = repo_key(a.repo)
+    # the primary checkout's key, never a worktree's directory name: the gate and
+    # `dispose --fixed` look the repo up under ~/Projects (review adhoc-01)
+    key = repo_key(main_worktree(a.repo))
     rank = {s: i for i, s in enumerate(SEVERITIES)}
     ordered = sorted(doc["findings"], key=lambda f: rank[f["severity"]])
     if not (a.scope and a.unit):

@@ -131,6 +131,12 @@ CASES = [
                           "\tv1 := api.Group(\"/v1\")\n\tv1.GET(\"/invoices\", h)\n}\n"},
      {"web/api.ts": "axios.get('/api/v1/invoices');\n"},
      0, r"resolved 1", "server/routes.go:5"),
+    ("a group var reused across functions does not leak its prefix (5.2-r1-02)",
+     {"server/routes.go": "package server\nfunc users(r *gin.Engine) {\n\tg := r.Group(\"/users\")\n"
+                          "\tg.GET(\"/list\", h)\n}\nfunc admin(r *gin.Engine) {\n"
+                          "\tg := r.Group(\"/admin\")\n\tg.GET(\"/stats\", h)\n}\n"},
+     {"web/api.ts": "axios.get('/users/list');\naxios.get('/admin/stats');\naxios.get('/admin/list');\n"},
+     1, r"found 3 · resolved 2 · unresolved 1", "route `/admin/list` does not resolve"),
     ("generated .pb.go struct declares a Go caller's fields",
      {"proto/approvalpb/approval.pb.go": "package approvalpb\n\ntype UpsertPolicyRequest struct {\n"
                                           "\tstate protoimpl.MessageState\n\tActionKey string `protobuf:\"x\"`\n}\n"},

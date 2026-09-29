@@ -96,6 +96,7 @@ ROUTE_DECL = re.compile(r"\b([A-Za-z_]\w*)\.(" + VERBS + r"|Handle|HandleFunc)\(
                         re.I)
 ROUTE_LARAVEL = re.compile(r"Route::(" + VERBS + r"|match)\(\s*['\"]([^'\"]*)", re.I)
 GROUP_DECL = re.compile(r"\b(\w+)\s*:?=\s*(\w+)\.Group\(\s*\"([^\"]*)\"")
+SCOPE_START = re.compile(r"^(func\b|(export\s+)?(async\s+)?function\b)")
 DECL_RECV = re.compile(r"^(router|app|r|e|g|rg|grp|group|mux|srv|server|routes?|v\d+|\w*Router|"
                        r"\w*Group|\w*router|\w*group)$")
 
@@ -319,17 +320,19 @@ class Index:
             for tree in self.all:
                 paths = [p for p in tree.paths if is_source(p) and not TEST_FILE.search(p)]
                 for p, text in tree.read(paths).items():
-                    groups = {m.group(1): (m.group(2), m.group(3)) for m in GROUP_DECL.finditer(text)}
-
-                    def prefix(var, seen=()):
-                        if var not in groups or var in seen:
-                            return ""
-                        parent, pre = groups[var]
-                        return prefix(parent, seen + (var,)) + pre
-
+                    # Group prefixes bind in declaration order and reset at each top-level
+                    # function, so two functions reusing `g` for different groups can't
+                    # borrow each other's prefix (review 5.2-r1-02). A binding is the full
+                    # prefix at the moment it is declared.
+                    groups = {}
                     for i, line in enumerate(text.splitlines(), 1):
                         if is_comment(line):
                             continue
+                        if SCOPE_START.match(line):
+                            groups = {}
+                        for m in GROUP_DECL.finditer(line):
+                            var, parent, pre = m.groups()
+                            groups[var] = groups.get(parent, "").rstrip("/") + pre
                         where = f"{tree_label(tree)}{p}:{i}"
                         for m in ROUTE_DECL.finditer(line):
                             recv, verb, raw = m.groups()
@@ -343,7 +346,7 @@ class Index:
                             elif verb.lower() not in ("all", "any"):
                                 method = verb.upper()
                             if raw.startswith("/"):
-                                self._route.append((method, prefix(recv).rstrip("/") + raw, where))
+                                self._route.append((method, groups.get(recv, "").rstrip("/") + raw, where))
                         for m in ROUTE_LARAVEL.finditer(line):
                             verb, raw = m.groups()
                             method = None if verb.lower() in ("any", "match") else verb.upper()

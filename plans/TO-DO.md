@@ -359,3 +359,9 @@ Source: ~/Projects/wellmed/kalpa-docs/plans/149-fail-loud-sweep/closeout-prep.md
 Touches: scripts/repo-graph-check.py · /plan §5.6.1 · /scope Repo Graph snapshot
 
 - [ ] **VERIFIED STILL TRUE 2026-09-29:** **`repo-graph-check.py` compares the snapshot SHA to local `HEAD`, but `/scope` records `origin/<trunk>`** (the WellMed Repo Graph column is literally "HEAD SHA (origin/develop)"). A local checkout a few commits behind its remote reads every repo as `diverged` → exit 3 → /plan STOPs. Scope 149's Phase 0 reported all 14 repos diverged; checked against `origin/<trunk>`, every recorded SHA was an ancestor (9 unchanged, 4 advanced). Fix: resolve the snapshot's column (origin/trunk) — `git fetch` then compare to `origin/<trunk>` — and keep local-HEAD/dirty as a separate advisory line.
+      **Correction (2026-09-29, scope 5 review 5.3-r3-03, checked against the code):** the writer,
+      `scripts/repo-graph-snapshot.sh:34`, records local `HEAD` (`git rev-parse --short HEAD`), not
+      `origin/<trunk>`. The WellMed table's "HEAD SHA (origin/develop)" column label is what claims origin.
+      So the snapshot and the checker agree on local HEAD. The defect is the label, or the local checkouts
+      scope 149 snapshotted differing from those its /plan later read. Before fixing, decide which ref
+      the contract means, then make the writer, the column label and `repo-graph-check.py` all use it.

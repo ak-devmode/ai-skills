@@ -1,6 +1,6 @@
 ---
 name: verify
-version: 0.2.0
+version: 0.2.1
 description: |
   Independent verification of a unit of scoped work. A deterministic runner executes
   every finish-condition row the unit owns and records evidence; a judge from the
@@ -120,6 +120,8 @@ writes the one `final` line.
 3.8 **Gate and report.** `$V/judge.py report --scope $SCOPE --unit $UNIT --run-id $RUN`
 writes `artifacts/verify-$UNIT-report.md` and prints the gate verdict. Advisory mode is
 the default until three scopes pass cleanly: blocks are reported, the unit is not held.
+Its exit status is the gate's — `1` blocked, `3` the gate itself errored (the report says
+`GATE ERROR` and stderr carries the cause); report a `3`, never read it as a pass.
 
 ---
 

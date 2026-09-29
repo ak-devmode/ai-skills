@@ -149,6 +149,20 @@ class TestJudge(unittest.TestCase):
         self.assertIn("- `away` — gap:", text)  # unreachable row is always a lever candidate
         self.assertIn("⚠ judge: claude-fallback codex not authed", text)
 
+    def test_report_propagates_a_gate_error(self):
+        # 5.2-r1-05: a gate that errors must not become a successful report.
+        self.ledger(self.base)
+        self.judge("record", "--judge", "codex gpt-test", "--input", self.answer())
+        run("verify-run.py", "finalize", "--log", self.log, "--run-id", self.rid, env=self.env)
+        with open(os.path.join(self.scope, "finish-conditions.md"), "w") as fh:
+            fh.write(f"**Schema version:** verify/1\n**Revision:** 1\n\n{HEADER}"
+                     "| ok | builds | 9.1 | B |  | svc | . | - | - | 4 | no | ev |\n")  # blank check cell
+        p = self.judge("report")
+        self.assertEqual(p.returncode, 3, p.stdout)
+        self.assertIn("[ERROR]", p.stderr)
+        text = read(os.path.join(self.scope, "artifacts", "verify-9.1-report.md"))
+        self.assertIn("GATE ERROR (exit 3)", text)
+
 
 if __name__ == "__main__":
     unittest.main()

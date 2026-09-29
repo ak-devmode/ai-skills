@@ -219,7 +219,10 @@ def cmd_report(a):
             raw = json.load(fh)
     gate = subprocess.run([sys.executable, os.path.join(SCRIPTS, "verdict-gate.py"), "--scope", a.scope,
                            "--unit", a.unit, "--projects", a.projects], capture_output=True, text=True)
-    gate_line = next((x for x in gate.stdout.splitlines() if x.startswith("verdict:")), "verdict: (gate error)")
+    gate_line = next((x for x in gate.stdout.splitlines() if x.startswith("verdict:")), None)
+    if gate_line is None:
+        why = next((x.strip() for x in gate.stderr.splitlines() if x.strip()), f"exit {gate.returncode}")
+        gate_line = f"verdict: GATE ERROR (exit {gate.returncode}) — {why}"
     marker = next((x for x in gate.stdout.splitlines() if x.startswith("marker:")), "")
     by_pend = {r["check_id"]: r for r in pend}
     lines = [f"# Verify report — unit {a.unit}", "",
@@ -249,7 +252,10 @@ def cmd_report(a):
     with open(out, "w", encoding="utf-8") as fh:
         fh.write("\n".join(lines))
     print(f"report: {out}\n{gate_line}" + (f"\n{marker}" if marker else ""))
-    return vl.EXIT_PASS
+    # The report is written either way; the gate's diagnostics and exit status pass through
+    # (1 blocked, 3 gate error) rather than being flattened to success (review 5.2-r1-05).
+    sys.stderr.write(gate.stderr)
+    return gate.returncode
 
 
 def main(argv):

@@ -68,7 +68,10 @@ that `/plan` drafts a table for Alex to confirm once. Do not invent rows here.
 (`ledger-init.sh --repo`). An older phase with no recorded base: pass
 `--range REPO=BASE..HEAD` explicitly and say where the base came from. **An empty range
 is a failure**, never a clean pass — on a direct-to-main repo a branch diff is empty by
-construction, which is why the range is explicit.
+construction, which is why the range is explicit. A **commit-less unit** (its plan stub
+has no Review task, `/scope` §5.9: wiring inside a third-party app, a human-only step)
+passes `--no-commits` to `judge.py prepare`: the judge works from the runner evidence
+and the scope. The flag is refused when the ledger shows commits in the unit's range.
 
 Set once for the steps below:
 

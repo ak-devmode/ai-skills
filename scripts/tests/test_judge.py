@@ -109,6 +109,21 @@ class TestJudge(unittest.TestCase):
         ok = self.judge("prepare", "--range", f"svc={self.base}..HEAD")
         self.assertEqual(ok.returncode, 0, ok.stderr)
 
+    def test_prepare_commitless_unit(self):
+        # 5.3-r1-02: a unit that declares no commits is judged on evidence, not refused
+        p = self.judge("prepare", "--no-commits")
+        self.assertEqual(p.returncode, 0, p.stderr)
+        prompt = read(p.stdout.split("prompt: ")[1].split()[0])
+        self.assertIn("none — the unit declares no commits", prompt)
+        self.ledger(git(self.svc, "rev-parse", "HEAD"))          # a base with 0 commits: fine
+        self.assertEqual(self.judge("prepare", "--no-commits").returncode, 0)
+
+    def test_no_commits_cannot_hide_real_commits(self):
+        self.ledger(self.base)                                  # 1 commit in range
+        p = self.judge("prepare", "--no-commits")
+        self.assertEqual(p.returncode, 3)
+        self.assertIn("--no-commits contradicts the ledger", p.stderr)
+
     # ---- record
     def test_record_lands_verdicts_and_raw_output(self):
         p = self.judge("record", "--judge", "codex gpt-test", "--input", self.answer())

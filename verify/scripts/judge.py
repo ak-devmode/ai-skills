@@ -13,10 +13,13 @@ candidates for a human; a check that ends inconclusive or unreachable is always 
 candidate, whether or not the judge named one.
 
 Usage:
-  judge.py prepare --scope DIR --unit N.P --run-id ID [--range REPO=BASE..HEAD ...] [--out-dir DIR]
+  judge.py prepare --scope DIR --unit N.P --run-id ID [--range REPO=BASE..HEAD ...] [--no-commits] [--out-dir DIR]
   judge.py record  --scope DIR --unit N.P --run-id ID --judge LINE --input FILE
   judge.py report  --scope DIR --unit N.P --run-id ID
     --range   overrides the ledger's base for REPO (older scopes have no recorded base)
+    --no-commits  the unit declares no commits (its stub has no Review task — /scope §5.9):
+              a repo with no base is judged on runner evidence alone. Refused when any
+              recorded base has commits in range, so it cannot hide an empty-range failure
 Output: prepare prints `prompt: <path>` and `schema: <path>`; record/report print what they wrote.
 Exit:   0 ok · 2 usage · 3 could not evaluate (no range, empty range, malformed judge output)
 """
@@ -91,6 +94,10 @@ def cmd_prepare(a):
             rng = overrides[repo]
         elif repo in base:
             rng = f"{base[repo]}..{head}"
+        elif a.no_commits:
+            ranges.append(f"  - `{path}`: none — the unit declares no commits; judge from the runner "
+                          f"evidence and the scope documents only")
+            continue
         else:
             return err(f"no revision range for {repo}", "a base SHA in the ledger (ledger-init.sh --repo) or "
                        "--range REPO=BASE..HEAD", "neither", p["ledger"],
@@ -100,6 +107,13 @@ def cmd_prepare(a):
         if n.returncode != 0:
             return err(f"range {rng} is not valid in {repo}", "BASE..HEAD of real commits", n.stderr.strip()[:200],
                        repo, f"git -C {path} log --oneline {rng}")
+        if a.no_commits and n.stdout.strip() != "0":
+            return err("--no-commits contradicts the ledger", f"no commits in any recorded range for {a.unit}",
+                       f"{rng} has {n.stdout.strip()} commits in {repo}", p["ledger"],
+                       "drop --no-commits: this unit commits, so it is judged on its range", cause="code")
+        if n.stdout.strip() == "0" and a.no_commits:
+            ranges.append(f"  - `{path}`: `{rng}` (0 commits — the unit declares none)")
+            continue
         if n.stdout.strip() == "0":
             return err(f"the unit's range is empty in {repo}", "at least one commit in the unit's range",
                        f"{rng} has 0 commits", repo,
@@ -264,6 +278,7 @@ def main(argv):
         s.add_argument("--projects", default=vl.PROJECTS)
         if name == "prepare":
             s.add_argument("--range", action="append", default=[])
+            s.add_argument("--no-commits", action="store_true")
             s.add_argument("--out-dir")
         if name == "record":
             s.add_argument("--judge", required=True)

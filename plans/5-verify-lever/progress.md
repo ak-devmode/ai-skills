@@ -547,3 +547,16 @@ so ask, except where the Decisions Log records a change Alex made.
   - Fleet lint: 0 ISSUE across 27 skills. Suite OK (2 skipped).
   - herdr: nothing in `verify/`, `review/` or their scripts references it; `/plan` touches herdr only when `$HERDR_PANE_ID` is set.
   - The live demo also exercised the new `lever_id` schema against real codex; it recorded without error.
+
+#### Dogfood: review 5.3-r1 (codex `gpt-6-sol`, `5f06a4c..5e5d3a2`, 8 commits) — DO NOT SHIP, 3 blocking + 6 should-fix → all 9 fixed
+→ `artifacts/review-5.3-r1.md`. Each fix is its own commit with a regression test that fails on the old code (mutation-checked by stashing the fix):
+- r1-01 all-started self-heal needed `--phase` → `init` accepts `--predates` alone — `d1d11e5`
+- r1-02 commit-less phases could never be judged (prepare required a range) → `judge.py prepare --no-commits`, refused when the ledger shows commits; /scope + /plan say when — `0c354dc`, `5f4f38a` (the dispose guard refused `0c354dc` because it didn't touch the cited `scope/SKILL.md`; it was right, the stub guidance was missing)
+- r1-03 a code unit with no `/review` could pass → gate blocks `review:<repo>` when commits in `base..HEAD` have no covering review record; legacy finding-only logs count. **Real data:** 5.1 now shows `review:ai-skills` (true — the owned miss in the Decisions Log); 5.2 is covered by r1–r3 — `617f021`, `/plan` §6.8 `…`
+- r1-04 `--all --json` gave closeout no reason per block → blocks carry `what`/`cause`, units carry `needs_verify` — `304b949`
+- r1-05 `gate-count` counted any ⚠-free row → a scope counts only if `--all` passes on ≥1 gated unit; `--all` reports `ungated` for an all-predating table; indexes deduped — `3c89a7f`
+- r1-06 missing raw judge output read as "no levers" → error when a model judged the run — `e742d9a`
+- r1-07 judge levers on invented checks → rejected at record — `30df048`
+- r1-08 `FETCH_HEAD` refreshed by any fetch → own stamp for the origin-main fetch — `98f01c2`
+- r1-09 `/verify` still said three clean scopes → five — `4e4cfe2`
+Suite OK (2 skipped). Lint 0 ISSUE.

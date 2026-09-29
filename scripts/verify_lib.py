@@ -53,16 +53,18 @@ def gate_mode(scope_dir):
     return GATE_MODE
 
 
-def todo_has_item(scope, text, open_only):
-    """True when `text` sits on a TO-DO item line (`- [ ] …`, or also `- [x] …` unless
-    open_only) in the project's TO-DO.md — or, when not open_only, its archive, where a
-    closed item moves. The file is beside PLANS-INDEX.md, at most three levels above the
-    scope. A mention in prose is not an item (review adhoc-r2-01)."""
-    text = text.strip()
-    if not text:
+def todo_has_item(scope, finding_id, open_only):
+    """True when a TO-DO item line (`- [ ] …`, or also `- [x] …` unless open_only) carries
+    `finding_id` as a whole token, in the project's TO-DO.md — or, when not open_only, its
+    archive, where a closed item moves. The file is beside PLANS-INDEX.md, at most three
+    levels above the scope. The ID is the link: free text can't tie an item to a finding,
+    a substring matched an unrelated task and prose matched nothing real (review adhoc
+    r1-03 → r2-01 → r3-01, the §5.1 three-rounds stop — Alex chose the ID link)."""
+    finding_id = finding_id.strip()
+    if not finding_id:
         return False
     box = r"\[ \]" if open_only else r"\[[ xX]\]"
-    item = re.compile(rf"^\s*[-*] {box} .*{re.escape(text)}", re.M)
+    item = re.compile(rf"^\s*[-*] {box} .*(?<![\w.-]){re.escape(finding_id)}(?![\w.-])", re.M)
     d = os.path.realpath(scope)
     for _ in range(3):
         d = os.path.dirname(d)

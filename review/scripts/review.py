@@ -410,11 +410,11 @@ def _dispose(a, log):
             return err(f"deferral before the round cap (round {rnd} ≤ {ROUND_CAP})",
                        f"a finding from round {ROUND_CAP + 1} or later", f"round {rnd}", a.finding,
                        "fix it, or reject it with the reason it is wrong", cause="code", code=vl.EXIT_FAIL)
-        if not vl.todo_has_item(a.scope, a.deferred, open_only=True):
-            return err("the deferral's TO-DO item is not an open item in TO-DO.md",
-                       "text from an unchecked `- [ ]` item line in the project's TO-DO.md",
-                       a.deferred.strip()[:120], f"TO-DO.md above {a.scope}",
-                       "write the item to TO-DO.md first, then pass text from its first line", cause="code",
+        if not vl.todo_has_item(a.scope, a.finding, open_only=True):
+            return err(f"no open TO-DO item carries `{a.finding}`",
+                       f"an unchecked `- [ ]` item line in the project's TO-DO.md naming {a.finding}",
+                       "none", f"TO-DO.md above {a.scope}",
+                       f"write `- [ ] [review {a.finding}] <what is left>` to TO-DO.md, then defer", cause="code",
                        code=vl.EXIT_FAIL)
     by = a.by
     if not by:

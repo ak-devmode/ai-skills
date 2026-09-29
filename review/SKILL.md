@@ -182,8 +182,9 @@ dropped.
 - **Round cap.** Past round 3 of one unit, only `blocking` findings are fixed in the loop.
   `should-fix` and `note` go to the project's `TO-DO.md` and are recorded
   `dispose --deferred "<TO-DO item>"` — never `--rejected`, because a deferral is not a
-  claim that the finding is wrong. Write the item to `TO-DO.md` first: `dispose` refuses a
-  deferral whose text is not in it, one from round 3 or earlier, and any blocking finding.
+  claim that the finding is wrong. Write the item to `TO-DO.md` first, carrying the finding
+  ID — `- [ ] [review <ID>] <what is left>`; the ID is the link. `dispose` refuses a deferral
+  with no open item naming the ID, one from round 3 or earlier, and any blocking finding.
 - **Same place, three rounds.** A file drawing findings in each of the last three rounds
   is a design that is wrong, not a patch that is incomplete. Stop fixing it and raise it to
   the user as one design finding: replace it, narrow what it promises, or cut it.

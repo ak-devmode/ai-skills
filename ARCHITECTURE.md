@@ -231,8 +231,8 @@ graphs.
 
 | Skill | Version | Notes |
 |---|---|---|
-| `plan` | 3.9.0 | Review + verify per unit, Done through the gate; self-heal with `Predates gate`; ledger `--repo` bases. |
-| `scope` | 3.9.0 | Step 5.10 writes `finish-conditions.md`; stubs carry Review/Verify tasks. |
+| `plan` | 3.10.0 | Review + verify per unit, Done through the gate; self-heal with `Predates gate`; ledger `--repo` bases; human checkpoints: table approval before work, review-outcome acceptance. |
+| `scope` | 3.10.0 | Step 5.10 writes `finish-conditions.md`, §5.10.1 the user approves it in plain English; stubs carry Review/Verify tasks. |
 | `closeout` | 1.4.0 | Step 3a verdict (`--all`), lever candidates, feature-map handoff, clean-scope count. |
 | `closeout-extended` | 1.0.1 | |
 | `cross-repo-init` | 1.5.0 | Branch survey = `repo-survey.sh`; CLAUDE template no longer writes memory paths. |
@@ -240,7 +240,7 @@ graphs.
 | `prd` | 1.1.0 | Step 0 = `context-gather.sh`. |
 | `concurrency` | 0.5.0 | Dedup'd against herdr; pane naming + dispatch log via scripts. |
 | `herdr` | 0.1.5 | Opus seat = 5.5 (`opus[1m]`). |
-| `review` | 3.2.0 | codex gate; rules extracted to `review/rules/`; dispositions enforced. |
+| `review` | 3.3.0 | codex gate; rules extracted to `review/rules/` (IRIS group §3.9); dispositions enforced, `deferred` past round 3; §5.1 convergence; `accept` records the user's yes. |
 | `ready-to-clear` | 1.1.0 | |
 | `verify` | 0.4.0 | Scope 5. Advisory gate until 5 clean scopes; codex effort scales with the diff; `--demo` on the planted-defect fixture; stale-clone line. |
 | `kalpa-*` | unversioned | Flattened 2026-08-09. |

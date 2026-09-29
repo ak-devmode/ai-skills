@@ -1,15 +1,17 @@
 ---
 name: review
-version: 3.2.0
+version: 3.3.0
 description: |
   Pre-landing code review with codex as the gate: the opposing model family, headless
   and read-only, reviews an explicit revision range against gstack's review checklist,
-  the Kalpa/PMG domain rules (SATU SEHAT + FHIR, ADR conformance, table write-ownership,
-  tenant isolation, PHI/credential leakage, stack footguns) and the lenses every repo
-  gets — fail-open verification, silent failure, local maxima, dirty comments, doc
-  claims. Every finding is logged under a stable ID and must be dispositioned (fixed in
-  a commit that touches it, or rejected with a reason) before the unit can be marked
-  Done. When codex cannot run, a Claude pass (gstack's engine + the same rules) is the
+  the domain rules per project (WellMed: SATU SEHAT + FHIR, ADR conformance, table
+  write-ownership; IRIS: its own invariants, never WellMed's ADRs; PMG; shared: tenant
+  isolation, PHI/credential leakage, stack footguns) and the lenses every repo gets —
+  fail-open verification, silent failure, local maxima, dirty comments, doc claims.
+  Every finding is logged under a stable ID and must be dispositioned (fixed in a commit
+  that touches it, rejected with a reason, or — past round 3, non-blocking — deferred to
+  a written TO-DO item); the loop stops on [CONVERGENCE] signals, and the user's yes to
+  the outcomes is recorded with `accept` before the unit can be marked Done. When codex cannot run, a Claude pass (gstack's engine + the same rules) is the
   fallback, and the report says so in its header.
 
   Use when asked to "review", "review this PR", "review the diff", "pre-landing

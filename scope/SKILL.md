@@ -1,6 +1,6 @@
 ---
 name: scope
-version: 3.9.0
+version: 3.10.0
 description: |
   Task scoping, skill router, and progress tracker. Reads current context (git diff,
   branch, CLAUDE.md, open files), eliminates assumptions via two rounds of open-ended

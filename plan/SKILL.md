@@ -1,6 +1,6 @@
 ---
 name: plan
-version: 3.9.0
+version: 3.10.0
 description: |
   Execute tasks from a structured plan document step by step, logging progress and
   stopping at human checkpoints. Plan files follow the naming convention *-PLAN.md

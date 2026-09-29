@@ -60,6 +60,13 @@ def collect(scope):
         if os.path.exists(raw_path):
             with open(raw_path, encoding="utf-8") as fh:
                 raw = json.load(fh)
+        elif not str(final.get("judge", "")).startswith("none "):
+            # A model judged this run, so its named levers exist somewhere — reading none
+            # would report "no candidates" when there are some (review 5.3-r1-06).
+            raise vl.ContractError(vl.message(
+                "ERROR", f"judge output for run {final['run_id']} is missing",
+                "the raw judge answer judge.py record keeps beside the verdict log", "no such file",
+                raw_path, "tooling", f"restore it from git, or re-run /verify {u}", f"{vl.CONTRACT} §4.9"))
         for c in vl.levers(final, raw):
             row = by_id.get(c["check_id"], {})
             c.update(run_id=final["run_id"], touches=f"{row.get('repo', '?')} · {c['check_id']}")

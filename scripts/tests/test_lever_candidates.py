@@ -102,6 +102,21 @@ class Levers(unittest.TestCase):
         self.assertNotIn("SECOND SIGHTING", again.stdout)  # flips once
         self.assertEqual(self.text().count("BUILD NOW"), 1)
 
+    def test_missing_raw_judge_output_is_an_error_not_none(self):
+        # 5.3-r1-06: a model-judged run with its raw answer gone must not read as "no levers"
+        sc = self.scope("5-e", "5.1")
+        log = os.path.join(sc, "artifacts", "verify-5.1.jsonl")
+        with open(log) as fh:
+            lines = fh.read().splitlines()
+        lines[-1] = lines[-1].replace('"judge": "none t"', '"judge": "codex gpt-test"')
+        with open(log, "w") as fh:
+            fh.write("\n".join(lines) + "\n")
+        before = self.text()
+        p = self.lc(sc)
+        self.assertEqual(p.returncode, 3, p.stdout)
+        self.assertIn("judge output for run", p.stderr)
+        self.assertEqual(self.text(), before)
+
     def test_nothing_to_record(self):
         sc = os.path.join(self.plans, "4-d")
         os.makedirs(os.path.join(sc, "artifacts"))

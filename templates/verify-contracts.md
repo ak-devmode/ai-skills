@@ -198,9 +198,11 @@ pre-PR, on the working tree the author is about to commit — so evidence with `
 passes. The flag stays on the record so a reader can see it; it is not a block.
 
 5.2.1 **Per unit, the gate also blocks when** a repo with a recorded base has commits in
-`base..HEAD` but no `review` record (§6.0) names that repo and covers the unit's start
-(its base at or before the unit's base, its head after it) — a unit that commits must be
-reviewed (review 5.3-r1-03); or when `artifacts/review-<unit>.jsonl` breaks §6.3: a `finding_id` with no disposition, a `fixed` without `sha`, or a `rejected`
+`base..HEAD` but no `review` record (§6.0) names that repo and covers the unit's first
+commit on the current branch — a unit that commits must be reviewed (review 5.3-r1-03);
+when a **blocking** finding's `fixed <sha>` sits in no later review's range — the fixes
+are reviewed again (`/plan` §6.8, 5.3-r2-03); when git cannot count the range (a block,
+never a zero); or when `artifacts/review-<unit>.jsonl` breaks §6.3: a `finding_id` with no disposition, a `fixed` without `sha`, or a `rejected`
 without `reason`. Deterministic, so the gate owns it — `/verify` judges whether a rejection
 was *right*, never whether one was recorded.
 

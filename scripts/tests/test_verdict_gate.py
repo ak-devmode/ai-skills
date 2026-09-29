@@ -309,6 +309,49 @@ class TestReviewRequired(Fixture):
         code, doc = self.gate_json("--blocking")
         self.assertEqual(code, 0, doc)
 
+    def test_review_of_a_discarded_branch_does_not_cover(self):
+        # 5.3-r2-03: the reviewed head must be on the current branch
+        git(self.svc, "checkout", "-q", "-b", "side")
+        git(self.svc, "commit", "-q", "--allow-empty", "-m", "side work")
+        side = git(self.svc, "rev-parse", "HEAD")
+        git(self.svc, "checkout", "-q", "main")
+        self.review_record(self.b, side)
+        self.verify("codex gpt-test", [self.v("ok", "pass")])
+        code, doc = self.gate_json("--blocking")
+        self.assertIn("review:svc", [b["id"] for b in doc["blocks"]])
+
+    def blocking_finding_fixed(self):
+        self.review_record(self.b, self.h)
+        git(self.svc, "commit", "-q", "--allow-empty", "-m", "fix r1-01")
+        fix = git(self.svc, "rev-parse", "HEAD")
+        recs = [{"schema": "verify/1", "ts": "t", "record": "finding", "review_id": "5.1-r1", "finding_id": "5.1-r1-01",
+                 "reviewer": "codex gpt-test", "range": {"svc": f"{self.b}..{self.h}"}, "file": "a", "line": 1,
+                 "severity": "blocking"},
+                {"schema": "verify/1", "ts": "t", "record": "disposition", "finding_id": "5.1-r1-01",
+                 "disposition": "fixed", "sha": fix, "by": "t"}]
+        with open(os.path.join(self.scope, "artifacts", "review-5.1.jsonl"), "a") as fh:
+            fh.writelines(json.dumps(r) + "\n" for r in recs)
+        return fix
+
+    def test_blocking_fix_needs_a_later_review(self):
+        # 5.3-r2-03: /plan §6.8 "review the fixes again", enforced
+        fix = self.blocking_finding_fixed()
+        self.verify("codex gpt-test", [self.v("ok", "pass")])
+        code, doc = self.gate_json("--blocking")
+        self.assertIn("rereview:5.1-r1-01", [b["id"] for b in doc["blocks"]])
+        self.review_record(self.h, fix)            # r2 covers the fix
+        code, doc = self.gate_json("--blocking")
+        self.assertEqual((code, doc["verdict"]), (0, "pass"), doc)
+
+    def test_unreadable_repo_blocks_instead_of_counting_zero(self):
+        # 5.3-r2-02: a git failure is never "no commits"
+        with open(os.path.join(self.scope, "closeout-prep.md"), "a") as fh:
+            fh.write("\n- base: 5.1 gone 0123456789abcdef0123456789abcdef01234567\n")
+        self.review_record(self.b, self.h)
+        self.verify("codex gpt-test", [self.v("ok", "pass")])
+        code, doc = self.gate_json("--blocking")
+        self.assertIn("review:gone", [b["id"] for b in doc["blocks"]])
+
     def test_review_that_starts_after_the_base_does_not_cover(self):
         git(self.svc, "commit", "-q", "--allow-empty", "-m", "more")
         self.review_record(self.h, git(self.svc, "rev-parse", "HEAD"))

@@ -108,11 +108,15 @@ def fallback_markers(review_log, projects):
 
 
 def review_presence_blocks(review_log, base, projects):
-    """§5.2.1 — a unit with commits must have been reviewed (review 5.3-r1-03). For every repo
-    whose ledger base has commits in base..HEAD, some `review` record must name that repo and
-    cover the unit's start: its base an ancestor of (or equal to) the unit's base, its head a
-    descendant of the base. Later commits (fixes, progress notes) don't force a re-review; a
-    unit with no reviewed commits at all can't pass as reviewed."""
+    """§5.2.1 — a unit with commits must have been reviewed (review 5.3-r1-03).
+
+    For every repo whose ledger base has commits in base..HEAD, some `review` record must
+    name that repo and cover the unit's start: its base at or before the unit's base, its head
+    after it AND on the current branch (a review of a discarded branch covers nothing —
+    5.3-r2-03). Later commits (progress notes) don't force a re-review. The fix of every
+    *blocking* finding must itself sit inside a later review's range, which is /plan §6.8's
+    "review the fixes again" (5.3-r2-03). A git call that fails is a block, never a zero
+    (5.3-r2-02)."""
     recs = vl.read_jsonl(review_log) if os.path.exists(review_log) else []
     reviews = [r for r in recs if r.get("record") == "review"]
     # Logs from before `review` records existed (§6.0) carry the range on each finding.
@@ -124,20 +128,48 @@ def review_presence_blocks(review_log, base, projects):
                     reviews.append({"review_id": f.get("review_id"), "range": {repo_: rng},
                                     "shas": {"base": fb, "head": fh}})
     blocks = []
+
+    def inside(path, r, sha):
+        """sha in (r.base, r.head], and r.head on the current branch."""
+        sh = r.get("shas") or {}
+        return bool(sh.get("base") and sh.get("head")) and not sha.startswith(sh["base"]) \
+            and not sh["base"].startswith(sha) \
+            and git_ok(path, "merge-base", "--is-ancestor", sh["base"], sha) \
+            and git_ok(path, "merge-base", "--is-ancestor", sha, sh["head"]) \
+            and git_ok(path, "merge-base", "--is-ancestor", sh["head"], "HEAD")
+
     for repo, b in sorted(base.items()):
         path = os.path.join(projects, repo)
         n = git_out(path, "rev-list", "--count", f"{b}..HEAD")
-        if n in (None, "0"):
+        if n is None:
+            blocks.append((f"review:{repo}", "cannot count the unit's commits", f"git rev-list {b[:10]}..HEAD "
+                           f"in {repo}", "git failed", f"{path}", "environment"))
             continue
-        ok = any(repo in r.get("range", {}) and (r.get("shas") or {}).get("head")
-                 and git_ok(path, "merge-base", "--is-ancestor", r["shas"]["base"], b)
-                 and git_ok(path, "merge-base", "--is-ancestor", b, r["shas"]["head"])
-                 and r["shas"]["head"] != b for r in reviews)
-        if not ok:
+        if n == "0":
+            continue
+        mine = [r for r in reviews if repo in r.get("range", {})]
+        # the unit's first commit must sit inside a review on this branch
+        oldest = (git_out(path, "rev-list", "--reverse", f"{b}..HEAD") or "").splitlines()[:1]
+        if not any(oldest and inside(path, r, oldest[0]) for r in mine):
             blocks.append((f"review:{repo}", "commits in range were never reviewed",
-                           f"a /review record covering {b[:10]}.. in {repo}",
-                           f"{n} commit(s) in {b[:10]}..HEAD, {len(reviews)} review record(s), none covering it",
+                           f"a /review record on this branch covering {b[:10]}.. in {repo}",
+                           f"{n} commit(s) in {b[:10]}..HEAD, {len(mine)} review record(s) for {repo}, none covering it",
                            f"{review_log} · {repo}", "code"))
+    latest = {}
+    for r in recs:
+        if r.get("record") == "disposition":
+            latest[r.get("finding_id")] = r
+    for f in recs:
+        d = latest.get(f.get("finding_id"))
+        if f.get("record") != "finding" or f.get("severity") != "blocking" or not d \
+                or d.get("disposition") != "fixed" or not d.get("sha"):
+            continue
+        for repo in (f.get("range") or {}):
+            path = os.path.join(projects, repo)
+            if not any(inside(path, r, d["sha"]) for r in reviews if repo in r.get("range", {})):
+                blocks.append((f"rereview:{f['finding_id']}", "a blocking finding's fix was never reviewed",
+                               f"a later /review whose range contains {d['sha'][:10]}",
+                               f"no review record covers it", f"{review_log} · {f['finding_id']}", "code"))
     return blocks
 
 

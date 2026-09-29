@@ -109,6 +109,18 @@ class FinishTable(unittest.TestCase):
         self.assertIn("p1-tests", {r["check_id"] for r in t["rows"]})
         self.assertRegex(self.text(), r"\| 2 \| \d{4}-\d\d-\d\d \| suite row \| T / Claude \|")
 
+    def test_add_replace_amends_a_row_in_place(self):
+        self.ft("init", "--phase", "9.1=team/svc")
+        rows = self.rows_file({"check_id": "p1-scope-deliverables", "deliverable": "amended: trial moved",
+                               "owner": "9.1", "check": "judge", "repo": "team/svc"})
+        p = self.ft("add", "--rows", rows, "--change", "amend", "--replace")
+        self.assertEqual(p.returncode, 0, p.stderr)
+        t = vl.parse_table(self.table)
+        self.assertEqual(len(t["rows"]), 4)
+        self.assertEqual({r["check_id"]: r for r in t["rows"]}["p1-scope-deliverables"]["deliverable"],
+                         "amended: trial moved")
+        self.assertEqual(t["revision"], 2)
+
     def test_add_that_would_not_parse_changes_nothing(self):
         self.ft("init", "--phase", "9.1=team/svc")
         before = self.text()

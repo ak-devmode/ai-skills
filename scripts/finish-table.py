@@ -20,7 +20,9 @@ Extra rows: JSONL, one object per row with the §3.2 columns. Defaults: class B,
 Usage:
   finish-table.py init --scope DIR [--phase SPEC ...] [--rows FILE] [--test-plan-owner N.P]
                        [--predates N.P,...] [--by NAME] [--dry-run]
-  finish-table.py add  --scope DIR --rows FILE --change TEXT [--by NAME] [--dry-run]
+  finish-table.py add  --scope DIR --rows FILE --change TEXT [--replace] [--by NAME] [--dry-run]
+    --replace   a row whose check_id already exists replaces that row in place (an amended
+                deliverable); without it a duplicate check_id is refused
     --predates  phases already started (Done or in progress) before the table existed;
                 verdict-gate.py and plans-index.py validate exempt them (Alex, 2026-09-29:
                 running scopes are never asked to reconcile verify)
@@ -209,6 +211,11 @@ def cmd_add(a):
         return fail("no rows to add", "at least one JSON row", "0", a.rows, "write the rows file",
                     code=vl.EXIT_USAGE)
     lines = read(path).splitlines()
+    existing = {r["check_id"]: r["_line"] for r in table["rows"]}
+    if a.replace:
+        for r in [r for r in new if r["check_id"] in existing]:
+            lines[existing[r["check_id"]] - 1] = render_row(r)
+        new = [r for r in new if r["check_id"] not in existing]
     last = max(r["_line"] for r in table["rows"]) if table["rows"] else \
         next(i + 2 for i, l in enumerate(lines) if vl._cells(l)[:1] == ["check_id"])
     rev = table["revision"] + 1
@@ -235,6 +242,7 @@ def main(argv):
     sub.choices["init"].add_argument("--test-plan-owner")
     sub.choices["init"].add_argument("--predates")
     sub.choices["add"].add_argument("--change", required=True)
+    sub.choices["add"].add_argument("--replace", action="store_true")
     try:
         a = ap.parse_args(argv)
     except SystemExit as exc:

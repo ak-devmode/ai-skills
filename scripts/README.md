@@ -71,7 +71,7 @@ by `test_entrypoint.py`'s compile check.
     verdict-gate.py --scope DIR (--unit N.P | --all) [--advisory|--blocking] [--skip-verify R] [--json]
       exit: 0 pass / advisory / skipped / predates-gate · 1 blocked (--all: any block) · 2 usage · 3 could not evaluate
     finish-table.py init --scope DIR --phase N.P[=repo,...]... [--rows F] [--test-plan-owner N.P] [--predates N.P,...]
-    finish-table.py add  --scope DIR --rows F --change TEXT
+    finish-table.py add  --scope DIR --rows F --change TEXT [--replace]
       exit: 0 written · 2 usage · 3 refused (exists / missing / would not parse — nothing written)
     dispatch-log.py --scope --task --status {dispatched,done,blocked,failed} [--seat --branch --worktree --pane --tail --log]
       exit: 0 written + read back · 1 did not land · 2 usage

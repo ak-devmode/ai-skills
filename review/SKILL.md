@@ -172,6 +172,23 @@ without a reason. `verdict-gate.py` refuses Done while any ID lacks one, and `/v
 audits whether each rejection was *right*. Nothing silently dismissed, nothing silently
 dropped.
 
+5.1 **Convergence — a review loop must end.** Every repo, every unit. `record` prints a
+`[CONVERGENCE]` line when either trips; act on it, don't re-run past it.
+
+- **Round cap.** Past round 3 of one unit, only `blocking` findings are fixed in the loop.
+  `should-fix` and `note` go to the project's `TO-DO.md` and are recorded
+  `dispose --deferred "<TO-DO item>"` — never `--rejected`, because a deferral is not a
+  claim that the finding is wrong. `dispose` refuses to defer a blocking finding.
+- **Same place, three rounds.** A file drawing findings in each of the last three rounds
+  is a design that is wrong, not a patch that is incomplete. Stop fixing it and raise it to
+  the user as one design finding: replace it, narrow what it promises, or cut it.
+- **Findings that argue opposite sides** (fixing one reopens another) mean the contract is
+  ambiguous. Stop and ask which side the user wants; don't pick one and reject the other.
+
+Why: scope 5.3 ran twelve rounds, eight of them patching one heuristic shell scanner,
+ending with two findings on opposite sides — the local-maxima failure this skill exists
+to catch, inside the skill. Review outcomes are a human checkpoint (`/plan` §6.8).
+
 ---
 
 ## 6. Behaviors

@@ -282,6 +282,31 @@ class TestReview(unittest.TestCase):
         self.assertEqual(self.dispose("9.1-r1-03", "--rejected", "comment is accurate").returncode, 0)
         self.assertEqual(gate.coverage_blocks(self.log), ([], 3))
 
+    def test_deferred_only_for_non_blocking_with_a_todo(self):
+        self.record()
+        gate = load("verdict-gate.py")
+        self.assertEqual(self.dispose("9.1-r1-01", "--deferred", "TO-DO: x").returncode, 1)  # blocking
+        self.assertEqual(self.dispose("9.1-r1-02", "--deferred", "  ").returncode, 1)
+        self.assertEqual(self.dispose("9.1-r1-02", "--deferred", "TO-DO: tenant filter").returncode, 0)
+        self.assertEqual(self.dispose("9.1-r1-03", "--deferred", "TO-DO: comment").returncode, 0)
+        self.assertEqual([b[0] for b in gate.coverage_blocks(self.log)[0]], ["9.1-r1-01"])
+        # a hand-written deferral of the blocking finding still blocks
+        with open(self.log, "a") as fh:
+            fh.write(json.dumps({"schema": "verify/1", "ts": "t", "record": "disposition", "finding_id": "9.1-r1-01",
+                                 "disposition": "deferred", "sha": None, "reason": "later", "by": "t"}) + "\n")
+        self.assertIn("deferred", gate.coverage_blocks(self.log)[0][0][1])
+
+    def test_convergence_signals(self):
+        for _ in range(3):
+            p = self.record()
+            self.assertEqual(p.returncode, 0, p.stderr)
+        self.assertIn("[CONVERGENCE] a.sh drew findings in each of the last 3 rounds", p.stdout)
+        self.assertIn("[CONVERGENCE] b.go", p.stdout)
+        self.assertNotIn("round 3 >", p.stdout)
+        p = self.record(findings=[])
+        self.assertIn("[CONVERGENCE] round 4 > 3", p.stdout)
+        self.assertNotIn("drew findings", p.stdout)  # a clean round breaks the streak
+
 
 if __name__ == "__main__":
     unittest.main()

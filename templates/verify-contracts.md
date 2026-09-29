@@ -260,7 +260,7 @@ exclusive lock on the log, so concurrent or clean reviews never share an ID.
 `text` · `fix`. IDs are assigned in severity order.
 
 6.2 **`disposition`** records: `schema` · `ts` · `finding_id` · `disposition`
-(`fixed | rejected`) · `sha` (required for `fixed`) · `reason` (required for `rejected`) ·
+(`fixed | rejected | deferred`) · `sha` (required for `fixed`) · `reason` (required for `rejected`; for `deferred`, the TO-DO item — never on a `blocking` finding, `review/SKILL.md` §5.1) ·
 `by`.
 
 6.3 **Coverage rule.** Every `finding_id` has at least one disposition; the latest one

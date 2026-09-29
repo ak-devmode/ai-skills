@@ -24,8 +24,10 @@ Exit:   0 ok · 1 disposition refused · 2 usage · 3 could not evaluate (empty 
 
 import argparse
 import datetime
+import fcntl
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -191,13 +193,32 @@ def cmd_record(a):
     key = repo_key(a.repo)
     rank = {s: i for i, s in enumerate(SEVERITIES)}
     ordered = sorted(doc["findings"], key=lambda f: rank[f["severity"]])
-    log = None
-    if a.scope and a.unit:
-        log = os.path.join(a.scope, "artifacts", f"review-{a.unit}.jsonl")
-        prior = {r.get("review_id") for r in vl.read_jsonl(log) if r.get("record") == "finding"}
-        review_id = f"{a.unit}-r{len(prior) + 1}"
-    else:
-        review_id = "adhoc"
+    if not (a.scope and a.unit):
+        print(build(a, doc, ordered, key, n, "adhoc")[2])
+        print("(no --scope/--unit: nothing logged; findings are not tracked for dispositions)", file=sys.stderr)
+        return vl.EXIT_PASS
+    art = os.path.join(a.scope, "artifacts")
+    os.makedirs(art, exist_ok=True)
+    log = os.path.join(art, f"review-{a.unit}.jsonl")
+    # Allocate the review ID and append under one exclusive lock, and always write a
+    # `review` record — even with zero findings — so concurrent or clean reviews can't
+    # mint the same ID (review 5.2-r1-04, -07).
+    with open(log, "a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        taken = [int(m.group(1)) for r in vl.read_jsonl(log)
+                 for m in [re.match(rf"^{re.escape(a.unit)}-r(\d+)$", str(r.get("review_id", "")))] if m]
+        review_id = f"{a.unit}-r{max(taken, default=0) + 1}"
+        records, findings, report = build(a, doc, ordered, key, n, review_id)
+        vl.append_verified(log, records)
+        out = os.path.join(art, f"review-{review_id}.md")
+        with open(out, "w", encoding="utf-8") as fh:
+            fh.write(report)
+    print(f"review {review_id}: {len(findings)} finding(s) logged -> {log}\nreport: {out}\nverdict: {doc['verdict']}")
+    return vl.EXIT_PASS
+
+
+def build(a, doc, ordered, key, n, review_id):
+    """(records, findings, report) for one review: a `review` record, then its findings."""
     ts = now()
     findings = [dict(f, finding_id=f"{review_id}-{i:02d}") for i, f in enumerate(ordered, 1)]
     records = [{"schema": vl.SCHEMA, "ts": ts, "record": "finding", "review_id": review_id,
@@ -212,17 +233,10 @@ def cmd_record(a):
                       f"`review.py dispose --scope <scope> --unit {a.unit or '<unit>'} --finding <ID> "
                       "(--fixed <sha> | --rejected \"<reason>\")`"]
     report = "\n".join(render(doc, findings, header)) + "\n"
-    if log is None:
-        print(report)
-        print("(no --scope/--unit: nothing logged; findings are not tracked for dispositions)", file=sys.stderr)
-        return vl.EXIT_PASS
-    if records:
-        vl.append_verified(log, records)
-    out = os.path.join(a.scope, "artifacts", f"review-{review_id}.md")
-    with open(out, "w", encoding="utf-8") as fh:
-        fh.write(report)
-    print(f"review {review_id}: {len(findings)} finding(s) logged -> {log}\nreport: {out}\nverdict: {doc['verdict']}")
-    return vl.EXIT_PASS
+    review = {"schema": vl.SCHEMA, "ts": ts, "record": "review", "review_id": review_id, "reviewer": a.reviewer,
+              "range": {key: a.range}, "passes": a.passes or "", "findings": len(findings),
+              "verdict": doc["verdict"]}
+    return [review] + records, findings, report
 
 
 # ---------- dispose ----------------------------------------------------------------

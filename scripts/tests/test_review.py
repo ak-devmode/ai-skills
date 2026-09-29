@@ -9,11 +9,13 @@ the gate will see.
 
 import json
 import os
+import shutil
 import subprocess
+import sys
 import tempfile
 import unittest
 
-from _helpers import load, run
+from _helpers import load, run, script
 
 REVIEW = "review/scripts/review.py"
 
@@ -122,6 +124,41 @@ class TestReview(unittest.TestCase):
                        "## What this review did not cover", "- no network", "**Verdict:** SHIP AFTER BLOCKING"):
             self.assertIn(needle, report)
         self.assertNotIn("DEGRADED", report)
+
+    def test_clean_reviews_reserve_distinct_ids(self):
+        # 5.2-r1-07: a zero-finding review still writes a `review` record, so the next one
+        # doesn't reuse its ID; and a missing artifacts dir is created, not a crash.
+        shutil.rmtree(os.path.join(self.scope, "artifacts"))
+        for n in (1, 2):
+            p = self.record(findings=[], verdict="SHIP")
+            self.assertEqual(p.returncode, 0, p.stderr)
+            self.assertIn(f"review 9.1-r{n}: 0 finding(s)", p.stdout)
+        self.assertTrue(os.path.exists(os.path.join(self.scope, "artifacts", "review-9.1-r2.md")))
+
+    def test_concurrent_reviews_mint_distinct_ids(self):
+        # 5.2-r1-04: allocation and append happen under one lock.
+        answer, rng = self.answer(), self.rng(self.repo)
+        procs = [subprocess.Popen([sys.executable, script(REVIEW), "record", "--repo", self.repo, "--range",
+                                   rng, "--reviewer", "codex gpt-test", "--input", answer,
+                                   "--scope", self.scope, "--unit", "9.1"], env=self.env,
+                                  stdout=subprocess.DEVNULL, stderr=subprocess.PIPE) for _ in range(6)]
+        for p in procs:
+            self.assertEqual(p.wait(), 0, p.stderr.read())
+        ids = [f["finding_id"] for f in self.findings()]
+        self.assertEqual(len(ids), 18)
+        self.assertEqual(len(set(ids)), 18)
+
+    def test_duplicate_finding_ids_block_coverage(self):
+        self.record()
+        with open(self.log) as fh:
+            recs = [json.loads(x) for x in fh]
+        dup = dict(next(r for r in recs if r.get("finding_id") == "9.1-r1-01"), text="a different finding")
+        with open(self.log, "a") as fh:
+            fh.write(json.dumps(dup) + "\n")
+        for fid in ("9.1-r1-01", "9.1-r1-02", "9.1-r1-03"):
+            self.assertEqual(self.dispose(fid, "--rejected", "x").returncode, 0)
+        blocks, _ = load("verdict-gate.py").coverage_blocks(self.log)
+        self.assertEqual([b[1] for b in blocks], ["duplicate finding ID"])
 
     def test_fallback_reviewer_is_degraded_in_the_header(self):
         self.record(reviewer="claude-fallback codex not authed")

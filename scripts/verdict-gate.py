@@ -51,6 +51,11 @@ def coverage_blocks(review_log):
         if r.get("record") == "disposition":
             latest[r.get("finding_id")] = r
     blocks = []
+    ids = [f.get("finding_id") for f in findings]
+    for fid in sorted({i for i in ids if ids.count(i) > 1}):
+        # One disposition must never clear two findings (review 5.2-r1-04).
+        blocks.append((fid, "duplicate finding ID", "one finding per finding_id",
+                       f"{ids.count(fid)} findings share it", f"{review_log} · {fid}", "tooling"))
     for f in findings:
         fid, d = f.get("finding_id"), latest.get(f.get("finding_id"))
         where = f"{review_log} · {fid} ({f.get('file')}:{f.get('line')})"

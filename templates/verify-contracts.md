@@ -204,7 +204,12 @@ and `dispose` (dispositions). No hand-written JSON.
 **Readers:** `verdict-gate.py` enforces coverage (§5.2.1); `/verify` audits every
 rejection's reasoning.
 
-Every record carries `record`: `finding` or `disposition`.
+Every record carries `record`: `review`, `finding` or `disposition`.
+
+6.0 **`review`** records — one per `record` call, written even when there are no findings:
+`schema` · `ts` · `review_id` · `reviewer` (judge line, §4.6) · `range` · `passes` ·
+`findings` (count) · `verdict`. `review.py` allocates the `review_id` and appends under an
+exclusive lock on the log, so concurrent or clean reviews never share an ID.
 
 6.1 **`finding`** records keep the reviewer's raw output: `schema` · `ts` · `review_id`
 (`<unit>-r<n>`) · `finding_id` (`<review_id>-<nn>`, stable for that review) · `reviewer`
@@ -218,7 +223,7 @@ Every record carries `record`: `finding` or `disposition`.
 `by`.
 
 6.3 **Coverage rule.** Every `finding_id` has at least one disposition; the latest one
-decides. A `fixed <sha>` commit must touch the finding's `file` — `dispose` refuses it
+decides. A `finding_id` carried by two findings blocks — one disposition must never clear two. A `fixed <sha>` commit must touch the finding's `file` — `dispose` refuses it
 otherwise, at write time. Nothing silently
 dismissed, nothing silently dropped. A re-review mints a new `review_id`; the old findings
 stay.

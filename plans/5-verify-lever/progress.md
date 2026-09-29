@@ -568,3 +568,11 @@ Suite OK (2 skipped). Lint 0 ISSUE.
 - r2-03 review coverage accepted a discarded-branch head, and nothing enforced "review the fixes of blocking findings again" → reviewed head must be on HEAD's history; every blocking finding's `fixed <sha>` must sit inside a later review — `c1cd4f3` (contract §5.2.1 updated). Real data: 5.2 and 5.3 clear it
 - r2-04 unwritable stamp crashed clone-behind → caught; the stamp only rate-limits — `568cd65`
 - r2-05 `--predates " , "` passed the empty check → parsed first — `0c6047f`
+
+#### Dogfood: reviews 5.3-r3 and r4 (codex `gpt-6-sol`) — r3: 1 blocking + 2 should-fix (2 fixed, 1 rejected); r4: 1 blocking + 1 should-fix (1 fixed, 1 rejected)
+→ `artifacts/review-5.3-r3.md`, `review-5.3-r4.md`
+- r3-01 a directory at the stamp path counted as a fresh fetch → only a regular file counts; r3-02 unwritable stamp was swallowed → reported — `c3516ef`
+- r3-03 **rejected**: `plans/TO-DO.md:361` was written by `151d0e9`, a **concurrent session** (WellMed scope 149 closeout) committing to ai-skills `main` inside 5.3's range — not this unit's work; surfaced to Alex
+- r4-01 **rejected**: symlinked stamp — needs tampering inside `.git`, which could equally rewrite `refs/remotes/origin/main`; the non-tampering failure modes are fixed (r1-08, r3-01, r3-02)
+- r4-02 callers showed "that line" (singular) → every line — `20906ab`
+- Gate: every one of the 19 findings dispositioned; no `review:` / `rereview:` block (r4's range covers r3's blocking fix; r4-01 rejected, so nothing further to re-review). Suite OK.

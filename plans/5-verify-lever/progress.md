@@ -587,3 +587,8 @@ Suite OK (2 skipped). Lint 0 ISSUE.
 - `p3-scope-deliverables` fail — the announcement is drafted, not sent. That's the gate-A human step; clears after Alex sends it.
 - `test-plan-followed` fail — the eng-review test plan's three-outcome class-A trial, which Alex moved to test-suite T2 on 2026-09-29. Needs Alex: amend the row (like `p2-scope-deliverables`) or accept the block.
 - `p3-names-resolve` inconclusive (judge downgrade) — the resolver found 0 references because it doesn't scan shell (`verify-prereqs.sh` reads `VERIFY_CODEX_BIN`, which is declared). Lever candidate `shell-env-identifier-scan`, first sighting. Needs Alex: build now or record.
+
+### Session: 2026-09-29 (Alex / Claude) — gate A answered
+- Pushed `main` (31 commits) before the announcement. Alex sent it.
+- **Lever built:** `resolve-identifiers.py` scans shell `$NAME` / `${NAME…}` outside single quotes, minus names the script assigns and the shell's own variables — `bcf8b7b`. The 5.3 range now finds and resolves `VERIFY_CODEX_BIN` (`.env.example:7`). Across all ai-skills history it flags 14 undeclared env reads in older shell scripts (grafana-remediate `GRAFANA_*`/`ALARM_*`, `GEMINI_API_KEY`, herdr's `HERDR_*`) — true by the rule, outside 5.3 → TO-DO at completion.
+- `finish-table.py add --replace` (amend a row in place) — used to amend `test-plan-followed` → rev 6.

@@ -1,7 +1,7 @@
 # Finish conditions — 5-verify-lever
 
 **Schema version:** verify/1
-**Revision:** 5
+**Revision:** 6
 **Scope:** ~/Projects/ai-skills/plans/5-verify-lever/scope.md
 
 One row per check. `check` is a shell command or the literal `judge`. A literal `|` in a
@@ -17,7 +17,7 @@ range is fixed: `8173b95..e3b74ec`.
 | gate-semantics-tested | verdict-gate enforces §5 end to end | 5.1/1.4 | B | `python3 -m unittest discover scripts/tests -p test_verdict_gate.py` | ai-skills | . | - | 300 | 4 | no | runner record |
 | scope-deliverables | scope.md §4.1 deliverables landed as specified | 5.1 | B | judge | ai-skills | . | - | - | 2 | no | judge reason |
 | no-overbuild | No abstraction Phase 1 did not need | 5.1 | B | judge | ai-skills | . | - | - | 2 | no | judge reason |
-| test-plan-followed | The eng-review test plan's edge cases and critical paths are covered | 5.3 | B | judge | ai-skills | . | - | - | 2 | no | judge reason |
+| test-plan-followed | The eng-review test plan's edge cases and critical paths are covered, except the three-outcome class-A live trial, which moved to kalpa-docs test-suite T2 (Alex, 2026-09-29; progress.md Decisions Log) | 5.3 | B | judge | ai-skills | . | - | - | 2 | no | judge reason |
 | p2-tests-green | The script test suite passes at the end of Phase 2 | 5.2 | B | `python3 -m unittest discover scripts/tests` | ai-skills | . | - | 300 | 4 | no | runner record |
 | p2-names-resolve | Every identifier Phase 2 references is declared | 5.2 | B | `python3 scripts/resolve-identifiers.py --repo . --range $VERIFY_BASE..HEAD` | ai-skills | . | - | - | 4 | no | runner record |
 | p2-skills-lint | `/verify` and `/review` pass the accretion linter | 5.2 | B | `python3 scripts/lint-skill.py verify review` | ai-skills | . | - | - | 4 | no | runner record |
@@ -44,3 +44,4 @@ range is fixed: `8173b95..e3b74ec`.
 | 3 | 2026-09-26 | Per the codex judge: `--decl-rev HEAD` moved the goalposts for a closed unit — reverted, so Phase 1 is judged against its own declarations (it fails; fixed in 5.2 `e4aaa0a`). `test-plan-followed` covers the whole scope's plan → owner 5.3 | Alex / Claude |
 | 4 | 2026-09-29 | Phase 2 (5.2) rows added: runner rows for the suite, names, lint, codex failure modes, review log and fixtures; judge rows for deliverables (plan as amended — Task 2.4 class B only, class-A trial moved to test-suite T2), over-build and rejections | Alex / Claude |
 | 5 | 2026-09-29 | Phase 3 (5.3) rows via finish-table.py add (its first real use): suite, live fixtures eval with VERIFY_EVAL=1, names, lint; judge rows for deliverables (plan as amended), over-build, rejections | Alex / Claude |
+| 6 | 2026-09-29 | test-plan-followed amended: the class-A three-outcome trial moved to test-suite T2 (Alex, 2026-09-29), as p2-scope-deliverables was | Alex / Claude |

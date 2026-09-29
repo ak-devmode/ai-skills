@@ -180,6 +180,14 @@ def evaluate(scope, unit, projects):
             blocks.append((fid, what, exp, found, where, cause, "record the disposition through /review's log writer"))
             report.append(f"BLOCK  {fid}  {what}")
         report.append(f"review {n} finding(s), {n - len(cov)} dispositioned")
+        # The latest review decides the review marker: a fallback review carries ⚠ until a
+        # codex re-review clears it (review/SKILL.md §3, review 5.2-r1-08). Logs predating
+        # `review` records fall back to the latest finding's reviewer.
+        recs = vl.read_jsonl(review)
+        latest = [r for r in recs if r.get("record") == "review"] or \
+                 [r for r in recs if r.get("record") == "finding"]
+        if latest and not str(latest[-1].get("reviewer", "")).startswith("codex "):
+            judges.add(f"review {latest[-1].get('reviewer', 'unrecorded')}")
     return report, blocks, sorted(j for j in judges if j)
 
 

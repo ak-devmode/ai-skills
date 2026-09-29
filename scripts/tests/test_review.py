@@ -143,7 +143,8 @@ class TestReview(unittest.TestCase):
                                    "--scope", self.scope, "--unit", "9.1"], env=self.env,
                                   stdout=subprocess.DEVNULL, stderr=subprocess.PIPE) for _ in range(6)]
         for p in procs:
-            self.assertEqual(p.wait(), 0, p.stderr.read())
+            _, err = p.communicate()
+            self.assertEqual(p.returncode, 0, err)
         ids = [f["finding_id"] for f in self.findings()]
         self.assertEqual(len(ids), 18)
         self.assertEqual(len(set(ids)), 18)
@@ -159,6 +160,21 @@ class TestReview(unittest.TestCase):
             self.assertEqual(self.dispose(fid, "--rejected", "x").returncode, 0)
         blocks, _ = load("verdict-gate.py").coverage_blocks(self.log)
         self.assertEqual([b[1] for b in blocks], ["duplicate finding ID"])
+
+    def test_fallback_review_marks_the_index_until_a_codex_review(self):
+        # 5.2-r1-08: the gate reads the latest review's reviewer, not only verify's judge.
+        gate = load("verdict-gate.py")
+        table = os.path.join(self.scope, "finish-conditions.md")
+        with open(table, "w") as fh:
+            fh.write("**Schema version:** verify/1\n**Revision:** 1\n\n"
+                     "| check_id | deliverable | owner | class | check | repo | dir | env | timeout | rung | "
+                     "unreachable_ok | evidence |\n|---|---|---|---|---|---|---|---|---|---|---|---|\n"
+                     "| ok | x | 9.1 | B | `true` | wellmed/svc | . | - | - | 4 | no | ev |\n")
+        self.record(reviewer="claude-fallback codex not authed", findings=[], verdict="SHIP")
+        judges = gate.evaluate(self.scope, "9.1", self.projects)[2]
+        self.assertIn("review claude-fallback codex not authed", judges)
+        self.record(findings=[], verdict="SHIP")
+        self.assertEqual(gate.evaluate(self.scope, "9.1", self.projects)[2], [])
 
     def test_fallback_reviewer_is_degraded_in_the_header(self):
         self.record(reviewer="claude-fallback codex not authed")

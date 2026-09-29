@@ -184,7 +184,9 @@ was *right*, never whether one was recorded.
 
 5.3 **Judge marker.** When the deciding `final` record's judge line is not `codex …`, the
 gate reports `⚠ judge: <line>` and `plans-index.py status` appends it to the phase's index
-status. A later final run with a codex judge clears it.
+status. A later final run with a codex judge clears it. The same holds for review: when the
+unit's latest `review` record (§6.0) has a non-codex reviewer, the gate reports
+`⚠ judge: review <line>` until a codex re-review.
 
 5.4 **Advisory mode** (the default until three real scopes pass cleanly): the gate prints
 the same result and the same marker, and exits `0` with `ADVISORY` on the verdict line

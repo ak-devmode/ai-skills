@@ -224,7 +224,8 @@ def build(a, doc, ordered, key, n, review_id):
                 "file": f["file"], "line": f["line"], "category": f["category"], "group": f.get("group", ""),
                 "severity": f["severity"], "text": f["text"], "fix": f.get("fix", "")} for f in findings]
     degraded = [] if a.reviewer.startswith("codex ") else [
-        f"**DEGRADED:** reviewer is `{a.reviewer}` — not the codex gate; the index carries ⚠ until a codex review."]
+        f"**DEGRADED:** reviewer is `{a.reviewer}` — not the codex gate; the gate reports `⚠ judge: review {a.reviewer}` "
+        "(and the index carries it) until a codex re-review of this unit."]
     header = [f"# /review — {key} @ `{a.range}` ({n} commits)", "",
               f"**Review:** `{review_id}` · **Reviewer:** {a.reviewer} · **Passes:** {a.passes or 'unrecorded'}"] \
         + degraded + [f"**Findings:** {len(findings)} — every ID needs a disposition: "

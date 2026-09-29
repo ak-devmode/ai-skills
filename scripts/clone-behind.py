@@ -53,8 +53,11 @@ def main(argv):
         if why:
             print(f"{name}: freshness unknown — fetch failed ({why})")
             return 0
-        with open(stamp, "w", encoding="utf-8") as fh:
-            fh.write(f"{int(time.time())}\n")
+        try:
+            with open(stamp, "w", encoding="utf-8") as fh:
+                fh.write(f"{int(time.time())}\n")
+        except OSError:
+            pass  # the stamp only rate-limits fetches; without it the next call fetches again (5.3-r2-04)
     n = git(a.repo, "rev-list", "--count", "HEAD..origin/main")
     if n.returncode != 0:
         print(f"{name}: freshness unknown — {n.stderr.strip() or 'no origin/main'}")

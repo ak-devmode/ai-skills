@@ -105,6 +105,15 @@ class CloneBehind(unittest.TestCase):
         p = run("clone-behind.py", "--repo", self.clone, "--max-age", "3600")
         self.assertIn("is 1 commit(s) behind origin/main", p.stdout)
 
+    def test_unwritable_stamp_still_reports(self):
+        # 5.3-r2-04: a failed cache write must not turn a successful fetch into a crash
+        self.git(self.other, "commit", "-q", "--allow-empty", "-m", "b")
+        self.git(self.other, "push", "-q", "origin", "HEAD:main")
+        os.makedirs(os.path.join(self.clone, ".git", "ai-skills-main-fetched"))  # a dir: open() fails
+        p = self.behind()
+        self.assertEqual(p.returncode, 0, p.stderr)
+        self.assertIn("is 1 commit(s) behind", p.stdout)
+
     def test_unreachable_origin_says_unknown_not_nothing(self):
         self.git(self.clone, "remote", "set-url", "origin", os.path.join(self.tmp.name, "gone.git"))
         p = self.behind()

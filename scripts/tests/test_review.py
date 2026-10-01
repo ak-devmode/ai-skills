@@ -453,6 +453,15 @@ class TestReview(unittest.TestCase):
                 self.assertEqual(p.returncode, code, p.stderr)
                 self.assertIn(needle, p.stderr)
         self.assertEqual(self.dispose("9.1-r1-01", "--fixed", self.commit(self.repo, "pkg/res.go")).returncode, 0)
+        # r2-05: in another repo the date decides, and an unknown review time fails closed
+        rr, new = load(REVIEW), self.commit(gw, "new.go")
+        f = {"range": {"wellmed/svc": "a.." + git(self.repo, "rev-parse", "HEAD")}}
+        cases = [("2000-06-01T00:00:00Z", None), (None, "time is unknown"), ("garbage", "time is unknown"),
+                 ("2099-01-01T00:00:00Z", "committed before the review")]
+        for ts, needle in cases:
+            with self.subTest(ts=ts):
+                why = rr.predates(dict(f, ts=ts), new, gw, [])
+                (self.assertIsNone(why) if needle is None else self.assertIn(needle, why or ""))
         # misfiled names the old commit as not a fix instead of printing its dispose line
         self.dispose("9.1-r1-01", "--rejected", f"FIXED by {intro[:8]}")
         self.dispose("9.1-r1-01", "--rejected", f"by design since {intro[:8]}; NOT FIXED, out of scope")

@@ -598,12 +598,16 @@ def predates(f, full, path, recs):
             return f"it is in the code that review reviewed (an ancestor of {head[:10]})"
         if rc == 1:
             return None
-    rc, ct, _ = git(path, "show", "-s", "--format=%ct", full)
+    # by date, and failing closed: with no review time or no commit date nothing shows the fix
+    # came after the finding (review r2-05). A commit in the review's own second passes.
     try:
-        before = rc == 0 and ts and int(ct) < calendar.timegm(time.strptime(ts, "%Y-%m-%dT%H:%M:%SZ"))
-    except ValueError:
-        before = False
-    return f"it was committed before the review ({ts})" if before else None
+        t = calendar.timegm(time.strptime(ts, "%Y-%m-%dT%H:%M:%SZ"))
+    except (TypeError, ValueError):
+        return f"the review's time is unknown ({ts!r}), so nothing shows the commit came after it"
+    rc, ct, _ = git(path, "show", "-s", "--format=%ct", full)
+    if rc != 0 or not ct.isdigit():
+        return "git cannot date the commit, so nothing shows it came after the review"
+    return f"it was committed before the review ({ts})" if int(ct) < t else None
 
 
 def fix_check(f, sha, path, key, recs):

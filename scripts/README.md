@@ -61,7 +61,7 @@ by `test_entrypoint.py`'s compile check.
     stamp-executed-by.sh <plan-file> [--repo DIR]
       exit: 0 stamped/unchanged · 1 write did not land · 2 usage · 3 no git user.name
     repo-graph-check.py <scope.md> [--projects DIR]
-      exit: 0 unchanged · 1 advanced only (confirm) · 3 diverged/missing (stop) · 4 no Repo Graph table · 2 usage
+      exit: 0 unchanged · 1 advanced only (confirm) · 3 diverged/missing (stop) · 4 no Repo Graph table / every row skipped · 2 usage
     ledger-init.sh <folder> --plan <plan> --phase "<P>: <name>" [--slug S] [--resumed] [--repo PATH]...
       exit: 0 ok · 1 write did not land / --repo not a git repo · 2 usage · 4 template missing
     resolve-identifiers.py --repo P (--range BASE..HEAD | --ids FILE) [--decl-repo P]... [--json]

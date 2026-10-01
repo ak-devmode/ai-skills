@@ -436,6 +436,11 @@ class TestReview(unittest.TestCase):
         self.assertEqual(self.dispose("9.1-r1-01", "--fixed", self.commit(self.repo, "pkg/res.go")).returncode, 0)
         # misfiled names the old commit as not a fix instead of printing its dispose line
         self.dispose("9.1-r1-01", "--rejected", f"FIXED by {intro[:8]}")
+        self.dispose("9.1-r1-01", "--rejected", f"by design since {intro[:8]}; NOT FIXED, out of scope")
+        p = run(REVIEW, "misfiled", "--scope", self.scope, "--unit", "9.1", env=self.env)
+        self.assertIn("no affirmative `FIXED` claim", p.stdout)
+        self.assertNotIn("--fixed ", p.stdout)
+        self.dispose("9.1-r1-01", "--rejected", f"FIXED by {intro[:8]}")
         p = run(REVIEW, "misfiled", "--scope", self.scope, "--unit", "9.1", env=self.env)
         self.assertIn(f"{intro[:8]}: not a fix", p.stdout)
         self.assertNotIn(f"--fixed {intro[:8]}", p.stdout)
@@ -478,6 +483,16 @@ class TestReview(unittest.TestCase):
         self.dispose("9.1-r1-01", "--rejected", f"not rejected on merit — FIXED by {fix[:7]} (tooling gap)")
         self.dispose("9.1-r1-02", "--rejected", "FIXED in kalpa-docs, committed with the progress notes")
         self.dispose("9.1-r1-03", "--rejected", "the comment is accurate as of 20260929")
+        # review adhoc-07: a negated claim, and a SHA cited outside the FIXED clause, print no dispose line
+        rr = load(REVIEW)
+        cases = [(f"NOT FIXED by {fix[:8]}: by design", (False, [])),
+                 (f"was never FIXED; see {fix[:8]}", (False, [])),
+                 (f"FIXED by {fix[:8]}; the bug came from abcdef12", (True, [fix[:8]])),
+                 ("not rejected on merit — FIXED in kalpa-docs decd35d", (True, ["decd35d"])),
+                 ("not rejected on merit", (False, []))]
+        for reason, want in cases:
+            with self.subTest(reason=reason):
+                self.assertEqual(rr.fix_claims(reason), want)
         ls = lambda: run(REVIEW, "misfiled", "--scope", self.scope, "--unit", "9.1", env=self.env)
         p = ls()
         self.assertEqual(p.returncode, 0, p.stderr)

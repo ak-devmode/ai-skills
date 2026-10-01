@@ -192,7 +192,9 @@ older than the review), with or without `--off-anchor`, and the gate blocks one.
 `--rejected` is refused without a reason — never use it to record a fix the tool refused.
 The latest disposition decides, so a fix logged as a rejection is corrected by disposing it
 again: `$RV misfiled --scope $SCOPE --unit $UNIT` lists every rejection whose reason says
-`FIXED` and prints the `dispose` line for each SHA it resolves (here or in a repo beside it);
+`FIXED` and prints the `dispose` line for each SHA in an affirmative `FIXED …` clause that
+resolves (here or in a repo beside it) — a negated `NOT FIXED` gets no line, nor a SHA cited
+for anything else;
 it writes nothing — fill each `--off-anchor` reason yourself, then re-`accept`. When every ID has one, the user's yes is recorded with
 `$RV accept --scope $SCOPE --unit $UNIT --by "<name>"` (`verify-contracts.md` §6.4) —
 never on their behalf. `verdict-gate.py` refuses Done while any ID lacks one, and `/verify`

@@ -621,6 +621,22 @@ def fix_check(f, sha, path, key, recs):
 # to record before test-only and cross-repo fixes were accepted (149.2: eleven of them).
 MISFILED = re.compile(r"\bFIXED\b|not rejected on merit")
 SHA = re.compile(r"\b[0-9a-f]{7,40}\b")
+NEGATION = {"not", "never", "no", "cannot", "unfixed"}
+
+
+def fix_claims(reason):
+    """(affirmed, SHAs): whether some `FIXED` is not negated by the three words before it, and
+    the SHAs in each such claim's own clause (up to `;` or a sentence end). `NOT FIXED by <sha>`,
+    or a SHA the reason cites for something else (where the bug came from), is never a fix
+    candidate (review adhoc-07)."""
+    affirmed, shas = False, []
+    for m in re.finditer(r"\bFIXED\b", reason):
+        before = [w.lower() for w in re.findall(r"[\w']+", reason[:m.start()])[-3:]]
+        if any(w in NEGATION or w.endswith("n't") for w in before):
+            continue
+        affirmed = True
+        shas += SHA.findall(re.split(r";|\.\s", reason[m.end():], maxsplit=1)[0])
+    return affirmed, list(dict.fromkeys(shas))
 
 
 def cmd_misfiled(a):
@@ -640,8 +656,12 @@ def cmd_misfiled(a):
     base = f"{os.path.abspath(sys.argv[0])} dispose --scope {a.scope} --unit {a.unit} --finding"
     for f, d in hits:
         print(f"{f['finding_id']} {f['severity']} {f['file']}:{f['line']}\n  rejected: {d['reason']}")
+        affirmed, shas = fix_claims(d["reason"])
+        if not affirmed:
+            print("  no affirmative `FIXED` claim (negated, or none) — read it by hand; no dispose line printed")
+            continue
         lines = []
-        for sha in dict.fromkeys(SHA.findall(d["reason"])):
+        for sha in shas:
             hit = [(p, k) for p, k in candidate_repos(f)
                    if git(p, "rev-parse", "--verify", "--quiet", f"{sha}^{{commit}}")[0] == 0]
             for path, key in hit:

@@ -129,6 +129,12 @@ def fallback_markers(review_log, projects):
     return out
 
 
+def round_no(review_id):
+    """n of a `<unit>-r<n>` review ID; -1 when it has none (never later than anything)."""
+    m = re.search(r"-r(\d+)$", str(review_id or ""))
+    return int(m.group(1)) if m else -1
+
+
 def review_presence_blocks(review_log, base, projects):
     """§5.2.1 — a unit with commits must have been reviewed (review 5.3-r1-03).
 
@@ -196,10 +202,12 @@ def review_presence_blocks(review_log, base, projects):
                            f"{d['sha'][:10]} is an ancestor of it", f"{review_log} · {f['finding_id']}", "code"))
         if f.get("severity") != "blocking":
             continue
-        # a fix recorded in another repo (`dispose --fixed-in`) is re-reviewed THERE
+        # a fix recorded in another repo (`dispose --fixed-in`) is re-reviewed THERE, by a review
+        # minted after the finding's — an earlier one never saw the fix as a fix (review adhoc-05)
+        later = [r for r in reviews if round_no(r.get("review_id")) > round_no(f.get("review_id")) >= 0]
         for repo in ([d["repo"]] if d.get("repo") else (f.get("range") or {})):
             path = os.path.join(projects, repo)
-            if not any(inside(path, r, d["sha"]) for r in reviews if repo in r.get("range", {})):
+            if not any(inside(path, r, d["sha"]) for r in later if repo in r.get("range", {})):
                 blocks.append((f"rereview:{f['finding_id']}", "a blocking finding's fix was never reviewed",
                                f"a later /review whose range contains {d['sha'][:10]}",
                                f"no review record covers it", f"{review_log} · {f['finding_id']}", "code"))

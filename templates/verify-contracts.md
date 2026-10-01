@@ -207,7 +207,8 @@ passes. The flag stays on the record so a reader can see it; it is not a block.
 5.2.1 **Per unit, the gate also blocks when** a repo with a recorded base has commits in
 `base..HEAD` but no `review` record (§6.0) names that repo and covers the unit's first
 commit on the current branch — a unit that commits must be reviewed (review 5.3-r1-03);
-when a **blocking** finding's `fixed <sha>` sits in no later review's range of the repo
+when a **blocking** finding's `fixed <sha>` sits in no later review's range (a higher `r<n>`
+than the finding's — an earlier review never saw the fix as a fix, review adhoc-05) of the repo
 holding it (the disposition's `repo`, else the finding's) — the fixes are reviewed again (`/plan` §6.8, 5.3-r2-03); when any
 finding's `fixed <sha>` in its own repo is an ancestor of the head its review saw — the reviewed
 code recorded as its own fix (review adhoc-01); when git cannot count the range (a block,

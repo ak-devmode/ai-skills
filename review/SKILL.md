@@ -176,7 +176,7 @@ that repo. The finding's file reaches into that repo only when it is absolute un
 leads with its directory name (`kalpa-docs/plans/...`); a bare relative path never matches
 a same-named file elsewhere (bpjs's `go.mod` is not gateway-go's), so a source fix
 normally also needs `--off-anchor`. A blocking finding's fix is re-reviewed in the repo
-that holds it.
+that holds it, by a review recorded after the finding's.
 
 `--fixed` is accepted when that commit touches the finding's file, or a test file in the
 same directory as it — a missing-coverage finding is fixed by a test-only commit. Any other

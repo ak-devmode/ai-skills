@@ -422,8 +422,9 @@ def _dispose(a, log):
     if a.fixed:
         path, key = fix_repo(f, a.fixed_in)
         if path is None:
-            return err(f"`--fixed-in {a.fixed_in}` is not a git repository", "the path of the repo holding the "
-                       "fix", key, "--fixed-in", "pass a checkout or worktree path, e.g. ~/Projects/wellmed/<repo>",
+            return err(f"`--fixed-in {a.fixed_in}` is not a git repository under {vl.PROJECTS}", "the path of the "
+                       "repo holding the fix", key, "--fixed-in", "pass a checkout or worktree path, e.g. "
+                       "~/Projects/wellmed/<repo>",
                        cause="code", code=vl.EXIT_USAGE)
         fix, code = fix_check(f, a.fixed, path, key, recs)
         if code is not None:
@@ -511,16 +512,24 @@ def fix_repo(f, fixed_in):
         return os.path.join(vl.PROJECTS, own), own
     path = os.path.realpath(os.path.expanduser(fixed_in))
     rc, top, e = git(path, "rev-parse", "--show-toplevel") if os.path.isdir(path) else (1, "", "no such directory")
+    if rc != 0 or not top:
+        return None, e[:200] or "not a repository"
+    # a repo outside the projects root keys by basename — lossy, and the gate could never find
+    # it to re-review the fix (review adhoc-04)
+    main = os.path.realpath(main_worktree(top))
+    if os.path.relpath(main, os.path.realpath(vl.PROJECTS)).startswith(".."):
+        return None, f"{main} is outside {vl.PROJECTS}"
     # the toplevel, not a subdirectory: `git show` names files from the repo root
-    return (top, repo_key(main_worktree(top))) if rc == 0 and top else (None, e[:200] or "not a repository")
+    return top, repo_key(main)
 
 
 def same_repo(f, path, key):
-    own = next(iter(f["range"]))
-    own_path = os.path.join(vl.PROJECTS, own)
-    if key == own or not os.path.isdir(own_path):
-        return key == own
-    return os.path.realpath(main_worktree(own_path)) == os.path.realpath(main_worktree(path))
+    """Is `path` the finding's own repo — by git identity (the primary checkout), never by key:
+    two repos can share a key, and a key match would let a stranger's same-named file count
+    as the anchor (review adhoc-04). A finding whose repo is gone matches nothing."""
+    own_path = os.path.join(vl.PROJECTS, next(iter(f["range"])))
+    return os.path.isdir(own_path) and \
+        os.path.realpath(main_worktree(own_path)) == os.path.realpath(main_worktree(path))
 
 
 def anchor_in(f, path, key):

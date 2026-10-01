@@ -171,8 +171,9 @@ $RV dispose --scope $SCOPE --unit $UNIT --finding <ID> --rejected "<why the find
 ```
 
 **A fix in another repo** — at the source the finding traces to, or a hand-back file in a
-docs repo — is `--fixed-in <repo path>`: the SHA must exist there, and the record carries
-that repo. The finding's file reaches into that repo only when it is absolute under it or
+docs repo — is `--fixed-in <repo path>`: a repo under `~/Projects` (`VERIFY_PROJECTS`), the
+SHA must exist there, and the record carries that repo. It is the finding's own repo only
+by git identity (its primary checkout), never by a matching name. The finding's file reaches into that repo only when it is absolute under it or
 leads with its directory name (`kalpa-docs/plans/...`); a bare relative path never matches
 a same-named file elsewhere (bpjs's `go.mod` is not gateway-go's), so a source fix
 normally also needs `--off-anchor`. A blocking finding's fix is re-reviewed in the repo

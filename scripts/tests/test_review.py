@@ -446,6 +446,29 @@ class TestReview(unittest.TestCase):
                                  "reason": None, "by": "t"}) + "\n")
         self.assertIn("predates:9.1-r1-01", [b[0] for b in gate.review_presence_blocks(self.log, {}, self.projects)])
 
+    def test_fixed_in_is_the_same_repo_only_by_git_identity(self):
+        # review adhoc-04: a repo outside the projects root keys by basename, so a stranger named
+        # like the finding's repo matched by key and its same-named file counted as the anchor.
+        own = self.mkrepo("svc2")
+        p = run(REVIEW, "record", "--repo", own, "--range", self.rng(own), "--reviewer", "codex gpt-test",
+                "--input", self.answer(), "--scope", self.scope, "--unit", "9.1", env=self.env)
+        self.assertEqual(p.returncode, 0, p.stderr)
+        stranger = os.path.join(self.tmp.name, "elsewhere", "svc2")
+        os.makedirs(stranger)
+        git(stranger, "init", "-q", "-b", "main")
+        sha = self.commit(stranger, "a.sh")
+        p = self.dispose("9.1-r1-01", "--fixed", sha, "--fixed-in", stranger)
+        self.assertEqual(p.returncode, 2, p.stderr)
+        self.assertIn("is outside", p.stderr)
+        rr = load(REVIEW)
+        f = {"range": {"svc2": "a..b"}, "file": "a.sh"}
+        cases = [(own, True), (stranger, False), (self.repo, False)]
+        self.addCleanup(setattr, rr.vl, "PROJECTS", rr.vl.PROJECTS)  # verify_lib is shared in-process
+        rr.vl.PROJECTS = self.projects
+        for path, want in cases:
+            with self.subTest(path=path):
+                self.assertEqual(rr.same_repo(f, path, "svc2"), want)
+
     def test_misfiled_rejections_redispose_as_fixed(self):
         # 149.2 logged real fixes as "rejected — not rejected on merit — FIXED by <sha>". The
         # latest disposition decides (§6.3), so a new `fixed` record supersedes each one.

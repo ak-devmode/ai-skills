@@ -183,7 +183,8 @@ finding — its own test beside it and named for it (`res_test.go`, `test_res.py
 `res.*`): a missing-coverage finding is fixed by a test-only commit. Another test in the
 directory is not the anchor's, and a test alone never fixes a blocking defect. Any other
 commit is refused unless `--off-anchor "<how this commit fixes it>"` says why; the record
-carries `via` (`anchor | test | off-anchor`) and the reason, so `/verify` can audit it.
+carries `via` (`anchor | test | off-anchor`) and the reason, so `/verify` can audit it, and
+an off-anchor fix at any severity must sit in a later review's range, like a blocking one's.
 **The reviewed code is never its own fix:** the commit that introduced a finding touches its
 file, so `dispose` refuses an ancestor of the head that review saw (in another repo, a commit
 older than the review), with or without `--off-anchor`, and the gate blocks one.

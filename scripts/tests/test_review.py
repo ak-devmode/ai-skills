@@ -331,6 +331,24 @@ class TestReview(unittest.TestCase):
                                  "by": "t"}) + "\n")
         self.assertEqual(gate.coverage_blocks(self.log)[0][0][1], "`fixed` off the anchor without a reason")
 
+    def test_off_anchor_fix_needs_a_later_review_at_any_severity(self):
+        # review adhoc-03: only a reason ties an off-anchor commit to the finding, so the gate
+        # wants it reviewed again — a note as much as a blocking finding. An anchor fix does not.
+        gate = load("verdict-gate.py")
+        rng = self.rng(self.repo)
+        self.record(findings=[{"file": "pkg/res.go", "line": 3, "severity": sev, "category": "engine",
+                               "group": "", "text": "t", "fix": ""} for sev in ("should-fix", "note")])
+        off = self.commit(self.repo, "internal/other.go")
+        self.assertEqual(self.dispose("9.1-r1-01", "--fixed", off, "--off-anchor", "the caller moved").returncode, 0)
+        self.assertEqual(self.dispose("9.1-r1-02", "--fixed", self.commit(self.repo, "pkg/res.go")).returncode, 0)
+        presence = lambda: [b[:2] for b in gate.review_presence_blocks(self.log, {}, self.projects)]
+        self.assertEqual(presence(), [("rereview:9.1-r1-01", "an off-anchor fix was never reviewed")])
+        p = run(REVIEW, "record", "--repo", self.repo, "--range", f"{rng.split('..')[1]}..{git(self.repo, 'rev-parse', 'HEAD')}",
+                "--reviewer", "codex gpt-test", "--input", self.answer(findings=[], verdict="SHIP"),
+                "--scope", self.scope, "--unit", "9.1", env=self.env)
+        self.assertEqual(p.returncode, 0, p.stderr)
+        self.assertEqual(presence(), [])
+
     def test_a_test_alone_never_fixes_a_blocking_finding(self):
         # review adhoc-02: its own test, but the defect is in the code
         self.record(findings=[{"file": "pkg/res.go", "line": 3, "severity": "blocking", "category": "fail-open",

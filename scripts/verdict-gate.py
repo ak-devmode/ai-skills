@@ -143,7 +143,8 @@ def review_presence_blocks(review_log, base, projects):
     after it AND on the current branch (a review of a discarded branch covers nothing —
     5.3-r2-03). Later commits (progress notes) don't force a re-review. The fix of every
     *blocking* finding must itself sit inside a later review's range, which is /plan §6.8's
-    "review the fixes again" (5.3-r2-03). A git call that fails is a block, never a zero
+    "review the fixes again" (5.3-r2-03) — and so must every `off-anchor` fix, whatever the
+    severity: nothing but a reason ties that commit to the finding (review adhoc-03). A git call that fails is a block, never a zero
     (5.3-r2-02)."""
     recs = vl.read_jsonl(review_log) if os.path.exists(review_log) else []
     reviews = [r for r in recs if r.get("record") == "review"]
@@ -200,7 +201,9 @@ def review_presence_blocks(review_log, base, projects):
             blocks.append((f"predates:{f['finding_id']}", "a `fixed` commit predates the finding",
                            f"a commit made after {head[:10]}, the head {f.get('review_id')} reviewed",
                            f"{d['sha'][:10]} is an ancestor of it", f"{review_log} · {f['finding_id']}", "code"))
-        if f.get("severity") != "blocking":
+        why = "a blocking finding's fix" if f.get("severity") == "blocking" else \
+            "an off-anchor fix" if d.get("via") == "off-anchor" else None
+        if why is None:
             continue
         # a fix recorded in another repo (`dispose --fixed-in`) is re-reviewed THERE, by a review
         # minted after the finding's — an earlier one never saw the fix as a fix (review adhoc-05)
@@ -208,7 +211,7 @@ def review_presence_blocks(review_log, base, projects):
         for repo in ([d["repo"]] if d.get("repo") else (f.get("range") or {})):
             path = os.path.join(projects, repo)
             if not any(inside(path, r, d["sha"]) for r in later if repo in r.get("range", {})):
-                blocks.append((f"rereview:{f['finding_id']}", "a blocking finding's fix was never reviewed",
+                blocks.append((f"rereview:{f['finding_id']}", f"{why} was never reviewed",
                                f"a later /review whose range contains {d['sha'][:10]}",
                                f"no review record covers it", f"{review_log} · {f['finding_id']}", "code"))
     return blocks

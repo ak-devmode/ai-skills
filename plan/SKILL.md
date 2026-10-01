@@ -1,6 +1,6 @@
 ---
 name: plan
-version: 3.10.0
+version: 3.10.1
 description: |
   Execute tasks from a structured plan document step by step, logging progress and
   stopping at human checkpoints. Plan files follow the naming convention *-PLAN.md
@@ -252,7 +252,10 @@ Procedure — the classification is pure git, so it is a script:
 
 It prints one line per repo — `unchanged` / `advanced` (recorded SHA is an ancestor,
 same branch) / `diverged` (branch moved, not an ancestor, or newly dirty) /
-`missing` — and the exit code is the gate:
+`missing` / `skipped` (no SHA recorded, or `In Scope?` = NO; never counted). A plain
+`HEAD SHA` header is compared against local HEAD; `HEAD SHA (origin/develop)` against
+that fetched remote ref, so a checkout merely behind origin is not drift. The exit
+code is the gate:
 
 - **0** — log "✅ Repo Graph snapshot matches current state" and proceed.
 - **1** (advanced only) — present the list; ask the user to confirm "proceed" or name

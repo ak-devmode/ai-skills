@@ -93,7 +93,10 @@ done
 if [ ${#new[@]} -gt 0 ]; then
   block="$(printf '%s\n' "${new[@]}")"
   tmp="$ledger.tmp.$$"
-  awk -v h="$header" -v b="$block" '{print} $0==h && !done {print ""; print b; done=1}' "$ledger" > "$tmp" && mv "$tmp" "$ledger"
+  # ENVIRON, not -v: BSD awk rejects a newline in a -v string (two --repo flags), and
+  # -v would also expand backslashes in the header.
+  H="$header" B="$block" awk '{print} $0==ENVIRON["H"] && !done {print ""; print ENVIRON["B"]; done=1}' \
+    "$ledger" > "$tmp" && mv "$tmp" "$ledger"
   for l in "${new[@]}"; do
     grep -qxF -e "$l" "$ledger" || { echo "ledger-init: base line did not land in $ledger: $l" >&2; exit 1; }
     echo "base: ${l#- base: }"

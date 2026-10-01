@@ -14,6 +14,11 @@
 #
 # Usage:  repo-graph-snapshot.sh [repo-root]      # default: git toplevel of $PWD
 # Output: markdown table on stdout; drift notes on stderr. Exit 3 if there is no graph.
+#
+# The SHA column is headed plain `HEAD SHA` because it records each checkout's LOCAL
+# HEAD; repo-graph-check.py compares a plain header against local HEAD. A table that
+# records a remote ref's SHA instead must name it — `HEAD SHA (origin/develop)` — and
+# the check then compares against that ref. Keep the two scripts in agreement.
 
 set -uo pipefail
 

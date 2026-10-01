@@ -399,6 +399,22 @@ class TestLedgerBase(Fixture):
         with open(os.path.join(self.scope, "closeout-prep.md")) as fh:
             self.assertEqual(fh.read().count("- base: 5.1 svc "), 1)
 
+    def test_two_repos_in_one_call(self):
+        # The joined base block once went to awk via -v; BSD awk rejects a newline there.
+        svc2 = os.path.join(self.projects, "svc2")
+        os.makedirs(svc2)
+        git(svc2, "init", "-q", "-b", "main")
+        git(svc2, "commit", "-q", "--allow-empty", "-m", "a")
+        p = self.ledger("--repo", svc2)
+        with open(os.path.join(self.scope, "closeout-prep.md")) as fh:
+            lines = fh.read().splitlines()
+        for name, path in (("svc", self.svc), ("svc2", svc2)):
+            line = f"- base: 5.1 {name} {git(path, 'rev-parse', 'HEAD')}"
+            self.assertIn(line, lines, p.stdout)
+        header = next(i for i, l in enumerate(lines) if l.startswith("## Phase 1: x"))
+        self.assertEqual(lines[header + 2:header + 4],
+                         [l for l in lines if l.startswith("- base: 5.1 ")])
+
     def test_non_repo_fails_loud(self):
         p = subprocess.run(["bash", script("ledger-init.sh"), self.scope, "--plan", self.plan,
                             "--phase", "1: x", "--repo", self.tmp.name], capture_output=True, text=True, env=self.env)

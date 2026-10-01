@@ -301,7 +301,8 @@ class TestReview(unittest.TestCase):
         cases = [  # (files the commit changes, extra flags, exit, via)
             (["pkg/res.go"], (), 0, "anchor"),
             (["pkg/res_test.go"], (), 0, "test"),
-            (["pkg/validation_test.go", "go.sum"], (), 0, "test"),
+            (["pkg/res_test.go", "go.sum"], (), 0, "test"),
+            (["pkg/validation_test.go"], (), 1, None),   # beside it, but not its test (adhoc-02)
             (["other/res_test.go"], (), 1, None),
             (["pkg/sub/res_test.go"], (), 1, None),
             (["pkg/notes.md"], (), 1, None),
@@ -329,6 +330,18 @@ class TestReview(unittest.TestCase):
                                  "disposition": "fixed", "sha": sha, "via": "off-anchor", "reason": " ",
                                  "by": "t"}) + "\n")
         self.assertEqual(gate.coverage_blocks(self.log)[0][0][1], "`fixed` off the anchor without a reason")
+
+    def test_a_test_alone_never_fixes_a_blocking_finding(self):
+        # review adhoc-02: its own test, but the defect is in the code
+        self.record(findings=[{"file": "pkg/res.go", "line": 3, "severity": "blocking", "category": "fail-open",
+                               "group": "", "text": "err swallowed", "fix": "return it"}])
+        sha = self.commit(self.repo, "pkg/res_test.go")
+        p = self.dispose("9.1-r1-01", "--fixed", sha)
+        self.assertEqual(p.returncode, 1, p.stderr)
+        self.assertIn("a commit in wellmed/svc changing pkg/res.go\n", p.stderr)
+        p = self.dispose("9.1-r1-01", "--fixed", sha, "--off-anchor", "the test pins the contract the caller relies on")
+        self.assertEqual(p.returncode, 0, p.stderr)
+        self.assertIn("(via off-anchor)", p.stdout)
 
     def test_fixed_in_another_repo(self):
         # 149.2-r5-01: a bpjs finding fixed at its source in gateway-go; 149.2-r2-03/-r18-03:

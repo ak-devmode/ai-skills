@@ -9,7 +9,8 @@ lands through `record`, which validates it, assigns `<unit>-r<n>-NN` IDs in seve
 order, appends one `finding` record per finding (write-then-read-back), and writes the
 human report, including what the review did not cover. `dispose` is the only way a
 finding gets a disposition, and it refuses a `fixed <sha>` whose commit touches neither
-the finding's file nor a test file in its directory, unless `--off-anchor "<how>"` says why
+the finding's file nor (non-blocking only) that file's own test beside it, unless
+`--off-anchor "<how>"` says why
 — that check has one right answer, so it is enforced at write time.
 verdict-gate.py then refuses Done while any finding lacks one (§5.2.1).
 
@@ -436,7 +437,8 @@ def _dispose(a, log):
             if a.off_anchor is None:
                 where_ = "is not in " + key if fix["anchor"] is None else "is not touched"
                 return err(f"`fixed {a.fixed}` does not reach the finding: {f['file']} {where_}",
-                           f"a commit in {key} changing {fix['anchor'] or f['file']} or a test file beside it",
+                           f"a commit in {key} changing {fix['anchor'] or f['file']}" + ("" if f.get("severity") == "blocking"
+                           else " or its own test beside it"),
                            f"it changes: {fix['touched'] or 'nothing'}", f"{a.finding} ({f['file']}:{f['line']})",
                            "fix in a commit that touches the file; if this commit fixes it elsewhere, add "
                            "`--off-anchor \"<how it fixes the finding>\"`; or record `--rejected \"<why>\"` if "
@@ -486,8 +488,18 @@ def _dispose(a, log):
     return vl.EXIT_PASS
 
 
-# a test file by name, for the languages the fleet uses (Go, Python, JS/TS, PHP, Ruby)
-TEST_FILE = re.compile(r"^(.+_test\.(go|py)|test_.+\.py|.+\.(test|spec)\.[cm]?[jt]sx?|.+Test\.php|.+_spec\.rb)$")
+# a test file by name, for the languages the fleet uses (Go, Python, JS/TS, PHP, Ruby); the
+# group that matched is the stem of the file it tests (res_test.go, test_res.py -> res)
+TEST_FILE = re.compile(r"^(?:(.+)_test\.(?:go|py)|test_(.+)\.py|(.+)\.(?:test|spec)\.[cm]?[jt]sx?|(.+)Test\.php|(.+)_spec\.rb)$")
+
+
+def tests_anchor(t, anchor):
+    """Is `t` the anchor's own test: beside it, named for it? Any test in the directory is
+    not — a change to validation_test.go says nothing about res.go (review adhoc-02)."""
+    m = TEST_FILE.match(os.path.basename(t))
+    stem = next((g for g in m.groups() if g), None) if m else None
+    return stem is not None and os.path.dirname(t) == os.path.dirname(anchor) \
+        and stem == os.path.splitext(os.path.basename(anchor))[0]
 
 
 def fix_repo(f, fixed_in):
@@ -559,8 +571,9 @@ def predates(f, full, path, recs):
 def fix_check(f, sha, path, key, recs):
     """({sha, repo, via, anchor, touched, predates}, None) or (None, a §10 error code). `via` is
     how commit `sha` in repo `path` reaches the finding: `anchor` (it changes the finding's
-    file), `test` (it changes a test file in the anchor's directory — a missing-coverage
-    finding is fixed by a test-only commit, 149.2-r11-02) or None (neither, or the file is
+    file), `test` (it changes the anchor's own test beside it — a missing-coverage finding
+    is fixed by a test-only commit, 149.2-r11-02; never for a blocking finding, whose fix a
+    test alone cannot be) or None (neither, or the file is
     not in that repo: refused unless the caller passes an explicit `--off-anchor` reason).
     `predates` says why the commit is older than the finding (always refused). One right
     answer, so it is checked at write time."""
@@ -571,8 +584,7 @@ def fix_check(f, sha, path, key, recs):
                          path, f"git -C {path} log --oneline -5; a fix in another repo needs `--fixed-in <path>`",
                          cause="code", code=vl.EXIT_FAIL)
     files, anchor = touched.splitlines(), anchor_in(f, path, key)
-    tests = anchor is not None and any(TEST_FILE.match(os.path.basename(t))
-                                       and os.path.dirname(t) == os.path.dirname(anchor) for t in files)
+    tests = anchor is not None and f.get("severity") != "blocking" and any(tests_anchor(t, anchor) for t in files)
     via = "anchor" if anchor in files else ("test" if tests else None)
     return {"sha": full, "repo": key, "via": via, "anchor": anchor, "touched": ", ".join(files[:6]),
             "predates": predates(f, full, path, recs)}, None

@@ -178,8 +178,10 @@ a same-named file elsewhere (bpjs's `go.mod` is not gateway-go's), so a source f
 normally also needs `--off-anchor`. A blocking finding's fix is re-reviewed in the repo
 that holds it, by a review recorded after the finding's.
 
-`--fixed` is accepted when that commit touches the finding's file, or a test file in the
-same directory as it — a missing-coverage finding is fixed by a test-only commit. Any other
+`--fixed` is accepted when that commit touches the finding's file, or — on a non-blocking
+finding — its own test beside it and named for it (`res_test.go`, `test_res.py` for
+`res.*`): a missing-coverage finding is fixed by a test-only commit. Another test in the
+directory is not the anchor's, and a test alone never fixes a blocking defect. Any other
 commit is refused unless `--off-anchor "<how this commit fixes it>"` says why; the record
 carries `via` (`anchor | test | off-anchor`) and the reason, so `/verify` can audit it.
 **The reviewed code is never its own fix:** the commit that introduced a finding touches its

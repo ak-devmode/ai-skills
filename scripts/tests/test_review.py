@@ -349,6 +349,21 @@ class TestReview(unittest.TestCase):
         self.assertEqual(p.returncode, 0, p.stderr)
         self.assertEqual(presence(), [])
 
+    def test_a_fix_off_the_current_branch_blocks(self):
+        # review r2-04: a fix on a side branch passes dispose (it is after the review) but is
+        # not in what ships until merged
+        gate = load("verdict-gate.py")
+        self.record(findings=[{"file": "a.sh", "line": 2, "severity": "note", "category": "engine", "group": "",
+                               "text": "t", "fix": ""}])
+        git(self.repo, "checkout", "-q", "-b", "side")
+        side = self.commit(self.repo, "a.sh")
+        self.assertEqual(self.dispose("9.1-r1-01", "--fixed", side).returncode, 0)
+        git(self.repo, "checkout", "-q", "main")
+        ids = lambda: [b[0] for b in gate.review_presence_blocks(self.log, {}, self.projects)]
+        self.assertEqual(ids(), ["unmerged:9.1-r1-01"])
+        git(self.repo, "merge", "-q", "--ff-only", "side")
+        self.assertEqual(ids(), [])
+
     def test_a_test_alone_never_fixes_a_blocking_finding(self):
         # review adhoc-02: its own test, but the defect is in the code
         self.record(findings=[{"file": "pkg/res.go", "line": 3, "severity": "blocking", "category": "fail-open",

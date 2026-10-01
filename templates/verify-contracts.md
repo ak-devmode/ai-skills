@@ -212,7 +212,8 @@ only a reason ties to the finding (review adhoc-03) — sits in no later review'
 than the finding's — an earlier review never saw the fix as a fix, review adhoc-05) of the repo
 holding it (the disposition's `repo`, else the finding's) — the fixes are reviewed again (`/plan` §6.8, 5.3-r2-03); when any
 finding's `fixed <sha>` in its own repo is an ancestor of the head its review saw — the reviewed
-code recorded as its own fix (review adhoc-01); when git cannot count the range (a block,
+code recorded as its own fix (review adhoc-01); when a `fixed <sha>` is not reachable from
+HEAD in the repo holding it — a fix on a branch that never merged (review r2-04); when git cannot count the range (a block,
 never a zero); or when `artifacts/review-<unit>.jsonl` breaks §6.3: a `finding_id` with no disposition, a `fixed` without `sha`, or a `rejected`
 without `reason`. Deterministic, so the gate owns it — `/verify` judges whether a rejection
 was *right*, never whether one was recorded.

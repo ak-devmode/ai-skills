@@ -272,7 +272,8 @@ class TestGate(Fixture):
         self.ledger()
         self.verify("codex gpt-test", [self.v("ok", "pass")])
         review = os.path.join(self.scope, "artifacts", "review-5.1.jsonl")
-        f = {"schema": "verify/1", "record": "finding", "review_id": "5.1-r1", "file": "a.py", "line": 1}
+        f = {"schema": "verify/1", "record": "finding", "review_id": "5.1-r1", "file": "a.py", "line": 1,
+             "range": {"svc": "0000000..0000000"}}
         with open(review, "w") as fh:
             fh.write(json.dumps(dict(f, finding_id="5.1-r1-01")) + "\n")
             fh.write(json.dumps(dict(f, finding_id="5.1-r1-02")) + "\n")
@@ -283,7 +284,7 @@ class TestGate(Fixture):
         self.assertEqual({b["id"] for b in doc["blocks"]}, {"5.1-r1-01", "5.1-r1-02"})
         with open(review, "a") as fh:
             for fid, extra in (("5.1-r1-01", {"disposition": "rejected", "reason": "misread"}),
-                               ("5.1-r1-02", {"disposition": "fixed", "sha": "abc1234"})):
+                               ("5.1-r1-02", {"disposition": "fixed", "sha": git(self.svc, "rev-parse", "HEAD")})):
                 fh.write(json.dumps(dict({"schema": "verify/1", "record": "disposition", "finding_id": fid}, **extra)) + "\n")
         self.assertEqual(self.gate("--blocking").returncode, 0)
 

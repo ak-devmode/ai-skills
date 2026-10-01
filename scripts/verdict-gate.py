@@ -195,6 +195,13 @@ def review_presence_blocks(review_log, base, projects):
         # the reviewed code is never its own fix: the commit that introduced a finding touches
         # its file (review adhoc-01); dispose refuses it, a hand-written record blocks here
         own, rng = next(iter((f.get("range") or {}).items()), ("", ""))
+        # a fix on a branch that never merged is not in what ships (review r2-04); a git
+        # failure (repo gone, sha unknown) is a block too, never a pass
+        hold = d.get("repo") or own
+        if not git_ok(os.path.join(projects, hold), "merge-base", "--is-ancestor", d["sha"], "HEAD"):
+            blocks.append((f"unmerged:{f['finding_id']}", "a `fixed` commit is not on the current branch",
+                           f"{d['sha'][:10]} reachable from HEAD in {hold}", "not an ancestor of HEAD (or git "
+                           "cannot tell)", f"{review_log} · {f['finding_id']}", "code"))
         head = rng.partition("..")[2]  # the head this finding's reviewer saw
         if own and head and d.get("repo", own) == own \
                 and git_ok(os.path.join(projects, own), "merge-base", "--is-ancestor", d["sha"], head):

@@ -186,7 +186,8 @@ off-anchor fix, at any severity, inside a later review's range. No guessing whic
 which directories count: each guess was a new way through (review r1/r2 on this tool).
 **The reviewed code is never its own fix:** the commit that introduced a finding touches its
 file, so `dispose` refuses an ancestor of the head that review saw (in another repo, a commit
-older than the review), with or without `--off-anchor`, and the gate blocks one.
+older than the review), with or without `--off-anchor`, and the gate blocks one — and blocks
+a fix not reachable from HEAD in the repo holding it, until its branch merges.
 `--rejected` is refused without a reason — never use it to record a fix the tool refused.
 The latest disposition decides, so a fix logged as a rejection is corrected by disposing it
 again: `$RV misfiled --scope $SCOPE --unit $UNIT` lists every rejection whose reason says

@@ -68,6 +68,10 @@ def coverage_blocks(review_log):
         elif d.get("disposition") == "fixed" and not d.get("sha"):
             blocks.append((fid, "`fixed` disposition without a commit", "the fixing commit's SHA",
                            "sha missing", where, "code"))
+        elif d.get("disposition") == "fixed" and d.get("via") == "off-anchor" and not str(d.get("reason") or "").strip():
+            blocks.append((fid, "`fixed` off the anchor without a reason",
+                           "how a commit that touches neither the file nor a test beside it fixes the finding",
+                           "reason missing", where, "code"))
         elif d.get("disposition") == "rejected" and not str(d.get("reason") or "").strip():
             blocks.append((fid, "`rejected` disposition without a reason", "the reason the finding is wrong",
                            "reason missing", where, "code"))
@@ -125,6 +129,12 @@ def fallback_markers(review_log, projects):
     return out
 
 
+def round_no(review_id):
+    """n of a `<unit>-r<n>` review ID; -1 when it has none (never later than anything)."""
+    m = re.search(r"-r(\d+)$", str(review_id or ""))
+    return int(m.group(1)) if m else -1
+
+
 def review_presence_blocks(review_log, base, projects):
     """§5.2.1 — a unit with commits must have been reviewed (review 5.3-r1-03).
 
@@ -133,7 +143,8 @@ def review_presence_blocks(review_log, base, projects):
     after it AND on the current branch (a review of a discarded branch covers nothing —
     5.3-r2-03). Later commits (progress notes) don't force a re-review. The fix of every
     *blocking* finding must itself sit inside a later review's range, which is /plan §6.8's
-    "review the fixes again" (5.3-r2-03). A git call that fails is a block, never a zero
+    "review the fixes again" (5.3-r2-03) — and so must every `off-anchor` fix, whatever the
+    severity: nothing but a reason ties that commit to the finding (review adhoc-03). A git call that fails is a block, never a zero
     (5.3-r2-02)."""
     recs = vl.read_jsonl(review_log) if os.path.exists(review_log) else []
     reviews = [r for r in recs if r.get("record") == "review"]
@@ -179,13 +190,35 @@ def review_presence_blocks(review_log, base, projects):
             latest[r.get("finding_id")] = r
     for f in recs:
         d = latest.get(f.get("finding_id"))
-        if f.get("record") != "finding" or f.get("severity") != "blocking" or not d \
-                or d.get("disposition") != "fixed" or not d.get("sha"):
+        if f.get("record") != "finding" or not d or d.get("disposition") != "fixed" or not d.get("sha"):
             continue
-        for repo in (f.get("range") or {}):
+        # the reviewed code is never its own fix: the commit that introduced a finding touches
+        # its file (review adhoc-01); dispose refuses it, a hand-written record blocks here
+        own, rng = next(iter((f.get("range") or {}).items()), ("", ""))
+        # a fix on a branch that never merged is not in what ships (review r2-04); a git
+        # failure (repo gone, sha unknown) is a block too, never a pass
+        hold = d.get("repo") or own
+        if not git_ok(os.path.join(projects, hold), "merge-base", "--is-ancestor", d["sha"], "HEAD"):
+            blocks.append((f"unmerged:{f['finding_id']}", "a `fixed` commit is not on the current branch",
+                           f"{d['sha'][:10]} reachable from HEAD in {hold}", "not an ancestor of HEAD (or git "
+                           "cannot tell)", f"{review_log} · {f['finding_id']}", "code"))
+        head = rng.partition("..")[2]  # the head this finding's reviewer saw
+        if own and head and d.get("repo", own) == own \
+                and git_ok(os.path.join(projects, own), "merge-base", "--is-ancestor", d["sha"], head):
+            blocks.append((f"predates:{f['finding_id']}", "a `fixed` commit predates the finding",
+                           f"a commit made after {head[:10]}, the head {f.get('review_id')} reviewed",
+                           f"{d['sha'][:10]} is an ancestor of it", f"{review_log} · {f['finding_id']}", "code"))
+        why = "a blocking finding's fix" if f.get("severity") == "blocking" else \
+            "an off-anchor fix" if d.get("via") == "off-anchor" else None
+        if why is None:
+            continue
+        # a fix recorded in another repo (`dispose --fixed-in`) is re-reviewed THERE, by a review
+        # minted after the finding's — an earlier one never saw the fix as a fix (review adhoc-05)
+        later = [r for r in reviews if round_no(r.get("review_id")) > round_no(f.get("review_id")) >= 0]
+        for repo in ([d["repo"]] if d.get("repo") else (f.get("range") or {})):
             path = os.path.join(projects, repo)
-            if not any(inside(path, r, d["sha"]) for r in reviews if repo in r.get("range", {})):
-                blocks.append((f"rereview:{f['finding_id']}", "a blocking finding's fix was never reviewed",
+            if not any(inside(path, r, d["sha"]) for r in later if repo in r.get("range", {})):
+                blocks.append((f"rereview:{f['finding_id']}", f"{why} was never reviewed",
                                f"a later /review whose range contains {d['sha'][:10]}",
                                f"no review record covers it", f"{review_log} · {f['finding_id']}", "code"))
     return blocks

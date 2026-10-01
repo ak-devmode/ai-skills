@@ -240,7 +240,7 @@ graphs.
 | `prd` | 1.1.0 | Step 0 = `context-gather.sh`. |
 | `concurrency` | 0.5.0 | Dedup'd against herdr; pane naming + dispatch log via scripts. |
 | `herdr` | 0.1.5 | Opus seat = 5.5 (`opus[1m]`). |
-| `review` | 3.3.1 | codex gate; rules extracted to `review/rules/` (IRIS group §3.9); dispositions enforced, `deferred` past round 3; §5.1 convergence; `accept` records the user's yes. |
+| `review` | 3.4.0 | codex gate; rules extracted to `review/rules/` (IRIS group §3.9); dispositions enforced, `deferred` past a repo's round 3 (rounds per repo); §5.1 convergence; `accept` records the user's yes. |
 | `ready-to-clear` | 1.1.0 | |
 | `verify` | 0.4.0 | Scope 5. Advisory gate until 5 clean scopes; codex effort scales with the diff; `--demo` on the planted-defect fixture; stale-clone line. |
 | `kalpa-*` | unversioned | Flattened 2026-08-09. |

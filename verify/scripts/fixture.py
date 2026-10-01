@@ -108,8 +108,13 @@ def build(root, variant="bad"):
     recs = [review, dict(finding, finding_id=f"{UNIT}-r1-01", file="notes/export.py", line=1, text="module docstring vague"),
             dict(finding, finding_id=f"{UNIT}-r1-02", file="notes/store.py", line=5, text="store is global state"),
             dict(finding, finding_id=f"{UNIT}-r1-03", file="notes/store.py", line=9, text="add() returns a count")]
+    # the fix is a commit after the reviewed head — the reviewed code is never its own fix
+    with open(os.path.join(repo, "notes", "export.py"), "a", encoding="utf-8") as fh:
+        fh.write("# export_text() is the module's one entry point\n")
+    git(repo, "commit", "-q", "-am", "fix r1-01: say what the module exports")
+    fix = head = git(repo, "rev-parse", "HEAD")
     disp = {"schema": "verify/1", "ts": "2026-09-26T00:01:00Z", "record": "disposition", "by": "fixture"}
-    recs.append(dict(disp, finding_id=f"{UNIT}-r1-01", disposition="fixed", sha=head, reason=None))
+    recs.append(dict(disp, finding_id=f"{UNIT}-r1-01", disposition="fixed", sha=fix, reason=None))
     recs.append(dict(disp, finding_id=f"{UNIT}-r1-02", disposition="rejected", sha=None,
                      reason="" if "rejection-no-reason" in d else "append-only in-memory store is the scope's design"))
     if "dropped-finding" not in d:

@@ -1,6 +1,6 @@
 ---
 name: review
-version: 3.3.1
+version: 3.4.0
 description: |
   Pre-landing code review with codex as the gate: the opposing model family, headless
   and read-only, reviews an explicit revision range against gstack's review checklist,
@@ -9,7 +9,7 @@ description: |
   isolation, PHI/credential leakage, stack footguns) and the lenses every repo gets —
   fail-open verification, silent failure, local maxima, dirty comments, doc claims.
   Every finding is logged under a stable ID and must be dispositioned (fixed in a commit
-  that touches it, rejected with a reason, or — past round 3, non-blocking — deferred to
+  that touches it, rejected with a reason, or — past a repo's round 3, non-blocking — deferred to
   a written TO-DO item); the loop stops on [CONVERGENCE] signals, and the user's yes to
   the outcomes is recorded with `accept` before the unit can be marked Done. When codex cannot run, a Claude pass (gstack's engine + the same rules) is the
   fallback, and the report says so in its header.
@@ -166,11 +166,35 @@ Each finding ID gets exactly one current disposition, through the script only:
 
 ```bash
 $RV dispose --scope $SCOPE --unit $UNIT --finding <ID> --fixed <sha>          # the fixing commit
+$RV dispose --scope $SCOPE --unit $UNIT --finding <ID> --fixed <sha> --fixed-in <repo path>   # fixed in another repo
 $RV dispose --scope $SCOPE --unit $UNIT --finding <ID> --rejected "<why the finding is wrong>"
 ```
 
-`--fixed` is refused unless that commit touches the finding's file; `--rejected` is refused
-without a reason. When every ID has one, the user's yes is recorded with
+**A fix in another repo** — at the source the finding traces to, or a hand-back file in a
+docs repo — is `--fixed-in <repo path>`: a repo under `~/Projects` (`VERIFY_PROJECTS`), the
+SHA must exist there, and the record carries that repo. It is the finding's own repo only
+by git identity (its primary checkout), never by a matching name. A fix there is always
+off the anchor (below), even when it touches a file of the same path, and is re-reviewed in
+the repo that holds it, by a review recorded after the finding's.
+
+**One rule for a fix.** `--fixed` is accepted on its own only when that commit touches the
+finding's file in the finding's own repo, after the head its review saw. Anything else — a
+test-only commit for a missing-coverage finding, a fix in another file, a fix in another
+repo — needs `--off-anchor "<how this commit fixes it>"`; the record carries `via`
+(`anchor | off-anchor`) and the reason, `/verify` audits it, and the gate wants every
+off-anchor fix, at any severity, inside a later review's range. No guessing which tests or
+which directories count: each guess was a new way through (review r1/r2 on this tool).
+**The reviewed code is never its own fix:** the commit that introduced a finding touches its
+file, so `dispose` refuses an ancestor of the head that review saw (in another repo, a commit
+older than the review), with or without `--off-anchor`, and the gate blocks one — and blocks
+a fix not reachable from HEAD in the repo holding it, until its branch merges.
+`--rejected` is refused without a reason — never use it to record a fix the tool refused.
+The latest disposition decides, so a fix logged as a rejection is corrected by disposing it
+again: `$RV misfiled --scope $SCOPE --unit $UNIT` lists every rejection whose reason says
+`FIXED` and prints the `dispose` line for each SHA in an affirmative `FIXED …` clause that
+resolves (here or in a repo beside it) — a negated `NOT FIXED` gets no line, nor a SHA cited
+for anything else;
+it writes nothing — fill each `--off-anchor` reason yourself, then re-`accept`. When every ID has one, the user's yes is recorded with
 `$RV accept --scope $SCOPE --unit $UNIT --by "<name>"` (`verify-contracts.md` §6.4) —
 never on their behalf. `verdict-gate.py` refuses Done while any ID lacks one, and `/verify`
 audits whether each rejection was *right*. Nothing silently dismissed, nothing silently
@@ -179,15 +203,22 @@ dropped.
 5.1 **Convergence — a review loop must end.** Every repo, every unit. `record` prints a
 `[CONVERGENCE]` line when either trips; act on it, don't re-run past it.
 
-- **Round cap.** Past round 3 of one unit, only `blocking` findings are fixed in the loop.
+**Rounds count per repo.** Review IDs number every review of the unit (`<unit>-r<n>`),
+but each rule below counts the reviews of *that repo* within the unit — `record` prints
+`round: <k> of <repo>`. A repo is its primary checkout: a review through a worktree, even
+one logged by its `<repo>.worktrees/<name>` path and since removed, counts as that repo's. A unit spanning 13 repos (149.2) otherwise hit the cap on a lane's
+first review.
+
+- **Round cap.** Past round 3 of one repo in a unit, only `blocking` findings are fixed in the loop.
   `should-fix` and `note` go to the project's `TO-DO.md` and are recorded
   `dispose --deferred "<TO-DO item>"` — never `--rejected`, because a deferral is not a
   claim that the finding is wrong. Write the item to `TO-DO.md` first, carrying the finding
   ID as the item's leading marker — `- [ ] [review <ID>] <what is left>`; the marker is
   the link, and an ID mentioned elsewhere on a line or a marker with no text is not. `dispose` refuses a deferral
-  with no open item naming the ID, one from round 3 or earlier, and any blocking finding.
-- **Same place, three rounds.** A file drawing findings in each of the last three rounds
-  is a design that is wrong, not a patch that is incomplete. Stop fixing it and raise it to
+  with no open item naming the ID, one from its repo's round 3 or earlier, and any blocking finding.
+- **Same place, three rounds.** A file drawing findings in each of the repo's last three rounds
+  — or, for a file outside the reviewed repos (a hand-back doc), in each of the unit's last
+  three reviews, whichever lanes they were — is a design that is wrong, not a patch that is incomplete. Stop fixing it and raise it to
   the user as one design finding: replace it, narrow what it promises, or cut it.
 - **Findings that argue opposite sides** (fixing one reopens another) mean the contract is
   ambiguous. Stop and ask which side the user wants; don't pick one and reject the other.

@@ -31,7 +31,7 @@ check yourself, whether each finish condition below is actually met.
 - **test-plan** — if a test plan is listed below, did the unit's tests cover its edge cases
   and critical paths? Name the uncovered ones.
 - **rejection-audit** — if a review log is listed, read every `rejected` disposition. Is the
-  reason actually right? For every `fixed <sha>`, does that commit touch the finding's file?
+  reason actually right? For every `fixed <sha>`, does that commit actually fix the finding — and for `via off-anchor`, does its reason hold?
 - **faithful-port** — where the scope says to port or follow a source artifact, was the
   source read and the result diffed against it per unit? A port with no source read is a
   high finding.

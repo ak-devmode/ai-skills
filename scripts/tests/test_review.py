@@ -76,8 +76,9 @@ class TestReview(unittest.TestCase):
             json.dump(doc, fh)
         return path
 
-    def record(self, reviewer="codex gpt-test", **over):
-        return run(REVIEW, "record", "--repo", self.repo, "--range", self.rng(self.repo), "--reviewer", reviewer,
+    def record(self, reviewer="codex gpt-test", repo=None, **over):
+        repo = repo or self.repo
+        return run(REVIEW, "record", "--repo", repo, "--range", self.rng(repo), "--reviewer", reviewer,
                    "--input", self.answer(**over), "--scope", self.scope, "--unit", "9.1", "--passes", "p",
                    env=self.env)
 
@@ -269,7 +270,7 @@ class TestReview(unittest.TestCase):
         git(self.repo, "commit", "-q", "-m", "unrelated")
         wrong = self.dispose("9.1-r1-01", "--fixed", git(self.repo, "rev-parse", "HEAD"))
         self.assertEqual(wrong.returncode, 1)
-        self.assertIn("does not touch the finding's file", wrong.stderr)
+        self.assertIn("does not reach the finding: a.sh is not touched", wrong.stderr)
         # a real fix touching a.sh is accepted
         with open(os.path.join(self.repo, "a.sh"), "w") as fh:
             fh.write("#!/bin/sh\nset -e\ncurl x\n")
@@ -281,6 +282,270 @@ class TestReview(unittest.TestCase):
         self.assertEqual(len(gate.coverage_blocks(self.log)[0]), 1)
         self.assertEqual(self.dispose("9.1-r1-03", "--rejected", "comment is accurate").returncode, 0)
         self.assertEqual(gate.coverage_blocks(self.log), ([], 3))
+
+    def commit(self, repo, *files):
+        for rel in files:
+            os.makedirs(os.path.join(repo, os.path.dirname(rel)), exist_ok=True)
+            with open(os.path.join(repo, rel), "a") as fh:
+                fh.write("x\n")
+        git(repo, "add", "-A")
+        git(repo, "commit", "-q", "-m", "c")
+        return git(repo, "rev-parse", "HEAD")
+
+    def test_fixed_accepts_the_anchor_else_an_off_anchor_reason(self):
+        # 149.2-r11-02: a missing-coverage finding on pkg/res.go is fixed by a test-only commit —
+        # off the anchor, with a reason, like every commit that does not touch the file (r2-02).
+        gate = load("verdict-gate.py")
+        self.record(findings=[{"file": "pkg/res.go", "line": 3, "severity": "should-fix", "category": "domain",
+                               "group": "3.8", "text": "no test for the failure path", "fix": "add one"}])
+        cases = [  # (files the commit changes, extra flags, exit, via)
+            (["pkg/res.go"], (), 0, "anchor"),
+            (["pkg/res_test.go"], (), 1, None),          # its own test is still off the anchor
+            (["pkg/res_test.go"], ("--off-anchor", "adds the failure-path test"), 0, "off-anchor"),
+            (["pkg/validation_test.go"], (), 1, None),
+            (["other/res_test.go"], (), 1, None),
+            (["pkg/sub/res_test.go"], (), 1, None),
+            (["pkg/notes.md"], (), 1, None),
+            (["pkg/notes.md"], ("--off-anchor", "   "), 1, None),
+            (["internal/saga/continuator.go"], ("--off-anchor", "the go.mod pin was the symptom; the fix "
+                                                "removes the call"), 0, "off-anchor"),
+            (["pkg/res.go"], ("--off-anchor", "also explained"), 0, "anchor"),
+        ]
+        for files, flags, code, via in cases:
+            with self.subTest(files=files, flags=flags):
+                before = len(read(self.log).splitlines())
+                sha = self.commit(self.repo, *files)
+                p = self.dispose("9.1-r1-01", "--fixed", sha[:9], *flags)
+                self.assertEqual(p.returncode, code, p.stderr)
+                recs = [json.loads(x) for x in read(self.log).splitlines()]
+                if code:
+                    self.assertEqual(len(recs), before)
+                    continue
+                self.assertEqual((recs[-1]["sha"], recs[-1]["via"]), (sha, via))
+                self.assertEqual(gate.coverage_blocks(self.log), ([], 1))
+        self.assertEqual(self.dispose("9.1-r1-01", "--rejected", "x", "--off-anchor", "y").returncode, 2)
+        # a hand-written off-anchor fix with no reason still blocks
+        with open(self.log, "a") as fh:
+            fh.write(json.dumps({"schema": "verify/1", "ts": "t", "record": "disposition", "finding_id": "9.1-r1-01",
+                                 "disposition": "fixed", "sha": sha, "via": "off-anchor", "reason": " ",
+                                 "by": "t"}) + "\n")
+        self.assertEqual(gate.coverage_blocks(self.log)[0][0][1], "`fixed` off the anchor without a reason")
+
+    def test_off_anchor_fix_needs_a_later_review_at_any_severity(self):
+        # review adhoc-03: only a reason ties an off-anchor commit to the finding, so the gate
+        # wants it reviewed again — a note as much as a blocking finding. An anchor fix does not.
+        gate = load("verdict-gate.py")
+        rng = self.rng(self.repo)
+        self.record(findings=[{"file": "pkg/res.go", "line": 3, "severity": sev, "category": "engine",
+                               "group": "", "text": "t", "fix": ""} for sev in ("should-fix", "note")])
+        off = self.commit(self.repo, "internal/other.go")
+        self.assertEqual(self.dispose("9.1-r1-01", "--fixed", off, "--off-anchor", "the caller moved").returncode, 0)
+        self.assertEqual(self.dispose("9.1-r1-02", "--fixed", self.commit(self.repo, "pkg/res.go")).returncode, 0)
+        presence = lambda: [b[:2] for b in gate.review_presence_blocks(self.log, {}, self.projects)]
+        self.assertEqual(presence(), [("rereview:9.1-r1-01", "an off-anchor fix was never reviewed")])
+        p = run(REVIEW, "record", "--repo", self.repo, "--range", f"{rng.split('..')[1]}..{git(self.repo, 'rev-parse', 'HEAD')}",
+                "--reviewer", "codex gpt-test", "--input", self.answer(findings=[], verdict="SHIP"),
+                "--scope", self.scope, "--unit", "9.1", env=self.env)
+        self.assertEqual(p.returncode, 0, p.stderr)
+        self.assertEqual(presence(), [])
+
+    def test_a_fix_off_the_current_branch_blocks(self):
+        # review r2-04: a fix on a side branch passes dispose (it is after the review) but is
+        # not in what ships until merged
+        gate = load("verdict-gate.py")
+        self.record(findings=[{"file": "a.sh", "line": 2, "severity": "note", "category": "engine", "group": "",
+                               "text": "t", "fix": ""}])
+        git(self.repo, "checkout", "-q", "-b", "side")
+        side = self.commit(self.repo, "a.sh")
+        self.assertEqual(self.dispose("9.1-r1-01", "--fixed", side).returncode, 0)
+        git(self.repo, "checkout", "-q", "main")
+        ids = lambda: [b[0] for b in gate.review_presence_blocks(self.log, {}, self.projects)]
+        self.assertEqual(ids(), ["unmerged:9.1-r1-01"])
+        git(self.repo, "merge", "-q", "--ff-only", "side")
+        self.assertEqual(ids(), [])
+
+    def test_a_test_alone_never_fixes_a_blocking_finding(self):
+        # review adhoc-02: its own test, but the defect is in the code
+        self.record(findings=[{"file": "pkg/res.go", "line": 3, "severity": "blocking", "category": "fail-open",
+                               "group": "", "text": "err swallowed", "fix": "return it"}])
+        sha = self.commit(self.repo, "pkg/res_test.go")
+        p = self.dispose("9.1-r1-01", "--fixed", sha)
+        self.assertEqual(p.returncode, 1, p.stderr)
+        self.assertIn("a commit in wellmed/svc changing pkg/res.go\n", p.stderr)
+        p = self.dispose("9.1-r1-01", "--fixed", sha, "--off-anchor", "the test pins the contract the caller relies on")
+        self.assertEqual(p.returncode, 0, p.stderr)
+        self.assertIn("(via off-anchor)", p.stdout)
+
+    def test_fixed_in_another_repo(self):
+        # 149.2-r5-01: a bpjs finding fixed at its source in gateway-go; 149.2-r2-03/-r18-03:
+        # findings on a docs-repo hand-back file. The sha must exist where --fixed-in says, and a
+        # fix in another repo is always off the anchor: no directory-name matching (r2-06).
+        gw, docs = self.mkrepo("wellmed/gw"), self.mkrepo("wellmed/kalpa-docs")
+        gw_wt = os.path.join(self.tmp.name, "gw-wt")
+        git(gw, "worktree", "add", "-q", gw_wt)
+        mk = lambda file, sev="note": {"file": file, "line": 1, "severity": sev, "category": "domain",
+                                       "group": "3.1", "text": "t", "fix": ""}
+        self.record(findings=[mk("go.mod", "blocking"), mk("kalpa-docs/plans/x.md"),
+                              mk(os.path.join(docs, "plans", "y.md"))])
+        gw_fix = self.commit(gw, "go.mod", "internal/egress/errors.go")   # touches a go.mod — not svc's
+        docs_fix = self.commit(docs, "plans/x.md", "plans/y.md")
+        svc_sha = git(self.repo, "rev-parse", "HEAD")
+        cases = [  # (finding, flags, exit, recorded repo, via)
+            ("9.1-r1-01", ("--fixed", gw_fix), 1, None, None),                              # not in svc
+            ("9.1-r1-01", ("--fixed", gw_fix, "--fixed-in", gw), 1, None, None),            # go.mod is svc's
+            ("9.1-r1-01", ("--fixed", svc_sha, "--fixed-in", gw), 1, None, None),           # sha not in gw
+            ("9.1-r1-01", ("--fixed", gw_fix, "--fixed-in", "/no/such/repo"), 2, None, None),
+            ("9.1-r1-01", ("--fixed-in", gw, "--rejected", "x"), 2, None, None),
+            ("9.1-r1-01", ("--fixed", gw_fix, "--fixed-in", gw_wt, "--off-anchor", "egress errors carry no URL"),
+             0, "wellmed/gw", "off-anchor"),
+            ("9.1-r1-02", ("--fixed", docs_fix, "--fixed-in", docs), 1, None, None),        # touched, but elsewhere
+            ("9.1-r1-02", ("--fixed", docs_fix, "--fixed-in", docs, "--off-anchor", "hand-back corrected"), 0,
+             "wellmed/kalpa-docs", "off-anchor"),
+            ("9.1-r1-03", ("--fixed", docs_fix[:8], "--fixed-in", os.path.join(docs, "plans"), "--off-anchor",
+                           "hand-back corrected"), 0, "wellmed/kalpa-docs", "off-anchor"),   # a subdir resolves up
+            ("9.1-r1-02", ("--fixed", docs_fix, "--fixed-in", self.repo), 1, None, None),   # own repo: not there
+        ]
+        for fid, flags, code, repo, via in cases:
+            with self.subTest(fid=fid, flags=flags):
+                before = len(read(self.log).splitlines())
+                p = self.dispose(fid, *flags)
+                self.assertEqual(p.returncode, code, p.stderr)
+                recs = [json.loads(x) for x in read(self.log).splitlines()]
+                if code:
+                    self.assertEqual(len(recs), before)
+                else:
+                    self.assertEqual((recs[-1]["finding_id"], recs[-1]["repo"], recs[-1]["via"]), (fid, repo, via))
+        gate = load("verdict-gate.py")
+        self.assertEqual(gate.coverage_blocks(self.log), ([], 3))
+        # the blocking fix is re-reviewed in the repo that holds it, not the finding's
+        rereview = lambda: [b[0] for b in gate.review_presence_blocks(self.log, {}, self.projects)]
+        self.assertEqual(rereview(), ["rereview:9.1-r1-01", "rereview:9.1-r1-02", "rereview:9.1-r1-03"])
+        for repo, left in ((gw, ["rereview:9.1-r1-02", "rereview:9.1-r1-03"]), (docs, [])):
+            p = run(REVIEW, "record", "--repo", repo, "--range", self.rng(repo), "--reviewer", "codex gpt-test",
+                    "--input", self.answer(findings=[], verdict="SHIP"), "--scope", self.scope, "--unit", "9.1",
+                    env=self.env)
+            self.assertEqual(p.returncode, 0, p.stderr)
+            self.assertEqual(rereview(), left)
+
+    def test_fixed_refuses_the_reviewed_code(self):
+        # review adhoc-01: the commit that introduced a finding touches its file, so the reviewed
+        # code itself was accepted as its own fix — and the original review's range satisfied
+        # the gate's re-review check. In the finding's repo by ancestry; elsewhere by date.
+        gate = load("verdict-gate.py")
+        intro = self.commit(self.repo, "pkg/res.go")
+        gw = self.mkrepo("wellmed/gw")
+        with open(os.path.join(gw, "old.go"), "w") as fh:
+            fh.write("x\n")
+        git(gw, "add", "-A")
+        subprocess.run(["git", "-C", gw, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "old"],
+                       check=True, env=dict(os.environ, GIT_COMMITTER_DATE="2000-01-01T00:00:00Z"))
+        old = git(gw, "rev-parse", "HEAD")
+        self.record(findings=[{"file": "pkg/res.go", "line": 3, "severity": "blocking", "category": "fail-open",
+                               "group": "", "text": "err swallowed", "fix": "return it"}])
+        cases = [  # (flags, exit, stderr needle)
+            (("--fixed", intro), 1, "predates the finding: it is in the code that review reviewed"),
+            (("--fixed", intro, "--off-anchor", "explained"), 1, "predates the finding"),
+            (("--fixed", old, "--fixed-in", gw, "--off-anchor", "explained"), 1, "committed before the review"),
+        ]
+        for flags, code, needle in cases:
+            with self.subTest(flags=flags):
+                p = self.dispose("9.1-r1-01", *flags)
+                self.assertEqual(p.returncode, code, p.stderr)
+                self.assertIn(needle, p.stderr)
+        self.assertEqual(self.dispose("9.1-r1-01", "--fixed", self.commit(self.repo, "pkg/res.go")).returncode, 0)
+        # r2-05: in another repo the date decides, and an unknown review time fails closed
+        rr, new = load(REVIEW), self.commit(gw, "new.go")
+        f = {"range": {"wellmed/svc": "a.." + git(self.repo, "rev-parse", "HEAD")}}
+        cases = [("2000-06-01T00:00:00Z", None), (None, "time is unknown"), ("garbage", "time is unknown"),
+                 ("2099-01-01T00:00:00Z", "committed before the review")]
+        for ts, needle in cases:
+            with self.subTest(ts=ts):
+                why = rr.predates(dict(f, ts=ts), new, gw, [])
+                (self.assertIsNone(why) if needle is None else self.assertIn(needle, why or ""))
+        # misfiled names the old commit as not a fix instead of printing its dispose line
+        self.dispose("9.1-r1-01", "--rejected", f"FIXED by {intro[:8]}")
+        self.dispose("9.1-r1-01", "--rejected", f"by design since {intro[:8]}; NOT FIXED, out of scope")
+        p = run(REVIEW, "misfiled", "--scope", self.scope, "--unit", "9.1", env=self.env)
+        self.assertIn("no affirmative `FIXED` claim", p.stdout)
+        self.assertNotIn("--fixed ", p.stdout)
+        self.dispose("9.1-r1-01", "--rejected", f"FIXED by {intro[:8]}")
+        p = run(REVIEW, "misfiled", "--scope", self.scope, "--unit", "9.1", env=self.env)
+        self.assertIn(f"{intro[:8]}: not a fix", p.stdout)
+        self.assertNotIn(f"--fixed {intro[:8]}", p.stdout)
+        # a hand-written record of the reviewed code as the fix blocks at the gate
+        with open(self.log, "a") as fh:
+            fh.write(json.dumps({"schema": "verify/1", "ts": "t", "record": "disposition", "finding_id": "9.1-r1-01",
+                                 "disposition": "fixed", "sha": intro, "repo": "wellmed/svc", "via": "anchor",
+                                 "reason": None, "by": "t"}) + "\n")
+        self.assertIn("predates:9.1-r1-01", [b[0] for b in gate.review_presence_blocks(self.log, {}, self.projects)])
+
+    def test_fixed_in_is_the_same_repo_only_by_git_identity(self):
+        # review adhoc-04: a repo outside the projects root keys by basename, so a stranger named
+        # like the finding's repo matched by key and its same-named file counted as the anchor.
+        own = self.mkrepo("svc2")
+        p = run(REVIEW, "record", "--repo", own, "--range", self.rng(own), "--reviewer", "codex gpt-test",
+                "--input", self.answer(), "--scope", self.scope, "--unit", "9.1", env=self.env)
+        self.assertEqual(p.returncode, 0, p.stderr)
+        stranger = os.path.join(self.tmp.name, "elsewhere", "svc2")
+        os.makedirs(stranger)
+        git(stranger, "init", "-q", "-b", "main")
+        sha = self.commit(stranger, "a.sh")
+        p = self.dispose("9.1-r1-01", "--fixed", sha, "--fixed-in", stranger)
+        self.assertEqual(p.returncode, 2, p.stderr)
+        self.assertIn("is outside", p.stderr)
+        rr = load(REVIEW)
+        f = {"range": {"svc2": "a..b"}, "file": "a.sh"}
+        cases = [(own, True), (stranger, False), (self.repo, False)]
+        self.addCleanup(setattr, rr.vl, "PROJECTS", rr.vl.PROJECTS)  # verify_lib is shared in-process
+        rr.vl.PROJECTS = self.projects
+        for path, want in cases:
+            with self.subTest(path=path):
+                self.assertEqual(rr.same_repo(f, path, "svc2"), want)
+
+    def test_misfiled_rejections_redispose_as_fixed(self):
+        # 149.2 logged real fixes as "rejected — not rejected on merit — FIXED by <sha>". The
+        # latest disposition decides (§6.3), so a new `fixed` record supersedes each one.
+        gate = load("verdict-gate.py")
+        self.record()
+        fix = self.commit(self.repo, "a.sh")
+        self.dispose("9.1-r1-01", "--rejected", f"not rejected on merit — FIXED by {fix[:7]} (tooling gap)")
+        self.dispose("9.1-r1-02", "--rejected", "FIXED in kalpa-docs, committed with the progress notes")
+        self.dispose("9.1-r1-03", "--rejected", "the comment is accurate as of 20260929")
+        # review adhoc-07: a negated claim, and a SHA cited outside the FIXED clause, print no dispose line
+        rr = load(REVIEW)
+        cases = [(f"NOT FIXED by {fix[:8]}: by design", (False, [])),
+                 (f"was never FIXED; see {fix[:8]}", (False, [])),
+                 (f"FIXED by {fix[:8]}; the bug came from abcdef12", (True, [fix[:8]])),
+                 ("not rejected on merit — FIXED in kalpa-docs decd35d", (True, ["decd35d"])),
+                 ("not rejected on merit", (False, [])),
+                 (f"FIXED upstream\nNOT FIXED by {fix[:8]}", (True, [])),          # r2-07
+                 (f"FIXED upstream! NOT FIXED by {fix[:8]}", (True, [])),
+                 (f"FIXED by {fix[:8]}? no", (True, [fix[:8]]))]
+        for reason, want in cases:
+            with self.subTest(reason=reason):
+                self.assertEqual(rr.fix_claims(reason), want)
+        ls = lambda: run(REVIEW, "misfiled", "--scope", self.scope, "--unit", "9.1", env=self.env)
+        p = ls()
+        self.assertEqual(p.returncode, 0, p.stderr)
+        cases = [  # (needle, present)
+            (f"--finding 9.1-r1-01 --fixed {fix[:7]}    # wellmed/svc, via anchor", True),
+            ("9.1-r1-02 should-fix", True), ("no SHA in the reason resolves", True),
+            ("9.1-r1-03", False),               # a rejection on merit is not misfiled
+            ("20260929", False),                # a digit-only token resolving nowhere is not a SHA
+            ("2 misfiled rejection(s) in 9.1", True)]
+        for needle, present in cases:
+            with self.subTest(needle=needle):
+                (self.assertIn if present else self.assertNotIn)(needle, p.stdout)
+        cmd = next(x for x in p.stdout.splitlines() if "--finding 9.1-r1-01" in x).split("#")[0].split()
+        redo = subprocess.run([sys.executable] + cmd + ["--by", "t"], env=self.env, capture_output=True, text=True)
+        self.assertEqual(redo.returncode, 0, redo.stderr)
+        latest = {r["finding_id"]: r for r in map(json.loads, read(self.log).splitlines())
+                  if r["record"] == "disposition"}
+        self.assertEqual((latest["9.1-r1-01"]["disposition"], latest["9.1-r1-01"]["sha"]), ("fixed", fix))
+        self.assertIn("1 misfiled rejection(s) in 9.1", ls().stdout)
+        self.assertEqual(gate.coverage_blocks(self.log), ([], 3))
+        p = run(REVIEW, "accept", "--scope", self.scope, "--unit", "9.1", "--by", "Alex", env=self.env)
+        self.assertIn("1 fixed, 2 rejected", p.stdout)
 
     def test_worktree_review_is_keyed_by_the_primary_checkout(self):
         wt = os.path.join(self.tmp.name, "herdr-wt-rec")
@@ -392,12 +657,87 @@ class TestReview(unittest.TestCase):
         for _ in range(3):
             p = self.record()
             self.assertEqual(p.returncode, 0, p.stderr)
-        self.assertIn("[CONVERGENCE] a.sh drew findings in each of the last 3 rounds", p.stdout)
+        self.assertIn("[CONVERGENCE] a.sh drew findings in each of the last 3 wellmed/svc rounds", p.stdout)
         self.assertIn("[CONVERGENCE] b.go", p.stdout)
         self.assertNotIn("round 3 >", p.stdout)
         p = self.record(findings=[])
-        self.assertIn("[CONVERGENCE] round 4 > 3", p.stdout)
+        self.assertIn("[CONVERGENCE] wellmed/svc round 4 > 3", p.stdout)
         self.assertNotIn("drew findings", p.stdout)  # a clean round breaks the streak
+
+    def test_a_file_outside_the_repos_converges_across_lanes(self):
+        # review adhoc-08: a hand-back doc cited by three lanes' reviews in a row, three spellings
+        docs, gw = self.mkrepo("wellmed/kalpa-docs"), self.mkrepo("wellmed/gw")
+        mk = lambda file: [{"file": file, "line": 1, "severity": "note", "category": "doc-claim", "group": "",
+                            "text": "t", "fix": ""}]
+        steps = [(self.generic, "other.md"), (self.repo, "kalpa-docs/plans/x.md"),
+                 (gw, os.path.join(docs, "plans", "x.md")), (self.repo, "../kalpa-docs/plans/x.md")]
+        out = [self.record(repo=repo, findings=mk(file)).stdout for repo, file in steps]
+        self.assertNotIn("outside the reviewed repos", "".join(out[:3]))   # r1 is inside the window
+        self.assertIn("x.md (outside the reviewed repos) drew findings in each of the unit's last 3", out[3])
+        self.assertNotIn("other.md", out[3])
+
+    def test_rounds_count_per_repo_within_the_unit(self):
+        # 149.2: one unit, 13 repos — bpjs's first review was r5 and the round cap fired on
+        # it. IDs stay unit-wide; every round rule counts the reviews of that review's repo.
+        steps = [  # (repo, unit-wide id, repo round, must print, must not print)
+            (self.repo, "9.1-r1", 1, [], ["[CONVERGENCE]"]),
+            (self.generic, "9.1-r2", 1, [], ["[CONVERGENCE]"]),
+            (self.generic, "9.1-r3", 2, [], ["[CONVERGENCE]"]),
+            (self.repo, "9.1-r4", 2, [], ["[CONVERGENCE]"]),  # unit round 4, svc round 2
+            (self.generic, "9.1-r5", 3, ["a.sh drew findings in each of the last 3 other/tool rounds"],
+             ["round 5 >", "> 3:"]),
+            (self.repo, "9.1-r6", 3, ["last 3 wellmed/svc rounds"], ["> 3:"]),
+            (self.generic, "9.1-r7", 4, ["[CONVERGENCE] other/tool round 4 > 3"], ["wellmed/svc round"]),
+        ]
+        for repo, rid, rnd, has, hasnt in steps:
+            with self.subTest(rid=rid):
+                p = self.record(repo=repo)
+                self.assertEqual(p.returncode, 0, p.stderr)
+                self.assertIn(f"review {rid}:", p.stdout)
+                self.assertIn(f"round: {rnd} of ", p.stdout)
+                for needle in has:
+                    self.assertIn(needle, p.stdout)
+                for needle in hasnt:
+                    self.assertNotIn(needle, p.stdout)
+        todo = os.path.join(os.path.dirname(self.scope), "TO-DO.md")
+        with open(todo, "w") as fh:
+            fh.write("".join(f"- [ ] [review 9.1-r{n}-02] tenant filter\n" for n in range(1, 8)))
+        # deferral: past round 3 of the finding's repo, whatever its unit-wide number
+        for fid, code in (("9.1-r4-02", 1), ("9.1-r5-02", 1), ("9.1-r6-02", 1), ("9.1-r7-02", 0)):
+            with self.subTest(defer=fid):
+                p = self.dispose(fid, "--deferred", "tenant filter")
+                self.assertEqual(p.returncode, code, p.stderr)
+                if code:
+                    self.assertIn("round 3 ≤ 3" if fid != "9.1-r4-02" else "round 2 ≤ 3", p.stderr)
+
+    def test_repo_round_reads_logs_without_review_records(self):
+        rr = load(REVIEW)
+        f = lambda rid, repo: {"record": "finding", "review_id": rid, "range": {repo: "a..b"}, "file": "x"}
+        recs = [f("9.1-r1", "a"), f("9.1-r2", "b"), f("9.1-r3", "a"), f("9.1-r10", "a")]
+        cases = [("9.1-r1", ("a", 1)), ("9.1-r2", ("b", 1)), ("9.1-r3", ("a", 2)), ("9.1-r10", ("a", 3)),
+                 ("9.1-r9", (None, 0))]
+        for rid, want in cases:
+            with self.subTest(rid=rid):
+                self.assertEqual(rr.repo_round(recs, "9.1", rid), want)
+
+
+    def test_rounds_of_one_repo_count_together_across_worktree_keys(self):
+        # review adhoc-06: 149.2 logged four supply-chain rounds under its worktree's path; a
+        # review keyed by the primary checkout restarted at round 1 and never converged.
+        wt = os.path.join(self.projects, "wellmed", "svc.worktrees", "live")
+        git(self.repo, "worktree", "add", "-q", wt)
+        f = lambda rid, repo: {"record": "finding", "review_id": rid, "range": {repo: "a..b"}, "file": "x"}
+        recs = [f("9.1-r1", "wellmed/svc.worktrees/gone-149"), f("9.1-r2", "wellmed/svc.worktrees/live"),
+                f("9.1-r3", "wellmed/other"), f("9.1-r4", "wellmed/svc")]
+        # in a subprocess: verify_lib reads VERIFY_PROJECTS at import, and is shared in-process
+        out = subprocess.run([sys.executable, "-c", "import json,sys; sys.path.insert(0, sys.argv[1]); "
+                              "from _helpers import load; rr = load('review/scripts/review.py'); "
+                              "print(json.dumps([rr.repo_round(json.loads(sys.argv[2]), '9.1', i) "
+                              "for i in ('9.1-r1', '9.1-r2', '9.1-r3', '9.1-r4')]))",
+                              os.path.dirname(os.path.abspath(__file__)), json.dumps(recs)],
+                             env=self.env, capture_output=True, text=True, check=True).stdout
+        self.assertEqual(json.loads(out), [["wellmed/svc", 1], ["wellmed/svc", 2], ["wellmed/other", 1],
+                                           ["wellmed/svc", 3]])
 
 
 if __name__ == "__main__":

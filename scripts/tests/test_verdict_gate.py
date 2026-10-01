@@ -272,7 +272,8 @@ class TestGate(Fixture):
         self.ledger()
         self.verify("codex gpt-test", [self.v("ok", "pass")])
         review = os.path.join(self.scope, "artifacts", "review-5.1.jsonl")
-        f = {"schema": "verify/1", "record": "finding", "review_id": "5.1-r1", "file": "a.py", "line": 1}
+        f = {"schema": "verify/1", "record": "finding", "review_id": "5.1-r1", "file": "a.py", "line": 1,
+             "range": {"svc": "0000000..0000000"}}
         with open(review, "w") as fh:
             fh.write(json.dumps(dict(f, finding_id="5.1-r1-01")) + "\n")
             fh.write(json.dumps(dict(f, finding_id="5.1-r1-02")) + "\n")
@@ -283,7 +284,7 @@ class TestGate(Fixture):
         self.assertEqual({b["id"] for b in doc["blocks"]}, {"5.1-r1-01", "5.1-r1-02"})
         with open(review, "a") as fh:
             for fid, extra in (("5.1-r1-01", {"disposition": "rejected", "reason": "misread"}),
-                               ("5.1-r1-02", {"disposition": "fixed", "sha": "abc1234"})):
+                               ("5.1-r1-02", {"disposition": "fixed", "sha": git(self.svc, "rev-parse", "HEAD")})):
                 fh.write(json.dumps(dict({"schema": "verify/1", "record": "disposition", "finding_id": fid}, **extra)) + "\n")
         self.assertEqual(self.gate("--blocking").returncode, 0)
 
@@ -298,8 +299,8 @@ class TestGate(Fixture):
 class TestReviewRequired(Fixture):
     """5.3-r1-03: a unit with commits in range cannot pass without a /review covering it."""
 
-    def review_record(self, base, head):
-        rec = {"schema": "verify/1", "ts": "t", "record": "review", "review_id": "5.1-r1",
+    def review_record(self, base, head, review_id="5.1-r1"):
+        rec = {"schema": "verify/1", "ts": "t", "record": "review", "review_id": review_id,
                "reviewer": "codex gpt-test", "range": {"svc": f"{base}..{head}"},
                "shas": {"base": base, "head": head}, "passes": "p", "findings": 0, "verdict": "SHIP"}
         with open(os.path.join(self.scope, "artifacts", "review-5.1.jsonl"), "a") as fh:
@@ -366,7 +367,10 @@ class TestReviewRequired(Fixture):
         self.verify("codex gpt-test", [self.v("ok", "pass")])
         code, doc = self.gate_json("--blocking")
         self.assertIn("rereview:5.1-r1-01", [b["id"] for b in doc["blocks"]])
-        self.review_record(self.h, fix)            # r2 covers the fix
+        self.review_record(self.b, fix)            # r1 again: a review minted no later never saw the fix
+        code, doc = self.gate_json("--blocking")
+        self.assertIn("rereview:5.1-r1-01", [b["id"] for b in doc["blocks"]])
+        self.review_record(self.h, fix, "5.1-r2")  # r2 covers the fix
         code, doc = self.gate_json("--blocking")
         self.assertEqual((code, doc["verdict"]), (0, "pass"), doc)
 

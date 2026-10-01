@@ -218,7 +218,8 @@ first review.
   the link, and an ID mentioned elsewhere on a line or a marker with no text is not. `dispose` refuses a deferral
   with no open item naming the ID, one from its repo's round 3 or earlier, and any blocking finding.
 - **Same place, three rounds.** A file drawing findings in each of the repo's last three rounds
-  is a design that is wrong, not a patch that is incomplete. Stop fixing it and raise it to
+  — or, for a file outside the reviewed repos (a hand-back doc), in each of the unit's last
+  three reviews, whichever lanes they were — is a design that is wrong, not a patch that is incomplete. Stop fixing it and raise it to
   the user as one design finding: replace it, narrow what it promises, or cut it.
 - **Findings that argue opposite sides** (fixing one reopens another) mean the contract is
   ambiguous. Stop and ask which side the user wants; don't pick one and reject the other.

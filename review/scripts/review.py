@@ -332,12 +332,40 @@ def convergence(recs, unit):
     if last > ROUND_CAP:
         out.append(f"[CONVERGENCE] {repo} round {last} > {ROUND_CAP}: fix blocking findings only; defer "
                    "should-fix/note with `dispose --deferred \"<TO-DO item>\"` (review/SKILL.md §5.1)")
+    seen = set()
     if last >= REPEAT:
         for f in sorted(set.intersection(*mine[-REPEAT:])):
+            seen.add(foreign(f, repo) or f)
             out.append(f"[CONVERGENCE] {f} drew findings in each of the last {REPEAT} {repo} rounds: stop "
                        "patching — raise it to the user as a design finding (replace, narrow, or cut) before "
                        "another fix")
+    # a file outside the reviewed repo (a hand-back doc) is cited by every lane's reviews, so its
+    # streak runs across repos — per-repo counting alone never sees it (review adhoc-08)
+    if len(revs) >= REPEAT:
+        sets = [{x for x in (foreign(f, rp) for f in files) if x} for _, rp, files in revs[-REPEAT:]]
+        for f in sorted(set.intersection(*sets) - seen):
+            out.append(f"[CONVERGENCE] {f} (outside the reviewed repos) drew findings in each of the unit's last "
+                       f"{REPEAT} reviews: stop patching — raise it to the user as a design finding")
     return out
+
+
+def foreign(file, repo):
+    """A finding's file as an identity outside repo `repo` (a key), or None: an absolute path, or
+    one that leads out of the repo (`../wellmed-backbone/...`) or with a sibling repo's directory
+    (`kalpa-docs/plans/...`)."""
+    if not file or not repo:
+        return None
+    if os.path.isabs(file):
+        return os.path.realpath(file)
+    root = os.path.realpath(os.path.join(vl.PROJECTS, repo))
+    first = os.path.normpath(file).split(os.sep)[0]
+    if first == "..":
+        path = os.path.realpath(os.path.join(root, file))
+        return None if path.startswith(root + os.sep) else path
+    sibling = os.path.join(os.path.dirname(root), first)
+    if first != os.path.basename(root) and os.path.exists(os.path.join(sibling, ".git")):
+        return os.path.realpath(os.path.join(os.path.dirname(root), file))
+    return None
 
 
 def build(a, doc, ordered, key, n, review_id):

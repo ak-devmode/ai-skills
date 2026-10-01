@@ -633,6 +633,18 @@ class TestReview(unittest.TestCase):
         self.assertIn("[CONVERGENCE] wellmed/svc round 4 > 3", p.stdout)
         self.assertNotIn("drew findings", p.stdout)  # a clean round breaks the streak
 
+    def test_a_file_outside_the_repos_converges_across_lanes(self):
+        # review adhoc-08: a hand-back doc cited by three lanes' reviews in a row, three spellings
+        docs, gw = self.mkrepo("wellmed/kalpa-docs"), self.mkrepo("wellmed/gw")
+        mk = lambda file: [{"file": file, "line": 1, "severity": "note", "category": "doc-claim", "group": "",
+                            "text": "t", "fix": ""}]
+        steps = [(self.generic, "other.md"), (self.repo, "kalpa-docs/plans/x.md"),
+                 (gw, os.path.join(docs, "plans", "x.md")), (self.repo, "../kalpa-docs/plans/x.md")]
+        out = [self.record(repo=repo, findings=mk(file)).stdout for repo, file in steps]
+        self.assertNotIn("outside the reviewed repos", "".join(out[:3]))   # r1 is inside the window
+        self.assertIn("x.md (outside the reviewed repos) drew findings in each of the unit's last 3", out[3])
+        self.assertNotIn("other.md", out[3])
+
     def test_rounds_count_per_repo_within_the_unit(self):
         # 149.2: one unit, 13 repos — bpjs's first review was r5 and the round cap fired on
         # it. IDs stay unit-wide; every round rule counts the reviews of that review's repo.

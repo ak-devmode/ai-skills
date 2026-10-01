@@ -292,17 +292,17 @@ class TestReview(unittest.TestCase):
         git(repo, "commit", "-q", "-m", "c")
         return git(repo, "rev-parse", "HEAD")
 
-    def test_fixed_accepts_the_anchor_or_a_test_beside_it(self):
-        # 149.2-r11-02: a missing-coverage finding on pkg/res.go is fixed by a test-only
-        # commit; anything else needs an explicit --off-anchor reason.
+    def test_fixed_accepts_the_anchor_else_an_off_anchor_reason(self):
+        # 149.2-r11-02: a missing-coverage finding on pkg/res.go is fixed by a test-only commit —
+        # off the anchor, with a reason, like every commit that does not touch the file (r2-02).
         gate = load("verdict-gate.py")
         self.record(findings=[{"file": "pkg/res.go", "line": 3, "severity": "should-fix", "category": "domain",
                                "group": "3.8", "text": "no test for the failure path", "fix": "add one"}])
         cases = [  # (files the commit changes, extra flags, exit, via)
             (["pkg/res.go"], (), 0, "anchor"),
-            (["pkg/res_test.go"], (), 0, "test"),
-            (["pkg/res_test.go", "go.sum"], (), 0, "test"),
-            (["pkg/validation_test.go"], (), 1, None),   # beside it, but not its test (adhoc-02)
+            (["pkg/res_test.go"], (), 1, None),          # its own test is still off the anchor
+            (["pkg/res_test.go"], ("--off-anchor", "adds the failure-path test"), 0, "off-anchor"),
+            (["pkg/validation_test.go"], (), 1, None),
             (["other/res_test.go"], (), 1, None),
             (["pkg/sub/res_test.go"], (), 1, None),
             (["pkg/notes.md"], (), 1, None),
@@ -363,8 +363,8 @@ class TestReview(unittest.TestCase):
 
     def test_fixed_in_another_repo(self):
         # 149.2-r5-01: a bpjs finding fixed at its source in gateway-go; 149.2-r2-03/-r18-03:
-        # findings on a docs-repo hand-back file. The sha must exist where --fixed-in says,
-        # and a relative anchor never matches a same-named file in another repo.
+        # findings on a docs-repo hand-back file. The sha must exist where --fixed-in says, and a
+        # fix in another repo is always off the anchor: no directory-name matching (r2-06).
         gw, docs = self.mkrepo("wellmed/gw"), self.mkrepo("wellmed/kalpa-docs")
         gw_wt = os.path.join(self.tmp.name, "gw-wt")
         git(gw, "worktree", "add", "-q", gw_wt)
@@ -383,9 +383,11 @@ class TestReview(unittest.TestCase):
             ("9.1-r1-01", ("--fixed-in", gw, "--rejected", "x"), 2, None, None),
             ("9.1-r1-01", ("--fixed", gw_fix, "--fixed-in", gw_wt, "--off-anchor", "egress errors carry no URL"),
              0, "wellmed/gw", "off-anchor"),
-            ("9.1-r1-02", ("--fixed", docs_fix, "--fixed-in", docs), 0, "wellmed/kalpa-docs", "anchor"),
-            ("9.1-r1-03", ("--fixed", docs_fix[:8], "--fixed-in", os.path.join(docs, "plans")), 0,
-             "wellmed/kalpa-docs", "anchor"),                                               # a subdir resolves up
+            ("9.1-r1-02", ("--fixed", docs_fix, "--fixed-in", docs), 1, None, None),        # touched, but elsewhere
+            ("9.1-r1-02", ("--fixed", docs_fix, "--fixed-in", docs, "--off-anchor", "hand-back corrected"), 0,
+             "wellmed/kalpa-docs", "off-anchor"),
+            ("9.1-r1-03", ("--fixed", docs_fix[:8], "--fixed-in", os.path.join(docs, "plans"), "--off-anchor",
+                           "hand-back corrected"), 0, "wellmed/kalpa-docs", "off-anchor"),   # a subdir resolves up
             ("9.1-r1-02", ("--fixed", docs_fix, "--fixed-in", self.repo), 1, None, None),   # own repo: not there
         ]
         for fid, flags, code, repo, via in cases:
@@ -402,11 +404,13 @@ class TestReview(unittest.TestCase):
         self.assertEqual(gate.coverage_blocks(self.log), ([], 3))
         # the blocking fix is re-reviewed in the repo that holds it, not the finding's
         rereview = lambda: [b[0] for b in gate.review_presence_blocks(self.log, {}, self.projects)]
-        self.assertEqual(rereview(), ["rereview:9.1-r1-01"])
-        p = run(REVIEW, "record", "--repo", gw, "--range", self.rng(gw), "--reviewer", "codex gpt-test", "--input",
-                self.answer(findings=[], verdict="SHIP"), "--scope", self.scope, "--unit", "9.1", env=self.env)
-        self.assertEqual(p.returncode, 0, p.stderr)
-        self.assertEqual(rereview(), [])
+        self.assertEqual(rereview(), ["rereview:9.1-r1-01", "rereview:9.1-r1-02", "rereview:9.1-r1-03"])
+        for repo, left in ((gw, ["rereview:9.1-r1-02", "rereview:9.1-r1-03"]), (docs, [])):
+            p = run(REVIEW, "record", "--repo", repo, "--range", self.rng(repo), "--reviewer", "codex gpt-test",
+                    "--input", self.answer(findings=[], verdict="SHIP"), "--scope", self.scope, "--unit", "9.1",
+                    env=self.env)
+            self.assertEqual(p.returncode, 0, p.stderr)
+            self.assertEqual(rereview(), left)
 
     def test_fixed_refuses_the_reviewed_code(self):
         # review adhoc-01: the commit that introduced a finding touches its file, so the reviewed

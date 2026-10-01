@@ -273,14 +273,15 @@ exclusive lock on the log, so concurrent or clean reviews never share an ID.
 6.2 **`disposition`** records: `schema` · `ts` · `finding_id` · `disposition`
 (`fixed | rejected | deferred`) · `sha` (required for `fixed`, the full SHA) · `repo` (`fixed`
 only: the repo key holding `sha` — the finding's own, or `dispose --fixed-in`'s) · `via` (`fixed` only:
-`anchor` — the commit changes the finding's file · `test` — it changes the anchor's own test,
-beside it and named for it (`res_test.go` for `res.go`), on a non-blocking finding · `off-anchor` — neither, and `reason` says how it fixes the finding) ·
+`anchor` — the commit changes the finding's file in the finding's own repo · `off-anchor` —
+anything else (a test-only fix, another file, another repo), and `reason` says how it fixes
+the finding) ·
 `reason` (required for `rejected` and for a `fixed` via `off-anchor`; for `deferred`, a note; the link is the finding ID, which must lead an open `- [ ]` item line in the project's `TO-DO.md` as `[review <id>]` followed by the work left, and the gate rechecks that item still exists, open or closed into `archive/TO-DO-archive.md` — never on a `blocking` finding or before round 4 *of the finding's repo* (rounds count the unit's reviews of that repo, not the unit-wide `r<n>`), `review/SKILL.md` §5.1) ·
 `by`.
 
 6.3 **Coverage rule.** Every `finding_id` has at least one disposition; the latest one
 decides — so a re-disposition supersedes an earlier one (`review.py misfiled` lists the
-rejections that say `FIXED`), and reopens acceptance (§6.4). A `finding_id` carried by two findings blocks — one disposition must never clear two. A `fixed <sha>` commit must touch the finding's `file` or (non-blocking) its own test,
+rejections that say `FIXED`), and reopens acceptance (§6.4). A `finding_id` carried by two findings blocks — one disposition must never clear two. A `fixed <sha>` commit must touch the finding's `file` in its own repo,
 or carry an `off-anchor` reason, and must post-date the finding (not an ancestor of the head
 its review saw; in another repo, not older than the review) — `dispose` refuses it otherwise,
 at write time, and the gate blocks an `off-anchor` fix without a reason. Nothing silently

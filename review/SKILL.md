@@ -173,19 +173,17 @@ $RV dispose --scope $SCOPE --unit $UNIT --finding <ID> --rejected "<why the find
 **A fix in another repo** — at the source the finding traces to, or a hand-back file in a
 docs repo — is `--fixed-in <repo path>`: a repo under `~/Projects` (`VERIFY_PROJECTS`), the
 SHA must exist there, and the record carries that repo. It is the finding's own repo only
-by git identity (its primary checkout), never by a matching name. The finding's file reaches into that repo only when it is absolute under it or
-leads with its directory name (`kalpa-docs/plans/...`); a bare relative path never matches
-a same-named file elsewhere (bpjs's `go.mod` is not gateway-go's), so a source fix
-normally also needs `--off-anchor`. A blocking finding's fix is re-reviewed in the repo
-that holds it, by a review recorded after the finding's.
+by git identity (its primary checkout), never by a matching name. A fix there is always
+off the anchor (below), even when it touches a file of the same path, and is re-reviewed in
+the repo that holds it, by a review recorded after the finding's.
 
-`--fixed` is accepted when that commit touches the finding's file, or — on a non-blocking
-finding — its own test beside it and named for it (`res_test.go`, `test_res.py` for
-`res.*`): a missing-coverage finding is fixed by a test-only commit. Another test in the
-directory is not the anchor's, and a test alone never fixes a blocking defect. Any other
-commit is refused unless `--off-anchor "<how this commit fixes it>"` says why; the record
-carries `via` (`anchor | test | off-anchor`) and the reason, so `/verify` can audit it, and
-an off-anchor fix at any severity must sit in a later review's range, like a blocking one's.
+**One rule for a fix.** `--fixed` is accepted on its own only when that commit touches the
+finding's file in the finding's own repo, after the head its review saw. Anything else — a
+test-only commit for a missing-coverage finding, a fix in another file, a fix in another
+repo — needs `--off-anchor "<how this commit fixes it>"`; the record carries `via`
+(`anchor | off-anchor`) and the reason, `/verify` audits it, and the gate wants every
+off-anchor fix, at any severity, inside a later review's range. No guessing which tests or
+which directories count: each guess was a new way through (review r1/r2 on this tool).
 **The reviewed code is never its own fix:** the commit that introduced a finding touches its
 file, so `dispose` refuses an ancestor of the head that review saw (in another repo, a commit
 older than the review), with or without `--off-anchor`, and the gate blocks one.

@@ -207,8 +207,8 @@ passes. The flag stays on the record so a reader can see it; it is not a block.
 5.2.1 **Per unit, the gate also blocks when** a repo with a recorded base has commits in
 `base..HEAD` but no `review` record (§6.0) names that repo and covers the unit's first
 commit on the current branch — a unit that commits must be reviewed (review 5.3-r1-03);
-when a **blocking** finding's `fixed <sha>` sits in no later review's range — the fixes
-are reviewed again (`/plan` §6.8, 5.3-r2-03); when git cannot count the range (a block,
+when a **blocking** finding's `fixed <sha>` sits in no later review's range of the repo
+holding it (the disposition's `repo`, else the finding's) — the fixes are reviewed again (`/plan` §6.8, 5.3-r2-03); when git cannot count the range (a block,
 never a zero); or when `artifacts/review-<unit>.jsonl` breaks §6.3: a `finding_id` with no disposition, a `fixed` without `sha`, or a `rejected`
 without `reason`. Deterministic, so the gate owns it — `/verify` judges whether a rejection
 was *right*, never whether one was recorded.
@@ -267,14 +267,16 @@ exclusive lock on the log, so concurrent or clean reviews never share an ID.
 `text` · `fix`. IDs are assigned in severity order.
 
 6.2 **`disposition`** records: `schema` · `ts` · `finding_id` · `disposition`
-(`fixed | rejected | deferred`) · `sha` (required for `fixed`, the full SHA) · `via` (`fixed` only:
+(`fixed | rejected | deferred`) · `sha` (required for `fixed`, the full SHA) · `repo` (`fixed`
+only: the repo key holding `sha` — the finding's own, or `dispose --fixed-in`'s) · `via` (`fixed` only:
 `anchor` — the commit changes the finding's file · `test` — it changes a test file in the
 anchor's directory · `off-anchor` — neither, and `reason` says how it fixes the finding) ·
 `reason` (required for `rejected` and for a `fixed` via `off-anchor`; for `deferred`, a note; the link is the finding ID, which must lead an open `- [ ]` item line in the project's `TO-DO.md` as `[review <id>]` followed by the work left, and the gate rechecks that item still exists, open or closed into `archive/TO-DO-archive.md` — never on a `blocking` finding or before round 4 *of the finding's repo* (rounds count the unit's reviews of that repo, not the unit-wide `r<n>`), `review/SKILL.md` §5.1) ·
 `by`.
 
 6.3 **Coverage rule.** Every `finding_id` has at least one disposition; the latest one
-decides. A `finding_id` carried by two findings blocks — one disposition must never clear two. A `fixed <sha>` commit must touch the finding's `file` or a test file beside it,
+decides — so a re-disposition supersedes an earlier one (`review.py misfiled` lists the
+rejections that say `FIXED`), and reopens acceptance (§6.4). A `finding_id` carried by two findings blocks — one disposition must never clear two. A `fixed <sha>` commit must touch the finding's `file` or a test file beside it,
 or carry an `off-anchor` reason — `dispose` refuses it otherwise, at write time, and the
 gate blocks an `off-anchor` fix without a reason. Nothing silently
 dismissed, nothing silently dropped. A re-review mints a new `review_id`; the old findings

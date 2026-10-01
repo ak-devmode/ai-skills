@@ -186,7 +186,8 @@ def review_presence_blocks(review_log, base, projects):
         if f.get("record") != "finding" or f.get("severity") != "blocking" or not d \
                 or d.get("disposition") != "fixed" or not d.get("sha"):
             continue
-        for repo in (f.get("range") or {}):
+        # a fix recorded in another repo (`dispose --fixed-in`) is re-reviewed THERE
+        for repo in ([d["repo"]] if d.get("repo") else (f.get("range") or {})):
             path = os.path.join(projects, repo)
             if not any(inside(path, r, d["sha"]) for r in reviews if repo in r.get("range", {})):
                 blocks.append((f"rereview:{f['finding_id']}", "a blocking finding's fix was never reviewed",

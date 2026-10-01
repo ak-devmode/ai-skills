@@ -166,14 +166,27 @@ Each finding ID gets exactly one current disposition, through the script only:
 
 ```bash
 $RV dispose --scope $SCOPE --unit $UNIT --finding <ID> --fixed <sha>          # the fixing commit
+$RV dispose --scope $SCOPE --unit $UNIT --finding <ID> --fixed <sha> --fixed-in <repo path>   # fixed in another repo
 $RV dispose --scope $SCOPE --unit $UNIT --finding <ID> --rejected "<why the finding is wrong>"
 ```
+
+**A fix in another repo** — at the source the finding traces to, or a hand-back file in a
+docs repo — is `--fixed-in <repo path>`: the SHA must exist there, and the record carries
+that repo. The finding's file reaches into that repo only when it is absolute under it or
+leads with its directory name (`kalpa-docs/plans/...`); a bare relative path never matches
+a same-named file elsewhere (bpjs's `go.mod` is not gateway-go's), so a source fix
+normally also needs `--off-anchor`. A blocking finding's fix is re-reviewed in the repo
+that holds it.
 
 `--fixed` is accepted when that commit touches the finding's file, or a test file in the
 same directory as it — a missing-coverage finding is fixed by a test-only commit. Any other
 commit is refused unless `--off-anchor "<how this commit fixes it>"` says why; the record
 carries `via` (`anchor | test | off-anchor`) and the reason, so `/verify` can audit it.
-`--rejected` is refused without a reason — never use it to record a fix the tool refused. When every ID has one, the user's yes is recorded with
+`--rejected` is refused without a reason — never use it to record a fix the tool refused.
+The latest disposition decides, so a fix logged as a rejection is corrected by disposing it
+again: `$RV misfiled --scope $SCOPE --unit $UNIT` lists every rejection whose reason says
+`FIXED` and prints the `dispose` line for each SHA it resolves (here or in a repo beside it);
+it writes nothing — fill each `--off-anchor` reason yourself, then re-`accept`. When every ID has one, the user's yes is recorded with
 `$RV accept --scope $SCOPE --unit $UNIT --by "<name>"` (`verify-contracts.md` §6.4) —
 never on their behalf. `verdict-gate.py` refuses Done while any ID lacks one, and `/verify`
 audits whether each rejection was *right*. Nothing silently dismissed, nothing silently

@@ -663,5 +663,24 @@ class TestReview(unittest.TestCase):
                 self.assertEqual(rr.repo_round(recs, "9.1", rid), want)
 
 
+    def test_rounds_of_one_repo_count_together_across_worktree_keys(self):
+        # review adhoc-06: 149.2 logged four supply-chain rounds under its worktree's path; a
+        # review keyed by the primary checkout restarted at round 1 and never converged.
+        wt = os.path.join(self.projects, "wellmed", "svc.worktrees", "live")
+        git(self.repo, "worktree", "add", "-q", wt)
+        f = lambda rid, repo: {"record": "finding", "review_id": rid, "range": {repo: "a..b"}, "file": "x"}
+        recs = [f("9.1-r1", "wellmed/svc.worktrees/gone-149"), f("9.1-r2", "wellmed/svc.worktrees/live"),
+                f("9.1-r3", "wellmed/other"), f("9.1-r4", "wellmed/svc")]
+        # in a subprocess: verify_lib reads VERIFY_PROJECTS at import, and is shared in-process
+        out = subprocess.run([sys.executable, "-c", "import json,sys; sys.path.insert(0, sys.argv[1]); "
+                              "from _helpers import load; rr = load('review/scripts/review.py'); "
+                              "print(json.dumps([rr.repo_round(json.loads(sys.argv[2]), '9.1', i) "
+                              "for i in ('9.1-r1', '9.1-r2', '9.1-r3', '9.1-r4')]))",
+                              os.path.dirname(os.path.abspath(__file__)), json.dumps(recs)],
+                             env=self.env, capture_output=True, text=True, check=True).stdout
+        self.assertEqual(json.loads(out), [["wellmed/svc", 1], ["wellmed/svc", 2], ["wellmed/other", 1],
+                                           ["wellmed/svc", 3]])
+
+
 if __name__ == "__main__":
     unittest.main()

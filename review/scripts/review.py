@@ -33,6 +33,7 @@ import calendar
 import contextlib
 import datetime
 import fcntl
+import functools
 import json
 import os
 import re
@@ -284,10 +285,25 @@ def reviews_of(recs, unit):
         if not m or r.get("record") not in ("review", "finding"):
             continue
         e = by.setdefault(int(m.group(1)), [r["review_id"], None, set()])
-        e[1] = e[1] or next(iter(r.get("range") or {}), None)
+        e[1] = e[1] or canonical(next(iter(r.get("range") or {}), None))
         if r.get("record") == "finding":
             e[2].add(r.get("file"))
     return [tuple(by[n]) for n in sorted(by)]
+
+
+# a worktree beside its repo: `<repo>.worktrees/<name>` (149.2 logged supply-chain's 4 rounds so)
+WORKTREE_KEY = re.compile(r"\.worktrees/.+$")
+
+
+@functools.lru_cache(maxsize=None)
+def canonical(key):
+    """A logged repo key as its primary checkout's key, so the rounds of one repo count together
+    however a review reached it (review adhoc-06). A live path resolves through git; a gone
+    worktree by its `<repo>.worktrees/<name>` name. Older logs keyed a worktree by its path."""
+    if not key:
+        return key
+    path = os.path.join(vl.PROJECTS, key)
+    return repo_key(main_worktree(path)) if os.path.isdir(path) else WORKTREE_KEY.sub("", key)
 
 
 def repo_round(recs, unit, review_id):

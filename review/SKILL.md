@@ -204,7 +204,8 @@ dropped.
 
 **Rounds count per repo.** Review IDs number every review of the unit (`<unit>-r<n>`),
 but each rule below counts the reviews of *that repo* within the unit — `record` prints
-`round: <k> of <repo>`. A unit spanning 13 repos (149.2) otherwise hit the cap on a lane's
+`round: <k> of <repo>`. A repo is its primary checkout: a review through a worktree, even
+one logged by its `<repo>.worktrees/<name>` path and since removed, counts as that repo's. A unit spanning 13 repos (149.2) otherwise hit the cap on a lane's
 first review.
 
 - **Round cap.** Past round 3 of one repo in a unit, only `blocking` findings are fixed in the loop.

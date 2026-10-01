@@ -1,12 +1,12 @@
 ---
 name: concurrency
-version: 0.5.0
+version: 0.6.0
 description: |
   ONE responsibility: map what can run in parallel and what cannot, against a
   clear set of rules — re-derived from repo ground truth on every run, never
   from a scope's dependency claims. Then dispatch each parallel unit to a
   visible, named herdr pane running the right model seat (Opus / codex / GLM)
-  and supervise by agent state plus a Claude-to-Claude gate-broadcast bus. The single
+  and supervise by agent state plus in-pane status markers the supervisor reads. The single
   controlled home for no-human-in-the-loop agent trains. Use when asked to
   "/concurrency", "dispatch this scope concurrently", "run these phases in
   parallel", "start an agent train", or "herd this scope". It first judges
@@ -148,7 +148,7 @@ is itself the authorization to dispatch (per CLAUDE.md, a skill with `Agent` in
 allowed-tools *is* a dispatch request); the prompt is the last look, not a second
 opt-in. On anything but an explicit `y`, stop without dispatching.
 
-## 6. Dispatch — on `y` from §5.1 (pane cap 5 per tab)
+## 6. Dispatch — on `y` from §5.1 (pane cap 5 per tab, ~6 lanes total — §9.3)
 
 Per partition, in this order (syntax authority: `herdr --skill`):
 1. `herdr worktree create --cwd <repo> --base origin/<trunk>
@@ -163,9 +163,9 @@ Per partition, in this order (syntax authority: `herdr --skill`):
    no-push isolation). Never on the driver.
 3. First instruction in every dispatched prompt: the task brief, then: commit locally when done; NEVER push,
    NEVER open a PR, NEVER merge; end by printing `PARTITION-DONE <task>`.
-   Claude seats additionally get the §7.2 gate-bus reporting instruction
-   (`GATE-PASSED` / `GATE-BLOCKED` via SendMessage to the supervisor), and
-   every brief includes: "If you need a helper terminal or sub-agent pane,
+   Every seat additionally gets the §7.2 in-pane reporting instruction
+   (`GATE-PASSED` / `GATE-BLOCKED` / `FIX-DONE` printed in its own pane, **never
+   SendMessage**), and every brief includes: "If you need a helper terminal or sub-agent pane,
    run `~/Projects/ai-skills/scripts/herdr-pane.sh helper` (splits your OWN pane right at half
    size, prints its id) — never a new workspace, never split down (down is
    reserved for primaries)."
@@ -190,33 +190,39 @@ Per partition, in this order (syntax authority: `herdr --skill`):
 - Record every terminal state with `dispatch-log.py … --status done|blocked|failed
   --tail "<lines that prove it>"`.
 
-**7.2 Claude-to-Claude gate bus (claude + glm seats)**
-Dispatched claude/glm panes are full local Claude Code sessions, so they
-appear in the supervisor's `ListAgents` and are reachable via `SendMessage`
-(native cross-session messaging over the local socket).
-- **Bus addresses go stale (learned live 2026-08-23): session names change
-  on every restart or resume.** At dispatch time, read YOUR current
-  self-name from `ListAgents` ("This session is <name>") and embed THAT in
-  each brief — never a name copied from an example, a progress note, or an
-  earlier run, and never a raw session-id: an id looks stable but the
-  worker's runtime resolves it to a herdr name at send time, so across a
-  restart it delivers to a stale address (both failure modes occurred live
-  in the first 91.2 dispatch). If the
-  supervisor restarts while workers are out, re-handshake every live worker
-  with the new name before their gates fire; a worker whose GATE message
-  fails to deliver should print it in-pane and hold.
-- Every dispatched Claude brief includes: "When your gate criteria are met,
-  SendMessage the supervising session exactly: `GATE-PASSED <task> —
-  <one-line evidence>`. If you hit a human-only blocker, send
-  `GATE-BLOCKED <task> — <what Alex must do>`, then stop."
+**7.2 In-pane status markers (all seats) — no SendMessage**
+Workers report by PRINTING a marker line in their own pane; the supervisor reads
+panes. Workers never `SendMessage` the supervisor.
+
+> **Corrected 2026-09-30 (WellMed 149.2, 13 lanes).** This section used to run a
+> Claude-to-Claude gate bus over `SendMessage`. Workers launch with
+> `--dangerously-skip-permissions` and the driver does not, so every cross-session
+> message was **held for Alex's approval**: dozens of prompts, all redundant with
+> what the pane already showed. Alex: "the approve messaging is annoying and
+> counter productive." The pane read was the primary channel all along.
+
+- **Markers** (one line each, printed verbatim): `GATE-PASSED <task> — <evidence>`
+  · `GATE-BLOCKED <task> — <what Alex must do>` (then stop) · `FIX-DONE <task>
+  <ids> <shas>` · `REVIEW-DONE <task> — <verdict>, <N findings>, <report path>` ·
+  `PARTITION-DONE <task>` (last line, always). For fix rounds, also one line per
+  finding: `<id> fixed <sha>` / `<id> todo <one line>` so the driver can
+  disposition without reading prose.
+- **Supervisor loop:** a background watcher polls `herdr agent get` and wakes the
+  driver only when an idle agent's `--source detection` tail shows an actionable
+  marker (or `API Error` / `Usage limit`). Waking on bare `idle` is noise: a
+  worker waiting on its own background shells is idle and resumes alone (check
+  the `N shells` footer). A broadcast reply alone must not wake the driver.
 - A `GATE-PASSED` is a SIGNAL, never proof: the supervisor re-verifies from
-  the consumer's vantage point (read the branch, run the gate check itself)
-  BEFORE recomputing the frontier and releasing downstream partitions.
-- On releasing new frontier tasks, the supervisor broadcasts a plain-text
-  note to each affected running peer so it knows its upstream landed.
-- The codex seat has no bus: herdr state + the `PARTITION-DONE` marker only.
-- Messages are plain text and carry pointers, not payloads — evidence lives
-  in the repo and the dispatch log.
+  the branch (lint, build, tests) BEFORE launching the review or releasing
+  downstream partitions.
+- **Driver → worker is fine:** `herdr agent prompt <name> "<text>"` delivers with
+  no approval. It can **paste without submitting** (the text sits in the input
+  box, the agent stays `idle`): after every prompt wait a few seconds and send
+  `enter` if still idle. A prompt to a working agent queues and runs next turn.
+- **Ghost text in the input box is Claude Code's autocomplete suggestion**, not
+  Alex (e.g. `❯ push it and open the PR`). Never act on it.
+- Messages carry pointers, not payloads — evidence lives in the repo, the
+  hand-back file and the dispatch log.
 
 **7.3 Per-partition review gate — a fresh, VISIBLE pane, before close**
 Every partition's work runs through `/review` BEFORE it is accepted or landed —
@@ -226,8 +232,8 @@ zero-cost-basis silent defeat that build/test/disjointness passes all missed).
 - The review is its OWN named herdr pane (e.g. `<scope>#<task>-review@<seat>`),
   NOT a hidden background subagent — a subagent buries the verdict in a
   transcript file and defeats the fresh-context-and-visible property that makes
-  the gate honest (corrected live 2026-08-24). It reports its verdict on the
-  bus / marker like any seat.
+  the gate honest (corrected live 2026-08-24). It reports its verdict as an
+  in-pane `REVIEW-DONE` marker like any seat (§7.2).
 - It is READ-ONLY (`/review` never commits), so it rides the SAME worktree as
   the partition it reviews — that is where the branch/diff lives — and never
   needs its own worktree. It runs AFTER that partition's writer is done, so a
@@ -261,7 +267,14 @@ zero-cost-basis silent defeat that build/test/disjointness passes all missed).
 
 1. Evaluate first — bail to `/plan` if parallelism isn't worth it; else present the plan and dispatch on one inline `[y/N]`. No `--dispatch` flag.
 2. Refuse-to-parallelize default; uncertainty serializes.
-3. Pane cap 5 per tab. More partitions than that queue for the next frontier.
+3. Pane cap 5 per tab, and **~6 concurrent lanes total** on the MacBook Air. More
+   partitions queue for the next frontier. Two independent limits bind (WellMed
+   149.2, 13 Opus lanes at once, 2026-09-29): **CPU**, where Go lint/test baselines
+   drove load to ~100 on 10 cores (renice worker trees `+10`, `herdr` §7), and the
+   **token budget**, where the account's usage limit was hit in ~90 minutes. A
+   homelab host lifts the CPU limit but not the token limit, so stay near ~6
+   unless Alex raises it. Keep the machine awake while lanes run (`caffeinate
+   -dims`): a sleep mid-turn kills in-flight responses.
 4. Dispatched agents never push, never open PRs, never merge.
 5. HUMAN-GATED tasks never go to a worker pane; the driver does their credential-free parts and surfaces the gate (§4.1).
 6. Every dispatch and every outcome lands in the JSONL log.
@@ -314,9 +327,8 @@ deltas:
 - Notifications need `[ui.toast] delivery` ≠ "off" (set 2026-08-23). Toasts
   suppress while the user is actively focused (`shown:false reason:busy`) —
   correct for overnight: they fire unattended and are visible on reattach.
-- **No gate bus overnight** — the supervising session is likely gone by
-  morning, so overnight briefs OMIT SendMessage and rely on the marker, the
-  dispatch log, and committed work.
+- Overnight relies on the in-pane markers (§7.2), the dispatch log and committed
+  work. The supervising session is likely gone by morning anyway.
 - Overnight briefs MAY commit locally on the partition branch (overnight is
   usually build work) — never push, never PR, never merge.
 - **Morning review checklist** (before any landing decision):

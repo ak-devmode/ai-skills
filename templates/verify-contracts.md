@@ -267,12 +267,16 @@ exclusive lock on the log, so concurrent or clean reviews never share an ID.
 `text` · `fix`. IDs are assigned in severity order.
 
 6.2 **`disposition`** records: `schema` · `ts` · `finding_id` · `disposition`
-(`fixed | rejected | deferred`) · `sha` (required for `fixed`) · `reason` (required for `rejected`; for `deferred`, a note; the link is the finding ID, which must lead an open `- [ ]` item line in the project's `TO-DO.md` as `[review <id>]` followed by the work left, and the gate rechecks that item still exists, open or closed into `archive/TO-DO-archive.md` — never on a `blocking` finding or before round 4 *of the finding's repo* (rounds count the unit's reviews of that repo, not the unit-wide `r<n>`), `review/SKILL.md` §5.1) ·
+(`fixed | rejected | deferred`) · `sha` (required for `fixed`, the full SHA) · `via` (`fixed` only:
+`anchor` — the commit changes the finding's file · `test` — it changes a test file in the
+anchor's directory · `off-anchor` — neither, and `reason` says how it fixes the finding) ·
+`reason` (required for `rejected` and for a `fixed` via `off-anchor`; for `deferred`, a note; the link is the finding ID, which must lead an open `- [ ]` item line in the project's `TO-DO.md` as `[review <id>]` followed by the work left, and the gate rechecks that item still exists, open or closed into `archive/TO-DO-archive.md` — never on a `blocking` finding or before round 4 *of the finding's repo* (rounds count the unit's reviews of that repo, not the unit-wide `r<n>`), `review/SKILL.md` §5.1) ·
 `by`.
 
 6.3 **Coverage rule.** Every `finding_id` has at least one disposition; the latest one
-decides. A `finding_id` carried by two findings blocks — one disposition must never clear two. A `fixed <sha>` commit must touch the finding's `file` — `dispose` refuses it
-otherwise, at write time. Nothing silently
+decides. A `finding_id` carried by two findings blocks — one disposition must never clear two. A `fixed <sha>` commit must touch the finding's `file` or a test file beside it,
+or carry an `off-anchor` reason — `dispose` refuses it otherwise, at write time, and the
+gate blocks an `off-anchor` fix without a reason. Nothing silently
 dismissed, nothing silently dropped. A re-review mints a new `review_id`; the old findings
 stay.
 

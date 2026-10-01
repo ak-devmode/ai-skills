@@ -283,6 +283,53 @@ class TestReview(unittest.TestCase):
         self.assertEqual(self.dispose("9.1-r1-03", "--rejected", "comment is accurate").returncode, 0)
         self.assertEqual(gate.coverage_blocks(self.log), ([], 3))
 
+    def commit(self, repo, *files):
+        for rel in files:
+            os.makedirs(os.path.join(repo, os.path.dirname(rel)), exist_ok=True)
+            with open(os.path.join(repo, rel), "a") as fh:
+                fh.write("x\n")
+        git(repo, "add", "-A")
+        git(repo, "commit", "-q", "-m", "c")
+        return git(repo, "rev-parse", "HEAD")
+
+    def test_fixed_accepts_the_anchor_or_a_test_beside_it(self):
+        # 149.2-r11-02: a missing-coverage finding on pkg/res.go is fixed by a test-only
+        # commit; anything else needs an explicit --off-anchor reason.
+        gate = load("verdict-gate.py")
+        self.record(findings=[{"file": "pkg/res.go", "line": 3, "severity": "should-fix", "category": "domain",
+                               "group": "3.8", "text": "no test for the failure path", "fix": "add one"}])
+        cases = [  # (files the commit changes, extra flags, exit, via)
+            (["pkg/res.go"], (), 0, "anchor"),
+            (["pkg/res_test.go"], (), 0, "test"),
+            (["pkg/validation_test.go", "go.sum"], (), 0, "test"),
+            (["other/res_test.go"], (), 1, None),
+            (["pkg/sub/res_test.go"], (), 1, None),
+            (["pkg/notes.md"], (), 1, None),
+            (["pkg/notes.md"], ("--off-anchor", "   "), 1, None),
+            (["internal/saga/continuator.go"], ("--off-anchor", "the go.mod pin was the symptom; the fix "
+                                                "removes the call"), 0, "off-anchor"),
+            (["pkg/res.go"], ("--off-anchor", "also explained"), 0, "anchor"),
+        ]
+        for files, flags, code, via in cases:
+            with self.subTest(files=files, flags=flags):
+                before = len(read(self.log).splitlines())
+                sha = self.commit(self.repo, *files)
+                p = self.dispose("9.1-r1-01", "--fixed", sha[:9], *flags)
+                self.assertEqual(p.returncode, code, p.stderr)
+                recs = [json.loads(x) for x in read(self.log).splitlines()]
+                if code:
+                    self.assertEqual(len(recs), before)
+                    continue
+                self.assertEqual((recs[-1]["sha"], recs[-1]["via"]), (sha, via))
+                self.assertEqual(gate.coverage_blocks(self.log), ([], 1))
+        self.assertEqual(self.dispose("9.1-r1-01", "--rejected", "x", "--off-anchor", "y").returncode, 2)
+        # a hand-written off-anchor fix with no reason still blocks
+        with open(self.log, "a") as fh:
+            fh.write(json.dumps({"schema": "verify/1", "ts": "t", "record": "disposition", "finding_id": "9.1-r1-01",
+                                 "disposition": "fixed", "sha": sha, "via": "off-anchor", "reason": " ",
+                                 "by": "t"}) + "\n")
+        self.assertEqual(gate.coverage_blocks(self.log)[0][0][1], "`fixed` off the anchor without a reason")
+
     def test_worktree_review_is_keyed_by_the_primary_checkout(self):
         wt = os.path.join(self.tmp.name, "herdr-wt-rec")
         git(self.repo, "worktree", "add", "-q", wt)

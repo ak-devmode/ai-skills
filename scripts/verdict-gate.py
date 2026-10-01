@@ -68,6 +68,10 @@ def coverage_blocks(review_log):
         elif d.get("disposition") == "fixed" and not d.get("sha"):
             blocks.append((fid, "`fixed` disposition without a commit", "the fixing commit's SHA",
                            "sha missing", where, "code"))
+        elif d.get("disposition") == "fixed" and d.get("via") == "off-anchor" and not str(d.get("reason") or "").strip():
+            blocks.append((fid, "`fixed` off the anchor without a reason",
+                           "how a commit that touches neither the file nor a test beside it fixes the finding",
+                           "reason missing", where, "code"))
         elif d.get("disposition") == "rejected" and not str(d.get("reason") or "").strip():
             blocks.append((fid, "`rejected` disposition without a reason", "the reason the finding is wrong",
                            "reason missing", where, "code"))

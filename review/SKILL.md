@@ -169,8 +169,11 @@ $RV dispose --scope $SCOPE --unit $UNIT --finding <ID> --fixed <sha>          # 
 $RV dispose --scope $SCOPE --unit $UNIT --finding <ID> --rejected "<why the finding is wrong>"
 ```
 
-`--fixed` is refused unless that commit touches the finding's file; `--rejected` is refused
-without a reason. When every ID has one, the user's yes is recorded with
+`--fixed` is accepted when that commit touches the finding's file, or a test file in the
+same directory as it — a missing-coverage finding is fixed by a test-only commit. Any other
+commit is refused unless `--off-anchor "<how this commit fixes it>"` says why; the record
+carries `via` (`anchor | test | off-anchor`) and the reason, so `/verify` can audit it.
+`--rejected` is refused without a reason — never use it to record a fix the tool refused. When every ID has one, the user's yes is recorded with
 `$RV accept --scope $SCOPE --unit $UNIT --by "<name>"` (`verify-contracts.md` §6.4) —
 never on their behalf. `verdict-gate.py` refuses Done while any ID lacks one, and `/verify`
 audits whether each rejection was *right*. Nothing silently dismissed, nothing silently

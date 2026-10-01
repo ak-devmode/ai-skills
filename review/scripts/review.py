@@ -8,15 +8,17 @@ here — the range, the project, and the rule files to read — and its JSON ans
 lands through `record`, which validates it, assigns `<unit>-r<n>-NN` IDs in severity
 order, appends one `finding` record per finding (write-then-read-back), and writes the
 human report, including what the review did not cover. `dispose` is the only way a
-finding gets a disposition, and it refuses a `fixed <sha>` whose commit does not touch
-the finding's file — that check has one right answer, so it is enforced at write time.
+finding gets a disposition, and it refuses a `fixed <sha>` whose commit touches neither
+the finding's file nor a test file in its directory, unless `--off-anchor "<how>"` says why
+— that check has one right answer, so it is enforced at write time.
 verdict-gate.py then refuses Done while any finding lacks one (§5.2.1).
 
 Usage:
   review.py prepare --repo PATH --range BASE..HEAD [--kalpa-only | --engine-only] [--out-dir DIR]
   review.py record  --repo PATH --range BASE..HEAD --reviewer LINE --input FILE
                     [--scope DIR --unit N.P] [--passes TEXT]
-  review.py dispose --scope DIR --unit N.P --finding ID (--fixed SHA | --rejected REASON | --deferred TODO) [--by NAME]
+  review.py dispose --scope DIR --unit N.P --finding ID (--fixed SHA [--off-anchor REASON] | --rejected REASON |
+                    --deferred TODO) [--by NAME]
   review.py accept  --scope DIR --unit N.P --by NAME     (the user's yes to the outcomes, §6.4)
 Output: prepare prints `prompt:`, `schema:`, `passes:`; record prints the report path (or the
         report, with no scope); dispose prints the disposition.
@@ -405,18 +407,27 @@ def _dispose(a, log):
     if f is None:
         return err(f"no finding `{a.finding}`", "a finding_id recorded by review.py record", "none", log,
                    f"grep finding_id {log}", code=vl.EXIT_USAGE)
+    fix = {}
+    if a.off_anchor is not None and not a.fixed:
+        return err("`--off-anchor` qualifies a fix", "`--fixed <sha> --off-anchor \"<how>\"`", "no --fixed",
+                   a.finding, "drop --off-anchor, or pass the fixing commit", code=vl.EXIT_USAGE)
     if a.fixed:
         repo_rel, _ = next(iter(f["range"].items()))
-        repo = os.path.join(vl.PROJECTS, repo_rel)
-        rc, touched, e = git(repo, "show", "--name-only", "--format=", a.fixed)
-        if rc != 0:
-            return err(f"`{a.fixed}` is not a commit in {repo_rel}", "the fixing commit", e[:200], repo,
-                       f"git -C {repo} log --oneline -5", cause="code", code=vl.EXIT_FAIL)
-        if f["file"] not in touched.splitlines():
-            return err(f"`fixed {a.fixed}` does not touch the finding's file", f"a commit changing {f['file']}",
-                       f"it changes: {', '.join(touched.splitlines()[:6]) or 'nothing'}",
-                       f"{a.finding} ({f['file']}:{f['line']})", "fix in a commit that touches the file, or "
-                       "record `--rejected \"<why>\"` if it isn't a defect", cause="code", code=vl.EXIT_FAIL)
+        fix, code = fix_check(f, a.fixed, os.path.join(vl.PROJECTS, repo_rel), repo_rel)
+        if code is not None:
+            return code
+        if fix["via"] is None:
+            if a.off_anchor is None:
+                return err(f"`fixed {a.fixed}` does not touch the finding's file", f"a commit changing "
+                           f"{f['file']} or a test file beside it", f"it changes: {fix['touched'] or 'nothing'}",
+                           f"{a.finding} ({f['file']}:{f['line']})", "fix in a commit that touches the file; if "
+                           "this commit fixes it elsewhere, add `--off-anchor \"<how it fixes the finding>\"`; or "
+                           "record `--rejected \"<why>\"` if it isn't a defect", cause="code", code=vl.EXIT_FAIL)
+            if not a.off_anchor.strip():
+                return err("`--off-anchor` needs the reason", "how this commit fixes a finding it does not "
+                           "touch", "empty", a.finding, "--off-anchor \"<how it fixes the finding>\"",
+                           cause="code", code=vl.EXIT_FAIL)
+            fix["via"] = "off-anchor"
     if a.rejected is not None and not a.rejected.strip():
         return err("`rejected` needs a reason", "the reason the finding is wrong", "empty", a.finding,
                    "--rejected \"<why the finding is wrong>\"", cause="code", code=vl.EXIT_FAIL)
@@ -447,12 +458,36 @@ def _dispose(a, log):
         rc, name, _ = git(a.scope, "config", "user.name")
         by = f"{name or 'unknown'} / Claude"
     kind = "fixed" if a.fixed else ("deferred" if a.deferred is not None else "rejected")
-    reason = a.deferred if kind == "deferred" else a.rejected
+    reason = {"fixed": a.off_anchor, "deferred": a.deferred, "rejected": a.rejected}[kind]
     rec = {"schema": vl.SCHEMA, "ts": now(), "record": "disposition", "finding_id": a.finding,
-           "disposition": kind, "sha": a.fixed, "reason": reason, "by": by}
+           "disposition": kind, "sha": fix.get("sha"), "reason": reason, "by": by}
+    if fix:
+        rec["via"] = fix["via"]
     vl.append_verified(log, [rec])
-    print(f"{a.finding}: {rec['disposition']} {a.fixed or reason}")
+    print(f"{a.finding}: {kind} {rec['sha'] or reason}" + (f" (via {fix['via']})" if fix else ""))
     return vl.EXIT_PASS
+
+
+# a test file by name, for the languages the fleet uses (Go, Python, JS/TS, PHP, Ruby)
+TEST_FILE = re.compile(r"^(.+_test\.(go|py)|test_.+\.py|.+\.(test|spec)\.[cm]?[jt]sx?|.+Test\.php|.+_spec\.rb)$")
+
+
+def fix_check(f, sha, path, key):
+    """({sha, via, touched}, None) or (None, a §10 error code). `via` is how commit `sha` in
+    repo `path` reaches the finding: `anchor` (it changes the finding's file), `test` (it
+    changes a test file in the anchor's directory — a missing-coverage finding is fixed by
+    a test-only commit, 149.2-r11-02) or None (neither: refused unless the caller passes an
+    explicit `--off-anchor` reason). One right answer, so it is checked at write time."""
+    rc, full, e = git(path, "rev-parse", "--verify", f"{sha}^{{commit}}")
+    rc2, touched, e2 = git(path, "show", "--name-only", "--format=", full) if rc == 0 else (rc, "", e)
+    if rc2 != 0:
+        return None, err(f"`{sha}` is not a commit in {key}", "the fixing commit", (e2 or e)[:200], path,
+                         f"git -C {path} log --oneline -5", cause="code", code=vl.EXIT_FAIL)
+    files, anchor = touched.splitlines(), f["file"]
+    tests = [t for t in files if TEST_FILE.match(os.path.basename(t))
+             and os.path.dirname(t) == os.path.dirname(anchor)]
+    via = "anchor" if anchor in files else ("test" if tests else None)
+    return {"sha": full, "via": via, "touched": ", ".join(files[:6])}, None
 
 
 def main(argv):
@@ -479,6 +514,8 @@ def main(argv):
     x.add_argument("--fixed", metavar="SHA")
     x.add_argument("--rejected", metavar="REASON")
     x.add_argument("--deferred", metavar="TODO", help="non-blocking only: the TO-DO item that carries it")
+    d.add_argument("--off-anchor", metavar="REASON",
+                   help="with --fixed: the commit touches neither the file nor a test beside it; say how it fixes it")
     d.add_argument("--by")
     c = sub.add_parser("accept")
     c.add_argument("--scope", required=True)

@@ -115,7 +115,7 @@ read-only context, so the author's model never grades its own work.
 
 - **`/review`** reviews the phase's exact revision range (`base..HEAD` per repo). Every
   finding gets a stable ID and must be dispositioned: `fixed <sha>` (the commit must
-  touch the file) or `rejected <reason>`.
+  touch the file or a test beside it, or say how it fixes it) or `rejected <reason>`.
 - **`/verify`** runs the phase's rows in the scope's `finish-conditions.md` (commands
   that fail loud), then the codex judge reads that evidence plus git. The judge can
   confirm or **downgrade** a result, never upgrade one. It reports an evidence *rung*

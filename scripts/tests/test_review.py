@@ -76,8 +76,9 @@ class TestReview(unittest.TestCase):
             json.dump(doc, fh)
         return path
 
-    def record(self, reviewer="codex gpt-test", **over):
-        return run(REVIEW, "record", "--repo", self.repo, "--range", self.rng(self.repo), "--reviewer", reviewer,
+    def record(self, reviewer="codex gpt-test", repo=None, **over):
+        repo = repo or self.repo
+        return run(REVIEW, "record", "--repo", repo, "--range", self.rng(repo), "--reviewer", reviewer,
                    "--input", self.answer(**over), "--scope", self.scope, "--unit", "9.1", "--passes", "p",
                    env=self.env)
 
@@ -392,12 +393,56 @@ class TestReview(unittest.TestCase):
         for _ in range(3):
             p = self.record()
             self.assertEqual(p.returncode, 0, p.stderr)
-        self.assertIn("[CONVERGENCE] a.sh drew findings in each of the last 3 rounds", p.stdout)
+        self.assertIn("[CONVERGENCE] a.sh drew findings in each of the last 3 wellmed/svc rounds", p.stdout)
         self.assertIn("[CONVERGENCE] b.go", p.stdout)
         self.assertNotIn("round 3 >", p.stdout)
         p = self.record(findings=[])
-        self.assertIn("[CONVERGENCE] round 4 > 3", p.stdout)
+        self.assertIn("[CONVERGENCE] wellmed/svc round 4 > 3", p.stdout)
         self.assertNotIn("drew findings", p.stdout)  # a clean round breaks the streak
+
+    def test_rounds_count_per_repo_within_the_unit(self):
+        # 149.2: one unit, 13 repos — bpjs's first review was r5 and the round cap fired on
+        # it. IDs stay unit-wide; every round rule counts the reviews of that review's repo.
+        steps = [  # (repo, unit-wide id, repo round, must print, must not print)
+            (self.repo, "9.1-r1", 1, [], ["[CONVERGENCE]"]),
+            (self.generic, "9.1-r2", 1, [], ["[CONVERGENCE]"]),
+            (self.generic, "9.1-r3", 2, [], ["[CONVERGENCE]"]),
+            (self.repo, "9.1-r4", 2, [], ["[CONVERGENCE]"]),  # unit round 4, svc round 2
+            (self.generic, "9.1-r5", 3, ["a.sh drew findings in each of the last 3 other/tool rounds"],
+             ["round 5 >", "> 3:"]),
+            (self.repo, "9.1-r6", 3, ["last 3 wellmed/svc rounds"], ["> 3:"]),
+            (self.generic, "9.1-r7", 4, ["[CONVERGENCE] other/tool round 4 > 3"], ["wellmed/svc round"]),
+        ]
+        for repo, rid, rnd, has, hasnt in steps:
+            with self.subTest(rid=rid):
+                p = self.record(repo=repo)
+                self.assertEqual(p.returncode, 0, p.stderr)
+                self.assertIn(f"review {rid}:", p.stdout)
+                self.assertIn(f"round: {rnd} of ", p.stdout)
+                for needle in has:
+                    self.assertIn(needle, p.stdout)
+                for needle in hasnt:
+                    self.assertNotIn(needle, p.stdout)
+        todo = os.path.join(os.path.dirname(self.scope), "TO-DO.md")
+        with open(todo, "w") as fh:
+            fh.write("".join(f"- [ ] [review 9.1-r{n}-02] tenant filter\n" for n in range(1, 8)))
+        # deferral: past round 3 of the finding's repo, whatever its unit-wide number
+        for fid, code in (("9.1-r4-02", 1), ("9.1-r5-02", 1), ("9.1-r6-02", 1), ("9.1-r7-02", 0)):
+            with self.subTest(defer=fid):
+                p = self.dispose(fid, "--deferred", "tenant filter")
+                self.assertEqual(p.returncode, code, p.stderr)
+                if code:
+                    self.assertIn("round 3 ≤ 3" if fid != "9.1-r4-02" else "round 2 ≤ 3", p.stderr)
+
+    def test_repo_round_reads_logs_without_review_records(self):
+        rr = load(REVIEW)
+        f = lambda rid, repo: {"record": "finding", "review_id": rid, "range": {repo: "a..b"}, "file": "x"}
+        recs = [f("9.1-r1", "a"), f("9.1-r2", "b"), f("9.1-r3", "a"), f("9.1-r10", "a")]
+        cases = [("9.1-r1", ("a", 1)), ("9.1-r2", ("b", 1)), ("9.1-r3", ("a", 2)), ("9.1-r10", ("a", 3)),
+                 ("9.1-r9", (None, 0))]
+        for rid, want in cases:
+            with self.subTest(rid=rid):
+                self.assertEqual(rr.repo_round(recs, "9.1", rid), want)
 
 
 if __name__ == "__main__":

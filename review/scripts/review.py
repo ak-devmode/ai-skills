@@ -260,34 +260,60 @@ def cmd_record(a):
         out = os.path.join(art, f"review-{review_id}.md")
         with open(out, "w", encoding="utf-8") as fh:
             fh.write(report)
-    print(f"review {review_id}: {len(findings)} finding(s) logged -> {log}\nreport: {out}\nverdict: {doc['verdict']}")
+    repo, rnd = repo_round(vl.read_jsonl(log), a.unit, review_id)
+    print(f"review {review_id}: {len(findings)} finding(s) logged -> {log}\nreport: {out}\nverdict: {doc['verdict']}\n"
+          f"round: {rnd} of {repo} in {a.unit}")
     for line in convergence(vl.read_jsonl(log), a.unit):
         print(line)
     return vl.EXIT_PASS
 
 
-def convergence(recs, unit):
-    """SKILL.md §5.1 signals for the latest round of `unit`: [CONVERGENCE] lines, or none.
-    A loop that keeps finding edge cases in one place is patching a design that is wrong
-    (5.3 ran 12 rounds on one heuristic, two findings ending on opposite sides)."""
-    rounds = {}
+def reviews_of(recs, unit):
+    """[(review_id, repo, files with findings)] for `unit`, in review order. Logs from before
+    `review` records existed (§6.0) carry the repo on each finding."""
+    pat, by = re.compile(rf"^{re.escape(unit)}-r(\d+)$"), {}
     for r in recs:
-        m = re.match(rf"^{re.escape(unit)}-r(\d+)$", str(r.get("review_id", "")))
-        if m and r.get("record") == "finding":
-            rounds.setdefault(int(m.group(1)), set()).add(r["file"])
-        elif m:
-            rounds.setdefault(int(m.group(1)), set())
-    if not rounds:
+        m = pat.match(str(r.get("review_id", "")))
+        if not m or r.get("record") not in ("review", "finding"):
+            continue
+        e = by.setdefault(int(m.group(1)), [r["review_id"], None, set()])
+        e[1] = e[1] or next(iter(r.get("range") or {}), None)
+        if r.get("record") == "finding":
+            e[2].add(r.get("file"))
+    return [tuple(by[n]) for n in sorted(by)]
+
+
+def repo_round(recs, unit, review_id):
+    """(repo, round): the round counts THAT repo's reviews within the unit, never the unit's.
+    IDs stay `<unit>-r<n>` across every repo, but 149.2 reviewed 13 repos in one unit, so
+    bpjs's first look was r5 and the round cap fired on it (review/SKILL.md §5.1)."""
+    revs = reviews_of(recs, unit)
+    ids = [rid for rid, _, _ in revs]
+    if review_id not in ids:
+        return None, 0  # an unknown review is round 0: below every cap, so nothing is released early
+    i = ids.index(review_id)
+    return revs[i][1], sum(1 for _, rp, _ in revs[:i + 1] if rp == revs[i][1])
+
+
+def convergence(recs, unit):
+    """SKILL.md §5.1 signals for the latest review of `unit`, counted over the reviews of
+    that review's repo: [CONVERGENCE] lines, or none. A loop that keeps finding edge cases
+    in one place is patching a design that is wrong (5.3 ran 12 rounds on one heuristic,
+    two findings ending on opposite sides)."""
+    revs = reviews_of(recs, unit)
+    if not revs:
         return []
-    last, out = max(rounds), []
+    repo = revs[-1][1]
+    mine = [files for _, rp, files in revs if rp == repo]
+    last, out = len(mine), []
     if last > ROUND_CAP:
-        out.append(f"[CONVERGENCE] round {last} > {ROUND_CAP}: fix blocking findings only; defer should-fix/note "
-                   "with `dispose --deferred \"<TO-DO item>\"` (review/SKILL.md §5.1)")
-    window = [rounds.get(n, set()) for n in range(last - REPEAT + 1, last + 1)]
+        out.append(f"[CONVERGENCE] {repo} round {last} > {ROUND_CAP}: fix blocking findings only; defer "
+                   "should-fix/note with `dispose --deferred \"<TO-DO item>\"` (review/SKILL.md §5.1)")
     if last >= REPEAT:
-        for f in sorted(set.intersection(*window)):
-            out.append(f"[CONVERGENCE] {f} drew findings in each of the last {REPEAT} rounds: stop patching — "
-                       "raise it to the user as a design finding (replace, narrow, or cut) before another fix")
+        for f in sorted(set.intersection(*mine[-REPEAT:])):
+            out.append(f"[CONVERGENCE] {f} drew findings in each of the last {REPEAT} {repo} rounds: stop "
+                       "patching — raise it to the user as a design finding (replace, narrow, or cut) before "
+                       "another fix")
     return out
 
 
@@ -403,12 +429,12 @@ def _dispose(a, log):
                        "severity blocking", a.finding, "fix it, or reject it with the reason it is wrong",
                        cause="code", code=vl.EXIT_FAIL)
         # SKILL.md §5.1: deferral is the round cap's release valve, not a way to skip a
-        # finding early, and the follow-up must exist (review adhoc-03)
-        m = re.search(r"-r(\d+)$", str(f.get("review_id", "")))
-        rnd = int(m.group(1)) if m else 0
+        # finding early, and the follow-up must exist (review adhoc-03). The round is the
+        # finding's repo's, not the unit's (149.2-r10-05 was satu-sehat's first review).
+        repo, rnd = repo_round(recs, a.unit, f.get("review_id"))
         if rnd <= ROUND_CAP:
-            return err(f"deferral before the round cap (round {rnd} ≤ {ROUND_CAP})",
-                       f"a finding from round {ROUND_CAP + 1} or later", f"round {rnd}", a.finding,
+            return err(f"deferral before the round cap ({repo} round {rnd} ≤ {ROUND_CAP})",
+                       f"a finding from round {ROUND_CAP + 1} or later of {repo}", f"round {rnd}", a.finding,
                        "fix it, or reject it with the reason it is wrong", cause="code", code=vl.EXIT_FAIL)
         if not vl.todo_has_item(a.scope, a.finding, open_only=True):
             return err(f"no open TO-DO item carries `{a.finding}`",

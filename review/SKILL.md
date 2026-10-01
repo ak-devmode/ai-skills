@@ -1,6 +1,6 @@
 ---
 name: review
-version: 3.3.1
+version: 3.4.0
 description: |
   Pre-landing code review with codex as the gate: the opposing model family, headless
   and read-only, reviews an explicit revision range against gstack's review checklist,
@@ -9,7 +9,7 @@ description: |
   isolation, PHI/credential leakage, stack footguns) and the lenses every repo gets —
   fail-open verification, silent failure, local maxima, dirty comments, doc claims.
   Every finding is logged under a stable ID and must be dispositioned (fixed in a commit
-  that touches it, rejected with a reason, or — past round 3, non-blocking — deferred to
+  that touches it, rejected with a reason, or — past a repo's round 3, non-blocking — deferred to
   a written TO-DO item); the loop stops on [CONVERGENCE] signals, and the user's yes to
   the outcomes is recorded with `accept` before the unit can be marked Done. When codex cannot run, a Claude pass (gstack's engine + the same rules) is the
   fallback, and the report says so in its header.
@@ -179,14 +179,19 @@ dropped.
 5.1 **Convergence — a review loop must end.** Every repo, every unit. `record` prints a
 `[CONVERGENCE]` line when either trips; act on it, don't re-run past it.
 
-- **Round cap.** Past round 3 of one unit, only `blocking` findings are fixed in the loop.
+**Rounds count per repo.** Review IDs number every review of the unit (`<unit>-r<n>`),
+but each rule below counts the reviews of *that repo* within the unit — `record` prints
+`round: <k> of <repo>`. A unit spanning 13 repos (149.2) otherwise hit the cap on a lane's
+first review.
+
+- **Round cap.** Past round 3 of one repo in a unit, only `blocking` findings are fixed in the loop.
   `should-fix` and `note` go to the project's `TO-DO.md` and are recorded
   `dispose --deferred "<TO-DO item>"` — never `--rejected`, because a deferral is not a
   claim that the finding is wrong. Write the item to `TO-DO.md` first, carrying the finding
   ID as the item's leading marker — `- [ ] [review <ID>] <what is left>`; the marker is
   the link, and an ID mentioned elsewhere on a line or a marker with no text is not. `dispose` refuses a deferral
-  with no open item naming the ID, one from round 3 or earlier, and any blocking finding.
-- **Same place, three rounds.** A file drawing findings in each of the last three rounds
+  with no open item naming the ID, one from its repo's round 3 or earlier, and any blocking finding.
+- **Same place, three rounds.** A file drawing findings in each of the repo's last three rounds
   is a design that is wrong, not a patch that is incomplete. Stop fixing it and raise it to
   the user as one design finding: replace it, narrow what it promises, or cut it.
 - **Findings that argue opposite sides** (fixing one reopens another) mean the contract is

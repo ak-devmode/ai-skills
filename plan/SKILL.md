@@ -447,7 +447,7 @@ on a direct-to-main repo a branch diff is empty by construction.
    Review task and every range is empty, the task is ❌ FAILED**, never a clean review:
    the phase declared commits and none are in range. Disposition every finding ID. Fix it
    in a commit that touches the file and record `fixed <sha>`, or record
-   `rejected <reason>` — or, past round 3, `deferred "<TO-DO item>"` for a non-blocking
+   `rejected <reason>` — or, past that repo's round 3, `deferred "<TO-DO item>"` for a non-blocking
    finding (`/review` §5.1; act on every `[CONVERGENCE]` line). After fixing any blocking
    finding, review the fix commits again. The gate enforces this: a repo with commits in
    range and no covering review record blocks the unit (`verify-contracts.md` §5.2.1).

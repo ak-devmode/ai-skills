@@ -508,7 +508,10 @@ class TestReview(unittest.TestCase):
                  (f"was never FIXED; see {fix[:8]}", (False, [])),
                  (f"FIXED by {fix[:8]}; the bug came from abcdef12", (True, [fix[:8]])),
                  ("not rejected on merit — FIXED in kalpa-docs decd35d", (True, ["decd35d"])),
-                 ("not rejected on merit", (False, []))]
+                 ("not rejected on merit", (False, [])),
+                 (f"FIXED upstream\nNOT FIXED by {fix[:8]}", (True, [])),          # r2-07
+                 (f"FIXED upstream! NOT FIXED by {fix[:8]}", (True, [])),
+                 (f"FIXED by {fix[:8]}? no", (True, [fix[:8]]))]
         for reason, want in cases:
             with self.subTest(reason=reason):
                 self.assertEqual(rr.fix_claims(reason), want)

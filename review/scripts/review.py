@@ -634,11 +634,14 @@ def fix_check(f, sha, path, key, recs):
 MISFILED = re.compile(r"\bFIXED\b|not rejected on merit")
 SHA = re.compile(r"\b[0-9a-f]{7,40}\b")
 NEGATION = {"not", "never", "no", "cannot", "unfixed"}
+# a claim's clause ends at `;`, a line break, or a sentence end — `FIXED upstream\nNOT FIXED by
+# <sha>` must not hand the negated SHA to the first claim (review r2-07)
+CLAUSE_END = re.compile(r";|\n|[.!?](?:\s|$)")
 
 
 def fix_claims(reason):
     """(affirmed, SHAs): whether some `FIXED` is not negated by the three words before it, and
-    the SHAs in each such claim's own clause (up to `;` or a sentence end). `NOT FIXED by <sha>`,
+    the SHAs in each such claim's own clause (CLAUSE_END). `NOT FIXED by <sha>`,
     or a SHA the reason cites for something else (where the bug came from), is never a fix
     candidate (review adhoc-07)."""
     affirmed, shas = False, []
@@ -647,7 +650,7 @@ def fix_claims(reason):
         if any(w in NEGATION or w.endswith("n't") for w in before):
             continue
         affirmed = True
-        shas += SHA.findall(re.split(r";|\.\s", reason[m.end():], maxsplit=1)[0])
+        shas += SHA.findall(CLAUSE_END.split(reason[m.end():], maxsplit=1)[0])
     return affirmed, list(dict.fromkeys(shas))
 
 

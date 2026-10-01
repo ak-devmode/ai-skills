@@ -28,6 +28,7 @@ Exit:   0 ok · 1 disposition refused · 2 usage · 3 could not evaluate (empty 
 """
 
 import argparse
+import calendar
 import contextlib
 import datetime
 import fcntl
@@ -37,6 +38,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SKILL = os.path.dirname(HERE)
@@ -422,9 +424,14 @@ def _dispose(a, log):
             return err(f"`--fixed-in {a.fixed_in}` is not a git repository", "the path of the repo holding the "
                        "fix", key, "--fixed-in", "pass a checkout or worktree path, e.g. ~/Projects/wellmed/<repo>",
                        cause="code", code=vl.EXIT_USAGE)
-        fix, code = fix_check(f, a.fixed, path, key)
+        fix, code = fix_check(f, a.fixed, path, key, recs)
         if code is not None:
             return code
+        if fix["predates"]:
+            return err(f"`fixed {a.fixed}` predates the finding: {fix['predates']}",
+                       f"a commit made after review {f.get('review_id')} raised {a.finding}", fix["sha"],
+                       f"{a.finding} ({f['file']}:{f['line']})", "fix it in a new commit; if the code was "
+                       "already right when reviewed, record `--rejected \"<why>\"`", cause="code", code=vl.EXIT_FAIL)
         if fix["via"] is None:
             if a.off_anchor is None:
                 where_ = "is not in " + key if fix["anchor"] is None else "is not touched"
@@ -522,13 +529,41 @@ def anchor_in(f, path, key):
     return file[len(lead):] if file.startswith(lead) else None
 
 
-def fix_check(f, sha, path, key):
-    """({sha, repo, via, anchor, touched}, None) or (None, a §10 error code). `via` is how
-    commit `sha` in repo `path` reaches the finding: `anchor` (it changes the finding's
+def finding_review(recs, f):
+    """(head sha, ts) of the review that raised finding `f`: the head of the finding's own range
+    (what its reviewer saw — `record` only accepts resolved SHAs) and its timestamp."""
+    head = next(iter((f.get("range") or {}).values()), "").partition("..")[2]
+    return head or None, f.get("ts")
+
+
+def predates(f, full, path, recs):
+    """Why commit `full` in repo `path` cannot be the fix of `f`, or None. The commit that
+    introduced a finding touches its file, so without this the reviewed code itself could be
+    recorded as its own fix. Exact by ancestry where the review's head is in `path`; elsewhere
+    (a fix in another repo) the commit must not be older than the review."""
+    head, ts = finding_review(recs, f)
+    if head:
+        rc = git(path, "merge-base", "--is-ancestor", full, head)[0]
+        if rc == 0:
+            return f"it is in the code that review reviewed (an ancestor of {head[:10]})"
+        if rc == 1:
+            return None
+    rc, ct, _ = git(path, "show", "-s", "--format=%ct", full)
+    try:
+        before = rc == 0 and ts and int(ct) < calendar.timegm(time.strptime(ts, "%Y-%m-%dT%H:%M:%SZ"))
+    except ValueError:
+        before = False
+    return f"it was committed before the review ({ts})" if before else None
+
+
+def fix_check(f, sha, path, key, recs):
+    """({sha, repo, via, anchor, touched, predates}, None) or (None, a §10 error code). `via` is
+    how commit `sha` in repo `path` reaches the finding: `anchor` (it changes the finding's
     file), `test` (it changes a test file in the anchor's directory — a missing-coverage
     finding is fixed by a test-only commit, 149.2-r11-02) or None (neither, or the file is
     not in that repo: refused unless the caller passes an explicit `--off-anchor` reason).
-    One right answer, so it is checked at write time."""
+    `predates` says why the commit is older than the finding (always refused). One right
+    answer, so it is checked at write time."""
     rc, full, e = git(path, "rev-parse", "--verify", "--quiet", f"{sha}^{{commit}}")
     rc2, touched, e2 = git(path, "show", "--name-only", "--format=", full) if rc == 0 else (1, "", e)
     if rc2 != 0:
@@ -539,7 +574,8 @@ def fix_check(f, sha, path, key):
     tests = anchor is not None and any(TEST_FILE.match(os.path.basename(t))
                                        and os.path.dirname(t) == os.path.dirname(anchor) for t in files)
     via = "anchor" if anchor in files else ("test" if tests else None)
-    return {"sha": full, "repo": key, "via": via, "anchor": anchor, "touched": ", ".join(files[:6])}, None
+    return {"sha": full, "repo": key, "via": via, "anchor": anchor, "touched": ", ".join(files[:6]),
+            "predates": predates(f, full, path, recs)}, None
 
 
 # ---------- misfiled ---------------------------------------------------------------
@@ -572,7 +608,10 @@ def cmd_misfiled(a):
             hit = [(p, k) for p, k in candidate_repos(f)
                    if git(p, "rev-parse", "--verify", "--quiet", f"{sha}^{{commit}}")[0] == 0]
             for path, key in hit:
-                fix, _ = fix_check(f, sha, path, key)
+                fix, _ = fix_check(f, sha, path, key, recs)
+                if fix["predates"]:
+                    lines.append(f"  {sha}: not a fix — {fix['predates']} ({key})")
+                    continue
                 cmd = f"{base} {f['finding_id']} --fixed {sha}"
                 cmd += "" if same_repo(f, path, key) else f" --fixed-in {path}"
                 cmd += "" if fix["via"] else ' --off-anchor "<how this commit fixes the finding>"'

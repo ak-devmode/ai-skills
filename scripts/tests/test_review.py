@@ -377,6 +377,44 @@ class TestReview(unittest.TestCase):
         self.assertEqual(p.returncode, 0, p.stderr)
         self.assertEqual(rereview(), [])
 
+    def test_fixed_refuses_the_reviewed_code(self):
+        # review adhoc-01: the commit that introduced a finding touches its file, so the reviewed
+        # code itself was accepted as its own fix — and the original review's range satisfied
+        # the gate's re-review check. In the finding's repo by ancestry; elsewhere by date.
+        gate = load("verdict-gate.py")
+        intro = self.commit(self.repo, "pkg/res.go")
+        gw = self.mkrepo("wellmed/gw")
+        with open(os.path.join(gw, "old.go"), "w") as fh:
+            fh.write("x\n")
+        git(gw, "add", "-A")
+        subprocess.run(["git", "-C", gw, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "old"],
+                       check=True, env=dict(os.environ, GIT_COMMITTER_DATE="2000-01-01T00:00:00Z"))
+        old = git(gw, "rev-parse", "HEAD")
+        self.record(findings=[{"file": "pkg/res.go", "line": 3, "severity": "blocking", "category": "fail-open",
+                               "group": "", "text": "err swallowed", "fix": "return it"}])
+        cases = [  # (flags, exit, stderr needle)
+            (("--fixed", intro), 1, "predates the finding: it is in the code that review reviewed"),
+            (("--fixed", intro, "--off-anchor", "explained"), 1, "predates the finding"),
+            (("--fixed", old, "--fixed-in", gw, "--off-anchor", "explained"), 1, "committed before the review"),
+        ]
+        for flags, code, needle in cases:
+            with self.subTest(flags=flags):
+                p = self.dispose("9.1-r1-01", *flags)
+                self.assertEqual(p.returncode, code, p.stderr)
+                self.assertIn(needle, p.stderr)
+        self.assertEqual(self.dispose("9.1-r1-01", "--fixed", self.commit(self.repo, "pkg/res.go")).returncode, 0)
+        # misfiled names the old commit as not a fix instead of printing its dispose line
+        self.dispose("9.1-r1-01", "--rejected", f"FIXED by {intro[:8]}")
+        p = run(REVIEW, "misfiled", "--scope", self.scope, "--unit", "9.1", env=self.env)
+        self.assertIn(f"{intro[:8]}: not a fix", p.stdout)
+        self.assertNotIn(f"--fixed {intro[:8]}", p.stdout)
+        # a hand-written record of the reviewed code as the fix blocks at the gate
+        with open(self.log, "a") as fh:
+            fh.write(json.dumps({"schema": "verify/1", "ts": "t", "record": "disposition", "finding_id": "9.1-r1-01",
+                                 "disposition": "fixed", "sha": intro, "repo": "wellmed/svc", "via": "anchor",
+                                 "reason": None, "by": "t"}) + "\n")
+        self.assertIn("predates:9.1-r1-01", [b[0] for b in gate.review_presence_blocks(self.log, {}, self.projects)])
+
     def test_misfiled_rejections_redispose_as_fixed(self):
         # 149.2 logged real fixes as "rejected — not rejected on merit — FIXED by <sha>". The
         # latest disposition decides (§6.3), so a new `fixed` record supersedes each one.

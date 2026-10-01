@@ -182,6 +182,9 @@ that holds it.
 same directory as it — a missing-coverage finding is fixed by a test-only commit. Any other
 commit is refused unless `--off-anchor "<how this commit fixes it>"` says why; the record
 carries `via` (`anchor | test | off-anchor`) and the reason, so `/verify` can audit it.
+**The reviewed code is never its own fix:** the commit that introduced a finding touches its
+file, so `dispose` refuses an ancestor of the head that review saw (in another repo, a commit
+older than the review), with or without `--off-anchor`, and the gate blocks one.
 `--rejected` is refused without a reason — never use it to record a fix the tool refused.
 The latest disposition decides, so a fix logged as a rejection is corrected by disposing it
 again: `$RV misfiled --scope $SCOPE --unit $UNIT` lists every rejection whose reason says

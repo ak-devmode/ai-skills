@@ -208,7 +208,9 @@ passes. The flag stays on the record so a reader can see it; it is not a block.
 `base..HEAD` but no `review` record (§6.0) names that repo and covers the unit's first
 commit on the current branch — a unit that commits must be reviewed (review 5.3-r1-03);
 when a **blocking** finding's `fixed <sha>` sits in no later review's range of the repo
-holding it (the disposition's `repo`, else the finding's) — the fixes are reviewed again (`/plan` §6.8, 5.3-r2-03); when git cannot count the range (a block,
+holding it (the disposition's `repo`, else the finding's) — the fixes are reviewed again (`/plan` §6.8, 5.3-r2-03); when any
+finding's `fixed <sha>` in its own repo is an ancestor of the head its review saw — the reviewed
+code recorded as its own fix (review adhoc-01); when git cannot count the range (a block,
 never a zero); or when `artifacts/review-<unit>.jsonl` breaks §6.3: a `finding_id` with no disposition, a `fixed` without `sha`, or a `rejected`
 without `reason`. Deterministic, so the gate owns it — `/verify` judges whether a rejection
 was *right*, never whether one was recorded.
@@ -277,8 +279,9 @@ anchor's directory · `off-anchor` — neither, and `reason` says how it fixes t
 6.3 **Coverage rule.** Every `finding_id` has at least one disposition; the latest one
 decides — so a re-disposition supersedes an earlier one (`review.py misfiled` lists the
 rejections that say `FIXED`), and reopens acceptance (§6.4). A `finding_id` carried by two findings blocks — one disposition must never clear two. A `fixed <sha>` commit must touch the finding's `file` or a test file beside it,
-or carry an `off-anchor` reason — `dispose` refuses it otherwise, at write time, and the
-gate blocks an `off-anchor` fix without a reason. Nothing silently
+or carry an `off-anchor` reason, and must post-date the finding (not an ancestor of the head
+its review saw; in another repo, not older than the review) — `dispose` refuses it otherwise,
+at write time, and the gate blocks an `off-anchor` fix without a reason. Nothing silently
 dismissed, nothing silently dropped. A re-review mints a new `review_id`; the old findings
 stay.
 

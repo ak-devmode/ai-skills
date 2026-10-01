@@ -183,8 +183,18 @@ def review_presence_blocks(review_log, base, projects):
             latest[r.get("finding_id")] = r
     for f in recs:
         d = latest.get(f.get("finding_id"))
-        if f.get("record") != "finding" or f.get("severity") != "blocking" or not d \
-                or d.get("disposition") != "fixed" or not d.get("sha"):
+        if f.get("record") != "finding" or not d or d.get("disposition") != "fixed" or not d.get("sha"):
+            continue
+        # the reviewed code is never its own fix: the commit that introduced a finding touches
+        # its file (review adhoc-01); dispose refuses it, a hand-written record blocks here
+        own, rng = next(iter((f.get("range") or {}).items()), ("", ""))
+        head = rng.partition("..")[2]  # the head this finding's reviewer saw
+        if own and head and d.get("repo", own) == own \
+                and git_ok(os.path.join(projects, own), "merge-base", "--is-ancestor", d["sha"], head):
+            blocks.append((f"predates:{f['finding_id']}", "a `fixed` commit predates the finding",
+                           f"a commit made after {head[:10]}, the head {f.get('review_id')} reviewed",
+                           f"{d['sha'][:10]} is an ancestor of it", f"{review_log} · {f['finding_id']}", "code"))
+        if f.get("severity") != "blocking":
             continue
         # a fix recorded in another repo (`dispose --fixed-in`) is re-reviewed THERE
         for repo in ([d["repo"]] if d.get("repo") else (f.get("range") or {})):

@@ -82,13 +82,6 @@ class TestReview(unittest.TestCase):
                    "--input", self.answer(**over), "--scope", self.scope, "--unit", "9.1", "--passes", "p",
                    *extra, env=self.env)
 
-    def sidecar(self, *lines, rng=None):
-        """A sidecar as prepare --lean writes it: bound to the range by its first line."""
-        path = os.path.join(self.tmp.name, "uncovered.txt")
-        with open(path, "w") as fh:
-            fh.write(f"# range: {rng or self.rng(self.repo)}\n" + "".join(f"{x}\n" for x in lines))
-        return path
-
     def findings(self):
         with open(self.log) as fh:
             return [r for r in map(json.loads, fh) if r["record"] == "finding"]
@@ -99,7 +92,7 @@ class TestReview(unittest.TestCase):
                 "--out-dir", os.path.join(self.tmp.name, "lean"), *flags, env=self.env)
         self.assertEqual(p.returncode, 0, p.stderr)
         bundle = read(p.stdout.split("prompt: ")[1].split()[0])
-        uncovered = read(p.stdout.split("uncovered: ")[1].split()[0])
+        uncovered = bundle.split("## Not in this bundle")[1].split("## The diff")[0]
         self.assertNotRegex(bundle, r"\{\{[A-Z_]+\}\}")
         self.assertIn("Read no other file", bundle)
         self.assertIn("`verdict`", bundle)   # the Output contract came along
@@ -114,9 +107,8 @@ class TestReview(unittest.TestCase):
                 out, bundle, uncovered = self.lean(repo)
                 self.assertIn("lean: 1 of 1 file(s) inlined", out)
                 self.assertIn("+curl x || true", bundle)
-                head, *rest = uncovered.splitlines()
-                self.assertEqual(head, f"# range: {self.rng(repo)}")
-                self.assertEqual(rest, [load(REVIEW).LEAN_NO_ADJACENT])    # always declared, by the script
+                items = [x for x in uncovered.splitlines() if x.startswith("- ")]
+                self.assertEqual(items, ["- " + load(REVIEW).LEAN_NO_ADJACENT])   # always declared, by the script
                 for s in present:
                     self.assertIn(s, bundle)
                 for s in absent:
@@ -153,9 +145,11 @@ class TestReview(unittest.TestCase):
     def test_lean_bundle_lists_an_oversized_claude_md(self):
         with open(os.path.join(self.repo, "CLAUDE.md"), "w") as fh:
             fh.write("x" * 30_000)
+        git(self.repo, "add", "-A")
+        git(self.repo, "commit", "-q", "-m", "big claude.md")     # read at the range's head, not the tree
         _, bundle, uncovered = self.lean(self.repo)
         self.assertIn("`CLAUDE.md` (30,000 bytes", uncovered)
-        self.assertNotIn("x" * 100, bundle)
+        self.assertNotIn("## The repo's CLAUDE.md", bundle)    # listed, never inlined as rules
 
     def test_lean_sections_match_groups_and_domain_md(self):
         rv = load(REVIEW)
@@ -302,8 +296,7 @@ class TestReview(unittest.TestCase):
     def test_lean_reviewer_is_never_codex_coverage(self):
         # plan 7: a lean review needs a covering codex review to clear, exactly like a fallback
         gate = load("verdict-gate.py")
-        p = self.record(reviewer="claude-lean mode lean (default)", extra=("--uncovered", self.sidecar()),
-                        findings=[], verdict="SHIP")
+        p = self.record(reviewer="claude-lean mode lean (default)", findings=[], verdict="SHIP")
         self.assertEqual(p.returncode, 0, p.stderr)
         self.assertEqual(gate.fallback_markers(self.log, self.projects), ["review claude-lean mode lean (default)"])
         report = read(os.path.join(self.scope, "artifacts", "review-9.1-r1.md"))
@@ -312,48 +305,38 @@ class TestReview(unittest.TestCase):
         self.record(findings=[], verdict="SHIP")
         self.assertEqual(gate.fallback_markers(self.log, self.projects), [])
 
-    def test_lean_record_needs_the_sidecar_and_reports_it(self):
-        p = self.record(reviewer="claude-lean mode lean (default)")
-        self.assertEqual(p.returncode, 2, "a lean review without --uncovered must be refused")
-        self.assertFalse(os.path.exists(self.log) and self.findings())
-        side = self.sidecar("`big.txt` — 1,600 changed lines; not reviewed")
-        p = self.record(reviewer="claude-lean mode lean (default)",
-                        extra=("--uncovered", side, "--mode", "mode: lean (default)"))
+    def test_lean_record_recomputes_what_the_range_leaves_out(self):
+        # review 7.1-r2-01: the not-covered list comes from the range itself, never from the caller
+        with open(os.path.join(self.repo, "big.txt"), "w") as fh:
+            fh.write("".join(f"line {i}\n" for i in range(1600)))
+        git(self.repo, "add", "-A")
+        git(self.repo, "commit", "-q", "-m", "big")
+        p = self.record(reviewer="claude-lean mode lean (default)", extra=("--mode", "mode: lean (default)"),
+                        cannot_do=[])                            # a reviewer that listed nothing
         self.assertEqual(p.returncode, 0, p.stderr)
         report = read(os.path.join(self.scope, "artifacts", "review-9.1-r1.md"))
         head, tail = report.split("## BLOCKING")[0], report.split("## What this review did not cover")[1]
         self.assertIn("**mode: lean (default)**", head)
-        self.assertIn("- `big.txt` — 1,600 changed lines; not reviewed", tail)
-        self.assertIn("- no network", tail)                      # the model's own list is kept too
-
-    def test_lean_record_refuses_a_stale_or_headless_sidecar(self):
-        # review 7.1-r1-05: an empty or other-range sidecar must not stand in for this range's
-        base = git(self.repo, "rev-list", "--max-parents=0", "HEAD")
-        other = f"{git(self.repo, 'rev-parse', base)}..{git(self.repo, 'rev-parse', base)}"
-        for side in (self.sidecar(rng=other), self.empty()):
-            with self.subTest(side=side):
-                p = self.record(reviewer="claude-lean mode lean (default)", extra=("--uncovered", side))
-                self.assertEqual(p.returncode, 2, p.stdout)
-                self.assertIn("not this range's", p.stderr)
-
-    def empty(self):
-        path = os.path.join(self.tmp.name, "empty.txt")
-        open(path, "w").close()
-        return path
+        self.assertIn("- `big.txt` — 1,600 changed lines", tail)
+        self.assertIn("- " + load(REVIEW).LEAN_NO_ADJACENT, tail)
+        self.record(cannot_do=[])                                # a codex review gets no lean list
+        codex = read(os.path.join(self.scope, "artifacts", "review-9.1-r2.md"))
+        self.assertNotIn(load(REVIEW).LEAN_NO_ADJACENT, codex)
 
     def test_lean_bundle_inlines_architecture_md(self):
         # review 7.1-r1-03: the full prompt reads CLAUDE.md and ARCHITECTURE.md first
         for doc, text in (("CLAUDE.md", "claude-rule-marker"), ("ARCHITECTURE.md", "arch-rule-marker")):
             with open(os.path.join(self.repo, doc), "w") as fh:
                 fh.write(text + "\n")
+        git(self.repo, "add", "-A")
+        git(self.repo, "commit", "-q", "-m", "docs")
         _, bundle, _ = self.lean(self.repo)
         self.assertIn("claude-rule-marker", bundle)
         self.assertIn("arch-rule-marker", bundle)
 
     def test_lean_rounds_stop_at_three_like_codex(self):
-        side = ("--uncovered", self.sidecar())
         for rnd in (1, 2, 3):
-            p = self.record(reviewer="claude-lean mode lean (default)", extra=side, findings=[], verdict="SHIP")
+            p = self.record(reviewer="claude-lean mode lean (default)", findings=[], verdict="SHIP")
             self.assertEqual("round 3 of 3: STOP" in p.stdout, rnd == 3, p.stdout)
 
     def test_fallback_reviewer_is_degraded_in_the_header(self):

@@ -18,14 +18,14 @@ Usage:
   review.py prepare --repo PATH --range BASE..HEAD [--kalpa-only | --engine-only] [--lean] [--out-dir DIR]
                     --lean: inline the capped diff + this project's rules into one bundle (plan 7)
   review.py record  --repo PATH --range BASE..HEAD --reviewer LINE --input FILE
-                    [--scope DIR --unit N.P] [--passes TEXT] [--mode LINE] [--uncovered FILE]
+                    [--scope DIR --unit N.P] [--passes TEXT] [--mode LINE]
   review.py dispose --scope DIR --unit N.P --finding ID (--fixed SHA [--off-anchor REASON] | --rejected REASON |
                     --deferred TODO) [--by NAME]
   review.py dispose ... --fixed SHA --fixed-in REPO_PATH     (the fix lives in another repo)
   review.py accept  --scope DIR --unit N.P --by NAME     (the user's yes to the outcomes, §6.4)
   review.py misfiled --scope DIR --unit N.P              (rejections that say "fixed/resolved <sha>" → dispose lines)
-Output: prepare prints `prompt:`, `schema:`, `passes:`, `range:`, `effort:` (+ `uncovered:` with
-        --lean — the files past the cap, for `record --uncovered`); record prints the report path (or the
+Output: prepare prints `prompt:`, `schema:`, `passes:`, `range:`, `effort:` (+ an `uncovered:` count
+        with --lean; record recomputes that list for a claude-lean reviewer); record prints the report path (or the
         report, with no scope); dispose prints the disposition.
 Exit:   0 ok · 1 disposition refused · 2 usage · 3 could not evaluate (empty range, malformed answer)
 """
@@ -73,7 +73,6 @@ LEAN_CAP = vl.LEAN_CAP   # changed lines inlined into a lean bundle (shared with
 LEAN_CLAUDE_MD = 24_000  # bytes of the repo's CLAUDE.md / ARCHITECTURE.md a lean bundle inlines; larger is listed
 LEAN_NO_ADJACENT = ("adjacent code outside the diff (lenses §1: the touched files in full, their callers and "
                     "callees) — a lean review reads only the diff hunks in its bundle")
-SIDECAR_HEAD = "# range: "  # the sidecar's first line binds it to the range it was prepared for
 # Standalone graphs that live under another project's directory. Matched before the
 # top-level project, so kalpa-iris never inherits WellMed's ADR checks (IRIS CLAUDE.md §3.1).
 SUBPROJECTS = {"wellmed/kalpa-iris": "iris"}
@@ -161,11 +160,35 @@ def domain_sections(numbers):
     return out
 
 
+def lean_coverage(repo, rng):
+    """(diff, inlined, total, [(doc, text)], [not covered]) for a lean review of the immutable
+    range `rng`. prepare builds the bundle from it and record recomputes the not-covered list
+    from it, so that list never passes through a file anyone could leave stale or empty
+    (review 7.1-r1-05, r2-01). CLAUDE.md / ARCHITECTURE.md are read at the range's head."""
+    diff, inlined, uncovered, total, _ = vl.capped_diff(repo, rng)
+    head, docs = rng.split("..")[1], []
+    # the full prompt has the reviewer read both first; lean inlines them or says it didn't (7.1-r1-03)
+    for doc in ("CLAUDE.md", "ARCHITECTURE.md"):
+        rc, text, _ = git(repo, "show", f"{head}:{doc}")
+        if rc != 0:
+            continue
+        size = len(text.encode("utf-8"))
+        if size <= LEAN_CLAUDE_MD:
+            docs.append((doc, text))
+        else:
+            uncovered.append(f"the repo's `{doc}` ({size:,} bytes, over the {LEAN_CLAUDE_MD:,}-byte lean "
+                             "limit) — not read")
+    # the lenses' first check reads whole touched files and their callees; a bundle of hunks
+    # cannot, so that coverage is always declared missing, by the script (7.1-r1-04)
+    uncovered.append(LEAN_NO_ADJACENT)
+    return diff, inlined, total, docs, uncovered
+
+
 def prepare_lean(a, n, proj, out_dir):
     """Write the lean bundle: everything the single Sonnet reviewer may read, in one file."""
     with open(PROMPT, encoding="utf-8") as fh:
         output_spec = fh.read().split("## Output", 1)[1]  # one Output contract for both modes
-    diff, inlined, uncovered, total, _ = vl.capped_diff(a.repo, a.range)
+    diff, inlined, total, docs, uncovered = lean_coverage(a.repo, a.range)
     _, log, _ = git(a.repo, "log", "--oneline", a.range)
     passes, sections = [], []
     if a.kalpa_only:
@@ -187,18 +210,7 @@ def prepare_lean(a, n, proj, out_dir):
     with open(LENSES, encoding="utf-8") as fh:
         sections.append("## Rules — lenses for every repo\n\n" + fh.read().strip())
     passes.append("lenses ✓")
-    # the full prompt has the reviewer read both first; lean inlines them or says it didn't (7.1-r1-03)
-    for i, doc in enumerate(("CLAUDE.md", "ARCHITECTURE.md")):
-        path = os.path.join(a.repo, doc)
-        if os.path.isfile(path) and os.path.getsize(path) <= LEAN_CLAUDE_MD:
-            with open(path, encoding="utf-8") as fh:
-                sections.insert(i, f"## The repo's {doc} — what \"correct\" means here\n\n" + fh.read().strip())
-        elif os.path.isfile(path):
-            uncovered.append(f"the repo's `{doc}` ({os.path.getsize(path):,} bytes, over the "
-                             f"{LEAN_CLAUDE_MD:,}-byte lean limit) — not read")
-    # the lenses' first check reads whole touched files and their callees; a bundle of hunks
-    # cannot, so that coverage is always declared missing, by the script (7.1-r1-04)
-    uncovered.append(LEAN_NO_ADJACENT)
+    sections[:0] = [f"## The repo's {doc} — what \"correct\" means here\n\n{text.strip()}" for doc, text in docs]
     passes.append(f"lean: {inlined} of {total} file(s) inlined")
     with open(LEAN_PROMPT, encoding="utf-8") as fh:
         text = fh.read()
@@ -210,13 +222,10 @@ def prepare_lean(a, n, proj, out_dir):
         text = text.replace("{{" + k + "}}", v)
     text = text.replace("{{DIFF}}", diff).rstrip() + "\n\n## Output" + output_spec
     bundle = os.path.join(out_dir, "review-lean-bundle.md")
-    side = os.path.join(out_dir, "review-lean-uncovered.txt")
     with open(bundle, "w", encoding="utf-8") as fh:
         fh.write(text)
-    with open(side, "w", encoding="utf-8") as fh:
-        fh.write(SIDECAR_HEAD + a.range + "\n" + "".join(u + "\n" for u in uncovered))
     print(f"prompt: {bundle}\nschema: {SCHEMA}\npasses: {' · '.join(passes)}\nrange: {a.range}\n"
-          f"effort: n/a (lean — one Sonnet pass)\nuncovered: {side} ({len(uncovered)} item(s))")
+          f"effort: n/a (lean — one Sonnet pass)\nuncovered: {len(uncovered)} item(s) — record recomputes them")
     return vl.EXIT_PASS
 
 
@@ -332,7 +341,7 @@ def cmd_record(a):
         problems = validate(doc)
     except (OSError, ValueError) as exc:
         doc, problems = None, [str(exc)]
-    uncovered, code = read_uncovered(a)
+    uncovered, code = lean_uncovered(a)
     if code is not None:
         return code
     if not problems and uncovered:
@@ -375,28 +384,17 @@ def cmd_record(a):
     return vl.EXIT_PASS
 
 
-def read_uncovered(a):
-    """(the lean sidecar's lines, None) or (None, error code). A `claude-lean` review must pass
-    `--uncovered`, even an empty one: without it the report could not say what the cap left out."""
-    if a.reviewer.startswith("claude-lean ") and not a.uncovered:
-        return None, err("a lean review needs prepare's uncovered list", "--uncovered <the `uncovered:` path "
-                         "review.py prepare --lean printed>", "no --uncovered", "--uncovered",
-                         "pass the sidecar path, even when it lists nothing", code=vl.EXIT_USAGE)
-    if not a.uncovered:
+def lean_uncovered(a):
+    """(not-covered lines, None) or (None, error code). A `claude-lean` review's list is
+    recomputed from its immutable range — the same function prepare used — never read back
+    from a file (review 7.1-r2-01). Other reviewers have none."""
+    if not a.reviewer.startswith("claude-lean "):
         return [], None
     try:
-        with open(a.uncovered, encoding="utf-8") as fh:
-            lines = [ln.strip() for ln in fh if ln.strip()]
-    except OSError as exc:
-        return None, err("cannot read the uncovered list", "the file prepare --lean wrote", str(exc),
-                         a.uncovered, "re-run review.py prepare --lean")
-    # an empty or stale sidecar must not pass for this range's (review 7.1-r1-05)
-    if not lines or lines[0] != SIDECAR_HEAD + a.range:
-        return None, err("the uncovered list is not this range's", f"a first line `{SIDECAR_HEAD}{a.range}`",
-                         lines[0] if lines else "an empty file", a.uncovered,
-                         "re-run review.py prepare --lean for this range and pass its `uncovered:` path",
-                         code=vl.EXIT_USAGE)
-    return lines[1:], None
+        return lean_coverage(a.repo, a.range)[4], None
+    except vl.ContractError as exc:
+        return None, err("git could not recompute the lean coverage", "a readable range", str(exc)[:200],
+                         a.repo, f"git -C {a.repo} diff --numstat {a.range}", cause="environment")
 
 
 def reviews_of(recs, unit):
@@ -862,7 +860,6 @@ def main(argv):
     r.add_argument("--scope")
     r.add_argument("--unit")
     r.add_argument("--passes")
-    r.add_argument("--uncovered", help="prepare --lean's uncovered list; required for a claude-lean reviewer")
     r.add_argument("--mode", help="review-mode.py's line, shown in the report header")
     d = sub.add_parser("dispose")
     d.add_argument("--scope", required=True)

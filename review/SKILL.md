@@ -1,6 +1,6 @@
 ---
 name: review
-version: 3.6.0
+version: 3.6.1
 description: |
   Pre-landing code review with codex as the gate: the opposing model family, headless
   and read-only, reviews an explicit revision range against gstack's review checklist,
@@ -282,11 +282,12 @@ Runs when §1.4 printed `mode: lean (…)`. The rules are the same files; what c
 who reads them and how much. The reviewer gets one packed file and no tools.
 
 7.1 **Render the bundle.** `$RV prepare --repo $REPO --range $RANGE --lean [--kalpa-only|--engine-only]`
-prints `prompt:` (the bundle), `schema:`, `passes:`, `range:` and `uncovered:`; keep them
-all. The bundle inlines the commits, the repo's CLAUDE.md (≤ 24 KB), gstack's checklist,
-only this project's `domain.md` sections, the lenses, and the diff. The diff is capped at
-1,500 changed lines. Files are inlined whole while they fit, and a file that doesn't fit
-is listed in `uncovered:`, never cut.
+prints `prompt:` (the bundle), `schema:`, `passes:`, `range:` and an `uncovered:` count;
+keep them all. The bundle inlines the commits, the repo's CLAUDE.md and ARCHITECTURE.md at
+the range's head (≤ 24 KB each), gstack's checklist, only this project's `domain.md`
+sections, the lenses, and the diff. The diff is capped at 1,500 changed lines. Files are
+inlined whole while they fit, and a file that doesn't fit is listed as not covered, never
+cut. Code adjacent to the diff is always listed as not covered.
 
 7.2 **One Sonnet subagent — dispatch is pre-authorized** (this skill declares `Agent`).
 Spawn it with `model: sonnet`. Its entire prompt: "Read `<prompt>` and follow it exactly.
@@ -296,9 +297,8 @@ summary of the change.
 
 7.3 **Record through the same writer.** `$RV record --repo $REPO --range <the range: line>
 --reviewer "claude-lean $MODE" --input <WORK>/answer.json --passes "<passes line>" --mode
-"$MODE" --uncovered <the uncovered: path> [--scope $SCOPE --unit $UNIT]`. `--uncovered` is
-required for a lean reviewer; `record` refuses without it, so the not-covered list can't
-be dropped. Exit 3 (a malformed answer) → re-run the subagent once, then stop and report.
+"$MODE" [--scope $SCOPE --unit $UNIT]`. For a `claude-lean` reviewer, `record` recomputes
+the not-covered list from the range itself, so nothing the caller passes can drop it. Exit 3 (a malformed answer) → re-run the subagent once, then stop and report.
 Never escalate to `full` on your own: that is the user's `--full`.
 
 7.4 **What lean does not do,** and says so in the report: no codex, no gstack engine

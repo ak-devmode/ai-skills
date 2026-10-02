@@ -394,7 +394,9 @@ def closeout_view(a, table):
         judges.update(js)
         unjudged += [b[0] for b in blocks if b[5] == NOT_JUDGED]
         failed += [b[0] for b in blocks if b[5] != NOT_JUDGED]
-        msgs += [vl.message("FAIL", f"{u}: {what}", exp, found, where, cause, nxt, DOCS)
+        # a not-judged row is a tooling WARN, never a FAIL (and `not-judged` is not a §10 cause — 7.1-r4-01)
+        msgs += [vl.message("WARN", f"{u}: {what}", exp, found, where, "tooling", nxt, DOCS) if cause == NOT_JUDGED
+                 else vl.message("FAIL", f"{u}: {what}", exp, found, where, cause, nxt, DOCS)
                  for _, what, exp, found, where, cause, nxt in blocks]
         per.append({"unit": u, "blocks": [{"id": b[0], "what": b[1], "cause": b[5]} for b in blocks],
                     "needs_verify": any(b[1] in NEEDS_VERIFY or b[5] == NOT_JUDGED for b in blocks)})

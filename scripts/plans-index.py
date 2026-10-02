@@ -296,7 +296,9 @@ def cmd_validate(args) -> int:
                               f"{err.strip().splitlines()[0] if err.strip() else doc}")
             elif doc.get("verdict") in ("pass", "predates-gate") or "⚠ verify skipped" in status or (
                     doc.get("verdict") == "advisory" and "⚠ verify advisory" in status) or (
-                    doc.get("verdict") == "not-judged" and "⚠ verify not judged" in status):
+                    doc.get("verdict") == "not-judged" and "⚠ verify not judged" in status and code == 0):
+                # in blocking mode a not-judged unit is refused (exit 1), so its Done row is not
+                # conformant whatever marker it carries (review 7.1-r4-02)
                 continue
             else:
                 issues.append(f"phase {num} (L{ln+1}) is Done without a passing verdict (gate: "

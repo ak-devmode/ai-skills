@@ -556,6 +556,44 @@ class TestIndexEnforcement(Fixture):
         v = run("plans-index.py", "validate", self.index, env=self.env)
         self.assertNotIn("without a passing verdict", v.stdout + v.stderr)
 
+    def test_not_judged_done_row_fails_validate_once_blocking(self):
+        # review 7.1-r4-02: an advisory not-judged Done is not conformant under a blocking gate
+        self.set_table([row("ok", "true"), row("jr", "judge", rung="2")])
+        self.ledger()
+        self.verify()
+        self.assertEqual(self.status("--advisory").returncode, 0)
+        self.assertNotIn("without a passing verdict", self.validate().stdout)
+        with open(self.index, "a") as fh:
+            fh.write("\n**Gate mode:** blocking\n")
+        v = self.validate()
+        self.assertIn("without a passing verdict", v.stdout + v.stderr)
+
+    def test_closeout_view_reports_not_judged_without_crashing(self):
+        # review 7.1-r4-01: `not-judged` is not a §10 cause; --all crashed on it
+        self.set_table([row("ok", "true"), row("jr", "judge", rung="2")])
+        self.ledger()
+        self.verify()
+        text = run("verdict-gate.py", "--scope", self.scope, "--all", env=self.env)
+        self.assertEqual(text.returncode, 0, text.stderr)
+        self.assertIn("verdict: NOT-JUDGED", text.stdout)
+        self.assertIn("⚠ verify not judged jr", text.stdout)
+        js = run("verdict-gate.py", "--scope", self.scope, "--all", "--json", env=self.env)
+        doc = json.loads(js.stdout)
+        self.assertEqual((doc["verdict"], doc["failed"]), ("not-judged", []))
+
+    def test_all_row_run_audits_each_phases_own_rejections(self):
+        # review 7.1-r4-03: without --owner, a 5.2 row must not read review-5.1.jsonl
+        self.set_table([row("ok", "true"), row("p1-rejections-justified", "judge", rung="2"),
+                        row("p2-rejections-justified", "judge", owner="5.2", rung="2")])
+        with open(os.path.join(self.scope, "artifacts", "review-5.2.jsonl"), "w") as fh:
+            fh.write(json.dumps({"record": "disposition", "finding_id": "5.2-r1-01", "disposition": "rejected"}) + "\n")
+        p = run("verify-run.py", "run", "--table", self.table, "--log", self.log, env=self.env)
+        rid = p.stdout.split("run_id: ")[1].split()[0]
+        got = {r["check_id"]: r["command"] for r in map(json.loads, open(self.log))
+               if r.get("run_id") == rid and r["run_state"] == "pending"}
+        self.assertTrue(got["p1-rejections-justified"].startswith("auto: "))
+        self.assertEqual(got["p2-rejections-justified"], "judge")
+
     def test_pass_writes_done_clean(self):
         self.ledger()
         self.verify("codex gpt-test", [self.v("ok", "pass")])

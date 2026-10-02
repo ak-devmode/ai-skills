@@ -31,6 +31,7 @@ import subprocess
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import landed_lib as ll  # noqa: E402
 import verify_lib as vl  # noqa: E402
 
 DOCS = f"{vl.CONTRACT} §5"
@@ -135,6 +136,11 @@ def round_no(review_id):
     return int(m.group(1)) if m else -1
 
 
+def known_shas(recs):
+    """Every SHA a log names — the lane commits a squash-merged fix can ride in on (§5.2.2)."""
+    return {s for r in recs for s in [*(r.get("shas") or {}).values(), r.get("sha")] if s}
+
+
 def review_presence_blocks(review_log, base, projects, scope=None):
     """§5.2.1 — a unit with commits must have been reviewed (review 5.3-r1-03).
 
@@ -147,6 +153,7 @@ def review_presence_blocks(review_log, base, projects, scope=None):
     severity: nothing but a reason ties that commit to the finding (review adhoc-03) — until the
     repo reaches the round cap and the user's acceptance follows the disposition (`stopped`).
     A git call that fails is a block, never a zero (5.3-r2-02)."""
+    ll.reset()
     recs = vl.read_jsonl(review_log) if os.path.exists(review_log) else []
     reviews = [r for r in recs if r.get("record") == "review"]
     # Logs from before `review` records existed (§6.0) carry the range on each finding.
@@ -158,35 +165,60 @@ def review_presence_blocks(review_log, base, projects, scope=None):
                     reviews.append({"review_id": f.get("review_id"), "range": {repo_: rng},
                                     "shas": {"base": fb, "head": fh}})
     blocks = []
+    known = known_shas(recs)
+
+    def canon(key):
+        return vl.canonical_key(key, projects)
 
     def root(repo):  # the scope's own worktree when it is one (verify_lib.repo_root, §3.2.1)
-        return vl.repo_root(projects, repo, scope)
+        return vl.repo_root(projects, canon(repo), scope)
+
+    def names(r, repo):  # the record's range names this repo, under any key for it
+        return any(canon(k) == canon(repo) for k in r.get("range", {}))
 
     def inside(path, r, sha):
-        """sha in (r.base, r.head], and r.head on the current branch."""
+        """sha in (r.base, r.head], and r.head landed — on the current branch or the trunk, an
+        ancestor or squash/rebase-merged (§5.2.2)."""
         sh = r.get("shas") or {}
         return bool(sh.get("base") and sh.get("head")) and not sha.startswith(sh["base"]) \
             and not sh["base"].startswith(sha) \
             and git_ok(path, "merge-base", "--is-ancestor", sh["base"], sha) \
             and git_ok(path, "merge-base", "--is-ancestor", sha, sh["head"]) \
-            and git_ok(path, "merge-base", "--is-ancestor", sh["head"], "HEAD")
+            and ll.landed(path, sh["head"], known) is not None
+
+    def squash_covers(path, r, b, tip):
+        """§5.2.2: the review's net diff (base..head) arrived in a commit S on tip's first-parent
+        line after the unit's base — S, not the lane commits, is what base..tip holds."""
+        sh = r.get("shas") or {}
+        s = sh.get("base") and sh.get("head") and ll.arrival(path, sh["base"], sh["head"], tip)
+        return bool(s) and not s.startswith(b) and git_ok(path, "merge-base", "--is-ancestor", b, s)
 
     for repo, b in sorted(base.items()):
         path = root(repo)
-        n = git_out(path, "rev-list", "--count", f"{b}..HEAD")
-        if n is None:
-            blocks.append((f"review:{repo}", "cannot count the unit's commits", f"git rev-list {b[:10]}..HEAD "
-                           f"in {repo}", "git failed", f"{path}", "environment"))
-            continue
-        if n == "0":
-            continue
-        mine = [r for r in reviews if repo in r.get("range", {})]
-        # the unit's first commit must sit inside a review on this branch
-        oldest = (git_out(path, "rev-list", "--reverse", f"{b}..HEAD") or "").splitlines()[:1]
-        if not any(oldest and inside(path, r, oldest[0]) for r in mine):
+        mine = [r for r in reviews if names(r, repo)]
+        counted, covered = [], False
+        # the unit's commits sit on HEAD while it is on its lane, on the trunk once merged (§5.2.2)
+        for tip in ll.targets(path):
+            n = git_out(path, "rev-list", "--count", f"{b}..{tip}")
+            if n is None:
+                blocks.append((f"review:{repo}", "cannot count the unit's commits", f"git rev-list {b[:10]}..{tip} "
+                               f"in {repo}", "git failed", f"{path}", "environment"))
+                covered = True  # reported; one block per repo
+                break
+            if n == "0":
+                continue
+            counted.append(f"{n} commit(s) in {b[:10]}..{tip}")
+            # the unit's first commit must sit inside a review on this branch, or a squash
+            # commit in the range must hold a review's net diff
+            oldest = (git_out(path, "rev-list", "--reverse", f"{b}..{tip}") or "").splitlines()[:1]
+            if any(oldest and inside(path, r, oldest[0]) for r in mine) \
+                    or any(squash_covers(path, r, b, tip) for r in mine):
+                covered = True
+                break
+        if counted and not covered:
             blocks.append((f"review:{repo}", "commits in range were never reviewed",
-                           f"a /review record on this branch covering {b[:10]}.. in {repo}",
-                           f"{n} commit(s) in {b[:10]}..HEAD, {len(mine)} review record(s) for {repo}, none covering it",
+                           f"a /review record covering {b[:10]}.. in {repo}, on HEAD or the trunk",
+                           f"{'; '.join(counted)}, {len(mine)} review record(s) for {repo}, none covering it",
                            f"{review_log} · {repo}", "code"))
     latest, at = {}, {}
     for i, r in enumerate(recs):
@@ -197,7 +229,7 @@ def review_presence_blocks(review_log, base, projects, scope=None):
         """review/SKILL.md §5.1 hard stop: past ROUND_CAP rounds of `repo`, the user chose to
         stop the loop — their `accept`, recorded after this disposition, stands in for the
         re-review (kalpa-iris 1.1: five rounds re-reviewing its own checkers)."""
-        return sum(1 for r in reviews if repo in r.get("range", {})) >= vl.ROUND_CAP and any(
+        return sum(1 for r in reviews if names(r, repo)) >= vl.ROUND_CAP and any(
             r.get("record") == "acceptance" and str(r.get("by") or "").strip() for r in recs[at[fid] + 1:])
 
     for f in recs:
@@ -209,13 +241,15 @@ def review_presence_blocks(review_log, base, projects, scope=None):
         own, rng = next(iter((f.get("range") or {}).items()), ("", ""))
         # a fix on a branch that never merged is not in what ships (review r2-04); a git
         # failure (repo gone, sha unknown) is a block too, never a pass
+        # — squash and rebase merges count when the fix's change arrived (§5.2.2)
         hold = d.get("repo") or own
-        if not git_ok(root(hold), "merge-base", "--is-ancestor", d["sha"], "HEAD"):
-            blocks.append((f"unmerged:{f['finding_id']}", "a `fixed` commit is not on the current branch",
-                           f"{d['sha'][:10]} reachable from HEAD in {hold}", "not an ancestor of HEAD (or git "
-                           "cannot tell)", f"{review_log} · {f['finding_id']}", "code"))
+        if ll.landed(root(hold), d["sha"], known) is None:
+            blocks.append((f"unmerged:{f['finding_id']}", "a `fixed` commit is not in what ships",
+                           f"{d['sha'][:10]} on HEAD or the trunk in {hold}: an ancestor, the same patch-id, or "
+                           "its change squash-merged",
+                           "none of the three (or git cannot tell)", f"{review_log} · {f['finding_id']}", "code"))
         head = rng.partition("..")[2]  # the head this finding's reviewer saw
-        if own and head and d.get("repo", own) == own \
+        if own and head and canon(d.get("repo", own)) == canon(own) \
                 and git_ok(root(own), "merge-base", "--is-ancestor", d["sha"], head):
             blocks.append((f"predates:{f['finding_id']}", "a `fixed` commit predates the finding",
                            f"a commit made after {head[:10]}, the head {f.get('review_id')} reviewed",
@@ -229,9 +263,9 @@ def review_presence_blocks(review_log, base, projects, scope=None):
         later = [r for r in reviews if round_no(r.get("review_id")) > round_no(f.get("review_id")) >= 0]
         for repo in ([d["repo"]] if d.get("repo") else (f.get("range") or {})):
             path = root(repo)
-            if not any(inside(path, r, d["sha"]) for r in later if repo in r.get("range", {})) \
+            if not any(inside(path, r, d["sha"]) for r in later if names(r, repo)) \
                     and not stopped(repo, f["finding_id"]):
-                capped = sum(1 for r in reviews if repo in r.get("range", {})) >= vl.ROUND_CAP
+                capped = sum(1 for r in reviews if names(r, repo)) >= vl.ROUND_CAP
                 blocks.append((f"rereview:{f['finding_id']}", f"{why} was never reviewed",
                                f"a later /review whose range contains {d['sha'][:10]}" + (
                                    f" — or, {repo} being at round {vl.ROUND_CAP}+, the user's "
@@ -251,11 +285,14 @@ def evidence_line(pend):
 
 def evaluate(scope, unit, projects):
     """Return (rows_report, blocks, judge_lines). Raises vl.ContractError."""
+    ll.reset()
     table = vl.parse_table(os.path.join(scope, "finish-conditions.md"))
     owned = vl.select(table["rows"], unit)
     log = os.path.join(scope, "artifacts", f"verify-{unit}.jsonl")
     recs = vl.read_jsonl(log)
     base = vl.bases(os.path.join(scope, "closeout-prep.md"), unit)
+    review = os.path.join(scope, "artifacts", f"review-{unit}.jsonl")
+    known = known_shas([*recs, *(vl.read_jsonl(review) if os.path.exists(review) else [])])
     report, blocks, judges = [], [], set()
     if not owned:
         raise vl.ContractError(vl.message("ERROR", f"no finish-table rows owned by {unit}",
@@ -334,11 +371,13 @@ def evaluate(scope, unit, projects):
             continue
         if repo in base:
             b = base[repo]
-            inside = git_ok(repo_path, "merge-base", "--is-ancestor", b, sha) and \
+            # after the base, and on HEAD — or landed on the trunk with the lane (§5.2.2)
+            inside = git_ok(repo_path, "merge-base", "--is-ancestor", b, sha) and (
                 git_ok(repo_path, "merge-base", "--is-ancestor", sha, head)
+                or ll.landed(repo_path, sha, known) is not None)
             if not inside:
-                block("evidence SHA is outside the unit's range", f"{b[:10]}..{head[:10]} in {repo}",
-                      f"evidence at {sha[:10]}", "code")
+                block("evidence SHA is outside the unit's range", f"{b[:10]}..{head[:10]} in {repo}, or landed "
+                      "on its trunk", f"evidence at {sha[:10]}", "code")
                 continue
         elif sha != head:
             block("evidence is stale and no base SHA is recorded", f"evidence at HEAD {head[:10]} of {repo}",
@@ -346,7 +385,6 @@ def evaluate(scope, unit, projects):
             continue
         report.append(f"pass   {cid}  {res['result']} · rung {res['rung_reached']}/{row['rung']} · "
                       f"{final.get('judge')}")
-    review = os.path.join(scope, "artifacts", f"review-{unit}.jsonl")
     for bid, what, exp, found, where, cause in review_presence_blocks(review, base, projects, scope):
         blocks.append((bid, what, exp, found, where, cause,
                        f"/review --scope {scope} --unit {unit} on the unit's base..HEAD"))

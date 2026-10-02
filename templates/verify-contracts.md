@@ -210,7 +210,8 @@ item flips to `BUILD NOW`, once.
 - the verdict's `table_rev` differs from the table's current `Revision` (re-run after a
   table change);
 - the verdict's `sha` for that repo is outside the unit's range `base..HEAD` — `base` is the
-  repo's SHA recorded by `ledger-init.sh` in the phase block at phase start.
+  repo's SHA recorded by `ledger-init.sh` in the phase block at phase start. A `sha` after
+  `base` that landed (§5.2.2) counts as inside: the lane it was taken on was squash-merged.
 
 **Uncommitted work is accepted, deliberately** (Alex, 2026-09-26). Verification runs
 pre-PR, on the working tree the author is about to commit — so evidence with `dirty: true`
@@ -218,7 +219,8 @@ passes. The flag stays on the record so a reader can see it; it is not a block.
 
 5.2.1 **Per unit, the gate also blocks when** a repo with a recorded base has commits in
 `base..HEAD` but no `review` record (§6.0) names that repo and covers the unit's first
-commit on the current branch — a unit that commits must be reviewed (review 5.3-r1-03);
+commit on the current branch — or whose net diff a squash commit in the range holds (§5.2.2) —
+a unit that commits must be reviewed (review 5.3-r1-03);
 when a **blocking** finding's `fixed <sha>` — or any finding's fix `via off-anchor`, which
 only a reason ties to the finding (review adhoc-03) — sits in no later review's range (a higher `r<n>`
 than the finding's — an earlier review never saw the fix as a fix, review adhoc-05) of the repo
@@ -227,11 +229,36 @@ unless that repo has had `ROUND_CAP` (3) reviews in the unit and an `acceptance`
 disposition: past the cap the loop stops on the user's yes (`/review` §5.1), and that yes stands in
 for the re-review; when any
 finding's `fixed <sha>` in its own repo is an ancestor of the head its review saw — the reviewed
-code recorded as its own fix (review adhoc-01); when a `fixed <sha>` is not reachable from
-HEAD in the repo holding it — a fix on a branch that never merged (review r2-04); when git cannot count the range (a block,
+code recorded as its own fix (review adhoc-01); when a `fixed <sha>` has not landed (§5.2.2) in
+the repo holding it — a fix on a branch that never merged (review r2-04); when git cannot count the range (a block,
 never a zero); or when `artifacts/review-<unit>.jsonl` breaks §6.3: a `finding_id` with no disposition, a `fixed` without `sha`, or a `rejected`
 without `reason`. Deterministic, so the gate owns it — `/verify` judges whether a rejection
 was *right*, never whether one was recorded.
+
+5.2.2 **Landed — squash and rebase merges count, unmerged work never does** (149.2: nearly
+all of 430 blocks were lane work squash-merged into develop). Implemented once, in
+`scripts/landed_lib.py`; pure git, never fetches. *What ships* is the repo's HEAD — the unit's
+lane while it is open — or its **trunk** once merged: CROSS-REPO.md `trunk-branch:`, else
+`origin/develop`, else origin/HEAD's branch (the `repo-survey.sh` cascade). When HEAD is an
+ancestor of the trunk only the trunk is read. A commit F has **landed** when, in order:
+1. F is an ancestor of what ships (true merge, fast-forward);
+2. F's `git patch-id --stable` matches a commit after the fork point (rebase merge, cherry-pick);
+3. F's own change F^..F is **contained** in a commit on the trunk's first-parent line (squash); or
+4. F^..L is contained there, for a commit L the logs name that F is an ancestor of — F and what
+   its lane did after it, so a fix reworked before the squash lands with the rework. Never the
+   lane *before* F: a follow-up pushed onto a lane after its squash has 0% of its own change on
+   the trunk and blocks, however much of its lane landed.
+
+*Contained*: more than half of the change's significant edits (added lines in place, pure
+deletions at their gap, a line with a 3-character word run) are not undone in that commit's
+tree, counting only edits the fork point lacks. Majority, not all: a squashed 149.2 lane kept
+96–99% (later lane commits and trunk work reworked the rest); an unmerged commit keeps ~0%. No
+informative edit, a SHA the repo lacks, or a git failure is never a landing.
+
+A **review** covers a squash commit S in the unit's range when the review's net diff
+(base..head) is contained in S, and a review's head that landed (by 1–4) still bounds which
+fixes it saw. Repo keys are compared through `verify_lib.canonical_key`, so a review logged as
+`<repo>.worktrees/<name>` — a worktree since removed — counts for `<repo>`.
 
 5.3 **Judge marker.** When the deciding `final` record's judge line is not `codex …`, the
 gate reports `⚠ judge: <line>` and `plans-index.py status` appends it to the phase's index

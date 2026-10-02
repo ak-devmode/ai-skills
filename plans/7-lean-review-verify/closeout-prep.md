@@ -195,6 +195,7 @@ Resumed/restarted phases append a SECOND block:
 - ai-skills · doc: `templates/verify-contracts.md` §4.10 — run cap (Task 1.5a)
 - ai-skills · test: `scripts/tests/test_judge.py` — runs 1/2/3, lean + codex mixed (Task 1.5a)
 - ai-skills · doc: `review/SKILL.md` 3.6.0 — §1.4 mode step, §7 lean procedure, `--mode` on §2.4, description (Task 1.6)
+- ai-skills · doc: `verify/SKILL.md` 0.6.0 — §2.4 mode, `--lean` on §3.2, §3.5.1 lean judge, §3.9 run cap, §5.1 mode line (Task 1.7)
 
 ### §3 Patterns Followed (additional)
 - `resolve()` / `main()` in `scripts/review-mode.py` ← `scripts/clone-behind.py` (docstring contract, exit codes, stdlib-only CLI)

@@ -7,8 +7,8 @@
 
 ## Resume Context
 
-- **Last completed:** Task 1.6
-- **Next action:** Task 1.7 — `/verify` SKILL.md
+- **Last completed:** Task 1.7
+- **Next action:** Task 1.8 — live dry run (AI+HUMAN_REVIEW)
 - **Open blockers:** none. There is no finish table yet; one is drafted and confirmed at
   Task 1.8's stop, before 1.V.
 
@@ -94,3 +94,12 @@
   record with `claude-lean` + `--uncovered`, what lean doesn't do; §4/§5 unchanged).
   Appended as §7 rather than inserted, so nothing renumbers: `/plan` and the contract cite
   §3 and §5.1. Lint: 0 issues, 1 size note (280 body lines).
+
+### Task 1.7 — ✅ DONE — `/verify` SKILL.md
+- **Files:** `verify/SKILL.md` (0.5.0 → 0.6.0)
+- **Result:** `MODE` is set with the other variables (§2.3); §2.4 branches; lean adds
+  `--lean` to §3.2 and replaces the probe/codex/fallback steps with §3.5.1 (one Sonnet
+  subagent, judge line `claude-lean $MODE`); §3.9 is the run-cap stop; §5.1 leads with
+  the mode. Nothing renumbered. Lint: 0 issues. Notes: a size note on review, and
+  cross-skill overlap (32–37%) between the two skills' parallel mode/subagent paragraphs —
+  advisory, left as is, since each skill states its own procedure.

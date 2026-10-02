@@ -70,7 +70,10 @@ LEAN_SECTIONS = {"wellmed": ["3.1", "3.2", "3.3", "3.4", "3.5", "3.6", "3.7", "3
                  "pmg": ["3.1", "3.5", "3.6", "3.7"],
                  "iris": ["3.1", "3.2", "3.5", "3.6", "3.7", "3.8", "3.9"]}
 LEAN_CAP = vl.LEAN_CAP   # changed lines inlined into a lean bundle (shared with /verify's)
-LEAN_CLAUDE_MD = 24_000  # bytes of the repo's CLAUDE.md a lean bundle inlines; larger is listed, not cut
+LEAN_CLAUDE_MD = 24_000  # bytes of the repo's CLAUDE.md / ARCHITECTURE.md a lean bundle inlines; larger is listed
+LEAN_NO_ADJACENT = ("adjacent code outside the diff (lenses §1: the touched files in full, their callers and "
+                    "callees) — a lean review reads only the diff hunks in its bundle")
+SIDECAR_HEAD = "# range: "  # the sidecar's first line binds it to the range it was prepared for
 # Standalone graphs that live under another project's directory. Matched before the
 # top-level project, so kalpa-iris never inherits WellMed's ADR checks (IRIS CLAUDE.md §3.1).
 SUBPROJECTS = {"wellmed/kalpa-iris": "iris"}
@@ -184,13 +187,18 @@ def prepare_lean(a, n, proj, out_dir):
     with open(LENSES, encoding="utf-8") as fh:
         sections.append("## Rules — lenses for every repo\n\n" + fh.read().strip())
     passes.append("lenses ✓")
-    claude_md = os.path.join(a.repo, "CLAUDE.md")
-    if os.path.isfile(claude_md) and os.path.getsize(claude_md) <= LEAN_CLAUDE_MD:
-        with open(claude_md, encoding="utf-8") as fh:
-            sections.insert(0, "## The repo's CLAUDE.md — what \"correct\" means here\n\n" + fh.read().strip())
-    elif os.path.isfile(claude_md):
-        uncovered.append(f"the repo's `CLAUDE.md` ({os.path.getsize(claude_md):,} bytes, over the "
-                         f"{LEAN_CLAUDE_MD:,}-byte lean limit) — not read")
+    # the full prompt has the reviewer read both first; lean inlines them or says it didn't (7.1-r1-03)
+    for i, doc in enumerate(("CLAUDE.md", "ARCHITECTURE.md")):
+        path = os.path.join(a.repo, doc)
+        if os.path.isfile(path) and os.path.getsize(path) <= LEAN_CLAUDE_MD:
+            with open(path, encoding="utf-8") as fh:
+                sections.insert(i, f"## The repo's {doc} — what \"correct\" means here\n\n" + fh.read().strip())
+        elif os.path.isfile(path):
+            uncovered.append(f"the repo's `{doc}` ({os.path.getsize(path):,} bytes, over the "
+                             f"{LEAN_CLAUDE_MD:,}-byte lean limit) — not read")
+    # the lenses' first check reads whole touched files and their callees; a bundle of hunks
+    # cannot, so that coverage is always declared missing, by the script (7.1-r1-04)
+    uncovered.append(LEAN_NO_ADJACENT)
     passes.append(f"lean: {inlined} of {total} file(s) inlined")
     with open(LEAN_PROMPT, encoding="utf-8") as fh:
         text = fh.read()
@@ -206,7 +214,7 @@ def prepare_lean(a, n, proj, out_dir):
     with open(bundle, "w", encoding="utf-8") as fh:
         fh.write(text)
     with open(side, "w", encoding="utf-8") as fh:
-        fh.write("".join(u + "\n" for u in uncovered))
+        fh.write(SIDECAR_HEAD + a.range + "\n" + "".join(u + "\n" for u in uncovered))
     print(f"prompt: {bundle}\nschema: {SCHEMA}\npasses: {' · '.join(passes)}\nrange: {a.range}\n"
           f"effort: n/a (lean — one Sonnet pass)\nuncovered: {side} ({len(uncovered)} item(s))")
     return vl.EXIT_PASS
@@ -378,10 +386,17 @@ def read_uncovered(a):
         return [], None
     try:
         with open(a.uncovered, encoding="utf-8") as fh:
-            return [ln.strip() for ln in fh if ln.strip()], None
+            lines = [ln.strip() for ln in fh if ln.strip()]
     except OSError as exc:
         return None, err("cannot read the uncovered list", "the file prepare --lean wrote", str(exc),
                          a.uncovered, "re-run review.py prepare --lean")
+    # an empty or stale sidecar must not pass for this range's (review 7.1-r1-05)
+    if not lines or lines[0] != SIDECAR_HEAD + a.range:
+        return None, err("the uncovered list is not this range's", f"a first line `{SIDECAR_HEAD}{a.range}`",
+                         lines[0] if lines else "an empty file", a.uncovered,
+                         "re-run review.py prepare --lean for this range and pass its `uncovered:` path",
+                         code=vl.EXIT_USAGE)
+    return lines[1:], None
 
 
 def reviews_of(recs, unit):

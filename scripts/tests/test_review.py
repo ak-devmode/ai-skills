@@ -82,10 +82,11 @@ class TestReview(unittest.TestCase):
                    "--input", self.answer(**over), "--scope", self.scope, "--unit", "9.1", "--passes", "p",
                    *extra, env=self.env)
 
-    def sidecar(self, *lines):
+    def sidecar(self, *lines, rng=None):
+        """A sidecar as prepare --lean writes it: bound to the range by its first line."""
         path = os.path.join(self.tmp.name, "uncovered.txt")
         with open(path, "w") as fh:
-            fh.write("".join(f"{x}\n" for x in lines))
+            fh.write(f"# range: {rng or self.rng(self.repo)}\n" + "".join(f"{x}\n" for x in lines))
         return path
 
     def findings(self):
@@ -113,7 +114,9 @@ class TestReview(unittest.TestCase):
                 out, bundle, uncovered = self.lean(repo)
                 self.assertIn("lean: 1 of 1 file(s) inlined", out)
                 self.assertIn("+curl x || true", bundle)
-                self.assertEqual(uncovered, "")
+                head, *rest = uncovered.splitlines()
+                self.assertEqual(head, f"# range: {self.rng(repo)}")
+                self.assertEqual(rest, [load(REVIEW).LEAN_NO_ADJACENT])    # always declared, by the script
                 for s in present:
                     self.assertIn(s, bundle)
                 for s in absent:
@@ -322,6 +325,30 @@ class TestReview(unittest.TestCase):
         self.assertIn("**mode: lean (default)**", head)
         self.assertIn("- `big.txt` — 1,600 changed lines; not reviewed", tail)
         self.assertIn("- no network", tail)                      # the model's own list is kept too
+
+    def test_lean_record_refuses_a_stale_or_headless_sidecar(self):
+        # review 7.1-r1-05: an empty or other-range sidecar must not stand in for this range's
+        base = git(self.repo, "rev-list", "--max-parents=0", "HEAD")
+        other = f"{git(self.repo, 'rev-parse', base)}..{git(self.repo, 'rev-parse', base)}"
+        for side in (self.sidecar(rng=other), self.empty()):
+            with self.subTest(side=side):
+                p = self.record(reviewer="claude-lean mode lean (default)", extra=("--uncovered", side))
+                self.assertEqual(p.returncode, 2, p.stdout)
+                self.assertIn("not this range's", p.stderr)
+
+    def empty(self):
+        path = os.path.join(self.tmp.name, "empty.txt")
+        open(path, "w").close()
+        return path
+
+    def test_lean_bundle_inlines_architecture_md(self):
+        # review 7.1-r1-03: the full prompt reads CLAUDE.md and ARCHITECTURE.md first
+        for doc, text in (("CLAUDE.md", "claude-rule-marker"), ("ARCHITECTURE.md", "arch-rule-marker")):
+            with open(os.path.join(self.repo, doc), "w") as fh:
+                fh.write(text + "\n")
+        _, bundle, _ = self.lean(self.repo)
+        self.assertIn("claude-rule-marker", bundle)
+        self.assertIn("arch-rule-marker", bundle)
 
     def test_lean_rounds_stop_at_three_like_codex(self):
         side = ("--uncovered", self.sidecar())

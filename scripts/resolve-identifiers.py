@@ -469,7 +469,7 @@ def added_lines(repo, base, head):
 
 
 def node_eval_given(text):
-    """{(lineno, NAME)} for each `process.env.NAME` read inside the single-quoted body of a
+    """{(lineno, NAME)} for each `process.env.<NAME>` read inside the single-quoted body of a
     `NAME=… node -e '…'` whose own prefix assigns NAME: the script hands that value to that
     one command, so it is not read from the environment. Only the command's own prefix names
     count — any other `process.env` read in the body is still an env read."""
@@ -479,7 +479,7 @@ def node_eval_given(text):
         if is_comment(text[start:m.start()], sh=True) or not SH_CMD_START.search(text[start:m.start()]):
             continue                      # a prefix only binds at a command's start
         names = {w.group(1) for w in SH_PREFIX_WORD.finditer(m.group("prefix"))}
-        for rx in ENV_USE[:2]:            # process.env.X, process.env["X"]
+        for rx in ENV_USE[:2]:            # the dot and bracket process.env forms
             for u in rx.finditer(m.group("body")):
                 if u.group(1) in names:
                     given.add((text.count("\n", 0, m.start("body") + u.start()) + 1, u.group(1)))

@@ -83,6 +83,11 @@ SH_ASSIGN_WORD = re.compile(r"^([A-Z][A-Z0-9_]*)\+?=")
 SH_KEYWORDS = {"export", "local", "readonly", "declare", "typeset"}
 SH_SEP = re.compile(r";|&&|\|\||\|&|\||(?<![<>&|])&(?![&>])|\n")  # a lone `&` too, never `2>&1` (5.3-r8-02)
 SH_LEAD = re.compile(r"^\s*(?:(?:then|do|else|elif|if|while|until|!|\{|\()\s+)*")  # only at a command's start
+# `case` arms: a header `case W in`, then a pattern `a|b)` / `(a)` wherever one is due (after
+# the header and after each `;;` `;&` `;;&`), until `esac`. Matched on the strict mask.
+SH_CASE = re.compile(r"(?P<head>\bcase\s+\S+\s+in(?=\s|$))|(?P<end>;;&|;;|;&)|(?P<esac>\besac\b)")
+SH_CASE_PAT = re.compile(r"\(?\s*[^\s()|;&<>]+(?:\s*\|\s*[^\s()|;&<>]+)*\s*\)")
+SH_CMD_START = re.compile(r"(?:^|[;&|({]|\b(?:then|do|else))\s*$")
 
 
 CTX = "\x01"  # fills quoted / substituted text in a strict mask: one opaque stretch per word
@@ -135,10 +140,55 @@ def shell_mask(line, strict=False):
     return "".join(out)
 
 
-def shell_commands(line):
+def case_spans(syntax, state):
+    """Blank a line's `case` syntax — each `case W in` header and arm pattern, and the `&` of a
+    `;&` / `;;&` terminator — so the command after a pattern starts like one after `then`
+    (`develop) PORT=1` binds PORT) and a pattern's `|` is never read as a pipe. Returns the
+    blanked strict mask and the blanked spans, whose reads still count. `state` is
+    [case depth, pattern due], carried line to line. Anything unrecognised stays unblanked
+    and reads as before: fail closed."""
+    out, spans, i = list(syntax), [], 0
+    while i < len(syntax):
+        if state[1]:
+            j = i + len(syntax[i:]) - len(syntax[i:].lstrip())
+            if j == len(syntax):
+                break                     # the pattern is on a later line
+            state[1] = False
+            if syntax.startswith("esac", j) and not re.match(r"\w", syntax[j + 4:j + 5]):
+                state[0] -= 1
+                i = j + 4
+                continue
+            m = SH_CASE_PAT.match(syntax, j)
+            if m:
+                spans.append((j, m.end()))
+                i = m.end()
+            continue
+        m = SH_CASE.search(syntax, i)
+        if not m:
+            break
+        i = m.end()
+        at_start = SH_CMD_START.search(syntax[:m.start()])
+        if m.group("head") and at_start:
+            state[0] += 1
+            state[1] = True
+            spans.append(m.span())
+        elif m.group("end") and state[0] > 0:
+            state[1] = True
+            if m.group().endswith("&"):
+                spans.append((m.end() - 1, m.end()))
+        elif m.group("esac") and at_start and state[0] > 0:
+            state[0] -= 1
+    for a, b in spans:
+        out[a:b] = [" "] * (b - a)
+    return "".join(out), spans
+
+
+def shell_commands(line, syntax=None):
     """[(start, end)] of each simple command on the line, split only on separators the shell
-    sees (never inside quotes, comments or substitutions)."""
-    syntax, cuts, prev, before = shell_mask(line, strict=True), [], 0, ""
+    sees (never inside quotes, comments or substitutions). `syntax` is the line's strict
+    mask, when the caller has already blanked its `case` syntax."""
+    syntax = shell_mask(line, strict=True) if syntax is None else syntax
+    cuts, prev, before = [], 0, ""
     for m in SH_SEP.finditer(syntax):
         cuts.append((prev, m.start(), before, m.group()))
         prev, before = m.end(), m.group()
@@ -220,18 +270,27 @@ def shell_assigned(text):
     branches, functions never called, `( … )` subshells — is deliberately not modeled. The
     syntactic subshell forms are: a pipeline's commands bind nothing, and a line that
     backgrounds anything or continues onto the next binds nothing (5.3-r9-01, r11-01)."""
-    local, read_first = set(), set()
+    local, read_first, case = set(), set(), [0, False]
+
+    def read(s):
+        read_first.update(n for n in (m.group(1) or m.group(2) for m in SH_USE.finditer(s))
+                          if n not in local)
+
     for line in text.splitlines():
-        if is_comment(line):
+        if is_comment(line, sh=True):
             continue
-        reads_mask, syntax = shell_mask(line), shell_mask(line, strict=True)
-        for a, b, sub in shell_commands(line):
+        reads_mask = shell_mask(line)
+        syntax, spans = case_spans(shell_mask(line, strict=True), case)
+        for a, b, sub in shell_commands(line, syntax):
+            while spans and spans[0][1] <= a:   # a `case "$X" in` header or `"$Y")` pattern
+                read(reads_mask[slice(*spans.pop(0))])
             binds = [] if sub else shell_binds(syntax[a:b])
             # within one command the reads happen first (a `for` list, a right-hand side);
             # a loop body is a later command, split off at `do`
-            reads = {m.group(1) or m.group(2) for m in SH_USE.finditer(reads_mask[a:b])}
-            read_first |= {n for n in reads if n not in local}
+            read(reads_mask[a:b])
             local |= {n for n in binds if n not in read_first}
+        for s in spans:
+            read(reads_mask[slice(*s)])
     return local
 
 
@@ -317,8 +376,11 @@ def is_fixture(path):
     return bool(set(path.split("/")[:-1]) & FIXTURE_DIRS)
 
 
-def is_comment(line):
+def is_comment(line, sh=False):
+    """`sh`: a shell comment starts only with `#` — a `*) …` case arm is code."""
     s = line.strip()
+    if sh:
+        return s.startswith("#")
     return s.startswith(COMMENT_START) or s.startswith('"_comment')
 
 
@@ -385,7 +447,7 @@ def extract(files, full=None):
         local = shell_assigned((full or {}).get(path, "")) if path.endswith(".sh") else set()
         open_msg = None  # (message, depth) for a Go literal opened on an added line
         for lineno, text in lines:
-            if is_comment(text):
+            if is_comment(text, sh=path.endswith(".sh")):
                 continue
             for rx in ENV_USE:
                 for m in rx.finditer(text):

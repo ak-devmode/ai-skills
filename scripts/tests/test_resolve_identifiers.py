@@ -178,6 +178,18 @@ CASES = [
      {},
      {"bin/run.sh": "#!/bin/bash\nAP=1 && printf x | cat & wait; echo $AP\nAC=1 &&\n  true & wait\necho $AC\n"},
      1, r"unresolved 2", "env `AP` does not resolve"),
+    ("shell: an assignment after a case-arm pattern binds, `a|b)` and `(a)` included",
+     {},
+     {"bin/run.sh": "#!/bin/sh\ncase \"$1\" in\n  develop) BLUE=3004; GREEN=3006 ;;\n"
+                    "  staging|production) BLUE=3000; GREEN=3001 ;;\n  (*) BLUE=1 ;;\nesac\n"
+                    "case \"$1\" in a) NX=x ;; *) NX=y ;; esac\necho $BLUE $GREEN $NX\n"},
+     0, r"found 0 · resolved 0", ""),
+    ("shell: case arms bind only inside a case; reads in a header, pattern or arm still count",
+     {},
+     {"bin/run.sh": "#!/bin/sh\ncase \"$MODE\" in\n  \"$WANT\") HIT=1 ;;\n  *) X=$ARM_RD ;;\nesac\n"
+                    "echo $HIT\nfoo) OUTSIDE=1\necho $OUTSIDE\n"
+                    "case x in\n  a) PIPED=1 | cat ;;\nesac\necho $PIPED\n"},
+     1, r"found 5 · resolved 0 · unresolved 5", "env `OUTSIDE` does not resolve"),
     ("use inside a comment is not a reference",
      {},
      {"src/app.ts": "// process.env.GHOST is mentioned here only\nconst y = 1;\n"},

@@ -231,7 +231,7 @@ def cmd_record(a):
         return err("record needs the immutable range prepare printed", "`<base sha>..<head sha>` (full SHAs)",
                    a.range, "--range", "pass the `range:` line from `review.py prepare`", code=vl.EXIT_USAGE)
     if not vl.JUDGE_LINE.match(a.reviewer):
-        return err("reviewer line is malformed", "`codex <model>` / `claude-fallback <reason>` / `none <reason>`",
+        return err("reviewer line is malformed", "`codex <model>` / `claude-fallback <reason>` / `claude-lean <reason>` / `none <reason>`",
                    a.reviewer, "--reviewer", "pass the line codex-exec.py printed", code=vl.EXIT_USAGE)
     try:
         with open(a.input, encoding="utf-8") as fh:

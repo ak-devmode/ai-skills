@@ -243,6 +243,15 @@ class TestGate(Fixture):
         self.verify("codex gpt-test", [self.v("ok", "pass")])
         self.assertEqual(self.gate_json("--blocking")[1]["marker"], "")
 
+    def test_lean_judge_is_marked_never_codex(self):
+        # plan 7: a lean Sonnet judge is recorded like a fallback — the marker stays until codex
+        self.ledger()
+        self.verify("claude-lean mode lean (default)", [self.v("ok", "pass")])
+        code, doc = self.gate_json("--blocking")
+        self.assertEqual((code, doc["marker"]), (0, "⚠ judge: claude-lean mode lean (default)"))
+        self.verify("codex gpt-test", [self.v("ok", "pass")])
+        self.assertEqual(self.gate_json("--blocking")[1]["marker"], "")
+
     def test_advisory_warns_without_blocking(self):
         self.set_table([row("bad", "exit 1")])
         self.ledger()

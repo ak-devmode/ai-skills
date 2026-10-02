@@ -7,8 +7,8 @@
 
 ## Resume Context
 
-- **Last completed:** Task 1.1
-- **Next action:** Task 1.2 — `claude-lean` judge line in the contract
+- **Last completed:** Task 1.2
+- **Next action:** Task 1.3 — `review.py prepare --lean` bundle
 - **Open blockers:** none. There is no finish table yet; one is drafted and confirmed at
   Task 1.8's stop, before 1.V.
 
@@ -32,3 +32,11 @@
   value (wins but warns on stderr), both flags (exit 2) and an unknown argument (exit 2).
 - **Issues:** `.env.example` can't be read or edited (permission deny). Alex adds
   `AI_SKILLS_REVIEW_MODE=` there; collected for the Task 1.8 stop.
+
+### Task 1.2 — ✅ DONE — `claude-lean` judge line in the contract
+- **Files:** `scripts/verify_lib.py`, `scripts/verify-run.py`, `review/scripts/review.py`,
+  `verify/scripts/judge.py`, `templates/verify-contracts.md` §4.6, three test files
+- **Result:** `claude-lean <reason>` is accepted wherever `claude-fallback` is. Every
+  codex check in the scripts is a `codex ` prefix match, so lean is non-codex by
+  construction. Three new tests pin it: the gate marker, review coverage (a later codex
+  review clears it) and the judge report. 150 tests pass.

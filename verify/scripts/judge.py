@@ -293,7 +293,7 @@ def main(argv):
     except SystemExit as exc:
         return vl.EXIT_USAGE if exc.code else vl.EXIT_PASS
     if getattr(a, "judge", None) and not vl.JUDGE_LINE.match(a.judge):
-        return err("judge line is malformed", "`codex <model>` / `claude-fallback <reason>` / `none <reason>`",
+        return err("judge line is malformed", "`codex <model>` / `claude-fallback <reason>` / `claude-lean <reason>` / `none <reason>`",
                    a.judge, "--judge", "pass the line codex-exec.py printed")
     try:
         return {"prepare": cmd_prepare, "record": cmd_record, "report": cmd_report}[a.cmd](a)

@@ -222,6 +222,16 @@ class TestReview(unittest.TestCase):
         review("codex gpt-test", wide)
         self.assertEqual(gate.fallback_markers(self.log, self.projects), [])
 
+    def test_lean_reviewer_is_never_codex_coverage(self):
+        # plan 7: a lean review needs a covering codex review to clear, exactly like a fallback
+        gate = load("verdict-gate.py")
+        self.record(reviewer="claude-lean mode lean (default)", findings=[], verdict="SHIP")
+        self.assertEqual(gate.fallback_markers(self.log, self.projects), ["review claude-lean mode lean (default)"])
+        report = read(os.path.join(self.scope, "artifacts", "review-9.1-r1.md"))
+        self.assertIn("**DEGRADED:** reviewer is `claude-lean mode lean (default)`", report.split("## BLOCKING")[0])
+        self.record(findings=[], verdict="SHIP")
+        self.assertEqual(gate.fallback_markers(self.log, self.projects), [])
+
     def test_fallback_reviewer_is_degraded_in_the_header(self):
         self.record(reviewer="claude-fallback codex not authed")
         report = read(os.path.join(self.scope, "artifacts", "review-9.1-r1.md"))

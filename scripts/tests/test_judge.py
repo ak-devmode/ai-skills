@@ -174,6 +174,16 @@ class TestJudge(unittest.TestCase):
         self.assertIn("- `away` — `away-verified-unreachable` · gap:", text)
         self.assertIn("⚠ judge: claude-fallback codex not authed", text)
 
+    def test_lean_judge_line_is_accepted_and_marked(self):
+        self.ledger(self.base)
+        p = self.judge("record", "--judge", "claude-lean mode lean (default)", "--input", self.answer())
+        self.assertEqual(p.returncode, 0, p.stderr)
+        run("verify-run.py", "finalize", "--log", self.log, "--run-id", self.rid, env=self.env)
+        self.judge("report")
+        text = read(os.path.join(self.scope, "artifacts", "verify-9.1-report.md"))
+        self.assertIn("**Judge:** claude-lean mode lean (default)", text)
+        self.assertIn("⚠ judge: claude-lean mode lean (default)", text)
+
     def test_report_propagates_a_gate_error(self):
         # 5.2-r1-05: a gate that errors must not become a successful report.
         self.ledger(self.base)

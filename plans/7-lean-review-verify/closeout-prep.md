@@ -178,6 +178,9 @@ Resumed/restarted phases append a SECOND block:
 - ai-skills · code: `scripts/review-mode.py` (new) — the lean/full resolver (Task 1.1)
 - ai-skills · test: `scripts/tests/test_review_mode.py` (new) — table-driven precedence (Task 1.1)
 - ai-skills · doc: `scripts/README.md`, `CLAUDE.md` §4/§5 — the script and the env var (Task 1.1)
+- ai-skills · code: `scripts/verify_lib.py` (JUDGE_LINE), `scripts/verify-run.py`, `review/scripts/review.py`, `verify/scripts/judge.py` — accept `claude-lean` (Task 1.2)
+- ai-skills · test: `scripts/tests/test_verdict_gate.py`, `test_review.py`, `test_judge.py` — `claude-lean` is marked, never codex (Task 1.2)
+- ai-skills · doc: `templates/verify-contracts.md` §4.6 — the `claude-lean` judge line (Task 1.2)
 
 ### §3 Patterns Followed (additional)
 - `resolve()` / `main()` in `scripts/review-mode.py` ← `scripts/clone-behind.py` (docstring contract, exit codes, stdlib-only CLI)

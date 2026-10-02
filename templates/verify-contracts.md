@@ -155,7 +155,9 @@ else `null`) · `command` · `exit_code` (`null` if not run) · `duration_s` · 
 `check_id → {result, rung_reached, reason}` computed by the §5.1 authority rule.
 
 4.6 **Judge line** — exactly one of `codex <model codex reported>` ·
-`claude-fallback <reason>` · `none <reason>`. The model is a family (`VERIFY_CODEX_MODEL`,
+`claude-fallback <reason>` · `claude-lean <reason>` · `none <reason>`. `claude-lean` is the
+lean mode's single Sonnet pass over a packed bundle (`scripts/review-mode.py`); like
+`claude-fallback` it is never codex coverage, and the gate marks it `⚠ judge:`. The model is a family (`VERIFY_CODEX_MODEL`,
 default `sol`) resolved on every call from codex's own model list to its current slug,
 following retirement upgrades — never codex's floating default. Every codex failure mode
 (not installed, not authed, out of credits, model unusable or unresolved, a different model

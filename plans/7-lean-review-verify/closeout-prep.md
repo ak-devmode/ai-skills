@@ -181,6 +181,9 @@ Resumed/restarted phases append a SECOND block:
 - ai-skills · code: `scripts/verify_lib.py` (JUDGE_LINE), `scripts/verify-run.py`, `review/scripts/review.py`, `verify/scripts/judge.py` — accept `claude-lean` (Task 1.2)
 - ai-skills · test: `scripts/tests/test_verdict_gate.py`, `test_review.py`, `test_judge.py` — `claude-lean` is marked, never codex (Task 1.2)
 - ai-skills · doc: `templates/verify-contracts.md` §4.6 — the `claude-lean` judge line (Task 1.2)
+- ai-skills · code: `review/scripts/review.py` — `prepare --lean`, `lean_diff`, `domain_sections`, `LEAN_SECTIONS` (Task 1.3)
+- ai-skills · doc: `review/prompts/review-lean.md` (new) — the lean bundle's template (Task 1.3)
+- ai-skills · test: `scripts/tests/test_review.py` — sections by project, cap lists never cuts, oversized CLAUDE.md, LEAN_SECTIONS ↔ GROUPS ↔ domain.md (Task 1.3)
 
 ### §3 Patterns Followed (additional)
 - `resolve()` / `main()` in `scripts/review-mode.py` ← `scripts/clone-behind.py` (docstring contract, exit codes, stdlib-only CLI)

@@ -7,8 +7,8 @@
 
 ## Resume Context
 
-- **Last completed:** Task 1.2
-- **Next action:** Task 1.3 — `review.py prepare --lean` bundle
+- **Last completed:** Task 1.3
+- **Next action:** Task 1.4 — `review.py record` for lean
 - **Open blockers:** none. There is no finish table yet; one is drafted and confirmed at
   Task 1.8's stop, before 1.V.
 
@@ -40,3 +40,20 @@
   codex check in the scripts is a `codex ` prefix match, so lean is non-codex by
   construction. Three new tests pin it: the gate marker, review coverage (a later codex
   review clears it) and the judge report. 150 tests pass.
+
+### Task 1.3 — ✅ DONE — `review.py prepare --lean` bundle
+- **Files:** `review/scripts/review.py`, `review/prompts/review-lean.md` (new), `scripts/tests/test_review.py`
+- **Result:** one bundle with the commits, the repo's CLAUDE.md (≤ 24 KB, else listed),
+  the gstack checklist, only this project's `domain.md` sections, the lenses, a
+  not-covered list, the capped diff, and `review.md`'s own Output section (one contract
+  for both modes). Smoke test on `eea708c..45fcd32`: 2/2 files, 54 KB (~14k tokens).
+  37 review tests pass.
+- **Deviations from the plan text:**
+  - The cap fills greedily: a file that doesn't fit is listed and smaller later files
+    can still go in, rather than "every file after that". More coverage, same cap, never
+    partial.
+  - `prompt:` is the bundle path, so there's no separate `bundle:` line.
+  - CLAUDE.md is inlined (≤ 24 KB) because the full prompt tells the reviewer to read it.
+- **Risk:** the inlined gstack checklist has its own "Instructions" section, written for
+  an agent that can run commands. The bundle header forbids running anything; the dry
+  run (1.8) will show whether Sonnet obeys the header.

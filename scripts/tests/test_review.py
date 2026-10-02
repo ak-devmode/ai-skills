@@ -86,6 +86,62 @@ class TestReview(unittest.TestCase):
         with open(self.log) as fh:
             return [r for r in map(json.loads, fh) if r["record"] == "finding"]
 
+    # ---- prepare --lean (plan 7)
+    def lean(self, repo, *flags):
+        p = run(REVIEW, "prepare", "--repo", repo, "--range", self.rng(repo), "--lean",
+                "--out-dir", os.path.join(self.tmp.name, "lean"), *flags, env=self.env)
+        self.assertEqual(p.returncode, 0, p.stderr)
+        bundle = read(p.stdout.split("prompt: ")[1].split()[0])
+        uncovered = read(p.stdout.split("uncovered: ")[1].split()[0])
+        self.assertNotRegex(bundle, r"\{\{[A-Z_]+\}\}")
+        self.assertIn("Read no other file", bundle)
+        self.assertIn("`verdict`", bundle)   # the Output contract came along
+        return p.stdout, bundle, uncovered
+
+    def test_lean_bundle_inlines_this_projects_sections_only(self):
+        iris = self.mkrepo("wellmed/kalpa-iris")
+        for repo, present, absent in ((self.repo, ["### 3.3", "### 3.8"], ["### 3.9"]),
+                                      (iris, ["### 3.2", "### 3.9"], ["### 3.3", "### 3.4"]),
+                                      (self.generic, [], ["### 3.1"])):
+            with self.subTest(repo=repo):
+                out, bundle, uncovered = self.lean(repo)
+                self.assertIn("lean: 1 of 1 file(s) inlined", out)
+                self.assertIn("+curl x || true", bundle)
+                self.assertEqual(uncovered, "")
+                for s in present:
+                    self.assertIn(s, bundle)
+                for s in absent:
+                    self.assertNotIn(s, bundle)
+        _, bundle, _ = self.lean(self.repo, "--engine-only")
+        self.assertNotIn("### 3.1", bundle)
+
+    def test_lean_bundle_past_the_cap_lists_never_cuts(self):
+        with open(os.path.join(self.repo, "big.txt"), "w") as fh:
+            fh.write("".join(f"line {i}\n" for i in range(1600)))
+        with open(os.path.join(self.repo, "small.sh"), "w") as fh:
+            fh.write("echo small\n")
+        git(self.repo, "add", "-A")
+        git(self.repo, "commit", "-q", "-m", "big")
+        out, bundle, uncovered = self.lean(self.repo)
+        self.assertIn("lean: 2 of 3 file(s) inlined", out)       # a.sh + small.sh fit; big.txt does not
+        self.assertIn("+echo small", bundle)
+        self.assertNotIn("line 1599", bundle)                     # never partially inlined
+        self.assertIn("`big.txt` — 1,600 changed lines", uncovered)
+        self.assertIn("`big.txt` — 1,600 changed lines", bundle)  # and the reviewer is told
+
+    def test_lean_bundle_lists_an_oversized_claude_md(self):
+        with open(os.path.join(self.repo, "CLAUDE.md"), "w") as fh:
+            fh.write("x" * 30_000)
+        _, bundle, uncovered = self.lean(self.repo)
+        self.assertIn("`CLAUDE.md` (30,000 bytes", uncovered)
+        self.assertNotIn("x" * 100, bundle)
+
+    def test_lean_sections_match_groups_and_domain_md(self):
+        rv = load(REVIEW)
+        self.assertEqual(set(rv.LEAN_SECTIONS), set(rv.GROUPS))
+        for proj, numbers in rv.LEAN_SECTIONS.items():
+            self.assertEqual(len(rv.domain_sections(numbers)), len(numbers), proj)
+
     # ---- prepare
     def test_prepare_selects_rules_by_project(self):
         iris = self.mkrepo("wellmed/kalpa-iris")

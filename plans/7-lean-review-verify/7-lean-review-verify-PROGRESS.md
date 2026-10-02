@@ -7,10 +7,12 @@
 
 ## Resume Context
 
-- **Last completed:** Task 1.7 (1.8 awaiting review)
-- **Next action:** Alex reviews Task 1.8 — then 1.R (/review --full), 1.V (/verify 7.1 --full)
-- **Open blockers:** none. There is no finish table yet; one is drafted and confirmed at
-  Task 1.8's stop, before 1.V.
+- **Last completed:** Task 1.8 (reviewed by Alex 2026-10-02: the numbers fit a seat). The 7.1
+  finish table is written and approved (rev 1). 1.R round 1 is fixed and dispositioned.
+- **Next action:** 1.R round 2 — `/review --full` on the fix commits; then Alex's `accept`;
+  then 1.V `/verify 7.1 --full`.
+- **Open blockers:** `AI_SKILLS_REVIEW_MODE` is not yet in `.env.example`, so `p1-names-resolve`
+  fails until Alex runs `bash ~/cc/add-review-mode-env.sh` and the change is committed.
 
 ---
 
@@ -123,3 +125,21 @@
   filename, so I added a `- base: 7.1` line by hand. `judge.py` needs a `scope.md`, so I
   added a pointer to the plan. Both are lever candidates.
 - **Waiting on Alex:** judge the numbers; add `.env.example`; confirm the 7.1 finish table.
+
+### Task 1.8 — ✅ DONE — reviewed by Alex
+- ~163k Sonnet tokens per unit fits a seat ("yes"). The schema stays outside the bundle.
+- `.env.example`: Alex asked for a script → `~/cc/add-review-mode-env.sh` (idempotent,
+  reads the file back). The 7.1 finish table is confirmed and approved (`e2f3272`).
+
+### Task 1.R — round 1 (codex gpt-6-sol, full) — 9 findings, all fixed
+- Report: `artifacts/review-7.1-r1.md`. Verdict DO NOT SHIP: 6 blocking, 3 should-fix.
+- Fixed:
+  - `3308dd6` — quoted filenames (06)
+  - `4a388a1` — ARCHITECTURE.md inlined; adjacent code always declared uncovered; sidecar
+    bound to its range (03, 04, 05)
+  - `a671020` — unit's plan inlined; log limit applied after filtering (02, 07)
+  - `fa783aa` — ARCHITECTURE.md descriptions, off-anchor (09)
+  - this commit — Resume Context (08)
+- 01 (`.env.example`) is fixed by Alex's script run plus a commit, recorded off-anchor
+  when it lands.
+

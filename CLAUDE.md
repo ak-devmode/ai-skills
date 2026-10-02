@@ -220,6 +220,7 @@ scripts/finish-table.py         — finish-conditions.md writer: standard rows p
 scripts/lever-candidates.py     — /closeout: lever candidates → TO-DO.md, second sighting = another scope
 scripts/verify-prereqs.sh       — setup.sh step 4: Python + codex checks, warns, always exit 0
 scripts/clone-behind.py         — one line when this clone is behind origin/main (/verify, /plan)
+scripts/review-mode.py          — /review + /verify mode: flag > AI_SKILLS_REVIEW_MODE > default lean
 scripts/tests/                  — stdlib unittest suite for the scripts (CLAUDE.md §6 Test:)
 plans/PLANS-INDEX.md            — local plans tracking ai-skills development
 plans/<scope>/                  — active scope folders
@@ -235,9 +236,11 @@ CLAUDE.md
 ## 5. Environment variables
 
 Skills run inside Claude Code's session and inherit its environment. No SSM,
-no API keys managed at this layer. The verification scripts read five optional
+no API keys managed at this layer. The verification scripts read six optional
 overrides, declared in `.env.example` (so `resolve-identifiers.py` can resolve
-them): `VERIFY_PROJECTS` (root for finish-table `repo` cells, default
+them): `AI_SKILLS_REVIEW_MODE` (`full` restores the codex gate + full Claude fallback
+for `/review` and `/verify`; unset means `lean`; set it in `~/.claude/settings.json` →
+`env`), `VERIFY_PROJECTS` (root for finish-table `repo` cells, default
 `~/Projects`), `VERIFY_CODEX_BIN` (codex binary; tests use fakes),
 `VERIFY_CODEX_MODEL` (codex model family or exact slug, default `sol` — resolved
 from codex's model cache so it tracks new versions), `CODEX_HOME` (codex's own home,

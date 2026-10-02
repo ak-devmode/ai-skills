@@ -9,6 +9,7 @@ Completed, a live folder at `plans/` root belongs in Active.
 
 | # | Status | Folder | Description | Created by |
 |---|--------|--------|-------------|------------|
+| 7 | Draft — awaiting Alex's confirmation | 7-lean-review-verify/ | Lean /review and /verify — default mode for teammates with no codex and a regular Claude seat: one self-contained bundle (diff capped at 1,500 lines, only this project's rules) read by one Sonnet subagent, no gstack engine or specialists, review round cap 2. Today's codex/full path stays, via AI_SKILLS_REVIEW_MODE=full or --full; every header names the mode. | Alex |
 
 ## Completed / Archived
 

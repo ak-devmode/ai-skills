@@ -65,6 +65,13 @@ class Repo:
 
 # (name, base files, head files, expected exit, summary regex, extra stdout needle)
 CASES = [
+    # a docs-only range is a clean, explicit pass — never a bare `found 0` (kalpa-iris scope 1)
+    ("docs-only range is not applicable",
+     {}, {"docs/plan.md": "uses process.env.NOT_CODE\n"},
+     0, r"found 0 · resolved 0", "not applicable: "),
+    ("source with no references has nothing to resolve",
+     {}, {"src/app.ts": "export const x = 1;\n"},
+     0, r"found 0 · resolved 0", "nothing to resolve: 1 changed source file(s)"),
     ("fake env var fails",
      {".env.example": "REAL_VAR=1\n"},
      {"src/app.ts": "const x = process.env.FAKE_VAR;\n"},

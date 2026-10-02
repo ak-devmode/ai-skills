@@ -37,7 +37,9 @@ Usage:
                   namespace = HTTP method or omitted)
     --decl-repo   extra repos searched for ssm / proto / route declarations (cross-repo)
 Output: one line per reference, a §10 message per failure, then
-        `found N · resolved M · unresolved U · unsupported kinds K`.
+        `found N · resolved M · unresolved U · unsupported kinds K`. A range with no
+        reference prints `not applicable: …` (no source file changed) or `nothing to
+        resolve: …` first — exit 0, a clean pass, not a vacuous one.
 Exit:   0 every reference resolved · 1 anything unresolved or unsupported · 2 usage
         · 3 could not evaluate (git error, empty range)
 """
@@ -683,8 +685,9 @@ def main(argv):
             sh = [p for p in files if p.endswith(".sh") and is_source(p)]
             full = Tree(a.repo, head).read(sh) if sh else {}
             refs, rev = extract(files, full), a.decl_rev or head
+            scanned = [f for f in files if is_source(f) and not TEST_FILE.search(f)]
         else:
-            refs, rev = [], a.rev
+            refs, rev, scanned = [], a.rev, None
             with open(a.ids, encoding="utf-8") as fh:
                 for i, line in enumerate(fh, 1):
                     if line.strip():
@@ -743,6 +746,14 @@ def main(argv):
                           f"one of {', '.join(KINDS)}", r["kind"], loc(r), "tooling",
                           "resolve it by hand and record the evidence, or add the kind to "
                           "scripts/resolve-identifiers.py"))
+    if scanned is not None and not refs and not a.json:
+        # a docs-only range is not a vacuous pass: the row claims every reference of the
+        # supported kinds resolves, and there are none (kalpa-iris scope 1; verify/SKILL.md §4)
+        print(f"not applicable: {a.rng} changes no source file this scanner reads ({len(files)} changed, "
+              f"none of {' '.join(sorted(SRC_EXT))} outside tests) — nothing to resolve, a clean pass"
+              if not scanned else
+              f"nothing to resolve: {len(scanned)} changed source file(s), no {'/'.join(KINDS)} reference "
+              "— a clean pass")
     summary = (f"found {len(results) + len(unsupported)} · resolved {len(resolved)} · "
                f"unresolved {len(unresolved)} · unsupported kinds {len(kinds_unsup)}"
                + (f" ({', '.join(kinds_unsup)})" if kinds_unsup else ""))

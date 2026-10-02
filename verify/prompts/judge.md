@@ -43,7 +43,10 @@ check yourself, whether each finish condition below is actually met.
   in the repo. Judge the pattern, not a caller count.
 - **invented-reality** — names, paths, env vars, contracts, fields or routes used as if they
   exist without being declared anywhere. The `names-resolve` runner row, when present,
-  checked the kinds it supports; look past it for the rest.
+  checked the kinds it supports; look past it for the rest. When it reports `not
+  applicable` or `nothing to resolve` (found 0), that is a pass, not a vacuous check: confirm
+  from `git diff --stat` that the range has no such references, and downgrade it only if
+  the scanner missed real ones. Names in docs belong to this lens, not to that row.
 - **evidence** — a runner check whose command cannot fail, tests the wrong thing, or ran
   against the wrong repo/dir/SHA.
 

@@ -151,6 +151,9 @@ inconclusive (5.2's `p2-fixtures`).
 | `faithful-port` | a source-vs-destination diff command, or `judge` | 4 / 2 | the scope ports or follows a source artifact |
 
 `$VERIFY_BASE` is exported by the runner from the ledger's base for that row's repo.
+On a docs-only range `names-resolve` prints `not applicable: …` and exits 0 — a clean pass,
+which the judge confirms from the diff rather than refusing as vacuous. Keep the standard
+command: no exit-3 wrapper and no `unreachable_ok` for it.
 Disposition *coverage* (every finding dispositioned) is the gate's job, not a row.
 
 **Faithful-port rule.** Where a scope says to port or follow a source: read the source →

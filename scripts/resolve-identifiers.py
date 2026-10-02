@@ -318,7 +318,8 @@ def shell_assigned(text):
     return local
 
 
-ENV_DECL_FILE = re.compile(r"(^|/)(\.env(\.[\w-]+)?\.(example|sample|template|dist)"
+# `.env.example`, and plain `env.example` — the WellMed fleet's actual filename (149.2)
+ENV_DECL_FILE = re.compile(r"(^|/)(\.?env(\.[\w-]+)?\.(example|sample|template|dist)"
                            r"|[\w-]+\.env\.example|(docker-)?compose[\w.-]*\.ya?ml)$")
 ENV_DECL_LINE = re.compile(r"^\s*(?:export\s+|-\s*)?([A-Z][A-Z0-9_]*)\s*[:=]")
 
@@ -644,6 +645,26 @@ class Index:
         return self._route
 
 
+def repo_names(repo):
+    """The repo's own names, best first: its origin remote's, its primary checkout's folder (a
+    linked worktree's git common dir), the folder itself. Inside a worktree the folder is the
+    branch-ish `fix-149-final`, which no SSM service segment ever matches (149.2)."""
+    names = []
+    try:
+        url = git(repo, "remote", "get-url", "origin").strip()
+        names.append(re.sub(r"\.git$", "", url.rstrip("/").rsplit("/", 1)[-1].rsplit(":", 1)[-1]))
+    except GitError:
+        pass
+    try:
+        common = git(repo, "rev-parse", "--path-format=absolute", "--git-common-dir").strip()
+        if os.path.basename(common) == ".git":
+            names.append(os.path.basename(os.path.dirname(common)))
+    except GitError:
+        pass
+    names.append(os.path.basename(os.path.realpath(repo)))
+    return list(dict.fromkeys(n for n in names if n))
+
+
 def tree_label(tree):
     return "" if getattr(tree, "is_primary", False) else os.path.basename(os.path.realpath(tree.repo)) + ":"
 
@@ -707,18 +728,19 @@ def resolve(r, idx):
                 hits.append(where)
         if hits:
             return "resolved", hits[0]
-        repo_base = os.path.basename(os.path.realpath(idx.repo.repo))
+        bases = repo_names(idx.repo.repo)
+        repo_base = bases[0]
         for path, where, ign in idx.ssm():
             segs = segments(path)
             if len(segs) < 2 or segs[-1] != name or not ENV_NAME.match(name):
                 continue
             svc = segs[-2]
-            if svc == "shared" or repo_base == svc or repo_base.endswith("-" + svc):
+            if svc == "shared" or any(b == svc or b.endswith("-" + svc) for b in bases):
                 if ign:
                     ignored += 1
                     continue
                 return "resolved", f"{where} (SSM {svc}/)"
-        return "unresolved", ("env declaration files (.env*.example|sample|template, compose "
+        return "unresolved", ("env declaration files (.env*.example, env.example, …sample|template, compose "
                               "environment:) in the using file's directory or an ancestor, or an "
                               f"SSM path `/…/shared/{name}` or `/…/<{repo_base} service>/{name}`", ignored)
     if kind == "ssm":

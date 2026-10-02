@@ -96,6 +96,20 @@ CASES = [
      {"services/a/.env.example": "A_ONLY=1\n"},
      {"services/b/main.go": "package b\nvar v = os.Getenv(\"A_ONLY\")\n"},
      1, r"unresolved 1", "env `A_ONLY` does not resolve"),
+    # plain `env.example`, no leading dot — the WellMed fleet's filename (149.2: catalog,
+    # pharmacy, bpjs reported their declared names unresolved)
+    ("plain env.example declares",
+     {"env.example": "APP_ENV=dev\nDB_URL=postgres://x\n"},
+     {"cmd/main.go": "package main\nvar v = os.Getenv(\"DB_URL\")\n"},
+     0, r"found 1 · resolved 1", "env.example:2"),
+    ("a sibling service's plain env.example does not count",
+     {"services/a/env.example": "A_ONLY=1\n"},
+     {"services/b/main.go": "package b\nvar v = os.Getenv(\"A_ONLY\")\n"},
+     1, r"unresolved 1", "env `A_ONLY` does not resolve"),
+    ("env.example.bak is not a declaration file",
+     {"env.example.bak": "BAK_ONLY=1\n"},
+     {"cmd/main.go": "package main\nvar v = os.Getenv(\"BAK_ONLY\")\n"},
+     1, r"unresolved 1", "env `BAK_ONLY` does not resolve"),
     ("ancestor declaration counts",
      {".env.example": "ROOT_VAR=1\n"},
      {"services/b/main.go": "package b\nvar v = os.Getenv(\"ROOT_VAR\")\n"},
@@ -372,33 +386,57 @@ class TestResolveIdentifiers(unittest.TestCase):
 class TestSsmAsEnv(unittest.TestCase):
     """An SSM loader injects `/…/<shared|service>/<NAME>` as env NAME — namespace = service."""
 
+    def setUp(self):
+        self.infra = Repo({"ssm/parameters/gateway-go.json":
+                           '[\n  "_comment: /wellmed/{env}/shared/COMMENT_ONLY is not a declaration",\n'
+                           '  {"path": "/wellmed/{env}/gateway-go/ROUTER_URL"},\n'
+                           '  {"path": "/wellmed/{env}/shared/DB_HOST"},\n'
+                           '  {"path": "/wellmed/{env}/cashier/CASHIER_ONLY"}\n]\n'}, {})
+        self.addCleanup(self.infra.close)
+
+    def service(self, root, folder, name, layout):
+        """A repo whose change reads env `name`, checked out as `layout`: `main` (the folder is
+        the repo's name), `worktree` (a linked worktree `<folder>.worktrees/fix-149-final`), or
+        `clone` (a folder named `fix-149-final` whose origin is the repo)."""
+        svc = os.path.join(root, folder)
+        os.makedirs(svc)
+        git(svc, "init", "-q", "-b", "main")
+        write(svc, {"README.md": "x\n"})
+        git(svc, "add", "-A")
+        git(svc, "commit", "-q", "-m", "base")
+        base = git(svc, "rev-parse", "HEAD")
+        if layout == "clone":
+            git(svc, "remote", "add", "origin", f"git@github.com:Kalpa-Health/{folder}.git")
+            os.rename(svc, os.path.join(root, "fix-149-final"))
+            svc = os.path.join(root, "fix-149-final")
+        elif layout == "worktree":
+            wt = os.path.join(root, f"{folder}.worktrees", "fix-149-final")
+            git(svc, "worktree", "add", "-q", "-b", "fix/149", wt)
+            svc = wt
+        write(svc, {"cfg.go": f"package c\nvar v = os.Getenv(\"{name}\")\n"})
+        git(svc, "add", "-A")
+        git(svc, "commit", "-q", "-m", "head")
+        return svc, base
+
     def test_ssm_declared_env(self):
-        infra = Repo({"ssm/parameters/gateway-go.json":
-                      '[\n  "_comment: /wellmed/{env}/shared/COMMENT_ONLY is not a declaration",\n'
-                      '  {"path": "/wellmed/{env}/gateway-go/ROUTER_URL"},\n'
-                      '  {"path": "/wellmed/{env}/shared/DB_HOST"},\n'
-                      '  {"path": "/wellmed/{env}/cashier/CASHIER_ONLY"}\n]\n'}, {})
-        cases = [("ROUTER_URL", 0), ("DB_HOST", 0), ("CASHIER_ONLY", 1), ("COMMENT_ONLY", 1)]
-        try:
-            for name, code in cases:
-                with self.subTest(env=name):
-                    tmp = tempfile.TemporaryDirectory()
-                    svc = os.path.join(tmp.name, "wellmed-gateway-go")
-                    os.makedirs(svc)
-                    git(svc, "init", "-q", "-b", "main")
-                    write(svc, {"README.md": "x\n"})
-                    git(svc, "add", "-A")
-                    git(svc, "commit", "-q", "-m", "base")
-                    base = git(svc, "rev-parse", "HEAD")
-                    write(svc, {"cfg.go": f"package c\nvar v = os.Getenv(\"{name}\")\n"})
-                    git(svc, "add", "-A")
-                    git(svc, "commit", "-q", "-m", "head")
-                    p = run("resolve-identifiers.py", "--repo", svc, "--range", f"{base}..HEAD",
-                            "--decl-repo", infra.path)
-                    tmp.cleanup()
-                    self.assertEqual(p.returncode, code, p.stdout + p.stderr)
-        finally:
-            infra.close()
+        # (env name, repo folder, layout, expected exit)
+        cases = [("ROUTER_URL", "wellmed-gateway-go", "main", 0),
+                 ("DB_HOST", "wellmed-gateway-go", "main", 0),
+                 ("CASHIER_ONLY", "wellmed-gateway-go", "main", 1),
+                 ("COMMENT_ONLY", "wellmed-gateway-go", "main", 1),
+                 # 149.2: inside a worktree the folder is `fix-149-final` — the repo is named
+                 # by its git common dir, or its origin remote
+                 ("ROUTER_URL", "wellmed-gateway-go", "worktree", 0),
+                 ("ROUTER_URL", "wellmed-gateway-go", "clone", 0),
+                 ("CASHIER_ONLY", "wellmed-gateway-go", "worktree", 1),
+                 ("ROUTER_URL", "wellmed-cashier", "worktree", 1),
+                 ("CASHIER_ONLY", "wellmed-cashier", "clone", 0)]
+        for name, folder, layout, code in cases:
+            with self.subTest(env=name, repo=folder, layout=layout), tempfile.TemporaryDirectory() as tmp:
+                svc, base = self.service(tmp, folder, name, layout)
+                p = run("resolve-identifiers.py", "--repo", svc, "--range", f"{base}..HEAD",
+                        "--decl-repo", self.infra.path)
+                self.assertEqual(p.returncode, code, p.stdout + p.stderr)
 
 
 if __name__ == "__main__":

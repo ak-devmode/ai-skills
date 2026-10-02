@@ -173,6 +173,7 @@ Resumed/restarted phases append a SECOND block:
 ## Phase 1: Lean mode (started 2026-10-02T07:21:40Z)
 
 - base: 7-lean-review-verify-PLAN ai-skills bff989a7db0b61ac9d232214fc62b9dcd02589cc
+- base: 7.1 ai-skills bff989a7db0b61ac9d232214fc62b9dcd02589cc
 
 ### §2 Files Changed (additional)
 - ai-skills · code: `scripts/review-mode.py` (new) — the lean/full resolver (Task 1.1)
@@ -197,7 +198,9 @@ Resumed/restarted phases append a SECOND block:
 - ai-skills · doc: `review/SKILL.md` 3.6.0 — §1.4 mode step, §7 lean procedure, `--mode` on §2.4, description (Task 1.6)
 - ai-skills · doc: `verify/SKILL.md` 0.6.0 — §2.4 mode, `--lean` on §3.2, §3.5.1 lean judge, §3.9 run cap, §5.1 mode line (Task 1.7)
 
-- ai-skills · code: `scripts/resolve-identifiers.py` — docstring/comment reworded (unplanned, `ca44e9a`)
+- ai-skills · code: `scripts/resolve-identifiers.py` — docstring/comment reworded (unplanned, `ca44e9a`)- ai-skills · doc: `plans/7-lean-review-verify/artifacts/lean-dry-run.md` (new) — measured tokens (Task 1.8)
+- ai-skills · doc: `plans/7-lean-review-verify/scope.md` (new) — pointer to the plan, so judge.py has a scope to read (Task 1.8)
+
 ### §3 Patterns Followed (additional)
 - `resolve()` / `main()` in `scripts/review-mode.py` ← `scripts/clone-behind.py` (docstring contract, exit codes, stdlib-only CLI)
 
@@ -212,3 +215,7 @@ Resumed/restarted phases append a SECOND block:
 ---
 
 <!-- Ledger ends here. Status flips to "complete" when all plan phases done. -->
+
+---
+
+## Phase 1: Lean mode (resumed 2026-10-02T07:40:42Z after compaction)

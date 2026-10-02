@@ -7,8 +7,8 @@
 
 ## Resume Context
 
-- **Last completed:** Task 1.7
-- **Next action:** Task 1.8 — live dry run (AI+HUMAN_REVIEW)
+- **Last completed:** Task 1.7 (1.8 awaiting review)
+- **Next action:** Alex reviews Task 1.8 — then 1.R (/review --full), 1.V (/verify 7.1 --full)
 - **Open blockers:** none. There is no finish table yet; one is drafted and confirmed at
   Task 1.8's stop, before 1.V.
 
@@ -111,3 +111,15 @@
   both. Reworded them. The general issue (ENV_USE matches inside Python docstrings and
   trailing comments) is left for TO-DO, not fixed here.
 
+### Task 1.8 — ⏸️ WAITING_HUMAN (AI+HUMAN_REVIEW) — live dry run
+- **Files:** `artifacts/lean-dry-run.md` (new), `scope.md` (new, a pointer), ledger `- base: 7.1` line
+- **Result:** lean `/review` used 88,142 subagent tokens (4 tool uses, 89 s, 3 real
+  findings); the lean judge used 75,032 (4 tool uses, 33 s, 5 sound verdicts). About 163k
+  per unit, against codex's 262–437k per call on similar ranges. Most lean tokens are
+  agent overhead and repeated turns, not the 10–14k bundle.
+- **Found along the way:** the resolver's own docstring tripped `names-resolve` (fixed in
+  `ca44e9a`). `AI_SKILLS_REVIEW_MODE` still waits on `.env.example`.
+- **Workarounds for a standalone plan:** `ledger-init.sh` labels the base after the plan
+  filename, so I added a `- base: 7.1` line by hand. `judge.py` needs a `scope.md`, so I
+  added a pointer to the plan. Both are lever candidates.
+- **Waiting on Alex:** judge the numbers; add `.env.example`; confirm the 7.1 finish table.

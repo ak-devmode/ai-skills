@@ -14,7 +14,10 @@ check yourself, whether each finish condition below is actually met.
    evidence is below and in the verdict log. You may confirm it (`pass`) or downgrade it
    (`inconclusive` / `fail`) if the evidence does not prove the deliverable — e.g. the
    command tests something narrower than the deliverable, or passes vacuously. You can
-   never upgrade a runner failure. For a *judge* check your verdict is the result.
+   never upgrade a runner failure. For a *judge* check your verdict is the result. A runner
+   `verified-unreachable` on a row whose table declares `unreachable_ok: yes: <reason>` is
+   Alex's exemption: your verdict there is recorded but not applied — if the exemption looks
+   wrong, say so in a finding.
 3. **Report the rung you reached, never a score.** 1 said so · 2 pointed at the line ·
    3 showed the bad case cannot happen · 4 ran a script that fails loud · 5 reproduced in
    the running app. A judge check you verified by reading the exact lines is rung 2; by a

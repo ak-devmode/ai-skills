@@ -138,7 +138,8 @@ finalization is a single append — a run is final entirely or not at all.
 
 4.3 **`pending`** — one record per check the runner touched:
 `check_id` · `deliverable` · `class` · `rung_required` · `rung_reached` (4 for a class-B
-command, 5 for a class-A command, 0 when not executed) · `table_rev` · `repo` · `dir` ·
+command, 5 for a class-A command, 0 when not executed) · `table_rev` · `unreachable_ok` (the
+row's, as a bool) · `repo` · `dir` ·
 `env` (the row's overlay only — never the caller's environment — plus `VERIFY_UNIT` and, when
 the ledger records one for the row's repo, `VERIFY_BASE`, which the runner exports so a
 static command can name the unit's range, e.g. `--range $VERIFY_BASE..HEAD`) · `cwd` (resolved) · `sha`
@@ -192,7 +193,11 @@ item flips to `BUILD NOW`, once.
 `pass > verified-unreachable > inconclusive > fail`.
 - **Runner row** (`check` is a command): final = the runner result, lowered to the judge's
   verdict if that is worse. **The judge may only downgrade.** Final rung = the lower of the
-  two. With judge `none`, the runner result stands.
+  two. With judge `none`, the runner result stands. **Exception — a declared exemption:** a
+  runner `verified-unreachable` on a row whose `unreachable_ok` is `yes: <reason>` keeps its
+  result and rung; the judge's verdict goes into the reason (flagged, not applied). The
+  exemption is Alex's decision, and a judge that cannot reach the environment either has
+  nothing to add but a flag.
 - **Judge row** (`check` is `judge`): final = the judge's verdict, pass or fail. With judge
   `none`, final = `inconclusive`.
 

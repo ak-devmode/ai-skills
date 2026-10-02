@@ -166,6 +166,23 @@ class TestGate(Fixture):
                 self.verify()
                 self.assertEqual(self.gate("--blocking").returncode, code)
 
+    def test_declared_unreachable_survives_the_judge(self):
+        # kalpa-iris scope 1: a row with Alex's `unreachable_ok` reason exited 3, the judge said
+        # inconclusive, and the gate blocked. The exemption is a human decision; the judge's
+        # verdict is kept in the reason (flagged), never applied. Undeclared rows still block.
+        for ok, code in (("yes: docs unit, nothing to scan", 0), ("no", 1)):
+            for verdict in ("inconclusive", "fail"):
+                with self.subTest(unreachable_ok=ok, judge=verdict):
+                    self.set_table([row("away", "exit 3", ok=ok)])
+                    self.ledger()
+                    self.verify("codex gpt-test", [self.v("away", verdict, rung=0)])
+                    gate_code, doc = self.gate_json("--blocking")
+                    self.assertEqual(gate_code, code, doc)
+                    if code == 0:
+                        with open(self.log) as fh:
+                            final = [json.loads(x) for x in fh if '"final"' in x][-1]
+                        self.assertIn("unreachable_ok", final["results"]["away"]["reason"])
+
     def test_stale_sha_rejected(self):
         self.verify()                                   # evidence at commit a
         git(self.svc, "commit", "-q", "--allow-empty", "-m", "b")

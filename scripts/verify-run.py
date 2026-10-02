@@ -131,6 +131,7 @@ def execute(row, projects, run_id, unit, rev, bases=None, scope=None):
     rec = {"schema": vl.SCHEMA, "ts": now(), "run_id": run_id, "run_state": "pending", "unit": unit,
            "check_id": row["check_id"], "deliverable": row["deliverable"], "class": row["class"],
            "rung_required": row["rung"], "rung_reached": 0, "table_rev": rev, "repo": row["repo"],
+           "unreachable_ok": row["unreachable_ok"],
            "dir": row["dir"], "env": row["env"], "sha": None, "dirty": None,
            "deployed_version": None, "command": row["check"], "exit_code": None,
            "duration_s": 0, "output_sha256": None, "output_tail": None}

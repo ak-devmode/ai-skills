@@ -364,6 +364,13 @@ def authority(p, j):
         return {"result": j["verdict"], "rung_reached": j["rung_reached"], "reason": f"judge: {j['reason']}"}
     if j is None:
         return {"result": p["result"], "rung_reached": p["rung_reached"], "reason": f"runner: {p['reason']}"}
+    if p["result"] == "verified-unreachable" and p.get("unreachable_ok"):
+        # §5.1: a row whose table declares `unreachable_ok: yes: <reason>` carries a human
+        # exemption — the judge's verdict is recorded, never applied (kalpa-iris scope 1:
+        # a declared exemption was downgraded to inconclusive and blocked anyway)
+        return {"result": p["result"], "rung_reached": p["rung_reached"],
+                "reason": f"runner: {p['reason']}; declared unreachable_ok — judge said {j['verdict']} "
+                          f"(flagged, not applied): {j['reason']}"}
     if ORDER[j["verdict"]] < ORDER[p["result"]]:
         return {"result": j["verdict"], "rung_reached": min(p["rung_reached"], j["rung_reached"]),
                 "reason": f"judge downgraded runner {p['result']}: {j['reason']}"}

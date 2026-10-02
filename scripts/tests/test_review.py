@@ -108,7 +108,9 @@ class TestReview(unittest.TestCase):
                 self.assertIn("lean: 1 of 1 file(s) inlined", out)
                 self.assertIn("+curl x || true", bundle)
                 items = [x for x in uncovered.splitlines() if x.startswith("- ")]
-                self.assertEqual(items, ["- " + load(REVIEW).LEAN_NO_ADJACENT])   # always declared, by the script
+                self.assertEqual(items, ["- the repo's `CLAUDE.md` (not present at the range's head) — not read",
+                                         "- the repo's `ARCHITECTURE.md` (not present at the range's head) — not read",
+                                         "- " + load(REVIEW).LEAN_NO_ADJACENT])   # always declared, by the script
                 for s in present:
                     self.assertIn(s, bundle)
                 for s in absent:
@@ -333,6 +335,17 @@ class TestReview(unittest.TestCase):
         _, bundle, _ = self.lean(self.repo)
         self.assertIn("claude-rule-marker", bundle)
         self.assertIn("arch-rule-marker", bundle)
+
+    def test_lean_bundle_lists_a_symlinked_doc_never_reads_the_link(self):
+        # review 7.1-r3-02: `git show` of a symlink returns its target path, not the document
+        with open(os.path.join(self.repo, "real.md"), "w") as fh:
+            fh.write("real-doc-marker\n")
+        os.symlink("real.md", os.path.join(self.repo, "CLAUDE.md"))
+        git(self.repo, "add", "-A")
+        git(self.repo, "commit", "-q", "-m", "linked doc")
+        _, bundle, uncovered = self.lean(self.repo)
+        self.assertIn("`CLAUDE.md` (not a regular file at the range's head (mode 120000))", uncovered)
+        self.assertNotIn("## The repo's CLAUDE.md", bundle)
 
     def test_lean_rounds_stop_at_three_like_codex(self):
         for rnd in (1, 2, 3):

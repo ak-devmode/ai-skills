@@ -168,16 +168,28 @@ def lean_coverage(repo, rng):
     diff, inlined, uncovered, total, _ = vl.capped_diff(repo, rng)
     head, docs = rng.split("..")[1], []
     # the full prompt has the reviewer read both first; lean inlines them or says it didn't (7.1-r1-03)
+    # inline a doc only when it is a regular file at the range's head; anything else — absent,
+    # a symlink, unreadable, too big — is listed with its reason, never silently skipped
+    # (review 7.1-r3-01, r3-02)
     for doc in ("CLAUDE.md", "ARCHITECTURE.md"):
-        rc, text, _ = git(repo, "show", f"{head}:{doc}")
-        if rc != 0:
-            continue
-        size = len(text.encode("utf-8"))
-        if size <= LEAN_CLAUDE_MD:
-            docs.append((doc, text))
+        why = None
+        rc, entry, _ = git(repo, "ls-tree", head, "--", doc)
+        mode = entry.split()[0] if rc == 0 and entry else ""
+        if not mode:
+            why = "not present at the range's head"
+        elif mode not in ("100644", "100755"):
+            why = f"not a regular file at the range's head (mode {mode})"
         else:
-            uncovered.append(f"the repo's `{doc}` ({size:,} bytes, over the {LEAN_CLAUDE_MD:,}-byte lean "
-                             "limit) — not read")
+            rc, text, e = git(repo, "show", f"{head}:{doc}")
+            size = len(text.encode("utf-8"))
+            if rc != 0:
+                why = f"unreadable at the range's head ({e[:80] or 'git show failed'})"
+            elif size > LEAN_CLAUDE_MD:
+                why = f"{size:,} bytes, over the {LEAN_CLAUDE_MD:,}-byte lean limit"
+            else:
+                docs.append((doc, text))
+        if why:
+            uncovered.append(f"the repo's `{doc}` ({why}) — not read")
     # the lenses' first check reads whole touched files and their callees; a bundle of hunks
     # cannot, so that coverage is always declared missing, by the script (7.1-r1-04)
     uncovered.append(LEAN_NO_ADJACENT)
@@ -345,7 +357,8 @@ def cmd_record(a):
     if code is not None:
         return code
     if not problems and uncovered:
-        # the files past the lean cap come from prepare's sidecar, never from the model's memory
+        # a lean review's not-covered list is recomputed from the range (lean_coverage), never
+        # taken from the model or from a file the caller passes (review 7.1-r2-01, r3-03)
         doc["cannot_do"] = uncovered + [c for c in doc["cannot_do"] if c not in uncovered]
     if problems:
         return err("review answer is malformed — nothing recorded", "findings with file:line, severity and "

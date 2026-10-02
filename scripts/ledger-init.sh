@@ -12,9 +12,13 @@
 # header (`- base: <unit> <repo> <sha>`, repo relative to $VERIFY_PROJECTS or
 # ~/Projects) — verdict-gate.py's range is base..HEAD (verify-contracts.md §5.2).
 # Only the FIRST base per unit+repo is kept: a resumed phase must not shrink the range.
+# A linked worktree (a herdr scope under ~/.herdr/worktrees/) is named by its main
+# checkout, the name the finish table and review log use. `--base REV` after a `--repo`
+# records REV instead of HEAD — the agreed review base when the branch already carries
+# commits that are not the unit's (scope docs committed before /plan started).
 #
 # Usage:  ledger-init.sh <folder> --plan <plan-path> --phase "<P>: <name>" [--slug S] [--resumed]
-#                        [--repo PATH ...]
+#                        [--repo PATH [--base REV] ...]
 #   --resumed  header reads "(resumed <ISO> after compaction)" — the template's form
 # Output: "created: …" or "found: …", then "phase header: …", then one "base: …" line per repo.
 # Exit:   0 ok · 1 write did not land · 2 usage · 4 template missing
@@ -22,11 +26,13 @@
 set -uo pipefail
 
 folder="${1:-}"; shift || true
-plan=""; phase=""; slug=""; verb=started; repos=()
+plan=""; phase=""; slug=""; verb=started; repos=(); revs=()
 while [ $# -gt 0 ]; do
   case "$1" in
     --resumed) verb=resumed; shift ;;
-    --repo) repos+=("${2:-}"); shift 2 ;;
+    --repo) repos+=("${2:-}"); revs+=(HEAD); shift 2 ;;
+    --base) [ ${#repos[@]} -gt 0 ] || { echo "ledger-init: --base follows the --repo it applies to" >&2; exit 2; }
+            revs[$((${#repos[@]} - 1))]="${2:-}"; shift 2 ;;
     --plan) plan="${2:-}"; shift 2 ;;
     --phase) phase="${2:-}"; shift 2 ;;
     --slug) slug="${2:-}"; shift 2 ;;
@@ -78,10 +84,13 @@ if [ ${#repos[@]} -gt 0 ]; then
   [ -d "$root" ] || { echo "ledger-init: projects root $root does not exist — base SHAs name repos relative to it (cause: environment; next: set VERIFY_PROJECTS)" >&2; exit 1; }
   projects="$(cd "$root" && pwd -P)"
 fi
-for r in ${repos[@]+"${repos[@]}"}; do
-  sha="$(git -C "$r" rev-parse HEAD 2>&1)" || {
-    echo "ledger-init: cannot record base SHA — expected a git repo at $r, found: $sha (cause: environment; next: git -C $r status)" >&2; exit 1; }
+for i in ${repos[@]+"${!repos[@]}"}; do
+  r="${repos[$i]}"; rev="${revs[$i]}"
+  sha="$(git -C "$r" rev-parse --verify --quiet "$rev^{commit}" 2>&1)" || {
+    echo "ledger-init: cannot record base SHA — expected a git repo at $r with commit '$rev', found: ${sha:-no such commit} (cause: environment; next: git -C $r log --oneline -5)" >&2; exit 1; }
   abs="$(cd "$r" && pwd -P)"
+  common="$(git -C "$r" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)"
+  [ "$(basename "$common")" = .git ] && abs="$(cd "$(dirname "$common")" && pwd -P)"
   name="${abs#"$projects"/}"
   [ "$name" != "$abs" ] || { name="$(basename "$abs")"; echo "ledger-init: note — $abs is outside $projects; recorded as '$name'" >&2; }
   if grep -qE "^- base: $unit $name [0-9a-f]+$" "$ledger"; then

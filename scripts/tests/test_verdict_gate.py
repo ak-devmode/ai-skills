@@ -419,6 +419,22 @@ class TestLedgerBase(Fixture):
         self.assertEqual(lines[header + 2:header + 4],
                          [l for l in lines if l.startswith("- base: 5.1 ")])
 
+    def test_worktree_named_by_main_checkout_and_explicit_base(self):
+        # kalpa-iris scope 1 recorded `1-code-inventory <HEAD>` — the worktree's basename and
+        # a HEAD that already carried the scope's doc commits.
+        agreed = git(self.svc, "rev-parse", "HEAD")
+        wt = os.path.join(self.tmp.name, "wt", "1-x")
+        git(self.svc, "worktree", "add", "-q", "-b", "feature/x", wt)
+        git(wt, "commit", "-q", "--allow-empty", "-m", "scope docs")
+        p = subprocess.run(["bash", script("ledger-init.sh"), self.scope, "--plan", self.plan, "--phase", "1: x",
+                            "--repo", wt, "--base", "main"], capture_output=True, text=True, env=self.env)
+        self.assertEqual(p.returncode, 0, p.stderr)
+        self.assertIn(f"base: 5.1 svc {agreed}", p.stdout)
+        bad = subprocess.run(["bash", script("ledger-init.sh"), self.scope, "--plan", self.plan, "--phase", "1: x",
+                              "--repo", wt, "--base", "no-such-rev"], capture_output=True, text=True, env=self.env)
+        self.assertEqual(bad.returncode, 1)
+        self.assertIn("cannot record base SHA", bad.stderr)
+
     def test_non_repo_fails_loud(self):
         p = subprocess.run(["bash", script("ledger-init.sh"), self.scope, "--plan", self.plan,
                             "--phase", "1: x", "--repo", self.tmp.name], capture_output=True, text=True, env=self.env)

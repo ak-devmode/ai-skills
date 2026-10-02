@@ -391,14 +391,17 @@ ledger lives in the scope folder (child plan) or the plan folder (standalone):
 
 ```bash
 ~/Projects/ai-skills/scripts/ledger-init.sh "$LEDGER_DIR" --plan "$PLAN_FILE" --phase "{P}: {name}" \
-    --repo ~/Projects/<repo> [--repo …]   # --resumed after compaction
+    --repo ~/Projects/<repo> [--base <rev>] [--repo …]   # --resumed after compaction
 ```
 
 Pass `--repo` for **every repo this plan commits to**. The script records each repo's HEAD
 as `- base: {N}.{P} <repo> <sha>` and keeps only the first one per repo, so a resumed
 phase never shrinks its range. That base is the start of the unit's revision range
 `base..HEAD`, which `/review` and `/verify` both take (§6.8). A repo first touched
-mid-phase gets its `--repo` before its first commit.
+mid-phase gets its `--repo` before its first commit. In a herdr worktree pass the worktree
+path — the base is recorded under the main checkout's name — and, when the branch already
+carries commits that are not this unit's (scope docs committed before `/plan`), `--base
+<rev>` after that `--repo` records the agreed review base instead of HEAD.
 
 It creates the ledger from the shared template if absent, otherwise appends a
 timestamped phase header — never overwrites — and reads the result back. Exit 4 means

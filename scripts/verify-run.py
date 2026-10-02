@@ -121,6 +121,20 @@ def decode(b):
     return b.decode("utf-8", "replace") if isinstance(b, bytes) else (b or "")
 
 
+REJECTIONS_ROW = re.compile(r"(^|-)rejections-justified$")  # the standard row (verify/SKILL.md §4)
+
+
+def rejections(scope, unit):
+    """How many of the unit's findings currently stand `rejected` (latest disposition wins), from
+    `artifacts/review-<unit>.jsonl`; 0 with no review log — there is nothing to audit."""
+    log = os.path.join(scope or "", "artifacts", f"review-{unit}.jsonl")
+    latest = {}
+    for r in vl.read_jsonl(log) if os.path.exists(log) else []:
+        if r.get("record") == "disposition":
+            latest[r.get("finding_id")] = r.get("disposition")
+    return sum(1 for d in latest.values() if d == "rejected")
+
+
 def execute(row, projects, run_id, unit, rev, bases=None, scope=None):
     # §4.3: the unit's base SHA for this repo (from the ledger) is exported as VERIFY_BASE, so a
     # static command can name the unit's range — `resolve-identifiers.py --range $VERIFY_BASE..HEAD`.
@@ -143,6 +157,12 @@ def execute(row, projects, run_id, unit, rev, bases=None, scope=None):
         rec["sha"] = sha
         rec["dirty"] = bool(git(repo_path, "status", "--porcelain")[1])
     if row["is_judge"]:
+        n = rejections(scope, unit) if REJECTIONS_ROW.search(row["check_id"]) else None
+        if n == 0:
+            # nothing to audit: decided here from the review log, never sent to a judge (Alex, 2026-10-02)
+            rec.update(command=f"{vl.AUTO_PREFIX}no rejected disposition in review-{unit}.jsonl", result="pass",
+                       rung_reached=4, reason="0 rejected dispositions in the review log — nothing to audit")
+            return rec
         rec.update(result="inconclusive", reason="judge row: awaiting judge")
         return rec
     if rc != 0 or not os.path.isdir(cwd):

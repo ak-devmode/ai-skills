@@ -164,6 +164,52 @@ class TestJudge(unittest.TestCase):
         self.assertNotIn("chatty-session-marker", inlined)     # only recorded scope, not the whole log
         self.assertNotIn("task-marker", inlined)
 
+    def test_refused_answer_writes_a_retry_prompt(self):
+        # plan 7.1-12(a): one retry naming what was missing, before NOT-JUDGED
+        self.ledger(self.base)
+        _, _ = self.prepared()
+        prompt = os.path.join(self.tmp.name, "w", f"judge-{self.rid}.md")
+        short = self.answer(verdicts=[{"check_id": "ok", "verdict": "pass", "rung_reached": 4, "reason": "r"}])
+        p = self.judge("record", "--judge", "codex gpt-test", "--input", short, "--prompt", prompt)
+        self.assertEqual(p.returncode, 3)
+        retry = p.stdout.split("retry-prompt: ")[1].split()[0]
+        text = read(retry)
+        self.assertTrue(text.startswith(read(prompt).rstrip()))           # the original prompt, intact
+        self.assertIn("- no verdict for `jr`", text)
+        self.assertIn("- no verdict for `away`", text)
+        self.assertIn("NOT-JUDGED, never blocked", p.stderr)
+        self.assertEqual(self.records("judged"), [])                      # still nothing recorded
+
+    def test_lean_big_scope_inlines_only_the_units_phase(self):
+        # plan 7.1-12(b): a scope over 40 KB is not dropped whole
+        self.ledger(self.base)
+        self.commit_file("app.sh", ["echo x"])
+        with open(os.path.join(self.scope, "scope.md"), "w") as fh:
+            fh.write("# scope\n\n## Context\n\n" + "filler " * 8000 + "\n\n## Phases\n\n"
+                     "### Phase 1 — the work\n\nphase-one-marker\n\n### Phase 2 — later\n\nphase-two-marker\n\n"
+                     "## Key Decisions Captured\n\ndecision-marker\n")
+        out, lean = self.prepared("--lean")
+        inlined = lean.split("## Inlined inputs")[1]
+        self.assertIn("phase-one-marker", inlined)
+        self.assertIn("decision-marker", inlined)
+        self.assertNotIn("phase-two-marker", inlined)
+        self.assertNotIn("filler filler", inlined)
+        self.assertIn("only its phase 1 section and Key Decisions are inlined", lean.split("# You are")[0])
+
+    def test_auto_decided_row_never_reaches_the_judge(self):
+        # plan 7.1-12(c): a runner-decided row is not in the prompt and not a required verdict
+        with open(os.path.join(self.scope, "finish-conditions.md"), "w") as fh:
+            fh.write(f"**Schema version:** verify/1\n**Revision:** 1\n\n{HEADER}{ROWS}"
+                     "| p1-rejections-justified | rejections right | 9.1 | B | judge | svc | . | - | - | 2 | no | ev |\n")
+        p = run("verify-run.py", "run", "--table", os.path.join(self.scope, "finish-conditions.md"),
+                "--log", self.log, "--owner", "9.1", env=self.env)
+        self.rid = p.stdout.split("run_id: ")[1].split()[0]
+        self.ledger(self.base)
+        _, prompt = self.prepared()
+        self.assertNotIn("p1-rejections-justified", prompt)
+        p = self.judge("record", "--judge", "codex gpt-test", "--input", self.answer())   # ok/jr/away only
+        self.assertEqual(p.returncode, 0, p.stderr)
+
     def test_lean_bundle_past_the_cap_lists_never_cuts(self):
         self.ledger(self.base)
         self.commit_file("big.txt", [f"line {i}" for i in range(1600)])

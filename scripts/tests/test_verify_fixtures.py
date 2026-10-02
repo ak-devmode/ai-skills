@@ -57,8 +57,8 @@ print("pong")
 '''
 
 
-def gate_blocks(info, judge_items=None, judge_line="none not configured"):
-    """Runner → (judged) → finalize → gate on a built fixture; returns the blocked ids."""
+def gate_run(info, judge_items=None, judge_line="none not configured"):
+    """Runner → (judged) → finalize → gate on a built fixture; returns (blocked ids, gate json, exit)."""
     env = dict(os.environ, VERIFY_PROJECTS=info["projects"])
     sc, unit = info["scope"], info["unit"]
     table, log = os.path.join(sc, "finish-conditions.md"), os.path.join(sc, "artifacts", f"verify-{unit}.jsonl")
@@ -73,7 +73,13 @@ def gate_blocks(info, judge_items=None, judge_line="none not configured"):
     else:
         run("verify-run.py", "finalize", "--log", log, "--run-id", rid, "--judge", judge_line, env=env)
     g = run("verdict-gate.py", "--scope", sc, "--unit", unit, "--blocking", "--json", env=env)
-    return {b["id"] for b in json.loads(g.stdout)["blocks"]}
+    doc = json.loads(g.stdout)
+    # a judge row nobody judged is NOT-JUDGED, not a block — but it still never passes (plan 7.1-12)
+    return {b["id"] for b in doc["blocks"]} | set(doc.get("not_judged", [])), doc, g.returncode
+
+
+def gate_blocks(*args, **kw):
+    return gate_run(*args, **kw)[0]
 
 
 def verdicts(verdict):
@@ -112,8 +118,11 @@ class TestDeterministicTier(unittest.TestCase):
                         self.assertIn(ocid, blocked, f"repairing {defect} also cleared {other}")
 
     def test_judge_none_cannot_pass_the_control(self):
-        blocked = gate_blocks(self.build("clean"))
+        blocked, doc, code = gate_run(self.build("clean"))
         self.assertEqual(blocked, set(JUDGE_CAUGHT.values()))  # judge rows stay inconclusive
+        # reported as not judged rather than blocked, and still refused in blocking mode
+        self.assertEqual((doc["verdict"], set(doc["not_judged"]), doc["blocks"], code),
+                         ("not-judged", set(JUDGE_CAUGHT.values()), [], 1))
 
     def test_always_failing_judge_fails_the_control(self):
         blocked = gate_blocks(self.build("clean"), verdicts("fail"), "codex fake-always-fail")

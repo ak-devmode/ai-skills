@@ -252,6 +252,42 @@ class TestGate(Fixture):
         self.verify("codex gpt-test", [self.v("ok", "pass")])
         self.assertEqual(self.gate_json("--blocking")[1]["marker"], "")
 
+    def test_unjudged_judge_row_is_not_judged_never_blocked(self):
+        # plan 7.1-12: nobody judging is a tooling failure, reported apart from blocks
+        self.set_table([row("ok", "true"), row("jr", "judge", rung="2")])
+        self.ledger()
+        self.verify()                                            # judge line `none not configured`
+        code, doc = self.gate_json("--advisory")
+        self.assertEqual((code, doc["verdict"], doc["blocks"], doc["not_judged"]), (0, "not-judged", [], ["jr"]))
+        self.assertIn("⚠ verify not judged: 1 (jr)", doc["marker"])
+        self.assertNotIn("⚠ verify advisory", doc["marker"])
+        code, doc = self.gate_json("--blocking")
+        self.assertEqual((code, doc["verdict"]), (1, "not-judged"))   # blocking: an unjudged unit is not Done
+        self.assertIn("NOT-JUDGED — refuses Done", self.gate("--blocking").stdout)
+        # a runner failure still blocks, and wins the verdict
+        self.set_table([row("bad", "false"), row("jr", "judge", rung="2")])
+        self.verify()
+        code, doc = self.gate_json("--blocking")
+        self.assertEqual((code, doc["verdict"], [b["id"] for b in doc["blocks"]], doc["not_judged"]),
+                         (1, "blocked", ["bad"], ["jr"]))
+
+    def test_zero_rejections_is_decided_by_the_runner(self):
+        # plan 7.1-12: nothing to audit is not a judge's job
+        self.set_table([row("ok", "true"), row("p1-rejections-justified", "judge", rung="2")])
+        self.ledger()
+        self.verify()
+        code, doc = self.gate_json("--blocking")
+        self.assertEqual((code, doc["verdict"], doc["not_judged"]), (0, "pass", []))
+        pend = [r for r in map(json.loads, open(self.log)) if r.get("check_id") == "p1-rejections-justified"]
+        self.assertTrue(pend[0]["command"].startswith("auto: "))
+        # one standing rejection: the row goes to the judge again
+        with open(os.path.join(self.scope, "artifacts", "review-5.1.jsonl"), "w") as fh:
+            fh.write(json.dumps({"record": "disposition", "finding_id": "5.1-r1-01", "disposition": "rejected"}) + "\n")
+        rid = self.verify()
+        rec = [r for r in map(json.loads, open(self.log)) if r.get("run_id") == rid
+               and r.get("check_id") == "p1-rejections-justified" and r["run_state"] == "pending"][0]
+        self.assertEqual((rec["command"], rec["result"]), ("judge", "inconclusive"))
+
     def test_advisory_warns_without_blocking(self):
         self.set_table([row("bad", "exit 1")])
         self.ledger()
@@ -504,6 +540,21 @@ class TestIndexEnforcement(Fixture):
         for f in FIELDS:
             self.assertIn(f, refusal)
         self.assertEqual(self.row51(), before)
+
+    def test_not_judged_refuses_in_blocking_and_marks_in_advisory(self):
+        self.set_table([row("ok", "true"), row("jr", "judge", rung="2")])
+        self.ledger()
+        self.verify()
+        before = self.row51()
+        p = self.status("--blocking")
+        self.assertEqual(p.returncode, 1, p.stdout + p.stderr)
+        self.assertIn("refusing Done for 5.1 — not judged (blocking mode)", p.stderr)
+        self.assertEqual(self.row51(), before)
+        p = self.status("--advisory")
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        self.assertIn("⚠ verify not judged: 1 (jr)", self.row51())
+        v = run("plans-index.py", "validate", self.index, env=self.env)
+        self.assertNotIn("without a passing verdict", v.stdout + v.stderr)
 
     def test_pass_writes_done_clean(self):
         self.ledger()

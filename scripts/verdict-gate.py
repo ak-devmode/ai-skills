@@ -310,6 +310,13 @@ def evaluate(scope, unit, projects):
             block("verdict predates the current finish table", f"table_rev {table['revision']}",
                   f"table_rev {final.get('table_rev')}", "code")
             continue
+        if res["result"] == "inconclusive" and row["is_judge"] and str(final.get("judge", "")).startswith("none "):
+            # nobody judged the work: a tooling failure, not a finding about it (Alex, 2026-10-02)
+            blocks.append((cid, "not judged — the judge did not run or its answer was refused", "a judge verdict",
+                           f"judge line `{final.get('judge')}`", f"{cid} · {log}", NOT_JUDGED,
+                           "re-run /verify's judge step (verify/SKILL.md §3.6 retry)"))
+            report.append(f"NOT-JUDGED  {cid}  {final.get('judge')}")
+            continue
         if res["result"] in ("fail", "inconclusive"):
             block(f"verdict is {res['result']}", "pass", f"{res['result']}: {res['reason']}{evidence_line(pend)}",
                   "code" if res["result"] == "fail" else "environment")
@@ -373,6 +380,7 @@ def evaluate(scope, unit, projects):
 
 # Blocks that mean "no complete verdict yet" — /closeout runs /verify for these, and only these.
 NEEDS_VERIFY = ("no final verdict", "an unfinished run is newer than the verdict")
+NOT_JUDGED = "not-judged"  # the cause on a judge row nobody judged: reported apart from blocks
 
 
 def closeout_view(a, table):
@@ -380,15 +388,16 @@ def closeout_view(a, table):
     anything is off, `marker: ⚠ verify failed <ids>` (+ judge markers) — the text /closeout
     puts on the archived index row."""
     units = sorted({r["owner"].split("/")[0] for r in table["rows"]}, key=lambda u: [int(x) for x in u.split(".")])
-    per, failed, judges, msgs = [], [], set(), []
+    per, failed, judges, msgs, unjudged = [], [], set(), [], []
     for u in units:
         report, blocks, js = evaluate(a.scope, u, a.projects)
         judges.update(js)
-        failed += [b[0] for b in blocks]
+        unjudged += [b[0] for b in blocks if b[5] == NOT_JUDGED]
+        failed += [b[0] for b in blocks if b[5] != NOT_JUDGED]
         msgs += [vl.message("FAIL", f"{u}: {what}", exp, found, where, cause, nxt, DOCS)
                  for _, what, exp, found, where, cause, nxt in blocks]
         per.append({"unit": u, "blocks": [{"id": b[0], "what": b[1], "cause": b[5]} for b in blocks],
-                    "needs_verify": any(b[1] in NEEDS_VERIFY for b in blocks)})
+                    "needs_verify": any(b[1] in NEEDS_VERIFY or b[5] == NOT_JUDGED for b in blocks)})
     markers = [f"⚠ judge: {j}" for j in sorted(judges) if not j.startswith("codex ")]
     if not units:
         # Every phase predates the gate: nothing was verified, so this is not a pass
@@ -398,10 +407,13 @@ def closeout_view(a, table):
         print(json.dumps(doc) if a.json else f"verdict: UNGATED (every phase predates the gate: "
                                              f"{', '.join(table['predates']) or 'no rows'})")
         return vl.EXIT_PASS
+    if unjudged:
+        markers.insert(0, f"⚠ verify not judged {', '.join(unjudged)}")
     if failed:
         markers.insert(0, f"⚠ verify failed {', '.join(failed)}")
     marker = " ".join(markers)
-    verdict = "failed" if failed else "pass"
+    # not-judged is not failed, and not pass either: it never counts toward the blocking flip
+    verdict = "failed" if failed else "not-judged" if unjudged else "pass"
     if a.json:
         print(json.dumps({"verdict": verdict, "units": per, "predates": table["predates"],
                           "failed": failed, "marker": marker, "messages": msgs}))
@@ -470,27 +482,36 @@ def main(argv):
         return vl.EXIT_EVAL
 
     markers = [f"⚠ judge: {j}" for j in judges if not j.startswith("codex ")]
+    nj = [b for b in blocks if b[5] == NOT_JUDGED]
+    blocks = [b for b in blocks if b[5] != NOT_JUDGED]
     if blocks and a.mode == "advisory":
         ids = ", ".join(b[0] for b in blocks)
         markers.append(f"⚠ verify advisory: {len(blocks)} blocked ({ids})")
-    verdict = "pass" if not blocks else ("advisory" if a.mode == "advisory" else "blocked")
+    if nj:
+        markers.append(f"⚠ verify not judged: {len(nj)} ({', '.join(b[0] for b in nj)})")
+    # a real block wins; otherwise nobody judging is NOT-JUDGED — never a block. In blocking
+    # mode it still refuses Done: an unjudged unit is not a verified one (Alex, 2026-10-02)
+    verdict = ("advisory" if a.mode == "advisory" else "blocked") if blocks else "not-judged" if nj else "pass"
     marker = " ".join(markers)
     level = "WARN" if a.mode == "advisory" else "BLOCK"
     msgs = [vl.message(level, what, exp, found, where, cause, nxt, DOCS)
-            for _, what, exp, found, where, cause, nxt in blocks]
+            for _, what, exp, found, where, cause, nxt in blocks] + \
+        [vl.message("WARN", what, exp, found, where, "tooling", nxt, DOCS) for _, what, exp, found, where, _, nxt in nj]
     if a.json:
         print(json.dumps({"verdict": verdict, "unit": a.unit, "marker": marker, "report": report,
                           "blocks": [{"id": b[0], "what": b[1], "cause": b[5]} for b in blocks],
-                          "messages": msgs}))
+                          "not_judged": [b[0] for b in nj], "messages": msgs}))
     else:
         print("\n".join(report))
         for m in msgs:
             print(m)
-        label = {"pass": "PASS", "advisory": "ADVISORY — would block", "blocked": "BLOCKED"}[verdict]
-        print(f"verdict: {label} ({a.unit}, {len(blocks)} block(s), mode {a.mode})")
+        label = {"pass": "PASS", "advisory": "ADVISORY — would block", "blocked": "BLOCKED",
+                 "not-judged": "NOT-JUDGED" + (" — refuses Done" if a.mode == "blocking" else "")}[verdict]
+        print(f"verdict: {label} ({a.unit}, {len(blocks)} block(s), {len(nj)} not judged, mode {a.mode})")
         if marker:
             print(f"marker: {marker}")
-    return vl.EXIT_FAIL if verdict == "blocked" else vl.EXIT_PASS
+    refuse = verdict == "blocked" or (verdict == "not-judged" and a.mode == "blocking")
+    return vl.EXIT_FAIL if refuse else vl.EXIT_PASS
 
 
 if __name__ == "__main__":

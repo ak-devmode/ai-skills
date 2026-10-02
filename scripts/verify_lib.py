@@ -382,6 +382,8 @@ KEBAB = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
 # review/SKILL.md §5.1: rounds of one repo in a unit before the loop stops and asks the user.
 # review.py's deferral rule and verdict-gate.py's re-review waiver read the same number.
 ROUND_CAP = 3
+# a judge row the runner decided itself (verify-run.py: zero rejections to audit); the judge never sees it
+AUTO_PREFIX = "auto: "
 # verify/SKILL.md §3.9: finalized /verify runs of one unit before the fix loop stops and asks.
 VERIFY_RUN_CAP = 2
 

@@ -267,6 +267,19 @@ archives, and its index row carries the printed `⚠ verify failed <check_ids>` 
 2026-09-29): its code is not read by a human, so an advisory gate there is a report
 nobody reads.
 
+5.4.3 **NOT-JUDGED — a judge failure is never a block** (Alex, 2026-10-02). A judge row
+whose final result is `inconclusive` because the deciding judge line is `none …` (the
+judge did not run, or its answer was refused after the §3.6 retry) is reported as
+`not judged`, apart from blocks. Verdict `NOT-JUDGED` when nothing else blocks. In advisory
+mode it exits `0` with marker `⚠ verify not judged: <n> (<ids>)`. In blocking mode it exits
+`1`, and `plans-index.py status` refuses Done: an unjudged unit is not a verified one. A
+runner row's result is unaffected (with no judge it stands), and any real block wins the
+verdict. `--all` lists them as `⚠ verify not judged <ids>`, never as failed. They need a
+`/verify` re-run and never count toward the blocking flip. The standard
+`rejections-justified` row is decided by the runner when the unit's review log has no
+standing `rejected` disposition: `pass`, rung 4, command `auto: …`. The judge never sees
+it.
+
 5.5 **Exit codes** for every script in this contract: `0` pass · `1` blocked / failed ·
 `2` usage · `3` could not evaluate (missing or malformed input, git error) — never read as
 pass.

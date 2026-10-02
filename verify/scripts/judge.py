@@ -15,7 +15,8 @@ candidate, whether or not the judge named one.
 Usage:
   judge.py prepare --scope DIR --unit N.P --run-id ID [--range REPO=BASE..HEAD ...] [--no-commits] [--lean] [--out-dir DIR]
     --lean    one self-contained bundle for a single Sonnet pass: every input inlined, the diff capped (plan 7)
-  judge.py record  --scope DIR --unit N.P --run-id ID --judge LINE --input FILE
+  judge.py record  --scope DIR --unit N.P --run-id ID --judge LINE --input FILE [--prompt FILE]
+    --prompt  on a refused answer, write <prompt>-retry.md naming what was wrong (printed `retry-prompt:`)
   judge.py report  --scope DIR --unit N.P --run-id ID
     --range   overrides the ledger's base for REPO (older scopes have no recorded base)
     --no-commits  the unit declares no commits (its stub has no Review task — /scope §5.9):
@@ -68,8 +69,11 @@ def err(what, expected, found, where, nxt, cause="tooling"):
 
 
 def pending_of(log, run_id):
+    """(the pending records the judge must answer, every record of the run). A row the runner
+    decided itself (`auto: …`, e.g. zero rejections to audit) is never sent to the judge."""
     recs = [r for r in vl.read_jsonl(log) if r.get("run_id") == run_id]
-    return [r for r in recs if r.get("run_state") == "pending"], recs
+    return [r for r in recs if r.get("run_state") == "pending"
+            and not str(r.get("command", "")).startswith(vl.AUTO_PREFIX)], recs
 
 
 def git_head(path):
@@ -216,7 +220,17 @@ def lean_bundle(full, p, unit, run_id, plans, judged):
             return
         parts.append(f"### {title} — `{path}`\n\n````\n{body.rstrip()}\n````")
 
-    inline("Scope", p["scope_md"])
+    if os.path.isfile(p["scope_md"]) and os.path.getsize(p["scope_md"]) > LEAN_FILE_CAP:
+        # too big whole: the unit's own phase section and the decisions log are what the
+        # conformance lens needs (dev-workbench 3.1: scope-deliverables went inconclusive)
+        phase = unit.split(".")[1] if "." in unit else unit
+        want = re.compile(rf"(?i)^#{{2,6}}\s+(.*\bphase\s+{re.escape(phase)}\b|.*\b{re.escape(unit)}\b|key decisions)")
+        inline(f"Scope — phase {phase} and Key Decisions only", p["scope_md"],
+               keep=lambda t: "\n\n".join(md_sections(t, want.match)) or "(no matching section)")
+        missing.append(f"the rest of the scope `{p['scope_md']}` ({os.path.getsize(p['scope_md']):,} bytes) — only "
+                       f"its phase {phase} section and Key Decisions are inlined")
+    else:
+        inline("Scope", p["scope_md"])
     # the unit's own plan carries its tasks and acceptance lines; a standalone plan's scope.md
     # may only point at it, and a lean judge cannot follow a pointer (7.1-r1-02)
     scope_dir = os.path.dirname(p["table"])
@@ -284,6 +298,23 @@ def validate(doc, check_ids):
     return problems
 
 
+def retry_prompt(prompt, problems):
+    """The original prompt plus exactly what the refused answer got wrong, written beside it, or
+    None when no prompt was given. One retry turns a missing verdict into a judged check
+    instead of a tooling failure (dev-workbench 3.1: 3 runner rows unanswered)."""
+    if not prompt or not os.path.isfile(prompt):
+        return None
+    with open(prompt, encoding="utf-8") as fh:
+        text = fh.read()
+    out = os.path.splitext(prompt)[0] + "-retry.md"
+    with open(out, "w", encoding="utf-8") as fh:
+        fh.write(text.rstrip() + "\n\n## Your previous answer was refused — answer again, in full\n\n"
+                 "It was not recorded. Fix every item below and return the complete JSON object, "
+                 "one verdict for every check_id in the Checks table:\n\n"
+                 + "".join(f"- {x}\n" for x in problems))
+    return out
+
+
 def cmd_record(a):
     p = paths(a.scope, a.unit)
     pend, _ = pending_of(p["log"], a.run_id)
@@ -295,9 +326,15 @@ def cmd_record(a):
     except (OSError, ValueError) as exc:
         problems = [str(exc)]
     if problems:
+        retry = retry_prompt(a.prompt, problems)
+        if retry:
+            print(f"retry-prompt: {retry}")
         return err("judge output is malformed — nothing recorded", "one verdict per owned check, findings on "
                    "known checks, per verify/schemas/judge-output.schema.json", "; ".join(problems[:6]), a.input,
-                   f"verify-run.py finalize --log {p['log']} --run-id {a.run_id} --judge 'none malformed judge output'")
+                   (f"re-run the judge once on {retry} (verify/SKILL.md §3.6); if it is refused again: " if retry
+                    else "") +
+                   f"verify-run.py finalize --log {p['log']} --run-id {a.run_id} --judge 'none malformed judge output'"
+                   " — the gate then reports the judge rows NOT-JUDGED, never blocked")
     verdicts = os.path.join(tempfile.mkdtemp(prefix="verify-judged-"), "verdicts.json")
     with open(verdicts, "w", encoding="utf-8") as fh:
         json.dump(doc["verdicts"], fh)
@@ -355,7 +392,7 @@ def cmd_report(a):
         gate_line = f"verdict: GATE ERROR (exit {gate.returncode}) — {why}"
     marker = next((x for x in gate.stdout.splitlines() if x.startswith("marker:")), "")
     stop = run_cap_line(p["log"], a.unit, a.run_id)
-    by_pend = {r["check_id"]: r for r in pend}
+    by_pend = {r["check_id"]: r for r in recs if r.get("run_state") == "pending"}   # auto rows too
     lines = [f"# Verify report — unit {a.unit}", "",
              f"**Run:** `{a.run_id}` · **Judge:** {final['judge']} · **Table revision:** {final['table_rev']}",
              f"**Gate:** {gate_line.replace('verdict: ', '')}" + (f" · {marker.replace('marker: ', '')}" if marker else ""),
@@ -403,6 +440,7 @@ def main(argv):
         if name == "record":
             s.add_argument("--judge", required=True)
             s.add_argument("--input", required=True)
+            s.add_argument("--prompt", help="the prompt the judge answered; a refused answer gets a retry prompt")
     try:
         a = ap.parse_args(argv)
     except SystemExit as exc:

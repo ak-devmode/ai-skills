@@ -1,6 +1,6 @@
 ---
 name: verify
-version: 0.6.0
+version: 0.7.0
 description: |
   Independent verification of a unit of scoped work. A deterministic runner executes
   every finish-condition row the unit owns and records evidence; a judge from the
@@ -136,8 +136,11 @@ writes nothing usable, the judge line is `none <reason>`, as in §3.5. Never esc
 `full` on your own: that is the user's `--full`.
 
 3.6 **Record the verdict.** `$V/judge.py record --scope $SCOPE --unit $UNIT --run-id $RUN
---judge "<judge line>" --input <OUT>`. Exit 3 (malformed answer — a check missing, an
-unknown lens) → nothing is recorded; finalize with `--judge 'none malformed judge output'`.
+--judge "<judge line>" --input <OUT> --prompt <PROMPT>`. Exit 3 (malformed answer — a check
+missing, an unknown lens) records nothing and prints `retry-prompt: <path>`: the prompt plus
+exactly what was wrong. Re-run the same judge once on that path and record again. Refused
+twice → finalize with `--judge 'none malformed judge output'`. The gate then reports those
+judge rows **NOT-JUDGED**, which is never a block (`verify-contracts.md` §5.4.3).
 
 3.7 **Finalize.** `$S/verify-run.py finalize --log $LOG --run-id $RUN` (add
 `--judge 'none <reason>'` when §3.6 did not record). This applies the authority rule and
@@ -171,7 +174,7 @@ inconclusive (5.2's `p2-fixtures`).
 | `scope-deliverables` | `judge` | 2 | always |
 | `no-overbuild` | `judge` | 2 | every unit that commits code |
 | `test-plan-followed` | `judge` | 2 | a `/plan-eng-review` test plan exists |
-| `rejections-justified` | `judge` | 2 | `/review` ran on the unit |
+| `rejections-justified` | `judge` (the runner passes it when there is no standing rejection) | 2 | `/review` ran on the unit |
 | `faithful-port` | a source-vs-destination diff command, or `judge` | 4 / 2 | the scope ports or follows a source artifact |
 
 `$VERIFY_BASE` is exported by the runner from the ledger's base for that row's repo.

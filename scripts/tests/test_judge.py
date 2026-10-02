@@ -173,6 +173,12 @@ class TestJudge(unittest.TestCase):
         # an unreachable row is always a lever candidate, keyed for a cross-scope match
         self.assertIn("- `away` — `away-verified-unreachable` · gap:", text)
         self.assertIn("⚠ judge: claude-fallback codex not authed", text)
+        # the block list lives in the report; the marker carries a count and a pointer (§5.4)
+        self.assertIn("## 5. Gate blocks\n\n- `review:svc` — commits in range were never reviewed", text)
+        self.assertIn("⚠ verify advisory: 1 blocked — see verdict-gate.py --unit 9.1", text)
+        p = self.judge("report")  # a second run finds the report and points at it
+        self.assertIn("⚠ verify advisory: 1 blocked — see artifacts/verify-9.1-report.md", p.stdout)
+        self.assertNotIn("(review:svc", p.stdout)
 
     def test_report_propagates_a_gate_error(self):
         # 5.2-r1-05: a gate that errors must not become a successful report.

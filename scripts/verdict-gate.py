@@ -508,8 +508,11 @@ def main(argv):
 
     markers = [f"⚠ judge: {j}" for j in judges if not j.startswith("codex ")]
     if blocks and a.mode == "advisory":
-        ids = ", ".join(b[0] for b in blocks)
-        markers.append(f"⚠ verify advisory: {len(blocks)} blocked ({ids})")
+        # a count and where the list lives — never the IDs: 149.2's 369 put 9,400 characters
+        # into one PLANS-INDEX cell (§5.4)
+        rep = os.path.join("artifacts", f"verify-{a.unit}-report.md")
+        where = rep if os.path.exists(os.path.join(a.scope, rep)) else f"verdict-gate.py --unit {a.unit}"
+        markers.append(f"⚠ verify advisory: {len(blocks)} blocked — see {where}")
     verdict = "pass" if not blocks else ("advisory" if a.mode == "advisory" else "blocked")
     marker = " ".join(markers)
     level = "WARN" if a.mode == "advisory" else "BLOCK"

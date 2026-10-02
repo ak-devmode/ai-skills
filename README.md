@@ -136,7 +136,7 @@ credentials, `tooling` = these scripts), and the exact next command.
 
 | Marker | Means | What to do |
 |---|---|---|
-| `⚠ verify advisory: N blocked (ids)` | The gate would have blocked, but it is in advisory mode | Read the report; fix, or accept with a reason |
+| `⚠ verify advisory: N blocked — see <report>` | The gate would have blocked, but it is in advisory mode | Read the report's §5 Gate blocks; fix, or accept with a reason |
 | `⚠ judge: claude-fallback <why>` / `⚠ judge: none <why>` | codex didn't judge, so the verdict is weaker | Set up codex; a later codex verdict clears it |
 | `⚠ judge: review <line>` | The review ran on the Claude fallback | Re-review with codex |
 | `⚠ verify skipped: <reason>` | Someone ran `/plan … --skip-verify "<reason>"` | Nothing, but it stays visible |

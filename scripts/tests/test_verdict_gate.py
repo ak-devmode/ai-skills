@@ -251,7 +251,7 @@ class TestGate(Fixture):
         self.assertEqual(p.returncode, 0)
         self.assertIn("[WARN]", p.stdout)
         self.assertIn("ADVISORY", p.stdout)
-        self.assertIn("marker: ⚠ judge: none not configured ⚠ verify advisory: 1 blocked (bad)", p.stdout)
+        self.assertIn("marker: ⚠ judge: none not configured ⚠ verify advisory: 1 blocked — see verdict-gate.py --unit 5.1", p.stdout)
 
     def test_index_gate_mode_line_makes_the_default_blocking(self):
         self.set_table([row("bad", "exit 1")])
@@ -611,7 +611,8 @@ class TestIndexEnforcement(Fixture):
         self.verify()
         p = self.status("--advisory")
         self.assertEqual(p.returncode, 0, p.stderr)
-        self.assertIn("⚠ verify advisory: 1 blocked (bad)", self.row51())
+        self.assertIn("⚠ verify advisory: 1 blocked — see verdict-gate.py --unit 5.1", self.row51())
+        self.assertNotIn("(bad)", self.row51())  # a count, never the ID list (149.2: 9,400 chars)
         self.assertEqual(self.validate().returncode, 0)
 
     def test_hand_edited_done_caught_by_validate(self):
@@ -759,7 +760,7 @@ class TestPredatesAndCloseout(Fixture):
         rows = ""
         for n in range(1, 7):
             self.archived_scope(n)
-            mark = " ⚠ verify advisory: 1 blocked (x)" if n == 6 else ""
+            mark = " ⚠ verify advisory: 1 blocked — see artifacts/verify-x-report.md" if n == 6 else ""
             rows += (f"| {n} | ✅ Done | `archive/{n}-s/` | s | t |\n"
                      f"| {n}.1 | ✅ Done{mark} | `archive/{n}-s/` | p | t |\n")
         with open(self.index, "a") as fh:

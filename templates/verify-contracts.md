@@ -272,7 +272,10 @@ A record without resolved `shas` cannot prove coverage and keeps the marker.
 `plans-index.py gate-count`, printed by `/closeout`, counts them and says when to flip
 `GATE_MODE`): the gate prints
 the same result and the same marker, and exits `0` with `ADVISORY` on the verdict line
-instead of blocking. `--skip-verify "<reason>"` bypasses the gate and is written into the
+instead of blocking. The advisory marker is a count and where the list lives —
+`⚠ verify advisory: N blocked — see artifacts/verify-<unit>-report.md` (the report's
+§5 *Gate blocks*; the gate command when no report exists yet) — **never the ID list**, which
+for 149.2 put 9,400 characters into one PLANS-INDEX cell. `--skip-verify "<reason>"` bypasses the gate and is written into the
 verdict header and the index status.
 
 5.4.1 **Closeout view** — `verdict-gate.py --all` evaluates every gated unit in the table.

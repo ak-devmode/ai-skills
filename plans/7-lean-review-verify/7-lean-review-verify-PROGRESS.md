@@ -7,12 +7,11 @@
 
 ## Resume Context
 
-- **Last completed:** 1.R round 2 fixed and dispositioned (`c192258` for r2-01; this commit for
-  r2-02). `.env.example` declares `AI_SKILLS_REVIEW_MODE` (`64c4a18`); `names-resolve` is clean.
-- **Next action:** 1.R round 3 (the last before the hard stop) — `/review --full` on
-  `64c4a18..HEAD`; then Alex's `accept`; then 1.V `/verify 7.1 --full`.
-- **Open blockers:** none in this repo. Task 1.9's env line was set early (see the round-2
-  entry) and is uncommitted in `dev-workbench`.
+- **Last completed:** 1.R closed. Rounds 1–3 had 14 findings, all fixed; Alex accepted the
+  outcomes (`a1be8c3`).
+- **Next action:** Task 1.10 (scaffolding severity cap), then 1.11 and 1.12, then one review
+  round on 1.10–1.12 (round 4, allowed by Alex), then 1.V `/verify 7.1 --full`.
+- **Open blockers:** none. Task 1.9's env line is uncommitted in `dev-workbench`.
 
 ---
 
@@ -161,4 +160,31 @@
   override existed. Read back as `full`.
 - **Left uncommitted:** `dev-workbench` is on `feature/3-multi-account-agents`, an unrelated
   branch. Sessions already open stay lean until restarted.
+
+
+
+### Decision (Alex, 2026-10-02) — fold three gate fixes into plan 7 (no new scope)
+Principle: block only when shipped work is wrong or a deliverable doesn't work; everything
+else is a note that never costs a round. Evidence: dev-workbench scope 3, unit 3.1
+(`review-3.1-r2.md`, `-r3.md`, `verify-3.1-report.md`, run `3.1-20261002T081234-e98f`).
+Alex answered: NOT-JUDGED refuses Done in blocking mode (a marker in advisory); one more
+review round (round 4) on the new work; proceed.
+
+### Task Detail — added tasks (plan file is not edited mid-run, /plan §8.1)
+- [ ] **1.10** `/review` severity cap: the reviewer JSON gets a required `target`
+  (`shipped|scaffolding`); `record` caps `blocking` → `should-fix` when the target is
+  scaffolding or the file lives in the scope/plans folder; the rule goes in `lenses.md`;
+  the gate's off-anchor re-review exempts capped findings. Tests.
+- [ ] **1.11** `/verify` judge: a change logged as a user decision or a `#### Unplanned:`
+  entry is in scope. `progress.md` is added to the judge's inputs; lean inlines its
+  Decisions Log and Unplanned entries. Tests.
+- [ ] **1.12** `/verify` "not judged, never blocked":
+  - (a) a refused answer → retry prompt naming the missing check IDs; retry once; then
+    NOT-JUDGED in the gate (a marker in advisory, refuses Done in blocking).
+  - (b) for a lean scope.md over 40 KB, inline only the unit's `### Phase P` and
+    `## Key Decisions Captured`.
+  - (c) `rejections-justified` with 0 rejections → the runner passes it and the judge
+    never sees it.
+  - Tests for each.
+- Keep: disposition and rung strictness unchanged.
 

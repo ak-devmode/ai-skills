@@ -171,14 +171,14 @@ Alex answered: NOT-JUDGED refuses Done in blocking mode (a marker in advisory); 
 review round (round 4) on the new work; proceed.
 
 ### Task Detail — added tasks (plan file is not edited mid-run, /plan §8.1)
-- [ ] **1.10** `/review` severity cap: the reviewer JSON gets a required `target`
+- [x] **1.10** `/review` severity cap: the reviewer JSON gets a required `target`
   (`shipped|scaffolding`); `record` caps `blocking` → `should-fix` when the target is
   scaffolding or the file lives in the scope/plans folder; the rule goes in `lenses.md`;
   the gate's off-anchor re-review exempts capped findings. Tests.
-- [ ] **1.11** `/verify` judge: a change logged as a user decision or a `#### Unplanned:`
+- [x] **1.11** `/verify` judge: a change logged as a user decision or a `#### Unplanned:`
   entry is in scope. `progress.md` is added to the judge's inputs; lean inlines its
   Decisions Log and Unplanned entries. Tests.
-- [ ] **1.12** `/verify` "not judged, never blocked":
+- [x] **1.12** `/verify` "not judged, never blocked":
   - (a) a refused answer → retry prompt naming the missing check IDs; retry once; then
     NOT-JUDGED in the gate (a marker in advisory, refuses Done in blocking).
   - (b) for a lean scope.md over 40 KB, inline only the unit's `### Phase P` and
@@ -187,4 +187,14 @@ review round (round 4) on the new work; proceed.
     never sees it.
   - Tests for each.
 - Keep: disposition and rung strictness unchanged.
+
+### Tasks 1.10–1.12 — ✅ DONE
+- **1.10** `ce4ff6f` — scaffolding cap. The path rule was narrowed from "anything under
+  `plans/`" to named files after a test showed a docs repo's `plans/` can hold delivered
+  hand-back files.
+- **1.11** `c5fe97b` — logged decisions and Unplanned entries are scope; progress joins
+  the judge's inputs.
+- **1.12** `235943e` — retry prompt, NOT-JUDGED (advisory marker / blocking refusal),
+  a big scope.md inlines the unit's phase only, zero-rejection auto-pass.
+- 214 tests pass; names-resolve clean. Next: review round 4 on `a1be8c3..HEAD`.
 

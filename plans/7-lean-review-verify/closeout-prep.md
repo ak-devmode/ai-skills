@@ -202,6 +202,12 @@ Resumed/restarted phases append a SECOND block:
 - ai-skills · doc: `plans/7-lean-review-verify/scope.md` (new) — pointer to the plan, so judge.py has a scope to read (Task 1.8)
 
 - dev-workbench · config: `config/claude-code/settings.json` — `AI_SKILLS_REVIEW_MODE=full` (unplanned, uncommitted)
+- ai-skills · code: `review/scripts/review.py`, `review/schemas/review-output.schema.json`, `scripts/verdict-gate.py` — scaffolding cap (Task 1.10)
+- ai-skills · doc: `review/rules/lenses.md` §7, `review/prompts/review.md`, `review/SKILL.md` 3.7.0, `templates/verify-contracts.md` §5.2.1 (Task 1.10)
+- ai-skills · code: `verify/scripts/judge.py`, `verify/prompts/judge.md` — logged scope, progress input (Task 1.11)
+- ai-skills · code: `scripts/verdict-gate.py`, `scripts/plans-index.py`, `scripts/verify-run.py`, `scripts/verify_lib.py`, `verify/scripts/judge.py` — NOT-JUDGED, retry, big-scope phase inline, auto rejections (Task 1.12)
+- ai-skills · doc: `verify/SKILL.md` 0.7.0, `templates/verify-contracts.md` §5.4.3 (Task 1.12)
+- ai-skills · test: `test_review.py`, `test_judge.py`, `test_verdict_gate.py`, `test_verify_fixtures.py` (Tasks 1.10–1.12)
 ### §3 Patterns Followed (additional)
 - `resolve()` / `main()` in `scripts/review-mode.py` ← `scripts/clone-behind.py` (docstring contract, exit codes, stdlib-only CLI)
 

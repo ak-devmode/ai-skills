@@ -419,7 +419,9 @@ def capped_diff(path, rng, budget=LEAN_CAP):
             raise ContractError(p.stderr.strip() or f"git {args[0]} exit {p.returncode}")
         return p.stdout
 
-    rows = [r.split("\t", 2) for r in g("diff", "--numstat", "--no-renames", rng).splitlines() if r]
+    # -z: names unquoted and NUL-terminated, so a name git would quote (spaces, non-ASCII) is
+    # read as-is; `:(literal)` keeps it from acting as a glob (review 7.1-r1-06)
+    rows = [r.split("\t", 2) for r in g("diff", "--numstat", "-z", "--no-renames", rng).split("\0") if r]
     parts, used, uncovered = [], 0, []
     for added, deleted, name in rows:
         n = (int(added) if added.isdigit() else 0) + (int(deleted) if deleted.isdigit() else 0)
@@ -427,7 +429,10 @@ def capped_diff(path, rng, budget=LEAN_CAP):
             uncovered.append(f"`{name}` — {n:,} changed lines; the bundle had {budget - used:,} of its "
                              f"{LEAN_CAP:,}-line lean cap left, so this file was not reviewed")
             continue
-        parts.append(g("diff", "--no-color", "--no-ext-diff", "--no-renames", rng, "--", name))
+        body = g("diff", "--no-color", "--no-ext-diff", "--no-renames", rng, "--", f":(literal){name}")
+        if n and not body.strip():
+            raise ContractError(f"git produced no patch for `{name}` ({n} changed lines)")
+        parts.append(body)
         used += n
     return "\n".join(parts), len(parts), uncovered, len(rows), used
 

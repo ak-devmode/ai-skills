@@ -135,6 +135,18 @@ class TestReview(unittest.TestCase):
         self.assertIn("`big.txt` — 1,600 changed lines", uncovered)
         self.assertIn("`big.txt` — 1,600 changed lines", bundle)  # and the reviewer is told
 
+    def test_lean_bundle_inlines_a_name_git_would_quote(self):
+        # review 7.1-r1-06: a quoted --numstat name used as a pathspec gave an empty patch
+        for name in ("with space.sh", "ünï.sh", "star*.sh"):
+            with open(os.path.join(self.repo, name), "w") as fh:
+                fh.write(f"echo {name}-marker\n")
+        git(self.repo, "add", "-A")
+        git(self.repo, "commit", "-q", "-m", "odd names")
+        out, bundle, _ = self.lean(self.repo)
+        self.assertIn("lean: 4 of 4 file(s) inlined", out)
+        for name in ("with space.sh", "ünï.sh", "star*.sh"):
+            self.assertIn(f"+echo {name}-marker", bundle)
+
     def test_lean_bundle_lists_an_oversized_claude_md(self):
         with open(os.path.join(self.repo, "CLAUDE.md"), "w") as fh:
             fh.write("x" * 30_000)

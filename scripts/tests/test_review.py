@@ -76,11 +76,17 @@ class TestReview(unittest.TestCase):
             json.dump(doc, fh)
         return path
 
-    def record(self, reviewer="codex gpt-test", repo=None, **over):
+    def record(self, reviewer="codex gpt-test", repo=None, extra=(), **over):
         repo = repo or self.repo
         return run(REVIEW, "record", "--repo", repo, "--range", self.rng(repo), "--reviewer", reviewer,
                    "--input", self.answer(**over), "--scope", self.scope, "--unit", "9.1", "--passes", "p",
-                   env=self.env)
+                   *extra, env=self.env)
+
+    def sidecar(self, *lines):
+        path = os.path.join(self.tmp.name, "uncovered.txt")
+        with open(path, "w") as fh:
+            fh.write("".join(f"{x}\n" for x in lines))
+        return path
 
     def findings(self):
         with open(self.log) as fh:
@@ -281,12 +287,35 @@ class TestReview(unittest.TestCase):
     def test_lean_reviewer_is_never_codex_coverage(self):
         # plan 7: a lean review needs a covering codex review to clear, exactly like a fallback
         gate = load("verdict-gate.py")
-        self.record(reviewer="claude-lean mode lean (default)", findings=[], verdict="SHIP")
+        p = self.record(reviewer="claude-lean mode lean (default)", extra=("--uncovered", self.sidecar()),
+                        findings=[], verdict="SHIP")
+        self.assertEqual(p.returncode, 0, p.stderr)
         self.assertEqual(gate.fallback_markers(self.log, self.projects), ["review claude-lean mode lean (default)"])
         report = read(os.path.join(self.scope, "artifacts", "review-9.1-r1.md"))
-        self.assertIn("**DEGRADED:** reviewer is `claude-lean mode lean (default)`", report.split("## BLOCKING")[0])
+        self.assertIn("**DEGRADED (lean: single Sonnet pass over one bundle, no specialists, diff capped at "
+                      "1,500 lines):** reviewer is `claude-lean mode lean (default)`", report.split("## BLOCKING")[0])
         self.record(findings=[], verdict="SHIP")
         self.assertEqual(gate.fallback_markers(self.log, self.projects), [])
+
+    def test_lean_record_needs_the_sidecar_and_reports_it(self):
+        p = self.record(reviewer="claude-lean mode lean (default)")
+        self.assertEqual(p.returncode, 2, "a lean review without --uncovered must be refused")
+        self.assertFalse(os.path.exists(self.log) and self.findings())
+        side = self.sidecar("`big.txt` — 1,600 changed lines; not reviewed")
+        p = self.record(reviewer="claude-lean mode lean (default)",
+                        extra=("--uncovered", side, "--mode", "mode: lean (default)"))
+        self.assertEqual(p.returncode, 0, p.stderr)
+        report = read(os.path.join(self.scope, "artifacts", "review-9.1-r1.md"))
+        head, tail = report.split("## BLOCKING")[0], report.split("## What this review did not cover")[1]
+        self.assertIn("**mode: lean (default)**", head)
+        self.assertIn("- `big.txt` — 1,600 changed lines; not reviewed", tail)
+        self.assertIn("- no network", tail)                      # the model's own list is kept too
+
+    def test_lean_rounds_stop_at_three_like_codex(self):
+        side = ("--uncovered", self.sidecar())
+        for rnd in (1, 2, 3):
+            p = self.record(reviewer="claude-lean mode lean (default)", extra=side, findings=[], verdict="SHIP")
+            self.assertEqual("round 3 of 3: STOP" in p.stdout, rnd == 3, p.stdout)
 
     def test_fallback_reviewer_is_degraded_in_the_header(self):
         self.record(reviewer="claude-fallback codex not authed")

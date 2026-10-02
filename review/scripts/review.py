@@ -18,7 +18,7 @@ Usage:
   review.py prepare --repo PATH --range BASE..HEAD [--kalpa-only | --engine-only] [--lean] [--out-dir DIR]
                     --lean: inline the capped diff + this project's rules into one bundle (plan 7)
   review.py record  --repo PATH --range BASE..HEAD --reviewer LINE --input FILE
-                    [--scope DIR --unit N.P] [--passes TEXT]
+                    [--scope DIR --unit N.P] [--passes TEXT] [--mode LINE] [--uncovered FILE]
   review.py dispose --scope DIR --unit N.P --finding ID (--fixed SHA [--off-anchor REASON] | --rejected REASON |
                     --deferred TODO) [--by NAME]
   review.py dispose ... --fixed SHA --fixed-in REPO_PATH     (the fix lives in another repo)
@@ -345,6 +345,12 @@ def cmd_record(a):
         problems = validate(doc)
     except (OSError, ValueError) as exc:
         doc, problems = None, [str(exc)]
+    uncovered, code = read_uncovered(a)
+    if code is not None:
+        return code
+    if not problems and uncovered:
+        # the files past the lean cap come from prepare's sidecar, never from the model's memory
+        doc["cannot_do"] = uncovered + [c for c in doc["cannot_do"] if c not in uncovered]
     if problems:
         return err("review answer is malformed — nothing recorded", "findings with file:line, severity and "
                    "category per review/schemas/review-output.schema.json", "; ".join(problems[:6]), a.input,
@@ -380,6 +386,23 @@ def cmd_record(a):
     for line in convergence(vl.read_jsonl(log), a.unit):
         print(line)
     return vl.EXIT_PASS
+
+
+def read_uncovered(a):
+    """(the lean sidecar's lines, None) or (None, error code). A `claude-lean` review must pass
+    `--uncovered`, even an empty one: without it the report could not say what the cap left out."""
+    if a.reviewer.startswith("claude-lean ") and not a.uncovered:
+        return None, err("a lean review needs prepare's uncovered list", "--uncovered <the `uncovered:` path "
+                         "review.py prepare --lean printed>", "no --uncovered", "--uncovered",
+                         "pass the sidecar path, even when it lists nothing", code=vl.EXIT_USAGE)
+    if not a.uncovered:
+        return [], None
+    try:
+        with open(a.uncovered, encoding="utf-8") as fh:
+            return [ln.strip() for ln in fh if ln.strip()], None
+    except OSError as exc:
+        return None, err("cannot read the uncovered list", "the file prepare --lean wrote", str(exc),
+                         a.uncovered, "re-run review.py prepare --lean")
 
 
 def reviews_of(recs, unit):
@@ -488,12 +511,14 @@ def build(a, doc, ordered, key, n, review_id):
                 "finding_id": f["finding_id"], "reviewer": a.reviewer, "range": {key: a.range},
                 "file": f["file"], "line": f["line"], "category": f["category"], "group": f.get("group", ""),
                 "severity": f["severity"], "text": f["text"], "fix": f.get("fix", "")} for f in findings]
+    lean = (f" (lean: single Sonnet pass over one bundle, no specialists, diff capped at {LEAN_CAP:,} lines)"
+            if a.reviewer.startswith("claude-lean ") else "")
     degraded = [] if a.reviewer.startswith("codex ") else [
-        f"**DEGRADED:** reviewer is `{a.reviewer}` — not the codex gate; the gate reports `⚠ judge: review {a.reviewer}` "
+        f"**DEGRADED{lean}:** reviewer is `{a.reviewer}` — not the codex gate; the gate reports `⚠ judge: review {a.reviewer}` "
         "(and the index carries it) until a codex re-review of this unit."]
     header = [f"# /review — {key} @ `{a.range}` ({n} commits)", "",
               f"**Review:** `{review_id}` · **Reviewer:** {a.reviewer} · **Passes:** {a.passes or 'unrecorded'}"] \
-        + degraded + [f"**Findings:** {len(findings)} — every ID needs a disposition: "
+        + ([f"**{a.mode}**"] if a.mode else []) + degraded + [f"**Findings:** {len(findings)} — every ID needs a disposition: "
                       f"`review.py dispose --scope <scope> --unit {a.unit or '<unit>'} --finding <ID> "
                       "(--fixed <sha> | --rejected \"<reason>\" | --deferred \"<TO-DO>\")`"]
     report = "\n".join(render(doc, findings, header)) + "\n"
@@ -502,7 +527,7 @@ def build(a, doc, ordered, key, n, review_id):
     shas = dict(zip(("base", "head"), a.range.split("..")))
     review = {"schema": vl.SCHEMA, "ts": ts, "record": "review", "review_id": review_id, "reviewer": a.reviewer,
               "range": {key: a.range}, "shas": shas, "passes": a.passes or "", "findings": len(findings),
-              "verdict": doc["verdict"]}
+              "verdict": doc["verdict"], "mode": a.mode or ""}
     return [review] + records, findings, report
 
 
@@ -843,6 +868,8 @@ def main(argv):
     r.add_argument("--scope")
     r.add_argument("--unit")
     r.add_argument("--passes")
+    r.add_argument("--uncovered", help="prepare --lean's uncovered list; required for a claude-lean reviewer")
+    r.add_argument("--mode", help="review-mode.py's line, shown in the report header")
     d = sub.add_parser("dispose")
     d.add_argument("--scope", required=True)
     d.add_argument("--unit", required=True)

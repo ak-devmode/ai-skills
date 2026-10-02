@@ -184,6 +184,8 @@ Resumed/restarted phases append a SECOND block:
 - ai-skills · code: `review/scripts/review.py` — `prepare --lean`, `lean_diff`, `domain_sections`, `LEAN_SECTIONS` (Task 1.3)
 - ai-skills · doc: `review/prompts/review-lean.md` (new) — the lean bundle's template (Task 1.3)
 - ai-skills · test: `scripts/tests/test_review.py` — sections by project, cap lists never cuts, oversized CLAUDE.md, LEAN_SECTIONS ↔ GROUPS ↔ domain.md (Task 1.3)
+- ai-skills · code: `review/scripts/review.py` — `record --uncovered/--mode`, `read_uncovered`, lean DEGRADED header, `mode` on the review record (Task 1.4)
+- ai-skills · test: `scripts/tests/test_review.py` — lean needs the sidecar, uncovered lands in the report, lean rounds stop at 3 (Task 1.4)
 
 ### §3 Patterns Followed (additional)
 - `resolve()` / `main()` in `scripts/review-mode.py` ← `scripts/clone-behind.py` (docstring contract, exit codes, stdlib-only CLI)

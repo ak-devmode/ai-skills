@@ -7,8 +7,8 @@
 
 ## Resume Context
 
-- **Last completed:** Task 1.3
-- **Next action:** Task 1.4 — `review.py record` for lean
+- **Last completed:** Task 1.4
+- **Next action:** Task 1.5 — `judge.py prepare --lean` bundle
 - **Open blockers:** none. There is no finish table yet; one is drafted and confirmed at
   Task 1.8's stop, before 1.V.
 
@@ -57,3 +57,12 @@
 - **Risk:** the inlined gstack checklist has its own "Instructions" section, written for
   an agent that can run commands. The bundle header forbids running anything; the dry
   run (1.8) will show whether Sonnet obeys the header.
+
+### Task 1.4 — ✅ DONE — `review.py record` for lean
+- **Files:** `review/scripts/review.py`, `scripts/tests/test_review.py`
+- **Result:** `--uncovered FILE` puts the sidecar's lines first in "What this review did
+  not cover", ahead of the model's own `cannot_do`. A `claude-lean` reviewer without
+  `--uncovered` is refused (exit 2), so the list can't be dropped by forgetting a flag.
+  `--mode LINE` shows in the header and is stored on the `review` record. The lean
+  DEGRADED header names the cap. Rounds are unchanged: lean stops at 3 like codex
+  (tested). 156 tests pass.

@@ -103,3 +103,11 @@
   the mode. Nothing renumbered. Lint: 0 issues. Notes: a size note on review, and
   cross-skill overlap (32–37%) between the two skills' parallel mode/subagent paragraphs —
   advisory, left as is, since each skill states its own procedure.
+
+#### Unplanned: resolver read its own docstring as env refs (`ca44e9a`)
+- **Files modified:** `scripts/resolve-identifiers.py`
+- **Why:** found by the 1.8 dry run. The 309af3f `node_eval_given` docstring and a trailing
+  comment spelled out `process.env.NAME` and `process.env.X`, and `names-resolve` reported
+  both. Reworded them. The general issue (ENV_USE matches inside Python docstrings and
+  trailing comments) is left for TO-DO, not fixed here.
+

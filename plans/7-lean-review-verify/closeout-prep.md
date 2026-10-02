@@ -197,6 +197,7 @@ Resumed/restarted phases append a SECOND block:
 - ai-skills · doc: `review/SKILL.md` 3.6.0 — §1.4 mode step, §7 lean procedure, `--mode` on §2.4, description (Task 1.6)
 - ai-skills · doc: `verify/SKILL.md` 0.6.0 — §2.4 mode, `--lean` on §3.2, §3.5.1 lean judge, §3.9 run cap, §5.1 mode line (Task 1.7)
 
+- ai-skills · code: `scripts/resolve-identifiers.py` — docstring/comment reworded (unplanned, `ca44e9a`)
 ### §3 Patterns Followed (additional)
 - `resolve()` / `main()` in `scripts/review-mode.py` ← `scripts/clone-behind.py` (docstring contract, exit codes, stdlib-only CLI)
 
@@ -205,6 +206,7 @@ Resumed/restarted phases append a SECOND block:
 
 ### §11 Risk Flags (additional)
 - `.env.example` is behind a permission deny, so `AI_SKILLS_REVIEW_MODE` is not declared there yet; until Alex adds it, `names-resolve` reports it unresolved (Task 1.1)
+- resolve-identifiers' ENV_USE matches `process.env.X` inside Python docstrings and trailing `#` comments — reworded the two instances in its own source; the general fix is a TO-DO
 - the ledger base is labelled `7-lean-review-verify-PLAN`, not `7.1`; pass `--range ai-skills=bff989a..HEAD` explicitly to `/review` and `/verify`
 
 ---

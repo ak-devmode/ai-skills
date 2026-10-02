@@ -6,7 +6,7 @@
 **Created by:** Alex
 **Executed by:** TBD
 **ADR:** N/A
-**Status:** Draft
+**Status:** Ready to execute
 **Branch:** feature/7-lean-review-verify
 
 ---
@@ -60,13 +60,21 @@ prints `mode: <lean|full> (<flag|env|default>)`.
 - Recorded by the existing `review.py record`: stable IDs, dispositions, accept and gate
   all unchanged. Reviewer line `claude-lean <reason>`. Header `DEGRADED (lean …)`.
 - No gstack engine load, no specialists.
-- Round cap 2. Round 2 reviews only the fix diff for blocking findings.
+- Round cap 3, the same as full mode (Alex, 2026-10-02): rounds 2 and 3 re-review the fix
+  commits, exactly as today.
 
 2.4 **`/verify` lean.** Runner, finalize and gate unchanged (zero model tokens).
 `judge.py prepare --lean` writes a self-contained bundle: `scope.md`, the finish table,
 the run's records, the review log, a diff stat and the capped diff. One Sonnet subagent
 pass. Judge line `claude-lean <reason>`. The index keeps `⚠ judge:` — a lean judge is
 never shown as codex.
+
+2.5 **`/verify` fix loop capped at 2 runs per unit, in both modes** (Alex, 2026-10-02). A
+blocked verify gets fixed and re-run once. After a unit's second finalized run, `judge.py
+report` prints `[CONVERGENCE] verify <unit> run 2 of 2: STOP`. The skill then stops and
+asks, inline: `1.` one more run, or `2.` stop here. The count comes from `final` lines in
+the unit's verdict log, so it is a script result, not a session's memory. Same shape as
+`/review`'s round-3 hard stop.
 
 ---
 
@@ -112,11 +120,10 @@ never shown as codex.
 - **Action**: Add `--uncovered FILE` and `--mode LINE`. Merge the uncovered files into
   "What this review did not cover" in the script, never trusting the model to copy them.
   Put the mode line and `DEGRADED (lean: single Sonnet pass, no specialists, diff capped
-  at 1,500 lines)` in the header. A unit whose latest round's reviewer is `claude-lean`
-  hits `[CONVERGENCE] … STOP` at round 2, not 3.
+  at 1,500 lines)` in the header. Round logic is unchanged: cap 3 for every reviewer.
 - **Output**: edits to `review.py`, tests
 - **Acceptance**: tests cover the uncovered list showing in the report, the lean header,
-  STOP at round 2 for lean, and round 3 unchanged for codex.
+  and lean rounds stopping at 3 exactly like codex.
 
 ### 1.5 `judge.py prepare --lean` bundle
 - **Type**: AI
@@ -129,13 +136,24 @@ never shown as codex.
 - **Acceptance**: tests show the bundle is self-contained (no `{{…}}` left, every listed
   input present), the cap and listing work, and the existing non-lean prompt is unchanged.
 
+### 1.5a `/verify` run cap — 2 per unit
+- **Type**: AI
+- **Input**: `ai-skills/verify/scripts/judge.py` (`report`), `ai-skills/scripts/verify_lib.py`, `ai-skills/templates/verify-contracts.md`
+- **Action**: Per §2.5, `judge.py report` counts the unit's `final` lines in
+  `artifacts/verify-<unit>.jsonl`. On the 2nd and every later run it prints
+  `[CONVERGENCE] verify <unit> run <n> of 2: STOP` and writes the same line into the
+  report. Mode does not change the cap. Document the cap in `verify-contracts.md`.
+- **Output**: edits to `judge.py` / `verify_lib.py`, contract text, tests in `test_judge.py`
+- **Acceptance**: tests show run 1 has no line; run 2 prints STOP; run 3 prints STOP again
+  with its count; full and lean runs count toward the same cap.
+
 ### 1.6 `/review` SKILL.md
 - **Type**: AI
 - **Input**: `ai-skills/review/SKILL.md`
 - **Action**: Add a mode step before §2 that runs `review-mode.py` and branches: `full` →
   §2/§3 unchanged; `lean` → a new section with prepare `--lean`, one Sonnet `Agent` whose
   whole prompt is "read `<bundle>`, write JSON matching `<schema>` to `<out>`, modify
-  nothing", record with `claude-lean`, and the round cap of 2. Document `--full` /
+  nothing", and record with `claude-lean`; §5 round rules apply unchanged. Document `--full` /
   `--lean` and the env var in the frontmatter description and §6. Bump `version`.
 - **Output**: `ai-skills/review/SKILL.md`
 - **Acceptance**: `scripts/lint-skill.py review` passes; the full path's text is unchanged
@@ -146,7 +164,8 @@ never shown as codex.
 - **Input**: `ai-skills/verify/SKILL.md`
 - **Action**: Same branch at §3.2–§3.5: `lean` skips the codex probe and runs one Sonnet
   subagent over the lean bundle, with judge line `claude-lean <reason>`. §5.1 reporting
-  leads with the mode line. Bump `version`.
+  leads with the mode line. Add the run-cap stop (§2.5): on a `[CONVERGENCE] … STOP`
+  line, ask before another run. Bump `version`.
 - **Output**: `ai-skills/verify/SKILL.md`
 - **Acceptance**: `scripts/lint-skill.py verify` passes.
 
@@ -190,9 +209,9 @@ the `/verify` gate result.
 
 ## 4. Risks
 
-4.1 **Round cap mismatch.** `/plan` §6.8 says "through that repo's round 3". Lean stops at
-round 2 through `[CONVERGENCE] … STOP`, which `/plan` already says to act on. `/plan` is
-not edited; if the wording causes confusion in practice, that is a separate change.
+4.1 **`/plan` doesn't mention the verify cap.** `/plan` §6.8 runs `/verify` once per unit
+and doesn't describe a fix loop. The cap lives in `/verify` and its `[CONVERGENCE]`
+line, so `/plan` needs no edit.
 
 4.2 **Narrower coverage is real.** Lean cannot follow a lead outside the bundle and runs
 no specialists. The header and the `⚠ judge:` index marker are what keep it from being

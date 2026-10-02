@@ -88,6 +88,13 @@ SH_LEAD = re.compile(r"^\s*(?:(?:then|do|else|elif|if|while|until|!|\{|\()\s+)*"
 SH_CASE = re.compile(r"(?P<head>\bcase\s+\S+\s+in(?=\s|$))|(?P<end>;;&|;;|;&)|(?P<esac>\besac\b)")
 SH_CASE_PAT = re.compile(r"\(?\s*[^\s()|;&<>]+(?:\s*\|\s*[^\s()|;&<>]+)*\s*\)")
 SH_CMD_START = re.compile(r"(?:^|[;&|({]|\b(?:then|do|else))\s*$")
+# `NAME=value … node -e '<body>'`: a value is quoted / unquoted pieces; a single-quoted body
+# cannot contain `'`, so `[^']*` is exactly the shell's own reading of it, across lines
+_SH_VALUE = r"""(?:"(?:[^"\\]|\\.)*"|'[^']*'|[^\s'"])*"""  # one char per unquoted step: no backtracking blow-up
+SH_PREFIX_WORD = re.compile(r"(?<![\w$])([A-Z][A-Z0-9_]*)=" + _SH_VALUE)
+NODE_EVAL = re.compile(r"(?P<prefix>(?:(?<![\w$])[A-Z][A-Z0-9_]*=" + _SH_VALUE + r"[ \t]+)+)"
+                       r"node[ \t]+(?:--[\w-]+(?:=[^\s'\"]+)?[ \t]+)*(?:-e|--eval|-p|--print)[ \t]+"
+                       r"'(?P<body>[^']*)'")
 
 
 CTX = "\x01"  # fills quoted / substituted text in a strict mask: one opaque stretch per word
@@ -454,6 +461,24 @@ def added_lines(repo, base, head):
     return files
 
 
+def node_eval_given(text):
+    """{(lineno, NAME)} for each `process.env.NAME` read inside the single-quoted body of a
+    `NAME=… node -e '…'` whose own prefix assigns NAME: the script hands that value to that
+    one command, so it is not read from the environment. Only the command's own prefix names
+    count — any other `process.env` read in the body is still an env read."""
+    given = set()
+    for m in NODE_EVAL.finditer(text):
+        start = text.rfind("\n", 0, m.start()) + 1
+        if is_comment(text[start:m.start()], sh=True) or not SH_CMD_START.search(text[start:m.start()]):
+            continue                      # a prefix only binds at a command's start
+        names = {w.group(1) for w in SH_PREFIX_WORD.finditer(m.group("prefix"))}
+        for rx in ENV_USE[:2]:            # process.env.X, process.env["X"]
+            for u in rx.finditer(m.group("body")):
+                if u.group(1) in names:
+                    given.add((text.count("\n", 0, m.start("body") + u.start()) + 1, u.group(1)))
+    return given
+
+
 def extract(files, full=None):
     """`full` maps a shell script's path to its whole text at HEAD, so a name assigned on an
     unchanged line still counts as local rather than an environment read."""
@@ -462,13 +487,15 @@ def extract(files, full=None):
         if not is_source(path) or TEST_FILE.search(path):
             continue
         local = shell_assigned((full or {}).get(path, "")) if path.endswith(".sh") else set()
+        given = node_eval_given((full or {}).get(path, "")) if path.endswith(".sh") else set()
         open_msg = None  # (message, depth) for a Go literal opened on an added line
         for lineno, text in lines:
             if is_comment(text, sh=path.endswith(".sh")):
                 continue
             for rx in ENV_USE:
                 for m in rx.finditer(text):
-                    refs.append(ref("env", m.group(1), None, path, lineno))
+                    if (lineno, m.group(1)) not in given:
+                        refs.append(ref("env", m.group(1), None, path, lineno))
             if path.endswith(".sh"):
                 seen = set()
                 for m in SH_USE.finditer(shell_mask(text)):

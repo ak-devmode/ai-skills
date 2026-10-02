@@ -125,6 +125,27 @@ class TestJudge(unittest.TestCase):
         self.assertIn("not inlined: 0 item(s)", out)
         self.assertIn("effort: n/a", out)
 
+    def test_lean_bundle_inlines_the_units_plan(self):
+        # review 7.1-r1-02: a standalone plan's scope.md may only point at the plan
+        self.ledger(self.base)
+        self.commit_file("app.sh", ["echo x"])
+        for name, text in (("9.1-thing-PLAN.md", "unit-plan-marker"), ("9.2-other-PLAN.md", "sibling-marker")):
+            with open(os.path.join(self.scope, name), "w") as fh:
+                fh.write(text + "\n")
+        _, lean = self.prepared("--lean")
+        self.assertIn("unit-plan-marker", lean)
+        self.assertNotIn("sibling-marker", lean)
+
+    def test_lean_verdict_log_limit_applies_to_this_run_only(self):
+        # review 7.1-r1-07: a long log of earlier runs must not push this run's records out
+        self.ledger(self.base)
+        self.commit_file("app.sh", ["echo x"])
+        with open(self.log, "a") as fh:
+            fh.write(("{\"run_id\": \"old\", \"pad\": \"" + "x" * 1000 + "\"}\n") * 60)
+        out, lean = self.prepared("--lean")
+        self.assertIn(self.rid, lean.split("## Inlined inputs")[1])
+        self.assertNotIn("Verdict log", lean.split("# You are the verification judge")[0])
+
     def test_lean_bundle_past_the_cap_lists_never_cuts(self):
         self.ledger(self.base)
         self.commit_file("big.txt", [f"line {i}" for i in range(1600)])

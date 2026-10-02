@@ -145,7 +145,7 @@ def cmd_prepare(a):
     missing = []
     if a.lean:
         try:
-            text, missing = lean_bundle(text, p, a.run_id, plans, judged)
+            text, missing = lean_bundle(text, p, a.unit, a.run_id, plans, judged)
         except vl.ContractError as exc:
             return err("git could not produce the lean diff", "a readable range", str(exc)[:200], "--lean",
                        "check the unit's ranges with git log", cause="environment")
@@ -161,7 +161,7 @@ def cmd_prepare(a):
 LEAN_FILE_CAP = 40_000  # bytes of one input file a lean judge bundle inlines; larger is listed, not cut
 
 
-def lean_bundle(full, p, run_id, plans, judged):
+def lean_bundle(full, p, unit, run_id, plans, judged):
     """(text, [not inlined]) — the full prompt unchanged, a preamble that takes away the judge's
     tools, and every input inlined: the scope, the table, this run's pending records, the
     review log, the test plans, and per repo a diff stat plus the diff under one shared cap."""
@@ -170,17 +170,25 @@ def lean_bundle(full, p, run_id, plans, judged):
     def inline(title, path, only=None):
         if not os.path.isfile(path):
             return
-        if os.path.getsize(path) > LEAN_FILE_CAP:
-            missing.append(f"{title} `{path}` ({os.path.getsize(path):,} bytes, over the {LEAN_FILE_CAP:,}-byte "
-                           "lean limit) — not inlined")
-            return
         with open(path, encoding="utf-8") as fh:
             body = fh.read()
-        if only:
+        if only:   # filter first: the limit is on what is inlined, not the whole log (7.1-r1-07)
             body = "".join(ln for ln in body.splitlines(True) if only(ln))
+        size = len(body.encode("utf-8"))
+        if size > LEAN_FILE_CAP:
+            missing.append(f"{title} `{path}` ({size:,} bytes, over the {LEAN_FILE_CAP:,}-byte "
+                           "lean limit) — not inlined")
+            return
         parts.append(f"### {title} — `{path}`\n\n````\n{body.rstrip()}\n````")
 
     inline("Scope", p["scope_md"])
+    # the unit's own plan carries its tasks and acceptance lines; a standalone plan's scope.md
+    # may only point at it, and a lean judge cannot follow a pointer (7.1-r1-02)
+    scope_dir = os.path.dirname(p["table"])
+    plan_files = sorted(glob.glob(os.path.join(scope_dir, f"{unit}-*-PLAN.md"))) or \
+        sorted(glob.glob(os.path.join(scope_dir, f"{unit.split('.')[0]}-*-PLAN.md")))
+    for plan_file in plan_files:
+        inline("Plan", plan_file)
     inline("Finish-condition table", p["table"])
     inline("Verdict log — this run's records", p["log"], lambda ln: f'"{run_id}"' in ln)
     inline("Review disposition log", p["review"])

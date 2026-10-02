@@ -1,6 +1,6 @@
 ---
 name: review
-version: 3.5.0
+version: 3.6.0
 description: |
   Pre-landing code review with codex as the gate: the opposing model family, headless
   and read-only, reviews an explicit revision range against gstack's review checklist,
@@ -13,6 +13,11 @@ description: |
   a written TO-DO item); the loop stops on [CONVERGENCE] signals, and the user's yes to
   the outcomes is recorded with `accept` before the unit can be marked Done. When codex cannot run, a Claude pass (gstack's engine + the same rules) is the
   fallback, and the report says so in its header.
+
+  **Lean is the default** (plan 7): one packed bundle — the diff capped at 1,500 lines,
+  only this project's rules — read by one Sonnet subagent, with no codex, engine load or
+  specialists. That fits a regular Claude seat. `AI_SKILLS_REVIEW_MODE=full` or `--full`
+  restores the codex gate above; `--lean` forces lean. Every report header names the mode.
 
   Use when asked to "review", "review this PR", "review the diff", "pre-landing
   review", "check my diff before merge", or before opening any PR. Also invoked by
@@ -70,6 +75,12 @@ S=~/Projects/ai-skills/scripts; RV=~/Projects/ai-skills/review/scripts/review.py
 REPO=<repo>; RANGE=<BASE>..HEAD
 ```
 
+1.4 **Mode — before anything else.** `MODE=$($S/review-mode.py [--full|--lean])`, passing
+the user's flag through if they gave one. It prints one line, `mode: <lean|full> (<flag|env|
+default>)`. Keep it for `record --mode` and the report's first lines. Exit 2 (both flags, or
+a bad `AI_SKILLS_REVIEW_MODE`) is a stop: report its message and don't pick a mode yourself.
+`full` → §2, and §3 when codex can't run. `lean` → §7, with no codex probe.
+
 ---
 
 ## 2. The Gate — codex
@@ -90,7 +101,7 @@ The prompt's directory is `$WORK`. Last line `codex <model>` → §2.4 with that
 the reviewer. `none <reason>` → §3 with that reason.
 
 2.4 **Record.** `$RV record --repo $REPO --range <the range: line> --reviewer "<line>" --input
-$WORK/answer.json --passes "<passes line>" [--scope $SCOPE --unit $UNIT]`. It assigns
+$WORK/answer.json --passes "<passes line>" --mode "$MODE" [--scope $SCOPE --unit $UNIT]`. It assigns
 `<unit>-r<n>-NN` IDs in severity order, appends the raw findings, and writes
 `artifacts/review-<unit>-r<n>.md` — including **what the review did not cover** (codex's
 own `cannot_do` list plus skipped passes). Exit 3 → the answer was malformed and nothing
@@ -148,8 +159,8 @@ reviewer line. The fallback never gets its own log format.
 
 ## 4. Report
 
-4.1 Lead with the reviewer line and the passes; a fallback says **DEGRADED** in the first
-lines, never only at the bottom. Then `BLOCKING` → `SHOULD FIX` → `NOTE`, each finding with
+4.1 Lead with the mode line, the reviewer line and the passes; a fallback or lean review
+says **DEGRADED** in the first lines, never only at the bottom. Then `BLOCKING` → `SHOULD FIX` → `NOTE`, each finding with
 its ID and `file:line`, then checked-clear, not-applicable, the verdict, and what was not
 covered. `record` renders exactly this; present it, don't re-rank it.
 
@@ -260,4 +271,43 @@ it as a design decision.
 6.5 **Numbered inline questions only.** Never `AskUserQuestion`.
 
 6.6 **Report the cost when it's high.** codex takes ~2–5 minutes on a mid-size range; the
-fallback loads a large engine. For a quick look, say that `--kalpa-only` exists.
+fallback loads a large engine. For a quick look, say that `--kalpa-only` exists. Lean is the
+cheap path; when a lean report lists uncovered files that matter, say that `--full` exists.
+
+---
+
+## 7. Lean — one Sonnet pass (the default)
+
+Runs when §1.4 printed `mode: lean (…)`. The rules are the same files; what changes is
+who reads them and how much. The reviewer gets one packed file and no tools.
+
+7.1 **Render the bundle.** `$RV prepare --repo $REPO --range $RANGE --lean [--kalpa-only|--engine-only]`
+prints `prompt:` (the bundle), `schema:`, `passes:`, `range:` and `uncovered:`; keep them
+all. The bundle inlines the commits, the repo's CLAUDE.md (≤ 24 KB), gstack's checklist,
+only this project's `domain.md` sections, the lenses, and the diff. The diff is capped at
+1,500 changed lines. Files are inlined whole while they fit, and a file that doesn't fit
+is listed in `uncovered:`, never cut.
+
+7.2 **One Sonnet subagent — dispatch is pre-authorized** (this skill declares `Agent`).
+Spawn it with `model: sonnet`. Its entire prompt: "Read `<prompt>` and follow it exactly.
+Write only the JSON object it asks for, matching `<schema>`, to `<WORK>/answer.json`. Read
+no other file, run no command, modify nothing else." Nothing else — no narrative, no
+summary of the change.
+
+7.3 **Record through the same writer.** `$RV record --repo $REPO --range <the range: line>
+--reviewer "claude-lean $MODE" --input <WORK>/answer.json --passes "<passes line>" --mode
+"$MODE" --uncovered <the uncovered: path> [--scope $SCOPE --unit $UNIT]`. `--uncovered` is
+required for a lean reviewer; `record` refuses without it, so the not-covered list can't
+be dropped. Exit 3 (a malformed answer) → re-run the subagent once, then stop and report.
+Never escalate to `full` on your own: that is the user's `--full`.
+
+7.4 **What lean does not do,** and says so in the report: no codex, no gstack engine
+load, no specialist fan-out (§3.2), no reads outside the bundle, nothing past the cap.
+`record` puts that in the DEGRADED header and the uncovered files under "What this review
+did not cover". The gate marks the unit `⚠ judge: review claude-lean …` until a codex
+review covers it.
+
+7.5 **Everything after recording is unchanged.** §4 reporting, §5 dispositions,
+`accept`, and the §5.1 round rules (hard stop at round 3) apply as written. A re-review
+round is another lean pass on its range. §3.4's telemetry check doesn't apply: lean never
+runs gstack's engine.

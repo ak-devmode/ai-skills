@@ -7,8 +7,8 @@
 
 ## Resume Context
 
-- **Last completed:** Task 1.5a
-- **Next action:** Task 1.6 — `/review` SKILL.md
+- **Last completed:** Task 1.6
+- **Next action:** Task 1.7 — `/verify` SKILL.md
 - **Open blockers:** none. There is no finish table yet; one is drafted and confirmed at
   Task 1.8's stop, before 1.V.
 
@@ -86,3 +86,11 @@
   run 2 on, it prints `[CONVERGENCE] verify <unit> run <n> of 2: STOP` and writes it under
   the report's Gate line. Mixed codex and lean runs count together (tested: run 1 no
   line, runs 2 and 3 STOP). The cap never changes a verdict.
+
+### Task 1.6 — ✅ DONE — `/review` SKILL.md
+- **Files:** `review/SKILL.md` (3.5.0 → 3.6.0)
+- **Result:** §1.4 runs `review-mode.py` first: `full` goes to §2/§3 (only `--mode` added
+  to §2.4), `lean` goes to a new §7 (render, one Sonnet `Agent` with a no-narrative prompt,
+  record with `claude-lean` + `--uncovered`, what lean doesn't do; §4/§5 unchanged).
+  Appended as §7 rather than inserted, so nothing renumbers: `/plan` and the contract cite
+  §3 and §5.1. Lint: 0 issues, 1 size note (280 body lines).

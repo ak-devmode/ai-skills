@@ -410,3 +410,9 @@ Touches: scripts/verdict-gate.py · scripts/verify_lib.py · scripts/finish-tabl
       - `p3-scope-deliverables` (5.3): inconclusive, no delivery receipt for the announcement (Alex: his word is the evidence; accepted)
       - `p3-rejections-justified` (5.3): the r12-01 rejection (see "Shell env scan: false alarm" under Plan 5.3 above)
 - [x] Run /closeout for plans 5.1 and 5.2 — folded into this scope closeout (2026-09-29)
+
+## Verify judge downgrades a check it has itself confirmed (kalpa-iris scope 1)
+Source: ~/.herdr/worktrees/kalpa-iris/feature/1-code-inventory/iris-docs/plans/1-code-inventory/artifacts/verify-1.1.jsonl (run 1.1-20261002T024158-e106)
+Touches: ai-skills · verify/scripts/judge.py prompt · scripts/verify_lib.py authority rule · templates/verify-contracts.md
+
+- [ ] The judge downgraded runner pass `c0-demand-exists` (rung 4, `test -s demand.md`) to inconclusive while stating that git shows demand.md was committed before the lanes — i.e. it verified the row's deliverable ("written before the lanes run") and still marked it down because the command is weaker than the row's wording. A judge that confirms the deliverable from evidence should pass the row at the rung it established (or raise a low "command weaker than deliverable" finding), not block. Seventh item after the six fixed in d23aee8. Owner: Alex.

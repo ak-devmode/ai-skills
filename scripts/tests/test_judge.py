@@ -146,6 +146,24 @@ class TestJudge(unittest.TestCase):
         self.assertIn(self.rid, lean.split("## Inlined inputs")[1])
         self.assertNotIn("Verdict log", lean.split("# You are the verification judge")[0])
 
+    def test_logged_decisions_reach_the_judge(self):
+        # plan 7.1-11: a user decision or an `#### Unplanned:` entry is recorded scope
+        self.ledger(self.base)
+        self.commit_file("app.sh", ["echo x"])
+        with open(os.path.join(self.scope, "progress.md"), "w") as fh:
+            fh.write("# progress\n\n## Session\n\nchatty-session-marker\n\n"
+                     "### Decision (Alex) — dates are dd/mm\n\ndecision-marker\n\n"
+                     "#### Unplanned: daemon fix\n\nunplanned-marker\n\n### Task 1.2\n\ntask-marker\n")
+        _, full = self.prepared()
+        self.assertIn(f"- Progress: `{os.path.join(self.scope, 'progress.md')}`", full)
+        self.assertIn("never flag it as unplanned", full)
+        _, lean = self.prepared("--lean")
+        inlined = lean.split("## Inlined inputs")[1]
+        self.assertIn("decision-marker", inlined)
+        self.assertIn("unplanned-marker", inlined)
+        self.assertNotIn("chatty-session-marker", inlined)     # only recorded scope, not the whole log
+        self.assertNotIn("task-marker", inlined)
+
     def test_lean_bundle_past_the_cap_lists_never_cuts(self):
         self.ledger(self.base)
         self.commit_file("big.txt", [f"line {i}" for i in range(1600)])

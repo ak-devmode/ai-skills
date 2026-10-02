@@ -29,6 +29,7 @@ import argparse
 import glob
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -47,9 +48,16 @@ LENSES = ("conformance", "test-plan", "rejection-audit", "faithful-port", "over-
           "invented-reality", "evidence")
 
 
+def progress_file(scope):
+    """The scope's `progress.md`, else a standalone plan's `<stem>-PROGRESS.md`, else None."""
+    own = os.path.join(scope, "progress.md")
+    found = [own] if os.path.isfile(own) else sorted(glob.glob(os.path.join(scope, "*-PROGRESS.md")))
+    return found[0] if found else None
+
+
 def paths(scope, unit):
     art = os.path.join(scope, "artifacts")
-    return {"table": os.path.join(scope, "finish-conditions.md"), "art": art,
+    return {"progress": progress_file(scope), "table": os.path.join(scope, "finish-conditions.md"), "art": art,
             "log": os.path.join(art, f"verify-{unit}.jsonl"), "ledger": os.path.join(scope, "closeout-prep.md"),
             "review": os.path.join(art, f"review-{unit}.jsonl"), "scope_md": os.path.join(scope, "scope.md")}
 
@@ -135,6 +143,7 @@ def cmd_prepare(a):
             "TABLE_REV": str(table["revision"]), "LOG": p["log"], "RANGES": "\n".join(ranges),
             "TEST_PLAN": ", ".join(f"`{x}`" for x in plans) or "none",
             "REVIEW_LOG": f"`{p['review']}`" if os.path.exists(p["review"]) else "none",
+            "PROGRESS": f"`{p['progress']}`" if p["progress"] else "none",
             "CHECKS": "\n".join(checks)}
     with open(PROMPT, encoding="utf-8") as fh:
         text = fh.read()
@@ -159,6 +168,30 @@ def cmd_prepare(a):
 
 
 LEAN_FILE_CAP = 40_000  # bytes of one input file a lean judge bundle inlines; larger is listed, not cut
+LOGGED = re.compile(r"(?i)decision|^#{2,6}\s+unplanned:")
+
+
+def md_sections(text, want):
+    """The markdown sections whose heading line matches `want`, each with its body up to the next
+    heading of the same or a higher level, in file order."""
+    lines, out, i = text.splitlines(True), [], 0
+    while i < len(lines):
+        m = re.match(r"^(#{1,6})\s", lines[i])
+        if m and want(lines[i]):
+            level, j = len(m.group(1)), i + 1
+            while j < len(lines) and not (re.match(r"^(#{1,6})\s", lines[j])
+                                          and len(re.match(r"^(#{1,6})", lines[j]).group(1)) <= level):
+                j += 1
+            out.append("".join(lines[i:j]).rstrip())
+            i = j
+        else:
+            i += 1
+    return out
+
+
+def logged_scope(text):
+    """A progress file's recorded scope changes: decision entries and `#### Unplanned:` ones."""
+    return "\n\n".join(md_sections(text, lambda h: bool(LOGGED.search(h)))) or "(no decision or unplanned entries)"
 
 
 def lean_bundle(full, p, unit, run_id, plans, judged):
@@ -167,11 +200,13 @@ def lean_bundle(full, p, unit, run_id, plans, judged):
     review log, the test plans, and per repo a diff stat plus the diff under one shared cap."""
     missing, parts = [], []
 
-    def inline(title, path, only=None):
+    def inline(title, path, only=None, keep=None):
         if not os.path.isfile(path):
             return
         with open(path, encoding="utf-8") as fh:
             body = fh.read()
+        if keep:
+            body = keep(body)
         if only:   # filter first: the limit is on what is inlined, not the whole log (7.1-r1-07)
             body = "".join(ln for ln in body.splitlines(True) if only(ln))
         size = len(body.encode("utf-8"))
@@ -191,6 +226,8 @@ def lean_bundle(full, p, unit, run_id, plans, judged):
         inline("Plan", plan_file)
     inline("Finish-condition table", p["table"])
     inline("Verdict log — this run's records", p["log"], lambda ln: f'"{run_id}"' in ln)
+    if p["progress"]:
+        inline("Progress — decisions and unplanned entries", p["progress"], keep=logged_scope)
     inline("Review disposition log", p["review"])
     for plan in plans:
         inline("Test plan", plan)

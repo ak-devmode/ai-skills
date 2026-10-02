@@ -201,6 +201,7 @@ Resumed/restarted phases append a SECOND block:
 - ai-skills · code: `scripts/resolve-identifiers.py` — docstring/comment reworded (unplanned, `ca44e9a`)- ai-skills · doc: `plans/7-lean-review-verify/artifacts/lean-dry-run.md` (new) — measured tokens (Task 1.8)
 - ai-skills · doc: `plans/7-lean-review-verify/scope.md` (new) — pointer to the plan, so judge.py has a scope to read (Task 1.8)
 
+- dev-workbench · config: `config/claude-code/settings.json` — `AI_SKILLS_REVIEW_MODE=full` (unplanned, uncommitted)
 ### §3 Patterns Followed (additional)
 - `resolve()` / `main()` in `scripts/review-mode.py` ← `scripts/clone-behind.py` (docstring contract, exit codes, stdlib-only CLI)
 
@@ -210,6 +211,7 @@ Resumed/restarted phases append a SECOND block:
 ### §11 Risk Flags (additional)
 - `.env.example` is behind a permission deny, so `AI_SKILLS_REVIEW_MODE` is not declared there yet; until Alex adds it, `names-resolve` reports it unresolved (Task 1.1)
 - resolve-identifiers' ENV_USE matches `process.env.X` inside Python docstrings and trailing `#` comments — reworded the two instances in its own source; the general fix is a TO-DO
+- the lean default went live for Alex the moment this branch was checked out (skills are symlinked from the working tree); a scope that changes a skill's default should set any opt-out before the branch is checked out
 - the ledger base is labelled `7-lean-review-verify-PLAN`, not `7.1`; pass `--range ai-skills=bff989a..HEAD` explicitly to `/review` and `/verify`
 
 ---

@@ -7,12 +7,12 @@
 
 ## Resume Context
 
-- **Last completed:** Task 1.8 (reviewed by Alex 2026-10-02: the numbers fit a seat). The 7.1
-  finish table is written and approved (rev 1). 1.R round 1 is fixed and dispositioned.
-- **Next action:** 1.R round 2 — `/review --full` on the fix commits; then Alex's `accept`;
-  then 1.V `/verify 7.1 --full`.
-- **Open blockers:** `AI_SKILLS_REVIEW_MODE` is not yet in `.env.example`, so `p1-names-resolve`
-  fails until Alex runs `bash ~/cc/add-review-mode-env.sh` and the change is committed.
+- **Last completed:** 1.R round 2 fixed and dispositioned (`c192258` for r2-01; this commit for
+  r2-02). `.env.example` declares `AI_SKILLS_REVIEW_MODE` (`64c4a18`); `names-resolve` is clean.
+- **Next action:** 1.R round 3 (the last before the hard stop) — `/review --full` on
+  `64c4a18..HEAD`; then Alex's `accept`; then 1.V `/verify 7.1 --full`.
+- **Open blockers:** none in this repo. Task 1.9's env line was set early (see the round-2
+  entry) and is uncommitted in `dev-workbench`.
 
 ---
 
@@ -142,4 +142,23 @@
   - this commit — Resume Context (08)
 - 01 (`.env.example`) is fixed by Alex's script run plus a commit, recorded off-anchor
   when it lands.
+
+### Task 1.R — round 2 (codex gpt-6-sol, full) — 2 findings, both fixed
+- Report: `artifacts/review-7.1-r2.md`. Verdict SHIP AFTER BLOCKING.
+- r2-01 (blocking): a sidecar holding only the range header passed. Fixed in `c192258`:
+  `record` recomputes the lean not-covered list from the range (`lean_coverage()`, shared
+  with `prepare`). `--uncovered` is removed, which also supersedes the r1-05 fix.
+  **Deviation from the plan text:** Task 1.4 specified `--uncovered FILE`; the plan file
+  isn't edited during execution, so the deviation is recorded here.
+- r2-02 (should-fix): stale Resume Context. Fixed in this commit.
+- 01 closed: Alex ran `~/cc/add-review-mode-env.sh`; committed as `64c4a18`, off-anchor.
+
+#### Unplanned: Task 1.9's env line set early
+- **Files modified:** `dev-workbench/config/claude-code/settings.json` (the target of
+  `~/.claude/settings.json`), with `"AI_SKILLS_REVIEW_MODE": "full"` added to `env`.
+- **Why:** Alex reported that his own reviews had gone lean. Skills read straight from this
+  checkout, which is on the feature branch, so the lean default was live before his
+  override existed. Read back as `full`.
+- **Left uncommitted:** `dev-workbench` is on `feature/3-multi-account-agents`, an unrelated
+  branch. Sessions already open stay lean until restarted.
 

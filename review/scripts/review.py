@@ -69,7 +69,7 @@ GROUPS = {"wellmed": "§3.1–§3.8", "pmg": "§3.1, §3.5, §3.6, §3.7 only",
 LEAN_SECTIONS = {"wellmed": ["3.1", "3.2", "3.3", "3.4", "3.5", "3.6", "3.7", "3.8"],
                  "pmg": ["3.1", "3.5", "3.6", "3.7"],
                  "iris": ["3.1", "3.2", "3.5", "3.6", "3.7", "3.8", "3.9"]}
-LEAN_CAP = 1500          # changed lines inlined into a lean bundle (plan 7, Alex 2026-10-02)
+LEAN_CAP = vl.LEAN_CAP   # changed lines inlined into a lean bundle (shared with /verify's)
 LEAN_CLAUDE_MD = 24_000  # bytes of the repo's CLAUDE.md a lean bundle inlines; larger is listed, not cut
 # Standalone graphs that live under another project's directory. Matched before the
 # top-level project, so kalpa-iris never inherits WellMed's ADR checks (IRIS CLAUDE.md §3.1).
@@ -158,32 +158,11 @@ def domain_sections(numbers):
     return out
 
 
-def lean_diff(repo, rng, cap=LEAN_CAP):
-    """(inlined diff text, inlined count, [uncovered lines], total files). Files go in whole, in
-    diff order, while they fit under `cap` changed lines; one that doesn't is listed, never cut."""
-    rc, stat, e = git(repo, "diff", "--numstat", "--no-renames", rng)
-    if rc != 0:
-        raise vl.ContractError(e)
-    parts, used, uncovered, rows = [], 0, [], [r.split("\t", 2) for r in stat.splitlines() if r]
-    for added, deleted, path in rows:
-        n = (int(added) if added.isdigit() else 0) + (int(deleted) if deleted.isdigit() else 0)
-        if used + n > cap:
-            uncovered.append(f"`{path}` — {n:,} changed lines; the bundle had {cap - used:,} of its "
-                             f"{cap:,}-line lean cap left, so this file was not reviewed")
-            continue
-        rc, body, e = git(repo, "diff", "--no-color", "--no-ext-diff", "--no-renames", rng, "--", path)
-        if rc != 0:
-            raise vl.ContractError(e)
-        parts.append(body)
-        used += n
-    return "\n".join(parts), len(parts), uncovered, len(rows)
-
-
 def prepare_lean(a, n, proj, out_dir):
     """Write the lean bundle: everything the single Sonnet reviewer may read, in one file."""
     with open(PROMPT, encoding="utf-8") as fh:
         output_spec = fh.read().split("## Output", 1)[1]  # one Output contract for both modes
-    diff, inlined, uncovered, total = lean_diff(a.repo, a.range)
+    diff, inlined, uncovered, total, _ = vl.capped_diff(a.repo, a.range)
     _, log, _ = git(a.repo, "log", "--oneline", a.range)
     passes, sections = [], []
     if a.kalpa_only:

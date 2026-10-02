@@ -95,6 +95,46 @@ class TestJudge(unittest.TestCase):
         self.assertIn("(1 commits)", prompt)
         self.assertIn(self.rid, prompt)
 
+    # ---- prepare --lean (plan 7)
+    def commit_file(self, name, lines):
+        with open(os.path.join(self.svc, name), "w") as fh:
+            fh.write("".join(f"{x}\n" for x in lines))
+        git(self.svc, "add", "-A")
+        git(self.svc, "commit", "-q", "-m", name)
+
+    def prepared(self, *flags):
+        p = self.judge("prepare", "--out-dir", os.path.join(self.tmp.name, "w"), *flags)
+        self.assertEqual(p.returncode, 0, p.stderr)
+        return p.stdout, read(p.stdout.split("prompt: ")[1].split()[0])
+
+    def test_lean_bundle_is_the_full_prompt_plus_inlined_inputs(self):
+        self.ledger(self.base)
+        self.commit_file("app.sh", ["echo lean-marker"])
+        _, full = self.prepared()
+        out, lean = self.prepared("--lean")
+        self.assertIn(full.rstrip(), lean)                         # the full rules, unchanged
+        self.assertNotIn("You have no tools", full)
+        self.assertNotRegex(lean, r"\{\{[A-Z_]+\}\}")
+        self.assertIn("You have no tools for this run", lean.split("# You are the verification judge")[0])
+        inlined = lean.split("## Inlined inputs")[1]
+        self.assertIn("# scope", inlined)
+        self.assertIn("| jr |", inlined)                           # the table
+        self.assertIn(self.rid, inlined)                           # this run's records
+        self.assertIn("+echo lean-marker", inlined)                # the diff
+        self.assertIn("app.sh", inlined)                           # and its stat
+        self.assertIn("not inlined: 0 item(s)", out)
+        self.assertIn("effort: n/a", out)
+
+    def test_lean_bundle_past_the_cap_lists_never_cuts(self):
+        self.ledger(self.base)
+        self.commit_file("big.txt", [f"line {i}" for i in range(1600)])
+        self.commit_file("small.sh", ["echo small"])
+        out, lean = self.prepared("--lean")
+        self.assertIn("not inlined: 1 item(s)", out)
+        self.assertIn("svc: `big.txt` — 1,600 changed lines", lean.split("# You are the verification judge")[0])
+        self.assertNotIn("line 1599", lean)
+        self.assertIn("+echo small", lean)
+
     def test_prepare_refuses_empty_range(self):
         self.ledger(git(self.svc, "rev-parse", "HEAD"))
         p = self.judge("prepare")

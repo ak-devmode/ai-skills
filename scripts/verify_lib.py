@@ -401,6 +401,35 @@ def effort_for(stats):
     return "high", why
 
 
+LEAN_CAP = 1500  # changed lines a lean bundle inlines, across every repo (plan 7, Alex 2026-10-02)
+
+
+def capped_diff(path, rng, budget=LEAN_CAP):
+    """(diff text, inlined, [not-covered lines], total files, lines used) for `rng` in the repo
+    at `path`. Files go in whole, in diff order, while they fit in `budget` changed lines; one
+    that doesn't is listed by name and size, never cut. Shared by /review's and /verify's lean
+    bundles so the two cap the same way. Raises ContractError when git cannot read the range."""
+    import subprocess
+
+    def g(*args):
+        p = subprocess.run(["git", "-C", path, *args], capture_output=True, text=True)
+        if p.returncode != 0:
+            raise ContractError(p.stderr.strip() or f"git {args[0]} exit {p.returncode}")
+        return p.stdout
+
+    rows = [r.split("\t", 2) for r in g("diff", "--numstat", "--no-renames", rng).splitlines() if r]
+    parts, used, uncovered = [], 0, []
+    for added, deleted, name in rows:
+        n = (int(added) if added.isdigit() else 0) + (int(deleted) if deleted.isdigit() else 0)
+        if used + n > budget:
+            uncovered.append(f"`{name}` — {n:,} changed lines; the bundle had {budget - used:,} of its "
+                             f"{LEAN_CAP:,}-line lean cap left, so this file was not reviewed")
+            continue
+        parts.append(g("diff", "--no-color", "--no-ext-diff", "--no-renames", rng, "--", name))
+        used += n
+    return "\n".join(parts), len(parts), uncovered, len(rows), used
+
+
 def diff_stat(path, rng):
     """(files, changed lines) for `rng` in the repo at `path`, from `git diff --shortstat`."""
     import subprocess

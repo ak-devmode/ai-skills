@@ -7,8 +7,8 @@
 
 ## Resume Context
 
-- **Last completed:** Task 1.4
-- **Next action:** Task 1.5 — `judge.py prepare --lean` bundle
+- **Last completed:** Task 1.5
+- **Next action:** Task 1.5a — `/verify` run cap, 2 per unit
 - **Open blockers:** none. There is no finish table yet; one is drafted and confirmed at
   Task 1.8's stop, before 1.V.
 
@@ -66,3 +66,15 @@
   `--mode LINE` shows in the header and is stored on the `review` record. The lean
   DEGRADED header names the cap. Rounds are unchanged: lean stops at 3 like codex
   (tested). 156 tests pass.
+
+### Task 1.5 — ✅ DONE — `judge.py prepare --lean` bundle
+- **Files:** `verify/scripts/judge.py`, `verify/prompts/judge-lean.md` (new),
+  `scripts/verify_lib.py`, `review/scripts/review.py`, `scripts/tests/test_judge.py`
+- **Result:** the bundle is the lean preamble, then today's full prompt verbatim (one set
+  of rules, tested by substring), then the inlined inputs: scope.md, the table, this run's
+  verdict-log records, the review log, the test plans, and per repo a `--stat` plus the
+  diff. One 1,500-line cap is shared across repos. Inputs over 40 KB and files past the
+  cap are listed in the preamble, and a check needing them is `inconclusive`.
+  200 tests pass.
+- **Pattern:** the capped diff moved from `review.py` into `verify_lib.capped_diff`, so
+  `/review` and `/verify` cap the same way (CLAUDE.md §3.5).

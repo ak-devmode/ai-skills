@@ -13,7 +13,8 @@ candidates for a human; a check that ends inconclusive or unreachable is always 
 candidate, whether or not the judge named one.
 
 Usage:
-  judge.py prepare --scope DIR --unit N.P --run-id ID [--range REPO=BASE..HEAD ...] [--no-commits] [--out-dir DIR]
+  judge.py prepare --scope DIR --unit N.P --run-id ID [--range REPO=BASE..HEAD ...] [--no-commits] [--lean] [--out-dir DIR]
+    --lean    one self-contained bundle for a single Sonnet pass: every input inlined, the diff capped (plan 7)
   judge.py record  --scope DIR --unit N.P --run-id ID --judge LINE --input FILE
   judge.py report  --scope DIR --unit N.P --run-id ID
     --range   overrides the ledger's base for REPO (older scopes have no recorded base)
@@ -39,6 +40,7 @@ sys.path.insert(0, SCRIPTS)
 import verify_lib as vl  # noqa: E402
 
 PROMPT = os.path.join(SKILL, "prompts", "judge.md")
+LEAN_PROMPT = os.path.join(SKILL, "prompts", "judge-lean.md")
 SCHEMA = os.path.join(SKILL, "schemas", "judge-output.schema.json")
 DOCS = f"{vl.CONTRACT} §4.4 · verify/SKILL.md"
 LENSES = ("conformance", "test-plan", "rejection-audit", "faithful-port", "over-build",
@@ -83,7 +85,7 @@ def cmd_prepare(a):
     overrides = dict(r.split("=", 1) for r in a.range)
     base = vl.bases(p["ledger"], a.unit)
     repos = sorted({r["repo"] for r in pend})
-    ranges, stats = [], []
+    ranges, stats, judged = [], [], []   # judged: (repo, path, range) with commits, for a lean bundle
     for repo in repos:
         path = vl.repo_root(a.projects, repo, a.scope)
         head = git_head(path)
@@ -120,6 +122,7 @@ def cmd_prepare(a):
                        "an empty range is a failure, not a clean pass — check the base SHA", cause="code")
         ranges.append(f"  - `{path}`: `{rng}` ({n.stdout.strip()} commits)")
         stats.append(vl.diff_stat(path, rng))
+        judged.append((repo, path, rng))
     by_id = {r["check_id"]: r for r in table["rows"]}
     checks = []
     for r in pend:
@@ -139,12 +142,62 @@ def cmd_prepare(a):
         text = text.replace("{{" + k + "}}", v)
     out_dir = a.out_dir or tempfile.mkdtemp(prefix=f"verify-{a.unit}-")
     os.makedirs(out_dir, exist_ok=True)
-    prompt = os.path.join(out_dir, f"judge-{a.run_id}.md")
+    missing = []
+    if a.lean:
+        try:
+            text, missing = lean_bundle(text, p, a.run_id, plans, judged)
+        except vl.ContractError as exc:
+            return err("git could not produce the lean diff", "a readable range", str(exc)[:200], "--lean",
+                       "check the unit's ranges with git log", cause="environment")
+    prompt = os.path.join(out_dir, f"judge-{a.run_id}{'-lean' if a.lean else ''}.md")
     with open(prompt, "w", encoding="utf-8") as fh:
         fh.write(text)
-    effort, why = vl.effort_for(stats)
-    print(f"prompt: {prompt}\nschema: {SCHEMA}\neffort: {effort} ({why})")
+    effort, why = ("n/a", "lean — one Sonnet pass") if a.lean else vl.effort_for(stats)
+    print(f"prompt: {prompt}\nschema: {SCHEMA}\neffort: {effort} ({why})"
+          + (f"\nnot inlined: {len(missing)} item(s)" if a.lean else ""))
     return vl.EXIT_PASS
+
+
+LEAN_FILE_CAP = 40_000  # bytes of one input file a lean judge bundle inlines; larger is listed, not cut
+
+
+def lean_bundle(full, p, run_id, plans, judged):
+    """(text, [not inlined]) — the full prompt unchanged, a preamble that takes away the judge's
+    tools, and every input inlined: the scope, the table, this run's pending records, the
+    review log, the test plans, and per repo a diff stat plus the diff under one shared cap."""
+    missing, parts = [], []
+
+    def inline(title, path, only=None):
+        if not os.path.isfile(path):
+            return
+        if os.path.getsize(path) > LEAN_FILE_CAP:
+            missing.append(f"{title} `{path}` ({os.path.getsize(path):,} bytes, over the {LEAN_FILE_CAP:,}-byte "
+                           "lean limit) — not inlined")
+            return
+        with open(path, encoding="utf-8") as fh:
+            body = fh.read()
+        if only:
+            body = "".join(ln for ln in body.splitlines(True) if only(ln))
+        parts.append(f"### {title} — `{path}`\n\n````\n{body.rstrip()}\n````")
+
+    inline("Scope", p["scope_md"])
+    inline("Finish-condition table", p["table"])
+    inline("Verdict log — this run's records", p["log"], lambda ln: f'"{run_id}"' in ln)
+    inline("Review disposition log", p["review"])
+    for plan in plans:
+        inline("Test plan", plan)
+    budget = vl.LEAN_CAP
+    for repo, path, rng in judged:
+        stat = subprocess.run(["git", "-C", path, "diff", "--stat", rng], capture_output=True, text=True).stdout
+        diff, _, uncovered, _, used = vl.capped_diff(path, rng, budget)
+        budget -= used
+        missing += [f"{repo}: {u}" for u in uncovered]
+        parts.append(f"### {repo} `{rng}`\n\n```\n{stat.rstrip()}\n```\n\n````diff\n{diff.rstrip()}\n````")
+    with open(LEAN_PROMPT, encoding="utf-8") as fh:
+        pre = fh.read()
+    listed = "\n".join(f"- {m}" for m in missing) or "- (nothing — every input is inlined)"
+    return (pre.replace("{{NOT_INLINED}}", listed) + "\n\n" + full.rstrip()
+            + "\n\n## Inlined inputs\n\n" + "\n\n".join(parts) + "\n"), missing
 
 
 # ---------- record -----------------------------------------------------------------
@@ -284,6 +337,7 @@ def main(argv):
         if name == "prepare":
             s.add_argument("--range", action="append", default=[])
             s.add_argument("--no-commits", action="store_true")
+            s.add_argument("--lean", action="store_true")
             s.add_argument("--out-dir")
         if name == "record":
             s.add_argument("--judge", required=True)

@@ -186,6 +186,11 @@ Resumed/restarted phases append a SECOND block:
 - ai-skills · test: `scripts/tests/test_review.py` — sections by project, cap lists never cuts, oversized CLAUDE.md, LEAN_SECTIONS ↔ GROUPS ↔ domain.md (Task 1.3)
 - ai-skills · code: `review/scripts/review.py` — `record --uncovered/--mode`, `read_uncovered`, lean DEGRADED header, `mode` on the review record (Task 1.4)
 - ai-skills · test: `scripts/tests/test_review.py` — lean needs the sidecar, uncovered lands in the report, lean rounds stop at 3 (Task 1.4)
+- ai-skills · code: `scripts/verify_lib.py` — `capped_diff`, `LEAN_CAP` (moved out of review.py; both lean bundles share it) (Task 1.5)
+- ai-skills · code: `verify/scripts/judge.py` — `prepare --lean`, `lean_bundle` (Task 1.5)
+- ai-skills · code: `review/scripts/review.py` — uses `vl.capped_diff` (Task 1.5)
+- ai-skills · doc: `verify/prompts/judge-lean.md` (new) — the lean judge preamble (Task 1.5)
+- ai-skills · test: `scripts/tests/test_judge.py` — full prompt kept verbatim, inputs inlined, cap lists never cuts (Task 1.5)
 
 ### §3 Patterns Followed (additional)
 - `resolve()` / `main()` in `scripts/review-mode.py` ← `scripts/clone-behind.py` (docstring contract, exit codes, stdlib-only CLI)

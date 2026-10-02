@@ -185,6 +185,35 @@ class TestPlacement(RunnerTest):
         self.assertEqual(own.returncode, 0, own.stderr)
 
 
+class TestWorktree(RunnerTest):
+    """A scope folder inside a linked worktree of the row's repo checks that worktree, not
+    the main checkout under --projects (verify_lib.repo_root; kalpa-iris scope 1)."""
+
+    def test_scope_in_worktree_checks_the_worktree(self):
+        svc = os.path.join(self.env.projects, "svc")
+        wt = os.path.join(self.env.tmp.name, "wt")
+        git(svc, "worktree", "add", "-q", "-b", "feature/x", wt)
+        with open(os.path.join(wt, "sub", "only-here.txt"), "w") as fh:
+            fh.write("y\n")
+        git(wt, "add", "-A")
+        git(wt, "commit", "-q", "-m", "worktree commit")
+        scope = os.path.join(wt, "plans", "1-x")
+        os.makedirs(scope)
+        table = os.path.join(scope, "finish-conditions.md")
+        with open(table, "w", encoding="utf-8") as fh:
+            fh.write(f"# t\n\n**Schema version:** verify/1\n**Revision:** 1\n\n{HEADER}{row('wt', 'test -f only-here.txt')}\n")
+        p = run("verify-run.py", "run", "--table", table, "--log", self.env.priv_log, "--projects",
+                self.env.projects, "--owner", "5.1")
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        self.assertEqual(self.pending("wt")["sha"], git(wt, "rev-parse", "HEAD"))
+        lib = load("verify-run.py").vl
+        self.assertEqual(os.path.realpath(lib.repo_root(self.env.projects, "svc", scope)), os.path.realpath(wt))
+        # no scope, a scope outside git, or another repo's row: <projects>/<repo> as before
+        self.assertEqual(lib.repo_root(self.env.projects, "svc"), svc)
+        self.assertEqual(lib.repo_root(self.env.projects, "svc", self.env.tmp.name), svc)
+        self.assertEqual(lib.repo_root(self.env.projects, "priv", scope), os.path.join(self.env.projects, "priv"))
+
+
 class TestReadBack(RunnerTest):
     def test_write_that_did_not_land_exits_3(self):
         mod = load("verify-run.py")

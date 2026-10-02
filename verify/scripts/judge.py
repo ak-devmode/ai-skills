@@ -85,7 +85,7 @@ def cmd_prepare(a):
     repos = sorted({r["repo"] for r in pend})
     ranges, stats = [], []
     for repo in repos:
-        path = os.path.join(a.projects, repo)
+        path = vl.repo_root(a.projects, repo, a.scope)
         head = git_head(path)
         if head is None:
             return err(f"cannot read repo {repo}", f"a git repo at {path}", "not readable", repo,

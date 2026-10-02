@@ -56,11 +56,17 @@ def fail(what, expected, found, where, nxt, cause="code", code=vl.EXIT_EVAL):
 
 def plans_repo(scope, projects):
     """The repo holding the scope folder, as a path under the projects root — where a
-    commit-less phase's judge rows point."""
-    p = subprocess.run(["git", "-C", scope, "rev-parse", "--show-toplevel"], capture_output=True, text=True)
+    commit-less phase's judge rows point. A linked worktree (a herdr scope under
+    ~/.herdr/worktrees/) names its main checkout's path — the verify scripts map it back
+    (verify_lib.repo_root)."""
+    p = subprocess.run(["git", "-C", scope, "rev-parse", "--path-format=absolute", "--show-toplevel",
+                        "--git-common-dir"], capture_output=True, text=True)
     if p.returncode != 0:
         return None
-    top, root = os.path.realpath(p.stdout.strip()), os.path.realpath(projects)
+    top, common = p.stdout.splitlines()[:2]
+    if os.path.basename(common) == ".git":
+        top = os.path.dirname(common)
+    top, root = os.path.realpath(top), os.path.realpath(projects)
     return os.path.relpath(top, root) if top.startswith(root + os.sep) else None
 
 

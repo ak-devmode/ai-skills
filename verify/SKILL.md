@@ -59,7 +59,8 @@ Show every line it prints to the user before anything else. It never blocks.
 2.1 **Unit** — a plan number (`5.1`). The scope folder holds `finish-conditions.md`,
 `closeout-prep.md` (base SHAs) and `artifacts/`. Resolve the plans dir with
 `~/Projects/ai-skills/scripts/resolve-plans-dir.sh`; the scope folder is
-`<plans>/<N>-<slug>/`.
+`<plans>/<N>-<slug>/`. A scope folder inside a herdr worktree is checked against that
+worktree, not the main checkout (`verify-contracts.md` §3.2.1) — no `--projects` override.
 
 2.2 **No `finish-conditions.md`** — stop. Report that the scope predates the gate and
 that `/plan` drafts a table for Alex to confirm once. Do not invent rows here.

@@ -99,7 +99,7 @@ def accepted(review_log):
     return last == "accepted"
 
 
-def fallback_markers(review_log, projects):
+def fallback_markers(review_log, projects, scope=None):
     """`review <reviewer>` for each fallback review no later codex review covers (review/SKILL.md
     §3). Covered = same repo, codex base an ancestor of the fallback's base, fallback head an
     ancestor of codex head (review 5.2-r2-01). Records without resolved `shas` cannot prove
@@ -115,7 +115,7 @@ def fallback_markers(review_log, projects):
     def covers(c, f):
         (repo, _), = f["range"].items()
         cs, fs = c.get("shas") or {}, f.get("shas") or {}
-        path = os.path.join(projects, repo)
+        path = vl.repo_root(projects, repo, scope)
         return (repo in c.get("range", {}) and all(cs.get(k) and fs.get(k) for k in ("base", "head"))
                 and git_ok(path, "merge-base", "--is-ancestor", cs["base"], fs["base"])
                 and git_ok(path, "merge-base", "--is-ancestor", fs["head"], cs["head"]))
@@ -135,7 +135,7 @@ def round_no(review_id):
     return int(m.group(1)) if m else -1
 
 
-def review_presence_blocks(review_log, base, projects):
+def review_presence_blocks(review_log, base, projects, scope=None):
     """§5.2.1 — a unit with commits must have been reviewed (review 5.3-r1-03).
 
     For every repo whose ledger base has commits in base..HEAD, some `review` record must
@@ -158,6 +158,9 @@ def review_presence_blocks(review_log, base, projects):
                                     "shas": {"base": fb, "head": fh}})
     blocks = []
 
+    def root(repo):  # the scope's own worktree when it is one (verify_lib.repo_root, §3.2.1)
+        return vl.repo_root(projects, repo, scope)
+
     def inside(path, r, sha):
         """sha in (r.base, r.head], and r.head on the current branch."""
         sh = r.get("shas") or {}
@@ -168,7 +171,7 @@ def review_presence_blocks(review_log, base, projects):
             and git_ok(path, "merge-base", "--is-ancestor", sh["head"], "HEAD")
 
     for repo, b in sorted(base.items()):
-        path = os.path.join(projects, repo)
+        path = root(repo)
         n = git_out(path, "rev-list", "--count", f"{b}..HEAD")
         if n is None:
             blocks.append((f"review:{repo}", "cannot count the unit's commits", f"git rev-list {b[:10]}..HEAD "
@@ -198,13 +201,13 @@ def review_presence_blocks(review_log, base, projects):
         # a fix on a branch that never merged is not in what ships (review r2-04); a git
         # failure (repo gone, sha unknown) is a block too, never a pass
         hold = d.get("repo") or own
-        if not git_ok(os.path.join(projects, hold), "merge-base", "--is-ancestor", d["sha"], "HEAD"):
+        if not git_ok(root(hold), "merge-base", "--is-ancestor", d["sha"], "HEAD"):
             blocks.append((f"unmerged:{f['finding_id']}", "a `fixed` commit is not on the current branch",
                            f"{d['sha'][:10]} reachable from HEAD in {hold}", "not an ancestor of HEAD (or git "
                            "cannot tell)", f"{review_log} · {f['finding_id']}", "code"))
         head = rng.partition("..")[2]  # the head this finding's reviewer saw
         if own and head and d.get("repo", own) == own \
-                and git_ok(os.path.join(projects, own), "merge-base", "--is-ancestor", d["sha"], head):
+                and git_ok(root(own), "merge-base", "--is-ancestor", d["sha"], head):
             blocks.append((f"predates:{f['finding_id']}", "a `fixed` commit predates the finding",
                            f"a commit made after {head[:10]}, the head {f.get('review_id')} reviewed",
                            f"{d['sha'][:10]} is an ancestor of it", f"{review_log} · {f['finding_id']}", "code"))
@@ -216,7 +219,7 @@ def review_presence_blocks(review_log, base, projects):
         # minted after the finding's — an earlier one never saw the fix as a fix (review adhoc-05)
         later = [r for r in reviews if round_no(r.get("review_id")) > round_no(f.get("review_id")) >= 0]
         for repo in ([d["repo"]] if d.get("repo") else (f.get("range") or {})):
-            path = os.path.join(projects, repo)
+            path = root(repo)
             if not any(inside(path, r, d["sha"]) for r in later if repo in r.get("range", {})):
                 blocks.append((f"rereview:{f['finding_id']}", f"{why} was never reviewed",
                                f"a later /review whose range contains {d['sha'][:10]}",
@@ -308,7 +311,7 @@ def evaluate(scope, unit, projects):
             block("verdict has no evidence SHA", "the pending record with the tested SHA", "none", "tooling")
             continue
         repo, sha = pend["repo"], pend["sha"]
-        repo_path = os.path.join(projects, repo)
+        repo_path = vl.repo_root(projects, repo, scope)
         if repo not in heads:
             heads[repo] = git_out(repo_path, "rev-parse", "HEAD")
         head = heads[repo]
@@ -331,7 +334,7 @@ def evaluate(scope, unit, projects):
         report.append(f"pass   {cid}  {res['result']} · rung {res['rung_reached']}/{row['rung']} · "
                       f"{final.get('judge')}")
     review = os.path.join(scope, "artifacts", f"review-{unit}.jsonl")
-    for bid, what, exp, found, where, cause in review_presence_blocks(review, base, projects):
+    for bid, what, exp, found, where, cause in review_presence_blocks(review, base, projects, scope):
         blocks.append((bid, what, exp, found, where, cause,
                        f"/review --scope {scope} --unit {unit} on the unit's base..HEAD"))
         report.append(f"BLOCK  {bid}  {what}")
@@ -349,7 +352,7 @@ def evaluate(scope, unit, projects):
                            f"--unit {unit} --by <name>"))
             report.append("BLOCK  review-acceptance  review outcomes not accepted")
         report.append(f"review {n} finding(s), {n - len(cov)} dispositioned")
-        for line in fallback_markers(review, projects):
+        for line in fallback_markers(review, projects, scope):
             judges.add(line)
     return report, blocks, sorted(j for j in judges if j)
 

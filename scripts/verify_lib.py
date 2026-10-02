@@ -31,6 +31,34 @@ GATE_MODE_LINE = re.compile(r"^\*\*Gate mode:\*\*[ \t]*(.*?)[ \t]*$", re.M)
 PROJECTS = os.environ.get("VERIFY_PROJECTS", os.path.expanduser("~/Projects"))
 
 
+def _git_lines(path, *args):
+    import subprocess
+    p = subprocess.run(["git", "-C", path, *args], capture_output=True, text=True)
+    return p.stdout.splitlines() if p.returncode == 0 else []
+
+
+def repo_root(projects, repo, scope=None):
+    """Where a finish-table `repo` cell is checked (§3.2.1): `<projects>/<repo>`, unless the
+    scope folder sits in a linked git worktree of that same repo — then that worktree. A
+    herdr scope lives under ~/.herdr/worktrees/, and its main checkout is usually on another
+    branch (kalpa-iris scope 1: an empty range and 45 phantom blocks). Matched by git
+    identity (the worktree's common dir), never by name."""
+    main = os.path.join(projects, repo)
+    if not scope:
+        return main
+    d = os.path.abspath(scope)
+    while not os.path.isdir(d):
+        d = os.path.dirname(d)
+    out = _git_lines(d, "rev-parse", "--path-format=absolute", "--show-toplevel", "--git-common-dir")
+    if len(out) != 2:
+        return main
+    top, common = os.path.realpath(out[0]), os.path.realpath(out[1])
+    owner = os.path.dirname(common) if os.path.basename(common) == ".git" else None
+    if owner and owner != top and owner == os.path.realpath(main):
+        return top
+    return main
+
+
 def gate_mode(scope_dir):
     """The mode the gate runs in for this scope: the nearest PLANS-INDEX.md's
     `**Gate mode:**` line, else GATE_MODE. Walks up at most three levels, which covers

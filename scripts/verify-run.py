@@ -66,7 +66,7 @@ def destination(log_path):
     return os.path.realpath(top), (m.group(1) if m else None)
 
 
-def refuse_placement(rows, log_path, projects):
+def refuse_placement(rows, log_path, projects, scope=None):
     """Return a §10 message if any row's evidence may not be written to log_path."""
     top, slug = destination(log_path)
     public = slug in PUBLIC_REMOTES
@@ -79,7 +79,7 @@ def refuse_placement(rows, log_path, projects):
                 f"destination {log_path} is in {why}", f"finish table line {r['_line']}", "code",
                 "point --log at the product's private scope folder", f"{vl.CONTRACT} §7.1")
         if r["class"] == "B" and public:
-            row_repo = os.path.realpath(os.path.join(projects, r["repo"]))
+            row_repo = os.path.realpath(vl.repo_root(projects, r["repo"], scope))
             if row_repo != top:
                 return vl.message(
                     "BLOCK", f"class-B evidence about another repo refused for `{r['check_id']}`",
@@ -121,7 +121,7 @@ def decode(b):
     return b.decode("utf-8", "replace") if isinstance(b, bytes) else (b or "")
 
 
-def execute(row, projects, run_id, unit, rev, bases=None):
+def execute(row, projects, run_id, unit, rev, bases=None, scope=None):
     # §4.3: the unit's base SHA for this repo (from the ledger) is exported as VERIFY_BASE, so a
     # static command can name the unit's range — `resolve-identifiers.py --range $VERIFY_BASE..HEAD`.
     overlay = dict(row["env"], VERIFY_UNIT=unit)
@@ -134,7 +134,7 @@ def execute(row, projects, run_id, unit, rev, bases=None):
            "dir": row["dir"], "env": row["env"], "sha": None, "dirty": None,
            "deployed_version": None, "command": row["check"], "exit_code": None,
            "duration_s": 0, "output_sha256": None, "output_tail": None}
-    repo_path = os.path.join(projects, row["repo"])
+    repo_path = vl.repo_root(projects, row["repo"], scope)
     cwd = os.path.normpath(os.path.join(repo_path, row["dir"]))
     rec["cwd"] = cwd
     rc, sha = git(repo_path, "rev-parse", "HEAD") if os.path.isdir(repo_path) else (1, "")
@@ -182,14 +182,15 @@ def cmd_run(a):
                          "0 rows", a.table, "code", "check the owner column, or pass --owner",
                          f"{vl.CONTRACT} §3.4"), file=sys.stderr)
         return vl.EXIT_EVAL
-    refusal = refuse_placement(rows, a.log, a.projects)
+    scope = os.path.dirname(os.path.abspath(a.table))
+    refusal = refuse_placement(rows, a.log, a.projects, scope)
     if refusal:
         print(refusal, file=sys.stderr)
         return vl.EXIT_FAIL
     unit = a.owner.split("/")[0] if a.owner else rows[0]["owner"].split("/")[0]
     run_id = f"{unit}-{datetime.datetime.now(datetime.timezone.utc):%Y%m%dT%H%M%S}-{secrets.token_hex(2)}"
-    bases = vl.bases(os.path.join(os.path.dirname(os.path.abspath(a.table)), "closeout-prep.md"), unit)
-    recs = [execute(r, a.projects, run_id, unit, table["revision"], bases) for r in rows]
+    bases = vl.bases(os.path.join(scope, "closeout-prep.md"), unit)
+    recs = [execute(r, a.projects, run_id, unit, table["revision"], bases, scope) for r in rows]
     vl.append_verified(a.log, recs)
     failed = False
     for r in recs:

@@ -102,6 +102,13 @@ resets it to `pending`, because a changed table is a new promise. The gate block
 | `unreachable_ok` | `no`, or `yes: <Alex's reason>` |
 | `evidence` | the artifact a pass leaves behind |
 
+3.2.1 **A scope inside a worktree checks that worktree.** A `repo` cell names the main
+checkout's path (`wellmed/kalpa-iris`), but when the scope folder itself sits in a linked
+git worktree of that repo (a herdr scope under `~/.herdr/worktrees/`), `verify-run.py`,
+`judge.py` and `verdict-gate.py` run and range against the worktree — matched by git
+identity, never by name (`verify_lib.repo_root`). Rows naming other repos still resolve
+under `~/Projects/`. No `--projects` symlink directory is needed.
+
 3.3 **Cell rules.** A literal `|` inside a cell is written `\|`. Commands may be wrapped in
 backticks; the parser strips one pair. An empty cell is an error, not a default — use `-`
 where a column allows it (`env`, `timeout`).

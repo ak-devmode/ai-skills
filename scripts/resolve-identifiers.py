@@ -58,7 +58,7 @@ DOCS = "templates/verify-contracts.md §10 · scripts/README.md (resolve-identif
 KINDS = ("env", "ssm", "proto", "route")
 SRC_EXT = {".go", ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".py", ".php", ".sh"}
 FIXTURE_DIRS = {"fixtures", "fixture", "__fixtures__", "testdata", "__mocks__", "mocks"}
-TEST_FILE = re.compile(r"(_test\.go|\.(test|spec)\.[jt]sx?|(^|/)test_[^/]*\.py)$")
+TEST_FILE = re.compile(r"(_test\.go|\.(test|spec)\.([jt]sx|[cm]?[jt]s)|(^|/)test_[^/]*\.py)$")
 COMMENT_START = ("//", "#", "*", "/*", "--")
 
 ENV_USE = [re.compile(p) for p in (

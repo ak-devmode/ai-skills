@@ -183,10 +183,21 @@ def case_spans(syntax, state):
     return "".join(out), spans
 
 
-def shell_commands(line, syntax=None):
+def continues_into_and_or(nxt):
+    """True when the line after a `\\`-continued one goes on only into an `|| …` / `&& …`
+    tail (`X=$(…) \\` then `|| { echo …; exit 1; }`) that ends there and backgrounds nothing:
+    the continued command is then the head of an AND/OR list run in this shell."""
+    if nxt is None:
+        return False
+    s = shell_mask(nxt, strict=True).strip()
+    return (bool(re.match(r"(&&|\|\|)", s)) and not re.search(r"(&&|\|\||\||\\)$", s)
+            and not any(m.group() in ("&", "|&") for m in SH_SEP.finditer(s)))
+
+
+def shell_commands(line, syntax=None, nxt=None):
     """[(start, end)] of each simple command on the line, split only on separators the shell
     sees (never inside quotes, comments or substitutions). `syntax` is the line's strict
-    mask, when the caller has already blanked its `case` syntax."""
+    mask, when the caller has already blanked its `case` syntax; `nxt` is the next line."""
     syntax = shell_mask(line, strict=True) if syntax is None else syntax
     cuts, prev, before = [], 0, ""
     for m in SH_SEP.finditer(syntax):
@@ -203,9 +214,13 @@ def shell_commands(line, syntax=None):
             out.append([a, b, sub, sep_after])
     # A line that backgrounds anything, or continues onto the next line, binds nothing: which
     # commands a `&` sends to a subshell (a whole AND/OR list, pipelines inside it, lines
-    # continued with `&&` `||` `|` `\`) is not worth modeling — fail closed (5.3-r10-01, r11-01)
+    # continued with `&&` `||` `|` `\`) is not worth modeling — fail closed (5.3-r10-01, r11-01).
+    # The one exception: a `\` continued only into an `||` / `&&` tail (continues_into_and_or)
     tail = syntax.rstrip()
-    if any(c[3] in ("&", "|&") for c in out) or re.search(r"(&&|\|\||\||\\)$", tail):
+    cont = re.search(r"(&&|\|\||\||\\)$", tail)
+    if cont and cont.group() == "\\" and out and out[-1][3] == "" and continues_into_and_or(nxt):
+        cont, out[-1][1] = None, len(tail) - 1   # the `\` is not a word of the command
+    if any(c[3] in ("&", "|&") for c in out) or cont:
         for c in out:
             c[2] = True
     return [(a, b, sub) for a, b, sub, _ in out]
@@ -269,19 +284,21 @@ def shell_assigned(text):
     whether or not that assignment runs on every path. Shell dataflow — conditional
     branches, functions never called, `( … )` subshells — is deliberately not modeled. The
     syntactic subshell forms are: a pipeline's commands bind nothing, and a line that
-    backgrounds anything or continues onto the next binds nothing (5.3-r9-01, r11-01)."""
+    backgrounds anything or continues onto the next binds nothing (5.3-r9-01, r11-01) —
+    except a `\\` continued only into an `|| …` / `&& …` tail that backgrounds nothing."""
     local, read_first, case = set(), set(), [0, False]
 
     def read(s):
         read_first.update(n for n in (m.group(1) or m.group(2) for m in SH_USE.finditer(s))
                           if n not in local)
 
-    for line in text.splitlines():
+    lines = text.splitlines()
+    for k, line in enumerate(lines):
         if is_comment(line, sh=True):
             continue
         reads_mask = shell_mask(line)
         syntax, spans = case_spans(shell_mask(line, strict=True), case)
-        for a, b, sub in shell_commands(line, syntax):
+        for a, b, sub in shell_commands(line, syntax, lines[k + 1] if k + 1 < len(lines) else None):
             while spans and spans[0][1] <= a:   # a `case "$X" in` header or `"$Y")` pattern
                 read(reads_mask[slice(*spans.pop(0))])
             binds = [] if sub else shell_binds(syntax[a:b])

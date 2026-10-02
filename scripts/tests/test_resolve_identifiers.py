@@ -178,6 +178,16 @@ CASES = [
      {},
      {"bin/run.sh": "#!/bin/bash\nAP=1 && printf x | cat & wait; echo $AP\nAC=1 &&\n  true & wait\necho $AC\n"},
      1, r"unresolved 2", "env `AP` does not resolve"),
+    ("shell: `X=$(…) \\` continued only into an `||` / `&&` tail still binds X",
+     {},
+     {"bin/run.sh": "#!/bin/bash\nSHA=$(curl -sf x | jq -r .v) \\\n  || { echo \"down\"; exit 1; }\n"
+                    "OK=1 \\\n  && true\necho $SHA $OK\n"},
+     0, r"found 0 · resolved 0", ""),
+    ("shell: a `\\` continued into a pipe, a background, a command or a further continuation binds nothing",
+     {},
+     {"bin/run.sh": "#!/bin/bash\nCP=1 \\\n  | cat\nCB=1 \\\n  || true & wait\nCW=1 \\\n  echo hi\n"
+                    "CC=1 \\\n  || true \\\n  || false\nCE=1 \\\n\necho $CP $CB $CW $CC $CE\n"},
+     1, r"found 5 · resolved 0 · unresolved 5", "env `CB` does not resolve"),
     ("shell: an assignment after a case-arm pattern binds, `a|b)` and `(a)` included",
      {},
      {"bin/run.sh": "#!/bin/sh\ncase \"$1\" in\n  develop) BLUE=3004; GREEN=3006 ;;\n"

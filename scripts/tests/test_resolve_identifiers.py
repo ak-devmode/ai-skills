@@ -237,6 +237,11 @@ CASES = [
      {"server/routes.js": "router.get('/patients/:id', show);\n"},
      {"web/api.ts": "fetch(`/patients/${id}`);\nfetch('/patient-list');\n"},
      1, r"found 2 · resolved 1 · unresolved 1", "route `/patient-list` does not resolve"),
+    ("a fetch to an interpolated base or absolute origin is external; a relative one is checked",
+     {"server/routes.js": "router.get('/patients/:id', show);\n"},
+     {"web/alert.mjs": "fetch(`${SENTRY_URL}/api/0${path}`);\nfetch('https://api.ocr.space/parse');\n"
+                       "fetch('/api/invented');\naxios.get(`${base}/api/also-invented`);\n"},
+     1, r"found 2 · resolved 0 · unresolved 2", "route `/api/invented` does not resolve"),
     ("a suffix-only match is not resolved (prefix unseen)",
      {"server/routes.go": "package server\nfunc reg(g *gin.RouterGroup) { g.GET(\"/invoices\", h) }\n"},
      {"web/api.ts": "axios.get('/api/v1/invoices');\n"},

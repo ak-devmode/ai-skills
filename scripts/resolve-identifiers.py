@@ -437,6 +437,13 @@ def route_path(raw):
     return s if s.startswith("/") else None
 
 
+def fetch_external(raw):
+    """A fetch() to an absolute origin or an interpolated base (`${SENTRY_URL}/api/0…`) calls
+    someone else's API, not one of this repo's routes. Only fetch(): Go's http.Get always takes
+    an absolute URL, and an axios / *Client call keeps its base-stripping as before."""
+    return bool(re.match(r"\s*(https?://|\$\{)", raw))
+
+
 # ---------- reference extraction ---------------------------------------------------
 
 def ref(kind, name, namespace, file, line):
@@ -523,7 +530,7 @@ def extract(files, full=None):
                 if open_msg[1] <= 0:
                     open_msg = None
             for m in ROUTE_FETCH.finditer(text):
-                p = route_path(m.group(1))
+                p = None if fetch_external(m.group(1)) else route_path(m.group(1))
                 if p:
                     refs.append(ref("route", p, None, path, lineno))
             for m in ROUTE_AXIOS.finditer(text):

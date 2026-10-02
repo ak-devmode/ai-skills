@@ -10,7 +10,7 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["file", "line", "severity", "category", "group", "text", "fix"],
+        "required": ["file", "line", "severity", "category", "group", "text", "fix", "target"],
         "properties": {
           "file": {"type": "string"},
           "line": {"type": "integer"},
@@ -19,7 +19,8 @@
                                                   "dirty-comment", "doc-claim", "fail-open"]},
           "group": {"type": "string"},
           "text": {"type": "string"},
-          "fix": {"type": "string"}
+          "fix": {"type": "string"},
+          "target": {"type": "string", "enum": ["shipped", "scaffolding"]}
         }
       }
     },

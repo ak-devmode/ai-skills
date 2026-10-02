@@ -220,8 +220,9 @@ def review_presence_blocks(review_log, base, projects, scope=None):
             blocks.append((f"predates:{f['finding_id']}", "a `fixed` commit predates the finding",
                            f"a commit made after {head[:10]}, the head {f.get('review_id')} reviewed",
                            f"{d['sha'][:10]} is an ancestor of it", f"{review_log} · {f['finding_id']}", "code"))
+        # a scaffolding finding never forces another round, even fixed off-anchor (lenses §7)
         why = "a blocking finding's fix" if f.get("severity") == "blocking" else \
-            "an off-anchor fix" if d.get("via") == "off-anchor" else None
+            "an off-anchor fix" if d.get("via") == "off-anchor" and f.get("target") != "scaffolding" else None
         if why is None:
             continue
         # a fix recorded in another repo (`dispose --fixed-in`) is re-reviewed THERE, by a review

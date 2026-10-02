@@ -1,6 +1,6 @@
 ---
 name: review
-version: 3.6.1
+version: 3.7.0
 description: |
   Pre-landing code review with codex as the gate: the opposing model family, headless
   and read-only, reviews an explicit revision range against gstack's review checklist,
@@ -210,6 +210,11 @@ it writes nothing — fill each `--off-anchor` reason yourself, then re-`accept`
 never on their behalf. `verdict-gate.py` refuses Done while any ID lacks one, and `/verify`
 audits whether each rejection was *right*. Nothing silently dismissed, nothing silently
 dropped.
+
+**Scaffolding never blocks** (`rules/lenses.md` §7). A finding whose only target is a check,
+a finish-table row, progress/plan notes or procedure prose the session added is capped at
+`should-fix` by `record` (shown as "scaffolding, capped from blocking"), and the gate never
+wants it re-reviewed. Shipped code is still held to `blocking`.
 
 5.1 **Convergence — a review loop must end.** Every repo, every unit. `record` prints a
 `[CONVERGENCE]` line when either trips; act on it, don't re-run past it.

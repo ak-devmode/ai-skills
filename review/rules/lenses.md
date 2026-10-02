@@ -46,3 +46,14 @@ Every claim a README, doc, comment, docstring or help text in the range makes ab
 behaviour — checked against the code at HEAD. A doc that describes a trap, flag, default
 or guarantee the code no longer has is a finding (on 108.6 this was one of the two
 findings codex missed).
+
+## 7. Severity: block only when shipped work is wrong
+
+Set every finding's `target`. `shipped` means the code, config or docs the change
+delivers. `scaffolding` means anything the session added to plan or verify its work: a
+check command, a finish-table row, a progress or plan note, runbook or procedure prose. A
+scaffolding finding is at most `should-fix`, never `blocking`, and never forces another
+round. Still raise it: a check that cannot fail is worth fixing. But `/verify`'s judge owns
+check quality, and a review round spent on the gate is a round not spent on the work.
+`record` enforces the cap, and also treats a finish table, ledger, progress, scope or plan
+document as scaffolding whatever `target` says.

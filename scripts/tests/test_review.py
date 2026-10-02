@@ -71,6 +71,9 @@ class TestReview(unittest.TestCase):
             "checked_clear": ["3.1"], "not_applicable": ["3.2 — no FHIR"], "cannot_do": ["no network"],
             "verdict": "SHIP AFTER BLOCKING"}
         doc.update(over)
+        for f in doc["findings"] if isinstance(doc["findings"], list) else []:
+            if isinstance(f, dict):
+                f.setdefault("target", "shipped")   # required since plan 7.1 (lenses §7)
         path = os.path.join(self.tmp.name, "answer.json")
         with open(path, "w") as fh:
             json.dump(doc, fh)
@@ -351,6 +354,31 @@ class TestReview(unittest.TestCase):
         for rnd in (1, 2, 3):
             p = self.record(reviewer="claude-lean mode lean (default)", findings=[], verdict="SHIP")
             self.assertEqual("round 3 of 3: STOP" in p.stdout, rnd == 3, p.stdout)
+
+    def test_scaffolding_findings_are_capped_and_force_no_rereview(self):
+        # lenses §7 (Alex, 2026-10-02): block only when shipped work is wrong
+        mk = lambda file, target: {"file": file, "line": 1, "severity": "blocking", "category": "fail-open",
+                                   "group": "", "text": "t", "fix": "", "target": target}
+        p = self.record(findings=[mk("a.sh", "shipped"), mk("check.sh", "scaffolding"),
+                                  mk("plans/9-x/finish-conditions.md", "shipped")], verdict="SHIP AFTER BLOCKING")
+        self.assertEqual(p.returncode, 0, p.stderr)
+        by = {f["file"]: f for f in self.findings()}
+        self.assertEqual((by["a.sh"]["severity"], by["a.sh"]["target"]), ("blocking", "shipped"))
+        for name in ("check.sh", "plans/9-x/finish-conditions.md"):     # declared, or a scaffolding file
+            self.assertEqual((by[name]["severity"], by[name]["target"], by[name]["capped"]),
+                             ("should-fix", "scaffolding", True))
+        report = read(os.path.join(self.scope, "artifacts", "review-9.1-r1.md"))
+        self.assertIn("scaffolding, capped from blocking", report.split("## SHOULD FIX")[1])
+        # a scaffolding finding fixed off-anchor needs no later review; a shipped one still does
+        fix = self.commit(self.repo, "other.txt")
+        gate = load("verdict-gate.py")
+        for fid in (by["check.sh"]["finding_id"], by["a.sh"]["finding_id"]):
+            run(REVIEW, "dispose", "--scope", self.scope, "--unit", "9.1", "--finding", fid, "--fixed", fix,
+                "--off-anchor", "test", env=self.env)
+        base = {"wellmed/svc": git(self.repo, "rev-list", "--max-parents=0", "HEAD")}
+        blocks = [b[0] for b in gate.review_presence_blocks(self.log, base, self.projects, self.scope)]
+        self.assertIn(f"rereview:{by['a.sh']['finding_id']}", blocks)
+        self.assertNotIn(f"rereview:{by['check.sh']['finding_id']}", blocks)
 
     def test_fallback_reviewer_is_degraded_in_the_header(self):
         self.record(reviewer="claude-fallback codex not authed")

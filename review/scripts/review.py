@@ -297,6 +297,31 @@ def cmd_prepare(a):
 
 # ---------- record -----------------------------------------------------------------
 
+# Scaffolding: what a session adds to plan and verify its work, not what ships (lenses §7).
+SCAFFOLD_NAMES = {"finish-conditions.md", "closeout-prep.md", "progress.md", "scope.md"}
+
+
+def is_scaffolding(f):
+    """The reviewer said so, or the file is planning/verification state by name: a finish
+    table, a ledger, a progress, scope or plan document. Not a whole `plans/` directory: in a
+    docs repo that can hold what a docs scope delivers (hand-back files)."""
+    name = os.path.basename(str(f.get("file", "")))
+    return f.get("target") == "scaffolding" or name in SCAFFOLD_NAMES or name.endswith(("-PROGRESS.md", "-PLAN.md"))
+
+
+def cap_scaffolding(doc):
+    """Block only when shipped work is wrong (Alex, 2026-10-02): a finding whose only target
+    is scaffolding is at most should-fix, so it never forces another round. Enforced here,
+    whatever the reviewer said."""
+    for f in doc["findings"]:
+        if is_scaffolding(f):
+            f["target"] = "scaffolding"
+            if f["severity"] == "blocking":
+                f["severity"], f["capped"] = "should-fix", True
+        else:
+            f["target"] = "shipped"
+
+
 def validate(doc):
     with open(SCHEMA, encoding="utf-8") as fh:
         problems = vl.schema_problems(doc, json.load(fh))
@@ -323,7 +348,9 @@ def render(doc, findings, header):
         lines.append(f"## {title} ({len(group)})")
         lines.append("")
         for f in group:
-            tag = f"{f['category']}{' ' + f['group'] if f.get('group') else ''}"
+            tag = f"{f['category']}{' ' + f['group'] if f.get('group') else ''}" + (
+                " · scaffolding, capped from blocking" if f.get("capped") else
+                " · scaffolding" if f.get("target") == "scaffolding" else "")
             lines.append(f"- **{f['finding_id']}** `{f['file']}:{f['line']}` ({tag}) — {f['text']}"
                          + (f" → {f['fix']}" if f.get("fix") else ""))
         lines.append("")
@@ -364,6 +391,7 @@ def cmd_record(a):
         return err("review answer is malformed — nothing recorded", "findings with file:line, severity and "
                    "category per review/schemas/review-output.schema.json", "; ".join(problems[:6]), a.input,
                    "re-run the reviewer; if codex keeps failing, run the Claude fallback (review/SKILL.md §3)")
+    cap_scaffolding(doc)
     # the primary checkout's key, never a worktree's directory name: the gate and
     # `dispose --fixed` look the repo up under ~/Projects (review adhoc-01)
     key = repo_key(main_worktree(a.repo))
@@ -515,7 +543,8 @@ def build(a, doc, ordered, key, n, review_id):
     records = [{"schema": vl.SCHEMA, "ts": ts, "record": "finding", "review_id": review_id,
                 "finding_id": f["finding_id"], "reviewer": a.reviewer, "range": {key: a.range},
                 "file": f["file"], "line": f["line"], "category": f["category"], "group": f.get("group", ""),
-                "severity": f["severity"], "text": f["text"], "fix": f.get("fix", "")} for f in findings]
+                "severity": f["severity"], "text": f["text"], "fix": f.get("fix", ""),
+                "target": f.get("target", "shipped"), "capped": bool(f.get("capped"))} for f in findings]
     lean = (f" (lean: single Sonnet pass over one bundle, no specialists, diff capped at {LEAN_CAP:,} lines)"
             if a.reviewer.startswith("claude-lean ") else "")
     degraded = [] if a.reviewer.startswith("codex ") else [

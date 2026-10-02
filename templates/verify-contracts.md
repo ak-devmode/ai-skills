@@ -227,8 +227,9 @@ passes. The flag stays on the record so a reader can see it; it is not a block.
 5.2.1 **Per unit, the gate also blocks when** a repo with a recorded base has commits in
 `base..HEAD` but no `review` record (§6.0) names that repo and covers the unit's first
 commit on the current branch — a unit that commits must be reviewed (review 5.3-r1-03);
-when a **blocking** finding's `fixed <sha>` — or any finding's fix `via off-anchor`, which
-only a reason ties to the finding (review adhoc-03) — sits in no later review's range (a higher `r<n>`
+when a **blocking** finding's `fixed <sha>` — or any `shipped` finding's fix `via off-anchor`, which
+only a reason ties to the finding (review adhoc-03); a `scaffolding` finding is capped at
+should-fix by `record` and never forces a round (`review/rules/lenses.md` §7) — sits in no later review's range (a higher `r<n>`
 than the finding's — an earlier review never saw the fix as a fix, review adhoc-05) of the repo
 holding it (the disposition's `repo`, else the finding's) — the fixes are reviewed again (`/plan` §6.8, 5.3-r2-03),
 unless that repo has had `ROUND_CAP` (3) reviews in the unit and an `acceptance` record follows the

@@ -26,6 +26,9 @@ Only the JSON object the schema describes.
 - `category`: `engine` (the generic checklist) · `domain` (domain rules; set `group` to the
   rule's section number, e.g. `3.5`) · `local-maxima` · `silent-failure` · `dirty-comment` ·
   `doc-claim` · `fail-open`.
+- `target`: `shipped` (what the change delivers) · `scaffolding` (a check, finish-table row,
+  progress/plan note or procedure prose the session added). Scaffolding is never `blocking`
+  (lenses §7).
 - `checked_clear` / `not_applicable`: the rule groups you verified clean, and those with no
   surface in this range. They are different results — never merge them.
 - `cannot_do`: every check above you could not actually perform here (network, running

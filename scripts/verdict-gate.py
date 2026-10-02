@@ -144,8 +144,9 @@ def review_presence_blocks(review_log, base, projects, scope=None):
     5.3-r2-03). Later commits (progress notes) don't force a re-review. The fix of every
     *blocking* finding must itself sit inside a later review's range, which is /plan §6.8's
     "review the fixes again" (5.3-r2-03) — and so must every `off-anchor` fix, whatever the
-    severity: nothing but a reason ties that commit to the finding (review adhoc-03). A git call that fails is a block, never a zero
-    (5.3-r2-02)."""
+    severity: nothing but a reason ties that commit to the finding (review adhoc-03) — until the
+    repo reaches the round cap and the user's acceptance follows the disposition (`stopped`).
+    A git call that fails is a block, never a zero (5.3-r2-02)."""
     recs = vl.read_jsonl(review_log) if os.path.exists(review_log) else []
     reviews = [r for r in recs if r.get("record") == "review"]
     # Logs from before `review` records existed (§6.0) carry the range on each finding.
@@ -187,10 +188,18 @@ def review_presence_blocks(review_log, base, projects, scope=None):
                            f"a /review record on this branch covering {b[:10]}.. in {repo}",
                            f"{n} commit(s) in {b[:10]}..HEAD, {len(mine)} review record(s) for {repo}, none covering it",
                            f"{review_log} · {repo}", "code"))
-    latest = {}
-    for r in recs:
+    latest, at = {}, {}
+    for i, r in enumerate(recs):
         if r.get("record") == "disposition":
-            latest[r.get("finding_id")] = r
+            latest[r.get("finding_id")], at[r.get("finding_id")] = r, i
+
+    def stopped(repo, fid):
+        """review/SKILL.md §5.1 hard stop: past ROUND_CAP rounds of `repo`, the user chose to
+        stop the loop — their `accept`, recorded after this disposition, stands in for the
+        re-review (kalpa-iris 1.1: five rounds re-reviewing its own checkers)."""
+        return sum(1 for r in reviews if repo in r.get("range", {})) >= vl.ROUND_CAP and any(
+            r.get("record") == "acceptance" and str(r.get("by") or "").strip() for r in recs[at[fid] + 1:])
+
     for f in recs:
         d = latest.get(f.get("finding_id"))
         if f.get("record") != "finding" or not d or d.get("disposition") != "fixed" or not d.get("sha"):
@@ -220,9 +229,13 @@ def review_presence_blocks(review_log, base, projects, scope=None):
         later = [r for r in reviews if round_no(r.get("review_id")) > round_no(f.get("review_id")) >= 0]
         for repo in ([d["repo"]] if d.get("repo") else (f.get("range") or {})):
             path = root(repo)
-            if not any(inside(path, r, d["sha"]) for r in later if repo in r.get("range", {})):
+            if not any(inside(path, r, d["sha"]) for r in later if repo in r.get("range", {})) \
+                    and not stopped(repo, f["finding_id"]):
+                capped = sum(1 for r in reviews if repo in r.get("range", {})) >= vl.ROUND_CAP
                 blocks.append((f"rereview:{f['finding_id']}", f"{why} was never reviewed",
-                               f"a later /review whose range contains {d['sha'][:10]}",
+                               f"a later /review whose range contains {d['sha'][:10]}" + (
+                                   f" — or, {repo} being at round {vl.ROUND_CAP}+, the user's "
+                                   "`review.py accept` to stop the loop here" if capped else ""),
                                f"no review record covers it", f"{review_log} · {f['finding_id']}", "code"))
     return blocks
 

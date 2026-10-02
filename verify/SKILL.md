@@ -1,6 +1,6 @@
 ---
 name: verify
-version: 0.4.0
+version: 0.5.0
 description: |
   Independent verification of a unit of scoped work. A deterministic runner executes
   every finish-condition row the unit owns and records evidence; a judge from the

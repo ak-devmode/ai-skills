@@ -1,6 +1,6 @@
 ---
 name: review
-version: 3.4.0
+version: 3.5.0
 description: |
   Pre-landing code review with codex as the gate: the opposing model family, headless
   and read-only, reviews an explicit revision range against gstack's review checklist,
@@ -191,9 +191,9 @@ a fix not reachable from HEAD in the repo holding it, until its branch merges.
 `--rejected` is refused without a reason — never use it to record a fix the tool refused.
 The latest disposition decides, so a fix logged as a rejection is corrected by disposing it
 again: `$RV misfiled --scope $SCOPE --unit $UNIT` lists every rejection whose reason says
-`FIXED` and prints the `dispose` line for each SHA in an affirmative `FIXED …` clause that
-resolves (here or in a repo beside it) — a negated `NOT FIXED` gets no line, nor a SHA cited
-for anything else;
+it was fixed (`fixed` or `resolved`, any case) and prints the `dispose` line for each SHA in
+an affirmative claim's clause that resolves (here or in a repo beside it) — a negated `not
+fixed` gets no line, nor a SHA cited for anything else;
 it writes nothing — fill each `--off-anchor` reason yourself, then re-`accept`. When every ID has one, the user's yes is recorded with
 `$RV accept --scope $SCOPE --unit $UNIT --by "<name>"` (`verify-contracts.md` §6.4) —
 never on their behalf. `verdict-gate.py` refuses Done while any ID lacks one, and `/verify`
@@ -209,6 +209,13 @@ but each rule below counts the reviews of *that repo* within the unit — `recor
 one logged by its `<repo>.worktrees/<name>` path and since removed, counts as that repo's. A unit spanning 13 repos (149.2) otherwise hit the cap on a lane's
 first review.
 
+- **Hard stop at round 3.** After a repo's third round in a unit is dispositioned, stop. Do
+  not start another round — and that includes the re-review of blocking or off-anchor fixes —
+  until the user answers, inline: `1.` another round, or `2.` stop here. Show the open
+  `rereview:` blocks from `verdict-gate.py` with the question. On "stop", their
+  `review.py accept` ends the loop: the gate lets that acceptance stand in for the re-review
+  of fixes disposed before it (`verify-contracts.md` §5.2.1). Ask again before each further
+  round. `record` prints `[CONVERGENCE] <repo> round 3 of 3: STOP` as the reminder.
 - **Round cap.** Past round 3 of one repo in a unit, only `blocking` findings are fixed in the loop.
   `should-fix` and `note` go to the project's `TO-DO.md` and are recorded
   `dispose --deferred "<TO-DO item>"` — never `--rejected`, because a deferral is not a
@@ -223,9 +230,17 @@ first review.
 - **Findings that argue opposite sides** (fixing one reopens another) mean the contract is
   ambiguous. Stop and ask which side the user wants; don't pick one and reject the other.
 
+**Verification scaffolding is review surface.** A checker, generator or script a session
+adds to verify its own deliverable is code, and every round reviews it. On a docs scope,
+bias against adding one: prefer a `judge` row or a one-line `grep`/`test` row over a new
+script, and when a finding lands on scaffolding the session added, ask whether the
+scaffolding should exist before patching it.
+
 Why: scope 5.3 ran twelve rounds, eight of them patching one heuristic shell scanner,
 ending with two findings on opposite sides — the local-maxima failure this skill exists
-to catch, inside the skill. Review outcomes are a human checkpoint (`/plan` §6.8).
+to catch, inside the skill. kalpa-iris 1.1 (a docs scope) ran five codex rounds and four
+verify runs; round 1 found the real defects and every later round found holes in checkers
+the session had added. Review outcomes are a human checkpoint (`/plan` §6.8).
 
 ---
 

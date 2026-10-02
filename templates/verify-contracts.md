@@ -222,7 +222,10 @@ commit on the current branch — a unit that commits must be reviewed (review 5.
 when a **blocking** finding's `fixed <sha>` — or any finding's fix `via off-anchor`, which
 only a reason ties to the finding (review adhoc-03) — sits in no later review's range (a higher `r<n>`
 than the finding's — an earlier review never saw the fix as a fix, review adhoc-05) of the repo
-holding it (the disposition's `repo`, else the finding's) — the fixes are reviewed again (`/plan` §6.8, 5.3-r2-03); when any
+holding it (the disposition's `repo`, else the finding's) — the fixes are reviewed again (`/plan` §6.8, 5.3-r2-03),
+unless that repo has had `ROUND_CAP` (3) reviews in the unit and an `acceptance` record follows the
+disposition: past the cap the loop stops on the user's yes (`/review` §5.1), and that yes stands in
+for the re-review; when any
 finding's `fixed <sha>` in its own repo is an ancestor of the head its review saw — the reviewed
 code recorded as its own fix (review adhoc-01); when a `fixed <sha>` is not reachable from
 HEAD in the repo holding it — a fix on a branch that never merged (review r2-04); when git cannot count the range (a block,

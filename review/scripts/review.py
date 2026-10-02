@@ -22,7 +22,7 @@ Usage:
                     --deferred TODO) [--by NAME]
   review.py dispose ... --fixed SHA --fixed-in REPO_PATH     (the fix lives in another repo)
   review.py accept  --scope DIR --unit N.P --by NAME     (the user's yes to the outcomes, §6.4)
-  review.py misfiled --scope DIR --unit N.P              (rejections that say "FIXED by <sha>" → dispose lines)
+  review.py misfiled --scope DIR --unit N.P              (rejections that say "fixed/resolved <sha>" → dispose lines)
 Output: prepare prints `prompt:`, `schema:`, `passes:`; record prints the report path (or the
         report, with no scope); dispose prints the disposition.
 Exit:   0 ok · 1 disposition refused · 2 usage · 3 could not evaluate (empty range, malformed answer)
@@ -57,7 +57,7 @@ DOCS = f"{vl.CONTRACT} §6 · review/SKILL.md"
 SEVERITIES = ("blocking", "should-fix", "note")
 # SKILL.md §5.1 convergence: past this many rounds on one unit, only blocking findings are
 # fixed in the loop; a file drawing findings REPEAT rounds running is a design problem.
-ROUND_CAP, REPEAT = 3, 3
+ROUND_CAP, REPEAT = vl.ROUND_CAP, 3
 CATEGORIES = ("engine", "domain", "local-maxima", "silent-failure", "dirty-comment", "doc-claim", "fail-open")
 GROUPS = {"wellmed": "§3.1–§3.8", "pmg": "§3.1, §3.5, §3.6, §3.7 only",
           "iris": "§3.1, §3.2, §3.5, §3.6 (module paths + parameterized queries only), §3.7, §3.8, §3.9 — "
@@ -329,6 +329,12 @@ def convergence(recs, unit):
     repo = revs[-1][1]
     mine = [files for _, rp, files in revs if rp == repo]
     last, out = len(mine), []
+    if last >= ROUND_CAP:
+        # the hard stop: no further round — re-review of fixes included — without the user's yes
+        # (kalpa-iris 1.1 ran five rounds finding holes in checkers it had added itself)
+        out.append(f"[CONVERGENCE] {repo} round {last} of {ROUND_CAP}: STOP after these dispositions — ask "
+                   "the user: another round (re-review of the fixes included), or `review.py accept` to stop "
+                   "here (review/SKILL.md §5.1)")
     if last > ROUND_CAP:
         out.append(f"[CONVERGENCE] {repo} round {last} > {ROUND_CAP}: fix blocking findings only; defer "
                    "should-fix/note with `dispose --deferred \"<TO-DO item>\"` (review/SKILL.md §5.1)")
@@ -634,8 +640,10 @@ def fix_check(f, sha, path, key, recs):
 # ---------- misfiled ---------------------------------------------------------------
 
 # A rejection whose own reason says the finding was fixed: what `dispose --fixed` refused
-# to record before test-only and cross-repo fixes were accepted off the anchor (149.2: eleven).
-MISFILED = re.compile(r"\bFIXED\b|not rejected on merit")
+# to record before test-only and cross-repo fixes were accepted off the anchor (149.2: eleven;
+# kalpa-iris 1.1: four, worded "Fixed in the rows" and "resolved in <sha>" — any case).
+CLAIM = re.compile(r"\b(?:fixed|resolved)\b", re.I)
+MISFILED = re.compile(CLAIM.pattern + r"|not rejected on merit", re.I)
 SHA = re.compile(r"\b[0-9a-f]{7,40}\b")
 NEGATION = {"not", "never", "no", "cannot", "unfixed"}
 # a claim's clause ends at `;`, a line break, or a sentence end — `FIXED upstream\nNOT FIXED by
@@ -644,12 +652,12 @@ CLAUSE_END = re.compile(r";|\n|[.!?](?:\s|$)")
 
 
 def fix_claims(reason):
-    """(affirmed, SHAs): whether some `FIXED` is not negated by the three words before it, and
+    """(affirmed, SHAs): whether some `FIXED` / `resolved` (any case) is not negated by the three words before it, and
     the SHAs in each such claim's own clause (CLAUSE_END). `NOT FIXED by <sha>`,
     or a SHA the reason cites for something else (where the bug came from), is never a fix
     candidate (review adhoc-07)."""
     affirmed, shas = False, []
-    for m in re.finditer(r"\bFIXED\b", reason):
+    for m in CLAIM.finditer(reason):
         before = [w.lower() for w in re.findall(r"[\w']+", reason[:m.start()])[-3:]]
         if any(w in NEGATION or w.endswith("n't") for w in before):
             continue

@@ -1,6 +1,6 @@
 ---
 name: plan
-version: 3.10.1
+version: 3.11.0
 description: |
   Execute tasks from a structured plan document step by step, logging progress and
   stopping at human checkpoints. Plan files follow the naming convention *-PLAN.md
@@ -455,7 +455,10 @@ on a direct-to-main repo a branch diff is empty by construction.
    in a commit that touches the file and record `fixed <sha>`, or record
    `rejected <reason>` — or, past that repo's round 3, `deferred "<TO-DO item>"` for a non-blocking
    finding (`/review` §5.1; act on every `[CONVERGENCE]` line). After fixing any blocking
-   finding, review the fix commits again. The gate enforces this: a repo with commits in
+   finding, review the fix commits again — through that repo's round 3. Then stop and ask
+   the user before any further round, re-review included (`/review` §5.1 hard stop); their
+   `accept` ends the loop. Verification scaffolding (checkers, generators) added during a
+   docs scope is itself review surface — bias against adding it. The gate enforces this: a repo with commits in
    range and no covering review record blocks the unit (`verify-contracts.md` §5.2.1).
    **Human checkpoint — review outcomes.** Once every ID is dispositioned, stop and show
    the user, in plain English: what each blocking finding was and how it was fixed, every

@@ -379,6 +379,9 @@ def authority(p, j):
 
 
 KEBAB = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
+# review/SKILL.md §5.1: rounds of one repo in a unit before the loop stops and asks the user.
+# review.py's deferral rule and verdict-gate.py's re-review waiver read the same number.
+ROUND_CAP = 3
 
 # codex reasoning effort scales with the size of what it reads (Alex, 2026-09-29): a one-commit
 # re-review at `high` is what drained a 5-hour window in scope 5.3 (12 review rounds, all high).

@@ -35,6 +35,10 @@ check yourself, whether each finish condition below is actually met.
   and critical paths? Name the uncovered ones.
 - **rejection-audit** — if a review log is listed, read every `rejected` disposition. Is the
   reason actually right? For every `fixed <sha>`, does that commit actually fix the finding — and for `via off-anchor`, does its reason hold?
+  A rejection whose reason names the commit that fixed the finding is a fix filed under the
+  wrong label, not a wrong dismissal: if that commit does fix it, it does not fail
+  `rejections-justified` — raise a `low` finding to relabel it (`review.py misfiled`). Fail
+  only a rejection that leaves a real defect unfixed.
 - **faithful-port** — where the scope says to port or follow a source artifact, was the
   source read and the result diffed against it per unit? A port with no source read is a
   high finding.

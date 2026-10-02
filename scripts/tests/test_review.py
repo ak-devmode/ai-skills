@@ -349,6 +349,25 @@ class TestReview(unittest.TestCase):
         self.assertEqual(p.returncode, 0, p.stderr)
         self.assertEqual(presence(), [])
 
+    def test_round_cap_stop_lets_the_users_accept_stand_in_for_the_rereview(self):
+        # review/SKILL.md §5.1 hard stop (kalpa-iris 1.1: five rounds re-reviewing its own
+        # checkers). Before the cap a fix is re-reviewed whatever the user says; from round 3,
+        # the user's `accept` after the disposition ends the loop instead of another round.
+        gate = load("verdict-gate.py")
+        one = [{"file": "pkg/res.go", "line": 3, "severity": "blocking", "category": "engine", "group": "",
+                "text": "t", "fix": ""}]
+        blocks = lambda: gate.review_presence_blocks(self.log, {}, self.projects)
+        for n, waived in ((1, False), (2, False), (3, True)):
+            with self.subTest(round=n):
+                self.assertEqual(self.record(findings=one).returncode, 0)
+                fix = self.commit(self.repo, "internal/other.go")
+                self.assertEqual(self.dispose(f"9.1-r{n}-01", "--fixed", fix, "--off-anchor", "moved").returncode, 0)
+                self.assertEqual([b[0] for b in blocks()], [f"rereview:9.1-r{n}-01"])
+                self.assertEqual("review.py accept" in blocks()[0][2], waived)
+                p = run(REVIEW, "accept", "--scope", self.scope, "--unit", "9.1", "--by", "Alex", env=self.env)
+                self.assertEqual(p.returncode, 0, p.stderr)
+                self.assertEqual([b[0] for b in blocks()], [] if waived else [f"rereview:9.1-r{n}-01"])
+
     def test_a_fix_off_the_current_branch_blocks(self):
         # review r2-04: a fix on a side branch passes dispose (it is after the review) but is
         # not in what ships until merged
@@ -520,7 +539,13 @@ class TestReview(unittest.TestCase):
                  ("not rejected on merit", (False, [])),
                  (f"FIXED upstream\nNOT FIXED by {fix[:8]}", (True, [])),          # r2-07
                  (f"FIXED upstream! NOT FIXED by {fix[:8]}", (True, [])),
-                 (f"FIXED by {fix[:8]}? no", (True, [fix[:8]]))]
+                 (f"FIXED by {fix[:8]}? no", (True, [fix[:8]])),
+                 # kalpa-iris 1.1 worded its four misfiled fixes in lower case
+                 (f"Fixed in the rows, not the generator ({fix[:8]}, rows.py → v.md). Declined: x",
+                  (True, [fix[:8]])),
+                 (f"Bookkeeping, resolved without an edit: committed in {fix[:8]}.", (True, [fix[:8]])),
+                 (f"left unresolved; see {fix[:8]}", (False, [])),
+                 (f"not fixed by {fix[:8]}", (False, []))]
         for reason, want in cases:
             with self.subTest(reason=reason):
                 self.assertEqual(rr.fix_claims(reason), want)
@@ -660,6 +685,7 @@ class TestReview(unittest.TestCase):
         self.assertIn("[CONVERGENCE] a.sh drew findings in each of the last 3 wellmed/svc rounds", p.stdout)
         self.assertIn("[CONVERGENCE] b.go", p.stdout)
         self.assertNotIn("round 3 >", p.stdout)
+        self.assertIn("[CONVERGENCE] wellmed/svc round 3 of 3: STOP", p.stdout)
         p = self.record(findings=[])
         self.assertIn("[CONVERGENCE] wellmed/svc round 4 > 3", p.stdout)
         self.assertNotIn("drew findings", p.stdout)  # a clean round breaks the streak

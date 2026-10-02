@@ -276,6 +276,20 @@ def cmd_record(a):
 
 # ---------- report -----------------------------------------------------------------
 
+def run_cap_line(log, unit, run_id):
+    """The run-cap stop for `run_id`, or "". The count is this unit's finalized runs up to and
+    including this one, read from the verdict log, so it cannot be forgotten between
+    sessions. Every mode counts toward one cap (plan 7, Alex 2026-10-02)."""
+    finals = [r["run_id"] for r in vl.read_jsonl(log) if r.get("run_state") == "final"]
+    if run_id not in finals:
+        return ""
+    n = finals.index(run_id) + 1
+    if n < vl.VERIFY_RUN_CAP:
+        return ""
+    return (f"[CONVERGENCE] verify {unit} run {n} of {vl.VERIFY_RUN_CAP}: STOP — ask the user: one more "
+            "run, or stop here (verify/SKILL.md §3.9)")
+
+
 def cmd_report(a):
     p = paths(a.scope, a.unit)
     pend, recs = pending_of(p["log"], a.run_id)
@@ -295,10 +309,12 @@ def cmd_report(a):
         why = next((x.strip() for x in gate.stderr.splitlines() if x.strip()), f"exit {gate.returncode}")
         gate_line = f"verdict: GATE ERROR (exit {gate.returncode}) — {why}"
     marker = next((x for x in gate.stdout.splitlines() if x.startswith("marker:")), "")
+    stop = run_cap_line(p["log"], a.unit, a.run_id)
     by_pend = {r["check_id"]: r for r in pend}
     lines = [f"# Verify report — unit {a.unit}", "",
              f"**Run:** `{a.run_id}` · **Judge:** {final['judge']} · **Table revision:** {final['table_rev']}",
              f"**Gate:** {gate_line.replace('verdict: ', '')}" + (f" · {marker.replace('marker: ', '')}" if marker else ""),
+             *(["", f"**{stop}**"] if stop else []),
              "", "## 1. Checks", "", "| Check | Result | Rung | Reason |", "|---|---|---|---|"]
     for cid, res in final["results"].items():
         need = by_pend.get(cid, {}).get("rung_required", "?")
@@ -318,7 +334,7 @@ def cmd_report(a):
     out = os.path.join(p["art"], f"verify-{a.unit}-report.md")
     with open(out, "w", encoding="utf-8") as fh:
         fh.write("\n".join(lines))
-    print(f"report: {out}\n{gate_line}" + (f"\n{marker}" if marker else ""))
+    print(f"report: {out}\n{gate_line}" + (f"\n{marker}" if marker else "") + (f"\n{stop}" if stop else ""))
     # The report is written either way; the gate's diagnostics and exit status pass through
     # (1 blocked, 3 gate error) rather than being flattened to success (review 5.2-r1-05).
     sys.stderr.write(gate.stderr)

@@ -224,6 +224,23 @@ class TestJudge(unittest.TestCase):
         self.assertIn("**Judge:** claude-lean mode lean (default)", text)
         self.assertIn("⚠ judge: claude-lean mode lean (default)", text)
 
+    def test_run_cap_stops_from_the_second_run(self):
+        # plan 7: the fix loop stops at 2 finalized runs, lean and full alike
+        self.ledger(self.base)
+        table = os.path.join(self.scope, "finish-conditions.md")
+        for n, judge_line in ((1, "codex gpt-test"), (2, "claude-lean mode lean (default)"), (3, "codex gpt-test")):
+            if n > 1:
+                p = run("verify-run.py", "run", "--table", table, "--log", self.log, "--owner", "9.1", env=self.env)
+                self.rid = p.stdout.split("run_id: ")[1].split()[0]
+            self.judge("record", "--judge", judge_line, "--input", self.answer())
+            run("verify-run.py", "finalize", "--log", self.log, "--run-id", self.rid, env=self.env)
+            p = self.judge("report")
+            text = read(os.path.join(self.scope, "artifacts", "verify-9.1-report.md"))
+            with self.subTest(run=n):
+                stop = f"[CONVERGENCE] verify 9.1 run {n} of 2: STOP"
+                self.assertEqual(stop in p.stdout, n >= 2, p.stdout)
+                self.assertEqual(stop in text.split("## 1. Checks")[0], n >= 2)
+
     def test_report_propagates_a_gate_error(self):
         # 5.2-r1-05: a gate that errors must not become a successful report.
         self.ledger(self.base)

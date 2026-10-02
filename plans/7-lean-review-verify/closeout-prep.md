@@ -191,6 +191,9 @@ Resumed/restarted phases append a SECOND block:
 - ai-skills · code: `review/scripts/review.py` — uses `vl.capped_diff` (Task 1.5)
 - ai-skills · doc: `verify/prompts/judge-lean.md` (new) — the lean judge preamble (Task 1.5)
 - ai-skills · test: `scripts/tests/test_judge.py` — full prompt kept verbatim, inputs inlined, cap lists never cuts (Task 1.5)
+- ai-skills · code: `verify/scripts/judge.py` — `run_cap_line`, STOP in report + stdout; `scripts/verify_lib.py` — `VERIFY_RUN_CAP = 2` (Task 1.5a)
+- ai-skills · doc: `templates/verify-contracts.md` §4.10 — run cap (Task 1.5a)
+- ai-skills · test: `scripts/tests/test_judge.py` — runs 1/2/3, lean + codex mixed (Task 1.5a)
 
 ### §3 Patterns Followed (additional)
 - `resolve()` / `main()` in `scripts/review-mode.py` ← `scripts/clone-behind.py` (docstring contract, exit codes, stdlib-only CLI)

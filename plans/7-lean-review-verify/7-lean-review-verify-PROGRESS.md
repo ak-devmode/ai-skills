@@ -7,8 +7,8 @@
 
 ## Resume Context
 
-- **Last completed:** Task 1.5
-- **Next action:** Task 1.5a — `/verify` run cap, 2 per unit
+- **Last completed:** Task 1.5a
+- **Next action:** Task 1.6 — `/review` SKILL.md
 - **Open blockers:** none. There is no finish table yet; one is drafted and confirmed at
   Task 1.8's stop, before 1.V.
 
@@ -78,3 +78,11 @@
   200 tests pass.
 - **Pattern:** the capped diff moved from `review.py` into `verify_lib.capped_diff`, so
   `/review` and `/verify` cap the same way (CLAUDE.md §3.5).
+
+### Task 1.5a — ✅ DONE — `/verify` run cap, 2 per unit
+- **Files:** `verify/scripts/judge.py`, `scripts/verify_lib.py`, `templates/verify-contracts.md` §4.10,
+  `scripts/tests/test_judge.py`
+- **Result:** `judge.py report` counts the unit's `final` lines in the verdict log. From
+  run 2 on, it prints `[CONVERGENCE] verify <unit> run <n> of 2: STOP` and writes it under
+  the report's Gate line. Mixed codex and lean runs count together (tested: run 1 no
+  line, runs 2 and 3 STOP). The cap never changes a verdict.

@@ -183,6 +183,12 @@ The same scope and run twice is a no-op. Another run of the same scope adds a li
 never counts. The same `lever_id` from a **different scope** is the second sighting: the
 item flips to `BUILD NOW`, once.
 
+4.10 **Run cap.** A unit's fix loop stops at `VERIFY_RUN_CAP` (2) finalized runs, counted from
+its verdict log's `final` lines in log order. From the 2nd run on, `judge.py report` prints
+`[CONVERGENCE] verify <unit> run <n> of 2: STOP` and writes it under the report's Gate line.
+`/verify` then asks before another run (`verify/SKILL.md` §3.9). Lean and full runs count
+toward the same cap. The cap stops the loop; it never changes a verdict.
+
 ---
 
 ## 5. Gate semantics — `verdict-gate.py`

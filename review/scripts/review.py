@@ -15,15 +15,17 @@ finding's file in the finding's own repo, after the head its review saw, unless
 verdict-gate.py then refuses Done while any finding lacks one (§5.2.1).
 
 Usage:
-  review.py prepare --repo PATH --range BASE..HEAD [--kalpa-only | --engine-only] [--out-dir DIR]
+  review.py prepare --repo PATH --range BASE..HEAD [--kalpa-only | --engine-only] [--lean] [--out-dir DIR]
+                    --lean: inline the capped diff + this project's rules into one bundle (plan 7)
   review.py record  --repo PATH --range BASE..HEAD --reviewer LINE --input FILE
-                    [--scope DIR --unit N.P] [--passes TEXT]
+                    [--scope DIR --unit N.P] [--passes TEXT] [--mode LINE]
   review.py dispose --scope DIR --unit N.P --finding ID (--fixed SHA [--off-anchor REASON] | --rejected REASON |
                     --deferred TODO) [--by NAME]
   review.py dispose ... --fixed SHA --fixed-in REPO_PATH     (the fix lives in another repo)
   review.py accept  --scope DIR --unit N.P --by NAME     (the user's yes to the outcomes, §6.4)
   review.py misfiled --scope DIR --unit N.P              (rejections that say "fixed/resolved <sha>" → dispose lines)
-Output: prepare prints `prompt:`, `schema:`, `passes:`; record prints the report path (or the
+Output: prepare prints `prompt:`, `schema:`, `passes:`, `range:`, `effort:` (+ an `uncovered:` count
+        with --lean; record recomputes that list for a claude-lean reviewer); record prints the report path (or the
         report, with no scope); dispose prints the disposition.
 Exit:   0 ok · 1 disposition refused · 2 usage · 3 could not evaluate (empty range, malformed answer)
 """
@@ -49,6 +51,7 @@ sys.path.insert(0, SCRIPTS)
 import verify_lib as vl  # noqa: E402
 
 PROMPT = os.path.join(SKILL, "prompts", "review.md")
+LEAN_PROMPT = os.path.join(SKILL, "prompts", "review-lean.md")
 SCHEMA = os.path.join(SKILL, "schemas", "review-output.schema.json")
 DOMAIN = os.path.join(SKILL, "rules", "domain.md")
 LENSES = os.path.join(SKILL, "rules", "lenses.md")
@@ -62,6 +65,14 @@ CATEGORIES = ("engine", "domain", "local-maxima", "silent-failure", "dirty-comme
 GROUPS = {"wellmed": "§3.1–§3.8", "pmg": "§3.1, §3.5, §3.6, §3.7 only",
           "iris": "§3.1, §3.2, §3.5, §3.6 (module paths + parameterized queries only), §3.7, §3.8, §3.9 — "
                   "never §3.3/§3.4, which are WellMed ADRs IRIS does not inherit"}
+# Lean mode inlines only these domain.md sections (the same groups as GROUPS, as section numbers).
+LEAN_SECTIONS = {"wellmed": ["3.1", "3.2", "3.3", "3.4", "3.5", "3.6", "3.7", "3.8"],
+                 "pmg": ["3.1", "3.5", "3.6", "3.7"],
+                 "iris": ["3.1", "3.2", "3.5", "3.6", "3.7", "3.8", "3.9"]}
+LEAN_CAP = vl.LEAN_CAP   # changed lines inlined into a lean bundle (shared with /verify's)
+LEAN_CLAUDE_MD = 24_000  # bytes of the repo's CLAUDE.md / ARCHITECTURE.md a lean bundle inlines; larger is listed
+LEAN_NO_ADJACENT = ("adjacent code outside the diff (lenses §1: the touched files in full, their callers and "
+                    "callees) — a lean review reads only the diff hunks in its bundle")
 # Standalone graphs that live under another project's directory. Matched before the
 # top-level project, so kalpa-iris never inherits WellMed's ADR checks (IRIS CLAUDE.md §3.1).
 SUBPROJECTS = {"wellmed/kalpa-iris": "iris"}
@@ -135,6 +146,101 @@ def resolve_range(repo, rng):
 
 # ---------- prepare ----------------------------------------------------------------
 
+def domain_sections(numbers):
+    """The `### <n> …` sections of domain.md for each number, in order, verbatim."""
+    with open(DOMAIN, encoding="utf-8") as fh:
+        text = fh.read()
+    found = {m.group(1): m for m in re.finditer(r"^### (\d+\.\d+)\b.*$", text, re.M)}
+    starts = sorted(m.start() for m in found.values())
+    out = []
+    for n in numbers:
+        m = found[n]                                  # a KeyError is a LEAN_SECTIONS/domain.md drift
+        end = next((s for s in starts if s > m.start()), len(text))
+        out.append(text[m.start():end].rstrip())
+    return out
+
+
+def lean_coverage(repo, rng):
+    """(diff, inlined, total, [(doc, text)], [not covered]) for a lean review of the immutable
+    range `rng`. prepare builds the bundle from it and record recomputes the not-covered list
+    from it, so that list never passes through a file anyone could leave stale or empty
+    (review 7.1-r1-05, r2-01). CLAUDE.md / ARCHITECTURE.md are read at the range's head."""
+    diff, inlined, uncovered, total, _ = vl.capped_diff(repo, rng)
+    head, docs = rng.split("..")[1], []
+    # the full prompt has the reviewer read both first; lean inlines them or says it didn't (7.1-r1-03)
+    # inline a doc only when it is a regular file at the range's head; anything else — absent,
+    # a symlink, unreadable, too big — is listed with its reason, never silently skipped
+    # (review 7.1-r3-01, r3-02)
+    for doc in ("CLAUDE.md", "ARCHITECTURE.md"):
+        why = None
+        rc, entry, _ = git(repo, "ls-tree", head, "--", doc)
+        mode = entry.split()[0] if rc == 0 and entry else ""
+        if not mode:
+            why = "not present at the range's head"
+        elif mode not in ("100644", "100755"):
+            why = f"not a regular file at the range's head (mode {mode})"
+        else:
+            rc, text, e = git(repo, "show", f"{head}:{doc}")
+            size = len(text.encode("utf-8"))
+            if rc != 0:
+                why = f"unreadable at the range's head ({e[:80] or 'git show failed'})"
+            elif size > LEAN_CLAUDE_MD:
+                why = f"{size:,} bytes, over the {LEAN_CLAUDE_MD:,}-byte lean limit"
+            else:
+                docs.append((doc, text))
+        if why:
+            uncovered.append(f"the repo's `{doc}` ({why}) — not read")
+    # the lenses' first check reads whole touched files and their callees; a bundle of hunks
+    # cannot, so that coverage is always declared missing, by the script (7.1-r1-04)
+    uncovered.append(LEAN_NO_ADJACENT)
+    return diff, inlined, total, docs, uncovered
+
+
+def prepare_lean(a, n, proj, out_dir):
+    """Write the lean bundle: everything the single Sonnet reviewer may read, in one file."""
+    with open(PROMPT, encoding="utf-8") as fh:
+        output_spec = fh.read().split("## Output", 1)[1]  # one Output contract for both modes
+    diff, inlined, total, docs, uncovered = lean_coverage(a.repo, a.range)
+    _, log, _ = git(a.repo, "log", "--oneline", a.range)
+    passes, sections = [], []
+    if a.kalpa_only:
+        passes.append("engine SKIPPED (--kalpa-only)")
+    elif os.path.exists(ENGINE):
+        with open(ENGINE, encoding="utf-8") as fh:
+            sections.append("## Rules — the generic review checklist (category `engine`)\n\n" + fh.read().strip())
+        passes.append("engine ✓ (inlined)")
+    else:
+        passes.append("engine SKIPPED (gstack checklist not installed)")
+    if a.engine_only:
+        passes.append("domain SKIPPED (--engine-only)")
+    elif proj == "generic":
+        passes.append("domain n/a — generic repo")
+    else:
+        sections.append(f"## Rules — domain checks (category `domain`; this repo is {proj}: {GROUPS[proj]})\n\n"
+                        + "\n\n".join(domain_sections(LEAN_SECTIONS[proj])))
+        passes.append(f"domain ✓ ({proj}, inlined)")
+    with open(LENSES, encoding="utf-8") as fh:
+        sections.append("## Rules — lenses for every repo\n\n" + fh.read().strip())
+    passes.append("lenses ✓")
+    sections[:0] = [f"## The repo's {doc} — what \"correct\" means here\n\n{text.strip()}" for doc, text in docs]
+    passes.append(f"lean: {inlined} of {total} file(s) inlined")
+    with open(LEAN_PROMPT, encoding="utf-8") as fh:
+        text = fh.read()
+    # DIFF goes last: a diff may itself contain `{{…}}`, and nothing after it is substituted
+    fill = {"REPO": os.path.realpath(a.repo), "PROJECT": proj, "RANGE": a.range, "COMMITS": str(n), "LOG": log,
+            "SECTIONS": "\n\n".join(sections),
+            "NOT_COVERED": "\n".join(f"- {u}" for u in uncovered) or "- (nothing — the whole range is inlined)"}
+    for k, v in fill.items():
+        text = text.replace("{{" + k + "}}", v)
+    text = text.replace("{{DIFF}}", diff).rstrip() + "\n\n## Output" + output_spec
+    bundle = os.path.join(out_dir, "review-lean-bundle.md")
+    with open(bundle, "w", encoding="utf-8") as fh:
+        fh.write(text)
+    print(f"prompt: {bundle}\nschema: {SCHEMA}\npasses: {' · '.join(passes)}\nrange: {a.range}\n"
+          f"effort: n/a (lean — one Sonnet pass)\nuncovered: {len(uncovered)} item(s) — record recomputes them")
+    return vl.EXIT_PASS
+
+
 def cmd_prepare(a):
     n, code = count_range(a.repo, a.range)
     if code is not None:
@@ -143,6 +249,14 @@ def cmd_prepare(a):
     if code is not None:
         return code
     proj = project(a.repo)
+    if a.lean:
+        out_dir = a.out_dir or tempfile.mkdtemp(prefix="review-")
+        os.makedirs(out_dir, exist_ok=True)
+        try:
+            return prepare_lean(a, n, proj, out_dir)
+        except vl.ContractError as exc:
+            return err("git could not produce the lean diff", "a readable range", str(exc)[:200], a.repo,
+                       f"git -C {a.repo} diff --numstat {a.range}", cause="environment")
     rules, passes = [], []
     if a.kalpa_only:
         passes.append("engine SKIPPED (--kalpa-only)")
@@ -183,6 +297,31 @@ def cmd_prepare(a):
 
 # ---------- record -----------------------------------------------------------------
 
+# Scaffolding: what a session adds to plan and verify its work, not what ships (lenses §7).
+SCAFFOLD_NAMES = {"finish-conditions.md", "closeout-prep.md", "progress.md", "scope.md"}
+
+
+def is_scaffolding(f):
+    """The reviewer said so, or the file is planning/verification state by name: a finish
+    table, a ledger, a progress, scope or plan document. Not a whole `plans/` directory: in a
+    docs repo that can hold what a docs scope delivers (hand-back files)."""
+    name = os.path.basename(str(f.get("file", "")))
+    return f.get("target") == "scaffolding" or name in SCAFFOLD_NAMES or name.endswith(("-PROGRESS.md", "-PLAN.md"))
+
+
+def cap_scaffolding(doc):
+    """Block only when shipped work is wrong (Alex, 2026-10-02): a finding whose only target
+    is scaffolding is at most should-fix, so it never forces another round. Enforced here,
+    whatever the reviewer said."""
+    for f in doc["findings"]:
+        if is_scaffolding(f):
+            f["target"] = "scaffolding"
+            if f["severity"] == "blocking":
+                f["severity"], f["capped"] = "should-fix", True
+        else:
+            f["target"] = "shipped"
+
+
 def validate(doc):
     with open(SCHEMA, encoding="utf-8") as fh:
         problems = vl.schema_problems(doc, json.load(fh))
@@ -209,7 +348,9 @@ def render(doc, findings, header):
         lines.append(f"## {title} ({len(group)})")
         lines.append("")
         for f in group:
-            tag = f"{f['category']}{' ' + f['group'] if f.get('group') else ''}"
+            tag = f"{f['category']}{' ' + f['group'] if f.get('group') else ''}" + (
+                " · scaffolding, capped from blocking" if f.get("capped") else
+                " · scaffolding" if f.get("target") == "scaffolding" else "")
             lines.append(f"- **{f['finding_id']}** `{f['file']}:{f['line']}` ({tag}) — {f['text']}"
                          + (f" → {f['fix']}" if f.get("fix") else ""))
         lines.append("")
@@ -231,7 +372,7 @@ def cmd_record(a):
         return err("record needs the immutable range prepare printed", "`<base sha>..<head sha>` (full SHAs)",
                    a.range, "--range", "pass the `range:` line from `review.py prepare`", code=vl.EXIT_USAGE)
     if not vl.JUDGE_LINE.match(a.reviewer):
-        return err("reviewer line is malformed", "`codex <model>` / `claude-fallback <reason>` / `none <reason>`",
+        return err("reviewer line is malformed", "`codex <model>` / `claude-fallback <reason>` / `claude-lean <reason>` / `none <reason>`",
                    a.reviewer, "--reviewer", "pass the line codex-exec.py printed", code=vl.EXIT_USAGE)
     try:
         with open(a.input, encoding="utf-8") as fh:
@@ -239,10 +380,18 @@ def cmd_record(a):
         problems = validate(doc)
     except (OSError, ValueError) as exc:
         doc, problems = None, [str(exc)]
+    uncovered, code = lean_uncovered(a)
+    if code is not None:
+        return code
+    if not problems and uncovered:
+        # a lean review's not-covered list is recomputed from the range (lean_coverage), never
+        # taken from the model or from a file the caller passes (review 7.1-r2-01, r3-03)
+        doc["cannot_do"] = uncovered + [c for c in doc["cannot_do"] if c not in uncovered]
     if problems:
         return err("review answer is malformed — nothing recorded", "findings with file:line, severity and "
                    "category per review/schemas/review-output.schema.json", "; ".join(problems[:6]), a.input,
                    "re-run the reviewer; if codex keeps failing, run the Claude fallback (review/SKILL.md §3)")
+    cap_scaffolding(doc)
     # the primary checkout's key, never a worktree's directory name: the gate and
     # `dispose --fixed` look the repo up under ~/Projects (review adhoc-01)
     key = repo_key(main_worktree(a.repo))
@@ -274,6 +423,19 @@ def cmd_record(a):
     for line in convergence(vl.read_jsonl(log), a.unit):
         print(line)
     return vl.EXIT_PASS
+
+
+def lean_uncovered(a):
+    """(not-covered lines, None) or (None, error code). A `claude-lean` review's list is
+    recomputed from its immutable range — the same function prepare used — never read back
+    from a file (review 7.1-r2-01). Other reviewers have none."""
+    if not a.reviewer.startswith("claude-lean "):
+        return [], None
+    try:
+        return lean_coverage(a.repo, a.range)[4], None
+    except vl.ContractError as exc:
+        return None, err("git could not recompute the lean coverage", "a readable range", str(exc)[:200],
+                         a.repo, f"git -C {a.repo} diff --numstat {a.range}", cause="environment")
 
 
 def reviews_of(recs, unit):
@@ -372,13 +534,16 @@ def build(a, doc, ordered, key, n, review_id):
     records = [{"schema": vl.SCHEMA, "ts": ts, "record": "finding", "review_id": review_id,
                 "finding_id": f["finding_id"], "reviewer": a.reviewer, "range": {key: a.range},
                 "file": f["file"], "line": f["line"], "category": f["category"], "group": f.get("group", ""),
-                "severity": f["severity"], "text": f["text"], "fix": f.get("fix", "")} for f in findings]
+                "severity": f["severity"], "text": f["text"], "fix": f.get("fix", ""),
+                "target": f.get("target", "shipped"), "capped": bool(f.get("capped"))} for f in findings]
+    lean = (f" (lean: single Sonnet pass over one bundle, no specialists, diff capped at {LEAN_CAP:,} lines)"
+            if a.reviewer.startswith("claude-lean ") else "")
     degraded = [] if a.reviewer.startswith("codex ") else [
-        f"**DEGRADED:** reviewer is `{a.reviewer}` — not the codex gate; the gate reports `⚠ judge: review {a.reviewer}` "
+        f"**DEGRADED{lean}:** reviewer is `{a.reviewer}` — not the codex gate; the gate reports `⚠ judge: review {a.reviewer}` "
         "(and the index carries it) until a codex re-review of this unit."]
     header = [f"# /review — {key} @ `{a.range}` ({n} commits)", "",
               f"**Review:** `{review_id}` · **Reviewer:** {a.reviewer} · **Passes:** {a.passes or 'unrecorded'}"] \
-        + degraded + [f"**Findings:** {len(findings)} — every ID needs a disposition: "
+        + ([f"**{a.mode}**"] if a.mode else []) + degraded + [f"**Findings:** {len(findings)} — every ID needs a disposition: "
                       f"`review.py dispose --scope <scope> --unit {a.unit or '<unit>'} --finding <ID> "
                       "(--fixed <sha> | --rejected \"<reason>\" | --deferred \"<TO-DO>\")`"]
     report = "\n".join(render(doc, findings, header)) + "\n"
@@ -387,7 +552,7 @@ def build(a, doc, ordered, key, n, review_id):
     shas = dict(zip(("base", "head"), a.range.split("..")))
     review = {"schema": vl.SCHEMA, "ts": ts, "record": "review", "review_id": review_id, "reviewer": a.reviewer,
               "range": {key: a.range}, "shas": shas, "passes": a.passes or "", "findings": len(findings),
-              "verdict": doc["verdict"]}
+              "verdict": doc["verdict"], "mode": a.mode or ""}
     return [review] + records, findings, report
 
 
@@ -721,12 +886,14 @@ def main(argv):
     m.add_argument("--kalpa-only", action="store_true")
     m.add_argument("--engine-only", action="store_true")
     p.add_argument("--out-dir")
+    p.add_argument("--lean", action="store_true", help="write one self-contained bundle for a single Sonnet pass")
     r = sub.add_parser("record")
     for opt in ("--repo", "--range", "--reviewer", "--input"):
         r.add_argument(opt, required=True)
     r.add_argument("--scope")
     r.add_argument("--unit")
     r.add_argument("--passes")
+    r.add_argument("--mode", help="review-mode.py's line, shown in the report header")
     d = sub.add_parser("dispose")
     d.add_argument("--scope", required=True)
     d.add_argument("--unit", required=True)

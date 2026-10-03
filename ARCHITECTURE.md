@@ -41,12 +41,16 @@ start to understand which skills exist and how they fit together.
   ARCHITECTURE.md, CLAUDE.md); templates in `cross-repo-init/templates/`.
 - `ready-to-clear/` — fresh-subagent clear-readiness gate (disk truth vs git truth).
 - `verify/` — independent verification: `verify-run.py` runs the finish-condition
-  rows, a codex judge (fresh, read-only; Claude subagent fallback) confirms or
-  downgrades via `verify/scripts/judge.py`, `verdict-gate.py` decides Done.
-  Contracts: `templates/verify-contracts.md`.
-- `review/` — codex as the gate over an explicit range (gstack checklist + `review/rules/`
-  domain + lenses); Claude pass (gstack engine) as fallback; findings logged with stable IDs
-  and dispositioned through `review/scripts/review.py`.
+  rows; a judge confirms or downgrades via `verify/scripts/judge.py`; `verdict-gate.py`
+  decides Done. The judge is lean by default — one Sonnet subagent over a packed bundle
+  (`judge.py prepare --lean`). Full mode (`AI_SKILLS_REVIEW_MODE=full` / `--full`) uses a
+  codex judge with a Claude subagent fallback. A unit's fix loop stops at 2 runs. Mode:
+  `scripts/review-mode.py`. Contracts: `templates/verify-contracts.md`.
+- `review/` — reviews an explicit range against gstack's checklist and `review/rules/`
+  (domain + lenses). Lean by default: one Sonnet subagent over a packed bundle, with the
+  diff capped at 1,500 lines and anything left out listed. Full mode: the codex gate, with
+  the gstack engine and specialists as fallback. Findings are logged with stable IDs and
+  dispositioned through `review/scripts/review.py`.
 - `scope-review/` — altitude-ordered review of a team member's scope.
 - `concurrency/` — partition a scope into a verified DAG, dispatch the ready
   frontier to named herdr panes (worktree per writer), supervise.
@@ -240,9 +244,9 @@ graphs.
 | `prd` | 1.1.0 | Step 0 = `context-gather.sh`. |
 | `concurrency` | 0.5.0 | Dedup'd against herdr; pane naming + dispatch log via scripts. |
 | `herdr` | 0.1.5 | Opus seat = 5.5 (`opus[1m]`). |
-| `review` | 3.4.0 | codex gate; rules extracted to `review/rules/` (IRIS group §3.9); dispositions enforced, `deferred` past a repo's round 3 (rounds per repo); §5.1 convergence; `accept` records the user's yes. |
+| `review` | 3.7.0 | Plan 7: lean default (one Sonnet pass over a packed bundle), `--full` / `AI_SKILLS_REVIEW_MODE=full` for the codex gate; codex gate; rules extracted to `review/rules/` (IRIS group §3.9); dispositions enforced, `deferred` past a repo's round 3 (rounds per repo); §5.1 convergence; `accept` records the user's yes. |
 | `ready-to-clear` | 1.1.0 | |
-| `verify` | 0.4.0 | Scope 5. Advisory gate until 5 clean scopes; codex effort scales with the diff; `--demo` on the planted-defect fixture; stale-clone line. |
+| `verify` | 0.7.0 | Plan 7: lean judge by default, fix loop capped at 2 runs; a judge failure is NOT-JUDGED, never a block. Scope 5. Advisory gate until 5 clean scopes; codex effort scales with the diff; `--demo` on the planted-defect fixture; stale-clone line. |
 | `kalpa-*` | unversioned | Flattened 2026-08-09. |
 
 ### 6.2 Active scope

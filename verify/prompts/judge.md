@@ -30,7 +30,10 @@ check yourself, whether each finish condition below is actually met.
 ## Lenses — apply each, report through `findings`
 
 - **conformance** — each scope deliverable in the unit's revision range vs what landed. A
-  deliverable absent or reshaped without a recorded decision is a finding.
+  deliverable absent or reshaped without a recorded decision is a finding. A change logged
+  in the progress file — a user decision (a Decisions Log or `Decision` entry) or an
+  `#### Unplanned:` entry (`/plan` §8.10) — is in scope: never flag it as unplanned. Flag
+  only changes that appear in neither the progress file nor the ledger.
 - **test-plan** — if a test plan is listed below, did the unit's tests cover its edge cases
   and critical paths? Name the uncovered ones.
 - **rejection-audit** — if a review log is listed, read every `rejected` disposition. Is the
@@ -67,6 +70,7 @@ carries the same slug — that match is what counts as a second sighting.
 ## Inputs
 
 - Scope: `{{SCOPE_MD}}` — the deliverables for unit {{UNIT}} are in its phase section.
+- Progress: {{PROGRESS}} — its decisions and `#### Unplanned:` entries are recorded scope.
 - Finish-condition table: `{{TABLE}}` (revision {{TABLE_REV}})
 - Verdict log: `{{LOG}}` — this run is `{{RUN_ID}}`; read its `pending` records.
 - Revision range per repo (review exactly this; run `git -C <repo> log/diff <range>`):

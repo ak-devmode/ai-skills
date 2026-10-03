@@ -95,6 +95,131 @@ class TestJudge(unittest.TestCase):
         self.assertIn("(1 commits)", prompt)
         self.assertIn(self.rid, prompt)
 
+    # ---- prepare --lean (plan 7)
+    def commit_file(self, name, lines):
+        with open(os.path.join(self.svc, name), "w") as fh:
+            fh.write("".join(f"{x}\n" for x in lines))
+        git(self.svc, "add", "-A")
+        git(self.svc, "commit", "-q", "-m", name)
+
+    def prepared(self, *flags):
+        p = self.judge("prepare", "--out-dir", os.path.join(self.tmp.name, "w"), *flags)
+        self.assertEqual(p.returncode, 0, p.stderr)
+        return p.stdout, read(p.stdout.split("prompt: ")[1].split()[0])
+
+    def test_lean_bundle_is_the_full_prompt_plus_inlined_inputs(self):
+        self.ledger(self.base)
+        self.commit_file("app.sh", ["echo lean-marker"])
+        _, full = self.prepared()
+        out, lean = self.prepared("--lean")
+        self.assertIn(full.rstrip(), lean)                         # the full rules, unchanged
+        self.assertNotIn("You have no tools", full)
+        self.assertNotRegex(lean, r"\{\{[A-Z_]+\}\}")
+        self.assertIn("You have no tools for this run", lean.split("# You are the verification judge")[0])
+        inlined = lean.split("## Inlined inputs")[1]
+        self.assertIn("# scope", inlined)
+        self.assertIn("| jr |", inlined)                           # the table
+        self.assertIn(self.rid, inlined)                           # this run's records
+        self.assertIn("+echo lean-marker", inlined)                # the diff
+        self.assertIn("app.sh", inlined)                           # and its stat
+        self.assertIn("not inlined: 0 item(s)", out)
+        self.assertIn("effort: n/a", out)
+
+    def test_lean_bundle_inlines_the_units_plan(self):
+        # review 7.1-r1-02: a standalone plan's scope.md may only point at the plan
+        self.ledger(self.base)
+        self.commit_file("app.sh", ["echo x"])
+        for name, text in (("9.1-thing-PLAN.md", "unit-plan-marker"), ("9.2-other-PLAN.md", "sibling-marker")):
+            with open(os.path.join(self.scope, name), "w") as fh:
+                fh.write(text + "\n")
+        _, lean = self.prepared("--lean")
+        self.assertIn("unit-plan-marker", lean)
+        self.assertNotIn("sibling-marker", lean)
+
+    def test_lean_verdict_log_limit_applies_to_this_run_only(self):
+        # review 7.1-r1-07: a long log of earlier runs must not push this run's records out
+        self.ledger(self.base)
+        self.commit_file("app.sh", ["echo x"])
+        with open(self.log, "a") as fh:
+            fh.write(("{\"run_id\": \"old\", \"pad\": \"" + "x" * 1000 + "\"}\n") * 60)
+        out, lean = self.prepared("--lean")
+        self.assertIn(self.rid, lean.split("## Inlined inputs")[1])
+        self.assertNotIn("Verdict log", lean.split("# You are the verification judge")[0])
+
+    def test_logged_decisions_reach_the_judge(self):
+        # plan 7.1-11: a user decision or an `#### Unplanned:` entry is recorded scope
+        self.ledger(self.base)
+        self.commit_file("app.sh", ["echo x"])
+        with open(os.path.join(self.scope, "progress.md"), "w") as fh:
+            fh.write("# progress\n\n## Session\n\nchatty-session-marker\n\n"
+                     "### Decision (Alex) — dates are dd/mm\n\ndecision-marker\n\n"
+                     "#### Unplanned: daemon fix\n\nunplanned-marker\n\n### Task 1.2\n\ntask-marker\n")
+        _, full = self.prepared()
+        self.assertIn(f"- Progress: `{os.path.join(self.scope, 'progress.md')}`", full)
+        self.assertIn("never flag it as unplanned", full)
+        _, lean = self.prepared("--lean")
+        inlined = lean.split("## Inlined inputs")[1]
+        self.assertIn("decision-marker", inlined)
+        self.assertIn("unplanned-marker", inlined)
+        self.assertNotIn("chatty-session-marker", inlined)     # only recorded scope, not the whole log
+        self.assertNotIn("task-marker", inlined)
+
+    def test_refused_answer_writes_a_retry_prompt(self):
+        # plan 7.1-12(a): one retry naming what was missing, before NOT-JUDGED
+        self.ledger(self.base)
+        _, _ = self.prepared()
+        prompt = os.path.join(self.tmp.name, "w", f"judge-{self.rid}.md")
+        short = self.answer(verdicts=[{"check_id": "ok", "verdict": "pass", "rung_reached": 4, "reason": "r"}])
+        p = self.judge("record", "--judge", "codex gpt-test", "--input", short, "--prompt", prompt)
+        self.assertEqual(p.returncode, 3)
+        retry = p.stdout.split("retry-prompt: ")[1].split()[0]
+        text = read(retry)
+        self.assertTrue(text.startswith(read(prompt).rstrip()))           # the original prompt, intact
+        self.assertIn("- no verdict for `jr`", text)
+        self.assertIn("- no verdict for `away`", text)
+        self.assertIn("NOT-JUDGED, never blocked", p.stderr)
+        self.assertEqual(self.records("judged"), [])                      # still nothing recorded
+
+    def test_lean_big_scope_inlines_only_the_units_phase(self):
+        # plan 7.1-12(b): a scope over 40 KB is not dropped whole
+        self.ledger(self.base)
+        self.commit_file("app.sh", ["echo x"])
+        with open(os.path.join(self.scope, "scope.md"), "w") as fh:
+            fh.write("# scope\n\n## Context\n\n" + "filler " * 8000 + "\n\n## Phases\n\n"
+                     "### Phase 1 — the work\n\nphase-one-marker\n\n### Phase 2 — later\n\nphase-two-marker\n\n"
+                     "## Key Decisions Captured\n\ndecision-marker\n")
+        out, lean = self.prepared("--lean")
+        inlined = lean.split("## Inlined inputs")[1]
+        self.assertIn("phase-one-marker", inlined)
+        self.assertIn("decision-marker", inlined)
+        self.assertNotIn("phase-two-marker", inlined)
+        self.assertNotIn("filler filler", inlined)
+        self.assertIn("only its phase 1 section and Key Decisions are inlined", lean.split("# You are")[0])
+
+    def test_auto_decided_row_never_reaches_the_judge(self):
+        # plan 7.1-12(c): a runner-decided row is not in the prompt and not a required verdict
+        with open(os.path.join(self.scope, "finish-conditions.md"), "w") as fh:
+            fh.write(f"**Schema version:** verify/1\n**Revision:** 1\n\n{HEADER}{ROWS}"
+                     "| p1-rejections-justified | rejections right | 9.1 | B | judge | svc | . | - | - | 2 | no | ev |\n")
+        p = run("verify-run.py", "run", "--table", os.path.join(self.scope, "finish-conditions.md"),
+                "--log", self.log, "--owner", "9.1", env=self.env)
+        self.rid = p.stdout.split("run_id: ")[1].split()[0]
+        self.ledger(self.base)
+        _, prompt = self.prepared()
+        self.assertNotIn("p1-rejections-justified", prompt)
+        p = self.judge("record", "--judge", "codex gpt-test", "--input", self.answer())   # ok/jr/away only
+        self.assertEqual(p.returncode, 0, p.stderr)
+
+    def test_lean_bundle_past_the_cap_lists_never_cuts(self):
+        self.ledger(self.base)
+        self.commit_file("big.txt", [f"line {i}" for i in range(1600)])
+        self.commit_file("small.sh", ["echo small"])
+        out, lean = self.prepared("--lean")
+        self.assertIn("not inlined: 1 item(s)", out)
+        self.assertIn("svc: `big.txt` — 1,600 changed lines", lean.split("# You are the verification judge")[0])
+        self.assertNotIn("line 1599", lean)
+        self.assertIn("+echo small", lean)
+
     def test_prepare_refuses_empty_range(self):
         self.ledger(git(self.svc, "rev-parse", "HEAD"))
         p = self.judge("prepare")
@@ -164,9 +289,10 @@ class TestJudge(unittest.TestCase):
         self.ledger(self.base)
         self.judge("record", "--judge", "claude-fallback codex not authed", "--input", self.answer())
         run("verify-run.py", "finalize", "--log", self.log, "--run-id", self.rid, env=self.env)
-        p = self.judge("report")
+        p = self.judge("report", "--mode", "mode: full (env)")
         self.assertEqual(p.returncode, 0, p.stderr)
         text = read(os.path.join(self.scope, "artifacts", "verify-9.1-report.md"))
+        self.assertIn("**mode: full (env)**", text.split("**Run:**")[0])   # plan 7 §2.1: the header names the mode
         self.assertIn("**Judge:** claude-fallback codex not authed", text)
         self.assertIn("| jr | pass | 2/2 |", text)
         self.assertIn("**low** · over-build · `jr`", text)
@@ -179,6 +305,33 @@ class TestJudge(unittest.TestCase):
         p = self.judge("report")  # a second run finds the report and points at it
         self.assertIn("⚠ verify advisory: 1 blocked — see artifacts/verify-9.1-report.md", p.stdout)
         self.assertNotIn("(review:svc", p.stdout)
+
+    def test_lean_judge_line_is_accepted_and_marked(self):
+        self.ledger(self.base)
+        p = self.judge("record", "--judge", "claude-lean mode lean (default)", "--input", self.answer())
+        self.assertEqual(p.returncode, 0, p.stderr)
+        run("verify-run.py", "finalize", "--log", self.log, "--run-id", self.rid, env=self.env)
+        self.judge("report")
+        text = read(os.path.join(self.scope, "artifacts", "verify-9.1-report.md"))
+        self.assertIn("**Judge:** claude-lean mode lean (default)", text)
+        self.assertIn("⚠ judge: claude-lean mode lean (default)", text)
+
+    def test_run_cap_stops_from_the_second_run(self):
+        # plan 7: the fix loop stops at 2 finalized runs, lean and full alike
+        self.ledger(self.base)
+        table = os.path.join(self.scope, "finish-conditions.md")
+        for n, judge_line in ((1, "codex gpt-test"), (2, "claude-lean mode lean (default)"), (3, "codex gpt-test")):
+            if n > 1:
+                p = run("verify-run.py", "run", "--table", table, "--log", self.log, "--owner", "9.1", env=self.env)
+                self.rid = p.stdout.split("run_id: ")[1].split()[0]
+            self.judge("record", "--judge", judge_line, "--input", self.answer())
+            run("verify-run.py", "finalize", "--log", self.log, "--run-id", self.rid, env=self.env)
+            p = self.judge("report")
+            text = read(os.path.join(self.scope, "artifacts", "verify-9.1-report.md"))
+            with self.subTest(run=n):
+                stop = f"[CONVERGENCE] verify 9.1 run {n} of 2: STOP"
+                self.assertEqual(stop in p.stdout, n >= 2, p.stdout)
+                self.assertEqual(stop in text.split("## 1. Checks")[0], n >= 2)
 
     def test_report_propagates_a_gate_error(self):
         # 5.2-r1-05: a gate that errors must not become a successful report.

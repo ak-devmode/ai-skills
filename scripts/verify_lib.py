@@ -19,7 +19,7 @@ DEFAULT_TIMEOUT = 120
 RESULTS = ("pass", "fail", "inconclusive", "verified-unreachable")
 ORDER = {"fail": 0, "inconclusive": 1, "verified-unreachable": 2, "pass": 3}  # §5.1
 EXIT_PASS, EXIT_FAIL, EXIT_USAGE, EXIT_EVAL = 0, 1, 2, 3                     # §5.5
-JUDGE_LINE = re.compile(r"^(codex|claude-fallback|none) \S.*$")               # §4.6
+JUDGE_LINE = re.compile(r"^(codex|claude-fallback|claude-lean|none) \S.*$")               # §4.6
 # §5.4: advisory until BLOCKING_AFTER real scopes pass cleanly — then Alex flips this to
 # "blocking". `plans-index.py gate-count` (printed by /closeout) is the reminder.
 GATE_MODE = "advisory"
@@ -403,6 +403,10 @@ KEBAB = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
 # review/SKILL.md §5.1: rounds of one repo in a unit before the loop stops and asks the user.
 # review.py's deferral rule and verdict-gate.py's re-review waiver read the same number.
 ROUND_CAP = 3
+# a judge row the runner decided itself (verify-run.py: zero rejections to audit); the judge never sees it
+AUTO_PREFIX = "auto: "
+# verify/SKILL.md §3.9: finalized /verify runs of one unit before the fix loop stops and asks.
+VERIFY_RUN_CAP = 2
 
 # codex reasoning effort scales with the size of what it reads (Alex, 2026-09-29): a one-commit
 # re-review at `high` is what drained a 5-hour window in scope 5.3 (12 review rounds, all high).
@@ -420,6 +424,40 @@ def effort_for(stats):
         if lines <= max_lines and files <= max_files:
             return level, why
     return "high", why
+
+
+LEAN_CAP = 1500  # changed lines a lean bundle inlines, across every repo (plan 7, Alex 2026-10-02)
+
+
+def capped_diff(path, rng, budget=LEAN_CAP):
+    """(diff text, inlined, [not-covered lines], total files, lines used) for `rng` in the repo
+    at `path`. Files go in whole, in diff order, while they fit in `budget` changed lines; one
+    that doesn't is listed by name and size, never cut. Shared by /review's and /verify's lean
+    bundles so the two cap the same way. Raises ContractError when git cannot read the range."""
+    import subprocess
+
+    def g(*args):
+        p = subprocess.run(["git", "-C", path, *args], capture_output=True, text=True)
+        if p.returncode != 0:
+            raise ContractError(p.stderr.strip() or f"git {args[0]} exit {p.returncode}")
+        return p.stdout
+
+    # -z: names unquoted and NUL-terminated, so a name git would quote (spaces, non-ASCII) is
+    # read as-is; `:(literal)` keeps it from acting as a glob (review 7.1-r1-06)
+    rows = [r.split("\t", 2) for r in g("diff", "--numstat", "-z", "--no-renames", rng).split("\0") if r]
+    parts, used, uncovered = [], 0, []
+    for added, deleted, name in rows:
+        n = (int(added) if added.isdigit() else 0) + (int(deleted) if deleted.isdigit() else 0)
+        if used + n > budget:
+            uncovered.append(f"`{name}` — {n:,} changed lines; the bundle had {budget - used:,} of its "
+                             f"{LEAN_CAP:,}-line lean cap left, so this file was not reviewed")
+            continue
+        body = g("diff", "--no-color", "--no-ext-diff", "--no-renames", rng, "--", f":(literal){name}")
+        if n and not body.strip():
+            raise ContractError(f"git produced no patch for `{name}` ({n} changed lines)")
+        parts.append(body)
+        used += n
+    return "\n".join(parts), len(parts), uncovered, len(rows), used
 
 
 def diff_stat(path, rng):

@@ -29,6 +29,7 @@ already caused real data loss. Prose cannot enforce itself — the same reasonin
 | `verify-run.py` | "it passed" as a claim — runs each finish-table row in its declared context and is the only writer of the verdict log | `/verify`, `/plan` checkpoints, `/closeout` (scope 5) |
 | `verdict-gate.py` | "verify ran, so it's done" — applies §5 to the latest final verdict per owned check (range, rung, revision, disposition coverage); `--all` is /closeout's whole-scope view; `**Predates gate:**` phases exempt; advisory until 5 clean scopes | `plans-index.py status`/`validate`, `/plan`, `/closeout` |
 | `finish-table.py` | a finish table typed by hand — standard rows per phase, Revision + Changelog on every change, read back through the runner's parser | /scope Step 5.10, /plan §5.6.2a self-heal |
+| `review-mode.py` | each skill deciding lean vs full on its own — flag > `AI_SKILLS_REVIEW_MODE` > default `lean`; a bad env value is an error, never a silent lean | `/review`, `/verify` (plan 7) |
 | `verify_lib.py` | (library, not a CLI) one table parser, message formatter and verified JSONL appender for the verify scripts | `verify-run.py`, `verdict-gate.py`, `resolve-identifiers.py` |
 
 **Tests:** `python3 -m unittest discover scripts/tests` from the repo root (stdlib only,
@@ -67,6 +68,8 @@ by `test_entrypoint.py`'s compile check.
       exit: 0 ok · 1 write did not land / --repo not a git repo · 2 usage · 4 template missing
     resolve-identifiers.py --repo P (--range BASE..HEAD | --ids FILE) [--decl-repo P]... [--json]
       exit: 0 all resolved · 1 unresolved or unsupported · 2 usage · 3 git error / empty range
+    review-mode.py [--full | --lean]
+      stdout: `mode: <lean|full> (<flag|env|default>)`   exit: 0 resolved · 2 both flags / bad env value / unknown arg
     verify-run.py run|judged|finalize ...  (templates/verify-contracts.md §4)
       exit: 0 runner rows passed / recorded · 1 a row failed or refused · 2 usage · 3 malformed input / write did not land
     verdict-gate.py --scope DIR (--unit N.P | --all) [--advisory|--blocking] [--skip-verify R] [--json]

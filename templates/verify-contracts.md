@@ -155,7 +155,9 @@ else `null`) · `command` · `exit_code` (`null` if not run) · `duration_s` · 
 `check_id → {result, rung_reached, reason}` computed by the §5.1 authority rule.
 
 4.6 **Judge line** — exactly one of `codex <model codex reported>` ·
-`claude-fallback <reason>` · `none <reason>`. The model is a family (`VERIFY_CODEX_MODEL`,
+`claude-fallback <reason>` · `claude-lean <reason>` · `none <reason>`. `claude-lean` is the
+lean mode's single Sonnet pass over a packed bundle (`scripts/review-mode.py`); like
+`claude-fallback` it is never codex coverage, and the gate marks it `⚠ judge:`. The model is a family (`VERIFY_CODEX_MODEL`,
 default `sol`) resolved on every call from codex's own model list to its current slug,
 following retirement upgrades — never codex's floating default. Every codex failure mode
 (not installed, not authed, out of credits, model unusable or unresolved, a different model
@@ -180,6 +182,12 @@ with `Touches:` and a `Sighting: <docs repo>/<scope> · run <run_id> · <date>` 
 The same scope and run twice is a no-op. Another run of the same scope adds a line but
 never counts. The same `lever_id` from a **different scope** is the second sighting: the
 item flips to `BUILD NOW`, once.
+
+4.10 **Run cap.** A unit's fix loop stops at `VERIFY_RUN_CAP` (2) finalized runs, counted from
+its verdict log's `final` lines in log order. From the 2nd run on, `judge.py report` prints
+`[CONVERGENCE] verify <unit> run <n> of 2: STOP` and writes it under the report's Gate line.
+`/verify` then asks before another run (`verify/SKILL.md` §3.9). Lean and full runs count
+toward the same cap. The cap stops the loop; it never changes a verdict.
 
 ---
 
@@ -221,8 +229,9 @@ passes. The flag stays on the record so a reader can see it; it is not a block.
 `base..HEAD` but no `review` record (§6.0) names that repo and covers the unit's first
 commit on the current branch — or whose net diff a squash commit in the range holds (§5.2.2) —
 a unit that commits must be reviewed (review 5.3-r1-03);
-when a **blocking** finding's `fixed <sha>` — or any finding's fix `via off-anchor`, which
-only a reason ties to the finding (review adhoc-03) — sits in no later review's range (a higher `r<n>`
+when a **blocking** finding's `fixed <sha>` — or any `shipped` finding's fix `via off-anchor`, which
+only a reason ties to the finding (review adhoc-03); a `scaffolding` finding is capped at
+should-fix by `record` and never forces a round (`review/rules/lenses.md` §7) — sits in no later review's range (a higher `r<n>`
 than the finding's — an earlier review never saw the fix as a fix, review adhoc-05) of the repo
 holding it (the disposition's `repo`, else the finding's) — the fixes are reviewed again (`/plan` §6.8, 5.3-r2-03),
 unless that repo has had `ROUND_CAP` (3) reviews in the unit and an `acceptance` record follows the
@@ -287,6 +296,19 @@ archives, and its index row carries the printed `⚠ verify failed <check_ids>` 
 `--advisory` flag still wins. kalpa-iris runs blocking from its first scope (Alex,
 2026-09-29): its code is not read by a human, so an advisory gate there is a report
 nobody reads.
+
+5.4.3 **NOT-JUDGED — a judge failure is never a block** (Alex, 2026-10-02). A judge row
+whose final result is `inconclusive` because the deciding judge line is `none …` (the
+judge did not run, or its answer was refused after the §3.6 retry) is reported as
+`not judged`, apart from blocks. Verdict `NOT-JUDGED` when nothing else blocks. In advisory
+mode it exits `0` with marker `⚠ verify not judged: <n> (<ids>)`. In blocking mode it exits
+`1`, and `plans-index.py status` refuses Done: an unjudged unit is not a verified one. A
+runner row's result is unaffected (with no judge it stands), and any real block wins the
+verdict. `--all` lists them as `⚠ verify not judged <ids>`, never as failed. They need a
+`/verify` re-run and never count toward the blocking flip. The standard
+`rejections-justified` row is decided by the runner when the unit's review log has no
+standing `rejected` disposition: `pass`, rung 4, command `auto: …`. The judge never sees
+it.
 
 5.5 **Exit codes** for every script in this contract: `0` pass · `1` blocked / failed ·
 `2` usage · `3` could not evaluate (missing or malformed input, git error) — never read as

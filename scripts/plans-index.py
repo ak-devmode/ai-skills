@@ -295,7 +295,10 @@ def cmd_validate(args) -> int:
                 issues.append(f"phase {num} (L{ln+1}) is Done but its gate could not evaluate: "
                               f"{err.strip().splitlines()[0] if err.strip() else doc}")
             elif doc.get("verdict") in ("pass", "predates-gate") or "⚠ verify skipped" in status or (
-                    doc.get("verdict") == "advisory" and "⚠ verify advisory" in status):
+                    doc.get("verdict") == "advisory" and "⚠ verify advisory" in status) or (
+                    doc.get("verdict") == "not-judged" and "⚠ verify not judged" in status and code == 0):
+                # in blocking mode a not-judged unit is refused (exit 1), so its Done row is not
+                # conformant whatever marker it carries (review 7.1-r4-02)
                 continue
             else:
                 issues.append(f"phase {num} (L{ln+1}) is Done without a passing verdict (gate: "
@@ -513,6 +516,13 @@ def cmd_status(args) -> int:
                 return 3
             for m in doc.get("messages", []):
                 print(m, file=sys.stderr)
+            if doc.get("verdict") == "not-judged" and code == 1:
+                print(status_msg("BLOCK", f"refusing Done for {args.num} — not judged (blocking mode)",
+                                 "a judge verdict for every judge row",
+                                 f"not judged: {', '.join(doc.get('not_judged', []))}", f"{args.index} row {args.num}",
+                                 "tooling", 're-run /verify; the judge did not run or its answer was refused'),
+                      file=sys.stderr)
+                return 1
             if doc.get("verdict") == "blocked":
                 ids = ", ".join(b["id"] for b in doc.get("blocks", []))
                 print(status_msg("BLOCK", f"refusing Done for {args.num} — verdict gate BLOCKED",

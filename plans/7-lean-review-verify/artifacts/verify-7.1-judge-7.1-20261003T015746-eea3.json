@@ -1,0 +1,47 @@
+{
+  "verdicts": [
+    {
+      "check_id": "p1-names-resolve",
+      "verdict": "pass",
+      "rung_reached": 4,
+      "reason": "Independently reran the resolver on the exact pinned range: 1 reference found, 1 resolved, 0 unresolved or unsupported."
+    },
+    {
+      "check_id": "p1-scope-deliverables",
+      "verdict": "pass",
+      "rung_reached": 2,
+      "reason": "Inspected the implementation, tests, skills, contracts and artifacts against tasks 1.1–1.9 and recorded additions 1.10–1.12. Departures are documented. Read-only smoke checks confirmed capped bundles and settings-derived full-mode headers. The team announcement is explicitly scheduled after merge."
+    },
+    {
+      "check_id": "p1-no-overbuild",
+      "verdict": "pass",
+      "rung_reached": 2,
+      "reason": "The mode resolver and shared capped-diff helper serve both existing skills. Lean recording, retries and convergence reuse existing writers and contracts; no unnecessary registry, plugin layer or parallel implementation landed."
+    },
+    {
+      "check_id": "p1-tests-green",
+      "verdict": "pass",
+      "rung_reached": 4,
+      "reason": "The pending runner record names the correct repository and pinned SHA and reports 217 tests, OK. Inspected meaningful lean, mode and run-cap coverage. The two skips are opt-in live Codex evaluations. Independently reran the mode cases successfully."
+    },
+    {
+      "check_id": "p1-skills-lint",
+      "verdict": "pass",
+      "rung_reached": 4,
+      "reason": "Independently reran the specified linter: 0 issues across review and verify. Its seven advisory notes do not violate this condition."
+    }
+  ],
+  "findings": [
+    {
+      "check_id": "unowned",
+      "lens": "evidence",
+      "severity": "low",
+      "where": "scripts/verify-run.py:164",
+      "text": "In an all-row run, the zero-rejection shortcut reads each row owner's review log but labels its evidence with the overall run's unit. A read-only reproduction audited 7.2 while reporting review-7.1.jsonl. Use the row owner's unit in the evidence string. This does not affect the requested single-unit run or the computed rejection result."
+    }
+  ],
+  "lever_candidates": [],
+  "feature_map": "n/a",
+  "judge": "codex gpt-6.1-sol",
+  "run_id": "7.1-20261003T015746-eea3"
+}

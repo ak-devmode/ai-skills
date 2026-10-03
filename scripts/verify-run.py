@@ -17,7 +17,7 @@ Usage:
   verify-run.py finalize --log FILE --run-id ID [--judge LINE]
     --owner     plan (`5.1`) or unit (`5.1/1.3`); omitted = every row (closeout)
     --input     JSON list (or JSONL) of {check_id, verdict, rung_reached, reason}
-    --judge     `codex <model>` · `claude-fallback <reason>` · `none <reason>`; finalize
+    --judge     `codex <model>` · `claude-fallback <reason>` · `claude-lean <reason>` · `none <reason>`; finalize
                 needs it only when the run has no judged records (then it must be `none …`)
 Output: one line per row, the run_id, §10 messages for anything that failed.
 Exit:   0 every runner row passed / recorded · 1 a row failed, or refused · 2 usage
@@ -121,6 +121,20 @@ def decode(b):
     return b.decode("utf-8", "replace") if isinstance(b, bytes) else (b or "")
 
 
+REJECTIONS_ROW = re.compile(r"(^|-)rejections-justified$")  # the standard row (verify/SKILL.md §4)
+
+
+def rejections(scope, unit):
+    """How many of the unit's findings currently stand `rejected` (latest disposition wins), from
+    `artifacts/review-<unit>.jsonl`; 0 with no review log — there is nothing to audit."""
+    log = os.path.join(scope or "", "artifacts", f"review-{unit}.jsonl")
+    latest = {}
+    for r in vl.read_jsonl(log) if os.path.exists(log) else []:
+        if r.get("record") == "disposition":
+            latest[r.get("finding_id")] = r.get("disposition")
+    return sum(1 for d in latest.values() if d == "rejected")
+
+
 def execute(row, projects, run_id, unit, rev, bases=None, scope=None):
     # §4.3: the unit's base SHA for this repo (from the ledger) is exported as VERIFY_BASE, so a
     # static command can name the unit's range — `resolve-identifiers.py --range $VERIFY_BASE..HEAD`.
@@ -143,6 +157,14 @@ def execute(row, projects, run_id, unit, rev, bases=None, scope=None):
         rec["sha"] = sha
         rec["dirty"] = bool(git(repo_path, "status", "--porcelain")[1])
     if row["is_judge"]:
+        # the row's own unit, not the run's: an all-row run spans phases (review 7.1-r4-03)
+        own = row["owner"].split("/")[0]
+        n = rejections(scope, own) if REJECTIONS_ROW.search(row["check_id"]) else None
+        if n == 0:
+            # nothing to audit: decided here from the review log, never sent to a judge (Alex, 2026-10-02)
+            rec.update(command=f"{vl.AUTO_PREFIX}no rejected disposition in review-{own}.jsonl", result="pass",
+                       rung_reached=4, reason="0 rejected dispositions in the review log — nothing to audit")
+            return rec
         rec.update(result="inconclusive", reason="judge row: awaiting judge")
         return rec
     if rc != 0 or not os.path.isdir(cwd):
@@ -226,7 +248,7 @@ def cmd_judged(a):
                                           "start a new run", DOCS))
     if a.judge.startswith("none "):
         raise vl.ContractError(vl.message("ERROR", "a `none` judge cannot record verdicts",
-                                          "`codex <model>` or `claude-fallback <reason>`", a.judge, "--judge",
+                                          "`codex <model>`, `claude-fallback <reason>` or `claude-lean <reason>`", a.judge, "--judge",
                                           "tooling", f"verify-run.py finalize --log {a.log} --run-id {a.run_id} "
                                           f"--judge '{a.judge}'", f"{vl.CONTRACT} §4.6, §5.1"))
     pending = {r["check_id"] for r in recs if r["run_state"] == "pending"}
@@ -329,8 +351,8 @@ def main(argv):
     except SystemExit as exc:
         return vl.EXIT_USAGE if exc.code else vl.EXIT_PASS
     if getattr(a, "judge", None) and not vl.JUDGE_LINE.match(a.judge):
-        print(vl.message("ERROR", "judge line is malformed", "`codex <model>`, `claude-fallback <reason>` or "
-                         "`none <reason>`", a.judge, "--judge", "tooling", "pass a well-formed judge line",
+        print(vl.message("ERROR", "judge line is malformed", "`codex <model>`, `claude-fallback <reason>`, "
+                         "`claude-lean <reason>` or `none <reason>`", a.judge, "--judge", "tooling", "pass a well-formed judge line",
                          f"{vl.CONTRACT} §4.6"), file=sys.stderr)
         return vl.EXIT_USAGE
     try:

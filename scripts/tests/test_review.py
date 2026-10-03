@@ -71,20 +71,96 @@ class TestReview(unittest.TestCase):
             "checked_clear": ["3.1"], "not_applicable": ["3.2 — no FHIR"], "cannot_do": ["no network"],
             "verdict": "SHIP AFTER BLOCKING"}
         doc.update(over)
+        for f in doc["findings"] if isinstance(doc["findings"], list) else []:
+            if isinstance(f, dict):
+                f.setdefault("target", "shipped")   # required since plan 7.1 (lenses §7)
         path = os.path.join(self.tmp.name, "answer.json")
         with open(path, "w") as fh:
             json.dump(doc, fh)
         return path
 
-    def record(self, reviewer="codex gpt-test", repo=None, **over):
+    def record(self, reviewer="codex gpt-test", repo=None, extra=(), **over):
         repo = repo or self.repo
         return run(REVIEW, "record", "--repo", repo, "--range", self.rng(repo), "--reviewer", reviewer,
                    "--input", self.answer(**over), "--scope", self.scope, "--unit", "9.1", "--passes", "p",
-                   env=self.env)
+                   *extra, env=self.env)
 
     def findings(self):
         with open(self.log) as fh:
             return [r for r in map(json.loads, fh) if r["record"] == "finding"]
+
+    # ---- prepare --lean (plan 7)
+    def lean(self, repo, *flags):
+        p = run(REVIEW, "prepare", "--repo", repo, "--range", self.rng(repo), "--lean",
+                "--out-dir", os.path.join(self.tmp.name, "lean"), *flags, env=self.env)
+        self.assertEqual(p.returncode, 0, p.stderr)
+        bundle = read(p.stdout.split("prompt: ")[1].split()[0])
+        uncovered = bundle.split("## Not in this bundle")[1].split("## The diff")[0]
+        self.assertNotRegex(bundle, r"\{\{[A-Z_]+\}\}")
+        self.assertIn("Read no other file", bundle)
+        self.assertIn("`verdict`", bundle)   # the Output contract came along
+        return p.stdout, bundle, uncovered
+
+    def test_lean_bundle_inlines_this_projects_sections_only(self):
+        iris = self.mkrepo("wellmed/kalpa-iris")
+        for repo, present, absent in ((self.repo, ["### 3.3", "### 3.8"], ["### 3.9"]),
+                                      (iris, ["### 3.2", "### 3.9"], ["### 3.3", "### 3.4"]),
+                                      (self.generic, [], ["### 3.1"])):
+            with self.subTest(repo=repo):
+                out, bundle, uncovered = self.lean(repo)
+                self.assertIn("lean: 1 of 1 file(s) inlined", out)
+                self.assertIn("+curl x || true", bundle)
+                items = [x for x in uncovered.splitlines() if x.startswith("- ")]
+                self.assertEqual(items, ["- the repo's `CLAUDE.md` (not present at the range's head) — not read",
+                                         "- the repo's `ARCHITECTURE.md` (not present at the range's head) — not read",
+                                         "- " + load(REVIEW).LEAN_NO_ADJACENT])   # always declared, by the script
+                for s in present:
+                    self.assertIn(s, bundle)
+                for s in absent:
+                    self.assertNotIn(s, bundle)
+        _, bundle, _ = self.lean(self.repo, "--engine-only")
+        self.assertNotIn("### 3.1", bundle)
+
+    def test_lean_bundle_past_the_cap_lists_never_cuts(self):
+        with open(os.path.join(self.repo, "big.txt"), "w") as fh:
+            fh.write("".join(f"line {i}\n" for i in range(1600)))
+        with open(os.path.join(self.repo, "small.sh"), "w") as fh:
+            fh.write("echo small\n")
+        git(self.repo, "add", "-A")
+        git(self.repo, "commit", "-q", "-m", "big")
+        out, bundle, uncovered = self.lean(self.repo)
+        self.assertIn("lean: 2 of 3 file(s) inlined", out)       # a.sh + small.sh fit; big.txt does not
+        self.assertIn("+echo small", bundle)
+        self.assertNotIn("line 1599", bundle)                     # never partially inlined
+        self.assertIn("`big.txt` — 1,600 changed lines", uncovered)
+        self.assertIn("`big.txt` — 1,600 changed lines", bundle)  # and the reviewer is told
+
+    def test_lean_bundle_inlines_a_name_git_would_quote(self):
+        # review 7.1-r1-06: a quoted --numstat name used as a pathspec gave an empty patch
+        for name in ("with space.sh", "ünï.sh", "star*.sh"):
+            with open(os.path.join(self.repo, name), "w") as fh:
+                fh.write(f"echo {name}-marker\n")
+        git(self.repo, "add", "-A")
+        git(self.repo, "commit", "-q", "-m", "odd names")
+        out, bundle, _ = self.lean(self.repo)
+        self.assertIn("lean: 4 of 4 file(s) inlined", out)
+        for name in ("with space.sh", "ünï.sh", "star*.sh"):
+            self.assertIn(f"+echo {name}-marker", bundle)
+
+    def test_lean_bundle_lists_an_oversized_claude_md(self):
+        with open(os.path.join(self.repo, "CLAUDE.md"), "w") as fh:
+            fh.write("x" * 30_000)
+        git(self.repo, "add", "-A")
+        git(self.repo, "commit", "-q", "-m", "big claude.md")     # read at the range's head, not the tree
+        _, bundle, uncovered = self.lean(self.repo)
+        self.assertIn("`CLAUDE.md` (30,000 bytes", uncovered)
+        self.assertNotIn("## The repo's CLAUDE.md", bundle)    # listed, never inlined as rules
+
+    def test_lean_sections_match_groups_and_domain_md(self):
+        rv = load(REVIEW)
+        self.assertEqual(set(rv.LEAN_SECTIONS), set(rv.GROUPS))
+        for proj, numbers in rv.LEAN_SECTIONS.items():
+            self.assertEqual(len(rv.domain_sections(numbers)), len(numbers), proj)
 
     # ---- prepare
     def test_prepare_selects_rules_by_project(self):
@@ -221,6 +297,88 @@ class TestReview(unittest.TestCase):
         self.assertEqual(marks, ["review claude-fallback codex out of credits"])
         review("codex gpt-test", wide)
         self.assertEqual(gate.fallback_markers(self.log, self.projects), [])
+
+    def test_lean_reviewer_is_never_codex_coverage(self):
+        # plan 7: a lean review needs a covering codex review to clear, exactly like a fallback
+        gate = load("verdict-gate.py")
+        p = self.record(reviewer="claude-lean mode lean (default)", findings=[], verdict="SHIP")
+        self.assertEqual(p.returncode, 0, p.stderr)
+        self.assertEqual(gate.fallback_markers(self.log, self.projects), ["review claude-lean mode lean (default)"])
+        report = read(os.path.join(self.scope, "artifacts", "review-9.1-r1.md"))
+        self.assertIn("**DEGRADED (lean: single Sonnet pass over one bundle, no specialists, diff capped at "
+                      "1,500 lines):** reviewer is `claude-lean mode lean (default)`", report.split("## BLOCKING")[0])
+        self.record(findings=[], verdict="SHIP")
+        self.assertEqual(gate.fallback_markers(self.log, self.projects), [])
+
+    def test_lean_record_recomputes_what_the_range_leaves_out(self):
+        # review 7.1-r2-01: the not-covered list comes from the range itself, never from the caller
+        with open(os.path.join(self.repo, "big.txt"), "w") as fh:
+            fh.write("".join(f"line {i}\n" for i in range(1600)))
+        git(self.repo, "add", "-A")
+        git(self.repo, "commit", "-q", "-m", "big")
+        p = self.record(reviewer="claude-lean mode lean (default)", extra=("--mode", "mode: lean (default)"),
+                        cannot_do=[])                            # a reviewer that listed nothing
+        self.assertEqual(p.returncode, 0, p.stderr)
+        report = read(os.path.join(self.scope, "artifacts", "review-9.1-r1.md"))
+        head, tail = report.split("## BLOCKING")[0], report.split("## What this review did not cover")[1]
+        self.assertIn("**mode: lean (default)**", head)
+        self.assertIn("- `big.txt` — 1,600 changed lines", tail)
+        self.assertIn("- " + load(REVIEW).LEAN_NO_ADJACENT, tail)
+        self.record(cannot_do=[])                                # a codex review gets no lean list
+        codex = read(os.path.join(self.scope, "artifacts", "review-9.1-r2.md"))
+        self.assertNotIn(load(REVIEW).LEAN_NO_ADJACENT, codex)
+
+    def test_lean_bundle_inlines_architecture_md(self):
+        # review 7.1-r1-03: the full prompt reads CLAUDE.md and ARCHITECTURE.md first
+        for doc, text in (("CLAUDE.md", "claude-rule-marker"), ("ARCHITECTURE.md", "arch-rule-marker")):
+            with open(os.path.join(self.repo, doc), "w") as fh:
+                fh.write(text + "\n")
+        git(self.repo, "add", "-A")
+        git(self.repo, "commit", "-q", "-m", "docs")
+        _, bundle, _ = self.lean(self.repo)
+        self.assertIn("claude-rule-marker", bundle)
+        self.assertIn("arch-rule-marker", bundle)
+
+    def test_lean_bundle_lists_a_symlinked_doc_never_reads_the_link(self):
+        # review 7.1-r3-02: `git show` of a symlink returns its target path, not the document
+        with open(os.path.join(self.repo, "real.md"), "w") as fh:
+            fh.write("real-doc-marker\n")
+        os.symlink("real.md", os.path.join(self.repo, "CLAUDE.md"))
+        git(self.repo, "add", "-A")
+        git(self.repo, "commit", "-q", "-m", "linked doc")
+        _, bundle, uncovered = self.lean(self.repo)
+        self.assertIn("`CLAUDE.md` (not a regular file at the range's head (mode 120000))", uncovered)
+        self.assertNotIn("## The repo's CLAUDE.md", bundle)
+
+    def test_lean_rounds_stop_at_three_like_codex(self):
+        for rnd in (1, 2, 3):
+            p = self.record(reviewer="claude-lean mode lean (default)", findings=[], verdict="SHIP")
+            self.assertEqual("round 3 of 3: STOP" in p.stdout, rnd == 3, p.stdout)
+
+    def test_scaffolding_findings_are_capped_and_force_no_rereview(self):
+        # lenses §7 (Alex, 2026-10-02): block only when shipped work is wrong
+        mk = lambda file, target: {"file": file, "line": 1, "severity": "blocking", "category": "fail-open",
+                                   "group": "", "text": "t", "fix": "", "target": target}
+        p = self.record(findings=[mk("a.sh", "shipped"), mk("check.sh", "scaffolding"),
+                                  mk("plans/9-x/finish-conditions.md", "shipped")], verdict="SHIP AFTER BLOCKING")
+        self.assertEqual(p.returncode, 0, p.stderr)
+        by = {f["file"]: f for f in self.findings()}
+        self.assertEqual((by["a.sh"]["severity"], by["a.sh"]["target"]), ("blocking", "shipped"))
+        for name in ("check.sh", "plans/9-x/finish-conditions.md"):     # declared, or a scaffolding file
+            self.assertEqual((by[name]["severity"], by[name]["target"], by[name]["capped"]),
+                             ("should-fix", "scaffolding", True))
+        report = read(os.path.join(self.scope, "artifacts", "review-9.1-r1.md"))
+        self.assertIn("scaffolding, capped from blocking", report.split("## SHOULD FIX")[1])
+        # a scaffolding finding fixed off-anchor needs no later review; a shipped one still does
+        fix = self.commit(self.repo, "other.txt")
+        gate = load("verdict-gate.py")
+        for fid in (by["check.sh"]["finding_id"], by["a.sh"]["finding_id"]):
+            run(REVIEW, "dispose", "--scope", self.scope, "--unit", "9.1", "--finding", fid, "--fixed", fix,
+                "--off-anchor", "test", env=self.env)
+        base = {"wellmed/svc": git(self.repo, "rev-list", "--max-parents=0", "HEAD")}
+        blocks = [b[0] for b in gate.review_presence_blocks(self.log, base, self.projects, self.scope)]
+        self.assertIn(f"rereview:{by['a.sh']['finding_id']}", blocks)
+        self.assertNotIn(f"rereview:{by['check.sh']['finding_id']}", blocks)
 
     def test_fallback_reviewer_is_degraded_in_the_header(self):
         self.record(reviewer="claude-fallback codex not authed")

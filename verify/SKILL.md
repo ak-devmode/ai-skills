@@ -1,6 +1,6 @@
 ---
 name: verify
-version: 0.5.0
+version: 0.7.0
 description: |
   Independent verification of a unit of scoped work. A deterministic runner executes
   every finish-condition row the unit owns and records evidence; a judge from the
@@ -14,6 +14,11 @@ description: |
   checkpoint and at /closeout. Never asks the author for data: disk, git and the
   running app only. `/verify --demo` runs a fixture with six planted defects and a
   clean control (~2 minutes) — the first thing to run after setup.
+
+  **Lean is the default** (plan 7): the runner and gate are unchanged, and the judge is
+  one Sonnet subagent reading one packed bundle (every input inlined, the diff capped at
+  1,500 lines), with no codex. `AI_SKILLS_REVIEW_MODE=full` or `--full` restores the codex
+  judge. A unit's fix loop stops at 2 runs and asks.
 allowed-tools:
   - Bash
   - Read
@@ -80,7 +85,13 @@ Set once for the steps below:
 S=~/Projects/ai-skills/scripts; V=~/Projects/ai-skills/verify/scripts
 SCOPE=<scope folder>; UNIT=<N.P>
 TABLE=$SCOPE/finish-conditions.md; LOG=$SCOPE/artifacts/verify-$UNIT.jsonl
+MODE=$($S/review-mode.py [--full|--lean])   # pass the user's flag through, if any
 ```
+
+2.4 **Mode.** `MODE` is one line, `mode: <lean|full> (<flag|env|default>)`. Exit 2 (both
+flags, or a bad `AI_SKILLS_REVIEW_MODE`) is a stop: report it and don't pick a mode
+yourself. `full` runs §3 as written. `lean` adds `--lean` to §3.2 and replaces §3.3–§3.5
+with §3.5.1.
 
 ---
 
@@ -92,7 +103,7 @@ failed rows are recorded as evidence. Exit 3 (malformed table) or a class-A plac
 refusal *is* a stop — report it with its message.
 
 3.2 **Render the judge prompt.** `$V/judge.py prepare --scope $SCOPE --unit $UNIT
---run-id $RUN [--range …]` → prints `prompt:` and `schema:` paths and an `effort:` line
+--run-id $RUN [--range …] [--lean]` → prints `prompt:` and `schema:` paths and an `effort:` line
 (`$EFFORT`, scaled to the unit's diff); the prompt's directory
 is the scratch `$WORK` for this run (`OUT=$WORK/answer-$RUN.json`). Exit 3 (no range,
 empty range) is a stop.
@@ -117,19 +128,35 @@ or writes nothing usable, the judge line is `none <reason>`: skip §3.6 and fina
 `--judge 'none <reason>'`. A fallback or `none` judge is not a failure of this skill; it
 is recorded, and the index shows `⚠ judge:` until a codex verdict clears it.
 
+3.5.1 **Lean: one Sonnet subagent, no codex probe.** Spawn it with `model: sonnet` and
+the §3.5 prompt, adding: "Read no other file and run no command." The lean bundle
+already inlines every input and lists what it couldn't fit, and the judge marks a check
+it can't decide `inconclusive`. The judge line is `claude-lean $MODE`. If the subagent
+writes nothing usable, the judge line is `none <reason>`, as in §3.5. Never escalate to
+`full` on your own: that is the user's `--full`.
+
 3.6 **Record the verdict.** `$V/judge.py record --scope $SCOPE --unit $UNIT --run-id $RUN
---judge "<judge line>" --input <OUT>`. Exit 3 (malformed answer — a check missing, an
-unknown lens) → nothing is recorded; finalize with `--judge 'none malformed judge output'`.
+--judge "<judge line>" --input <OUT> --prompt <PROMPT>`. Exit 3 (malformed answer — a check
+missing, an unknown lens) records nothing and prints `retry-prompt: <path>`: the prompt plus
+exactly what was wrong. Re-run the same judge once on that path and record again. Refused
+twice → finalize with `--judge 'none malformed judge output'`. The gate then reports those
+judge rows **NOT-JUDGED**, which is never a block (`verify-contracts.md` §5.4.3).
 
 3.7 **Finalize.** `$S/verify-run.py finalize --log $LOG --run-id $RUN` (add
 `--judge 'none <reason>'` when §3.6 did not record). This applies the authority rule and
 writes the one `final` line.
 
-3.8 **Gate and report.** `$V/judge.py report --scope $SCOPE --unit $UNIT --run-id $RUN`
+3.8 **Gate and report.** `$V/judge.py report --scope $SCOPE --unit $UNIT --run-id $RUN --mode "$MODE"`
 writes `artifacts/verify-$UNIT-report.md` and prints the gate verdict. Advisory mode is
 the default until five scopes pass cleanly: blocks are reported, the unit is not held.
 Its exit status is the gate's — `1` blocked, `3` the gate itself errored (the report says
 `GATE ERROR` and stderr carries the cause); report a `3`, never read it as a pass.
+
+3.9 **Run cap — the fix loop stops at 2.** From a unit's second finalized run on, `report`
+prints `[CONVERGENCE] verify <unit> run <n> of 2: STOP` (`verify-contracts.md` §4.10).
+Don't start another run until the user answers, inline: `1.` one more run, or `2.` stop
+here and accept the gate as reported. Ask again before each further run. Lean and full
+runs count toward the same cap.
 
 ---
 
@@ -147,7 +174,7 @@ inconclusive (5.2's `p2-fixtures`).
 | `scope-deliverables` | `judge` | 2 | always |
 | `no-overbuild` | `judge` | 2 | every unit that commits code |
 | `test-plan-followed` | `judge` | 2 | a `/plan-eng-review` test plan exists |
-| `rejections-justified` | `judge` | 2 | `/review` ran on the unit |
+| `rejections-justified` | `judge` (the runner passes it when there is no standing rejection) | 2 | `/review` ran on the unit |
 | `faithful-port` | a source-vs-destination diff command, or `judge` | 4 / 2 | the scope ports or follows a source artifact |
 
 `$VERIFY_BASE` is exported by the runner from the ledger's base for that row's repo.
@@ -165,7 +192,7 @@ other way is at most rung 1, whatever it claims.
 
 ## 5. Reporting
 
-5.1 Lead with the gate verdict and the judge line, then one line per check: result,
+5.1 Lead with the mode line, the gate verdict and the judge line, then one line per check: result,
 rung reached / required, reason. Then findings, highest severity first, each naming its
 check. Then lever candidates — recorded, not built; a lever is built on the second
 sighting from a different scope or run.

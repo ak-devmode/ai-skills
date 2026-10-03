@@ -434,3 +434,8 @@ Touches: ai-skills · review/scripts/review.py · verify/scripts/judge.py · scr
   Touches: ai-skills · scripts/resolve-identifiers.py
 - [ ] Follow-ups from PR #14 (fix/verify-squash-merge, written by kalpa-docs-f1's 149 driver, reported 2026-10-03). (1) The closeout view's marker `⚠ verify failed <ids>` still lists every ID (`scripts/verdict-gate.py` closeout_view; only the advisory marker became a count and pointer). Confirmed on trunk. (2) resolve-identifiers still fails on pharmacy's 4 proto fields (`MigrateResponse.Success` etc.) and satu-sehat's `PG_PROBE_*`. (3) Three fail-open edge cases Alex accepted as risk, recorded in the PR #14 body: `landed_lib.py:163` majority-containment credits a partially squashed fix; `landed_lib.py:270` the descendant fallback can credit a reverted fix; `resolve-identifiers.py:738` accepts a worktree folder name as a service identity. (4) The live-codex eval tier (`VERIFY_EVAL=1`) wasn't run on that PR.
   Touches: ai-skills · scripts/verdict-gate.py · scripts/landed_lib.py · scripts/resolve-identifiers.py
+
+## verify: resolve-identifiers.py ignores .vue (sighted in WellMed 153.2 verify)
+Source: kalpa-docs plans/153-fe-fail-loud-sweep/artifacts/verify-153.2-report.md (codex judge, run 153.2-20261003T090643-7ec2)
+Touches: ai-skills · scripts/resolve-identifiers.py
+- [ ] `SRC_EXT` excludes `.vue`, so on a Nuxt FE the names-resolve row says "nothing to resolve" while SFCs add env/route references (153.2: `autolist/payment-method-list` in two pages). Scan `<script>` blocks of `.vue` files.

@@ -7,9 +7,16 @@
 
 ## Resume Context
 
-- **Status:** Phase 0 done; executing Task 1.1.
-- **Next action:** Task 1.1 — write `scripts/plans-publish.sh`.
-- **Open blockers:** none.
+- **Status:** Tasks 1.1–1.7 done; 1.R round 1 recorded (8 findings, none blocking), all
+  fixed in `2d31d12` + the docs commit after it; awaiting Alex's accept of the outcomes.
+- **Next action:** dispositions → Alex accepts → Task 1.V `/verify 8.1` → merge to `main`
+  → Task 1.8 live check on the next real kalpa-docs `/plan` run (needs the merged skill).
+- **Open blockers:** finding 8.1-r1-02 is a design call for Alex: ai-skills `main` counts as
+  a shared trunk and publishes per task.
+
+## Artifacts
+
+- `artifacts/review-8.1-r1.md` — lean review round 1 (DEGRADED: single Sonnet pass)
 
 ---
 
@@ -80,3 +87,14 @@
 - **Files:** `scripts/README.md`
 - **Result:** both scripts in the table (what each replaces, callers) and in Contracts
   (usage + exit codes).
+
+### Task 1.R — round 1 — 8 findings, all fixed
+- **Review:** `8.1-r1`, lean (`mode: lean (default)`; `AI_SKILLS_REVIEW_MODE` unset on this
+  box), verdict SHIP, 0 blocking · 5 should-fix · 3 note.
+- **Fixed:** 01 unset origin/HEAD now exit 4, not a silent 0 · 02 ai-skills `main`
+  publishes too, stated in the script header and §8.5b (design call flagged for Alex) ·
+  03/06 push and ff-merge failures carry git's message · 04 add/commit failures map to
+  exit 3 · 05 exit-3 wording split (commit kept vs nothing committed) · 07 both scripts in
+  CLAUDE.md §4 and ARCHITECTURE §1.4 · 08 this Resume Context.
+- **Tests:** +3 (l unset origin/HEAD, m failed add, n rejected push says why) and a
+  message assertion on ff case e. 23/23 in the two files.

@@ -83,7 +83,9 @@ start to understand which skills exist and how they fit together.
   feature-map and handoff templates, with filled examples in `templates/examples/`.
 - `scripts/` — deterministic steps the skills call instead of describing them in
   prose (CLAUDE.md §3.6.1). Plans dir, scope numbering, PLANS-INDEX writes,
-  folder sweep, context gather, `Executed by` stamp, Repo Graph snapshot +
+  folder sweep, publishing plans writes to a shared trunk (`plans-publish.sh`),
+  fast-forwarding the local trunk after a worktree merges (`ff-local-trunk.sh`),
+  context gather, `Executed by` stamp, Repo Graph snapshot +
   freshness gate, ledger bootstrap, dispatch log, herdr pane identity, branch
   survey, guarded edits, the accretion linter (`lint-skill.py`), and the
   verification toolchain (`resolve-identifiers.py`, `verify-run.py`,

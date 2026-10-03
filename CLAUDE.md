@@ -201,6 +201,8 @@ templates/examples/             — filled examples of every template (never cop
 scripts/README.md               — contracts + exit codes for the shared scripts
 scripts/resolve-plans-dir.sh    — plans-dir resolution (one owner, 5 callers)
 scripts/claim-scope-number.sh   — scope numbering, race-defensive across 4 sources
+scripts/plans-publish.sh        — commit named plans paths; on a shared trunk rebase, push, read back (/plan §8.5b)
+scripts/ff-local-trunk.sh       — fast-forward the local trunk after a worktree merges (closeout §13.6)
 scripts/plans-index.py          — PLANS-INDEX validate/add/move, schema-enforcing
 scripts/todo-stats.py           — TO-DO.md counts for the SessionStart hook (counts only)
 scripts/plans-folder.sh         — plan/scope folder create + related-file sweep (no clobber)

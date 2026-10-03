@@ -88,7 +88,7 @@ isolation) and opt-in for a solo `/plan`. herdr manages the checkout path under
   `herdr worktree remove --workspace <id>`, then
   `git -C <repo> branch -D <branch>` and `git -C <repo> worktree prune`, then
   `~/Projects/ai-skills/scripts/ff-local-trunk.sh <repo>` so the primary checkout's
-  trunk carries the merge (fast-forward only; exit 3 is reported, never forced).
+  trunk carries the merge (fast-forward only; exits 2/3/4 are reported, never forced).
   Never leave a dangling worktree or branch (same discipline as no orphaned WIP).
 
 ## 4. Worker launch + trust (autonomous dispatch)

@@ -61,9 +61,11 @@ by `test_entrypoint.py`'s compile check.
     plans-publish.sh <plans-dir> -m <msg> -- <path>...
       Commits ONLY the named paths; on the repo's trunk also rebases onto origin (only if
       origin moved), pushes, retries a rejected push once, reads back with merge-base.
-      Off trunk: commit only.
-      exit: 0 published / committed off trunk · 2 usage · 3 conflict or repo busy — HALT,
-            commit kept, nothing pushed · 4 not pushed (offline, auth) — commit kept
+      Off trunk: commit only. A shared code trunk (ai-skills `main`) publishes too.
+      exit: 0 published / committed off trunk · 2 usage · 3 HALT — conflict or stash not
+            re-applied (commit kept, nothing pushed), or repo busy / add / commit failed
+            (nothing committed) · 4 not pushed (offline, auth, rejected, origin/HEAD unset)
+            — commit kept, git's reason in the message
 
     ff-local-trunk.sh <repo> [<trunk>]      trunk default: origin/HEAD's target
       Fast-forward only, wherever trunk is checked out (primary or linked worktree), else

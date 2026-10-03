@@ -640,7 +640,8 @@ archived, so nothing dangles:
 - then bring the local trunk up to what just merged —
   `~/Projects/ai-skills/scripts/ff-local-trunk.sh <primary-repo>`. Fast-forward only.
   Exit 3 (local trunk ahead/diverged, or a dirty file in the way) changed nothing:
-  report it in the summary and never force it. Exit 4 (fetch failed): report it.
+  report it in the summary and never force it. Exit 4 (fetch failed) or 2 (origin/HEAD
+  unset — pass the trunk): report it.
   Otherwise the disk Alex works from silently lacks the merged work.
 **Guard:** only after the branch is merged — never remove a worktree holding
 unmerged commits. If the scope used no worktree (docs-only, or Primary repo

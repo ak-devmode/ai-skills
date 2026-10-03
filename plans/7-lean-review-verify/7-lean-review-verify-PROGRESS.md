@@ -7,11 +7,10 @@
 
 ## Resume Context
 
-- **Last completed:** 1.R closed after 4 rounds (17 findings, all fixed; Alex accepted, `c42e04d`).
-  1.V run 1 (`7.1-20261003T015010-3144`, codex, full): advisory, 1 block. The `/verify`
-  report header lacked the mode line (§2.1). Fixed along with two low findings.
-- **Next action:** 1.V run 2 — the last under the run cap. Then Task 1.9 (Alex: commit
-  the dev-workbench env line, announce), mark 7 Done, and closeout.
+- **Last completed:** 1.V PASS (run 2, codex, full; Alex stopped at the cap). Task 1.9: the env
+  line is committed to `dev-workbench` main (`34fc320`).
+- **Next action:** merge `feature/7-lean-review-verify` → `main`, push, mark 7.1 Done through
+  the gate, then `/closeout`. Team announcement after the push.
 - **Open blockers:** none.
 
 ---
@@ -213,4 +212,12 @@ review round (round 4) on the new work; proceed.
   header reads `mode: full (flag)`. `[CONVERGENCE] verify 7.1 run 2 of 2: STOP`.
 - One low finding (an all-row auto-pass labelled the run's unit's review log) is fixed in
   the next commit. Not re-verified: the run cap is reached, and the fix changes no result.
+
+### Task 1.9 — ✅ DONE (env line) · announcement after push
+- `"AI_SKILLS_REVIEW_MODE": "full"` is committed to `dev-workbench` main (`34fc320`, not
+  pushed) through a temporary worktree. Alex's checkout (on `feature/3-multi-account-agents`,
+  with another session's work in it) was left untouched. The same line is still
+  uncommitted there and matches main.
+- Read back through `~/.claude/settings.json`: `full`.
+- Alex accepted verify run 2's PASS and stopped at the cap (2026-10-03).
 

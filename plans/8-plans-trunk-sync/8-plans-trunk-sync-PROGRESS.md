@@ -45,3 +45,20 @@
   (j) sibling's uncommitted edit survives a rebase, (k) busy repo → 3. All pass.
 - **Issues:** first run caught two defects in 1.1 — the busy check tested a repo-relative
   path from the wrong cwd, and a no-op rebase unstaged a sibling's file. Both fixed in 1.1.
+
+### Task 1.3 — ✅ DONE — `ff-local-trunk.sh`
+- **Files:** `scripts/ff-local-trunk.sh` (new)
+- **Result:** Fetches, refuses (exit 3) if local trunk has commits origin lacks, then
+  fast-forwards wherever trunk is checked out — primary or any linked worktree, found via
+  `worktree list --porcelain` — or, if nowhere, updates the ref with
+  `fetch origin trunk:trunk`, which git itself refuses unless it is a fast-forward.
+  Read-back compares the ref to `origin/<trunk>`.
+- **Issues:** none.
+
+### Task 1.4 — ✅ DONE — tests for `ff-local-trunk.sh`
+- **Files:** `scripts/tests/test_ff_local_trunk.py` (new)
+- **Result:** 9 cases: (a) primary on trunk advanced, (b) primary on a feature branch —
+  ref advanced, checkout untouched, (c) already current, (d) local trunk ahead → 3,
+  unchanged, (e) untracked file in the way → 3, file intact, (f) unreachable origin → 4,
+  (g) explicit `develop`, (h) trunk checked out in a linked worktree → advanced there,
+  (i) usage → 2. All pass first run.

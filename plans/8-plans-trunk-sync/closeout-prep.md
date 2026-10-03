@@ -178,12 +178,15 @@ Resumed/restarted phases append a SECOND block:
 ### §2 Files Changed (additional)
 - ai-skills · code: `scripts/plans-publish.sh` (new) — Task 1.1
 - ai-skills · test: `scripts/tests/test_plans_publish.py` (new) — Task 1.2
+- ai-skills · code: `scripts/ff-local-trunk.sh` (new) — Task 1.3
+- ai-skills · test: `scripts/tests/test_ff_local_trunk.py` (new) — Task 1.4
 
 ### §3 Patterns Followed (additional)
 - `scripts/plans-publish.sh` ← `scripts/claim-scope-number.sh:1` (approach header, exit-code contract, stderr provenance)
 
 ### §10 Test Coverage Map (additional)
 - `plans-publish.sh` → `test_plans_publish.py` cases a–k (publish, rebase, conflict, branch, sibling files, race, offline, usage, carry-over, autostash, busy)
+- `ff-local-trunk.sh` → `test_ff_local_trunk.py` cases a–i (on trunk, ref-only, current, ahead, dirty, offline, develop, linked worktree, usage)
 
 ### §11 Risk Flags (additional)
 - `plans-publish.sh` rebase uses `--autostash`: a sibling session's *staged* edits come back unstaged (content kept) when origin moved. Only on a real rebase; the no-move case skips rebase entirely.

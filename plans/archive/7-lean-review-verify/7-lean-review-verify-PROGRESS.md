@@ -198,6 +198,21 @@ review round (round 4) on the new work; proceed.
   a big scope.md inlines the unit's phase only, zero-rejection auto-pass.
 - 214 tests pass; names-resolve clean. Next: review round 4 on `a1be8c3..HEAD`.
 
+### Task 1.R — rounds 3–4 (codex, full) — ✅ DONE (1.R closed: 4 rounds, 17 findings, all fixed)
+- **Round 3** (`artifacts/review-7.1-r3.md`, DO NOT SHIP; the repo's hard stop). r3-01 and
+  r3-02: lean doc inlining could silently drop or misread CLAUDE.md/ARCHITECTURE.md;
+  r3-03: a stale comment. The `[CONVERGENCE]` design signal fired on `review.py`. Alex
+  chose to narrow, not patch. Fixed in `e02c559` (inline only a regular file at the
+  range's head; anything else is listed with its reason). Dispositions and Alex's accept,
+  no round 4 for those: `a1be8c3`.
+- **Round 4** (`artifacts/review-7.1-r4.md`, on 1.10–1.12 only, allowed by Alex as net-new
+  work). r4-01: `--all` crashed on NOT-JUDGED; r4-02: validate accepted a not-judged
+  marker under a blocking gate; r4-03: an all-row run read the first phase's review log.
+  Fixed in `3246533` (`scripts/verdict-gate.py`, `scripts/plans-index.py`,
+  `scripts/verify-run.py`, `scripts/tests/test_verdict_gate.py`), each with a test that
+  fails on the prior commit. Dispositions: `4bcd41b`. Alex's accept closed the loop:
+  `c42e04d`.
+
 ### Task 1.V — run 1 (codex gpt-6.1-sol, full) — ADVISORY, 1 block
 - Report: `artifacts/verify-7.1-report.md`. 5 of 6 checks pass. `rejections-justified`
   was auto-passed by the runner (1.12(c), live).

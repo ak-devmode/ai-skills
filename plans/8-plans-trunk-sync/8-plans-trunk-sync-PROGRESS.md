@@ -70,3 +70,13 @@
   "record a plans-repo SHA only after publish returns 0" rule (plan risk 4.3), and the
   2026-10-03 incident as the why. One-line pointers to 8.5b in §8.2, §8.3, §8.7, §11.4
   (folder move + row in one publish), §11.5. Lint: 0 issues.
+
+### Task 1.6 — ✅ DONE — `/closeout` + `herdr` teardown
+- **Files:** `closeout/SKILL.md` §13.6 (1.4.0 → 1.5.0), `herdr/SKILL.md` §3 Teardown (0.1.5 → 0.1.6)
+- **Result:** both teardowns end with `ff-local-trunk.sh <primary-repo>`; exit 3/4 are
+  reported, never forced. Lint: 0 issues.
+
+### Task 1.7 — ✅ DONE — script index
+- **Files:** `scripts/README.md`
+- **Result:** both scripts in the table (what each replaces, callers) and in Contracts
+  (usage + exit codes).

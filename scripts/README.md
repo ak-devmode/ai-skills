@@ -30,6 +30,8 @@ already caused real data loss. Prose cannot enforce itself — the same reasonin
 | `verdict-gate.py` | "verify ran, so it's done" — applies §5 to the latest final verdict per owned check (range, rung, revision, disposition coverage); `--all` is /closeout's whole-scope view; `**Predates gate:**` phases exempt; advisory until 5 clean scopes | `plans-index.py status`/`validate`, `/plan`, `/closeout` |
 | `finish-table.py` | a finish table typed by hand — standard rows per phase, Revision + Changelog on every change, read back through the runner's parser | /scope Step 5.10, /plan §5.6.2a self-heal |
 | `review-mode.py` | each skill deciding lean vs full on its own — flag > `AI_SKILLS_REVIEW_MODE` > default `lean`; a bad env value is an error, never a silent lean | `/review`, `/verify` (plan 7) |
+| `plans-publish.sh` | commit per task, push per phase — on a trunk every machine writes; **kalpa-docs sat 11 ahead / 21 behind** | /plan §8.5b |
+| `ff-local-trunk.sh` | nothing — worktree teardown left the primary checkout's trunk behind what just merged | /closeout §13.6, herdr §3 |
 | `verify_lib.py` | (library, not a CLI) one table parser, message formatter and verified JSONL appender for the verify scripts, and `capped_diff` — the one 1,500-line cap both lean bundles use | `verify-run.py`, `verdict-gate.py`, `resolve-identifiers.py`, `review.py`, `judge.py` |
 
 **Tests:** `python3 -m unittest discover scripts/tests` from the repo root (stdlib only,
@@ -55,6 +57,19 @@ by `test_entrypoint.py`'s compile check.
     plans-index.py status <index> --num --status [--skip-verify R] [--blocking|--advisory] [--dry-run]
     plans-index.py gate-count [<index>...] [--discover]  stdout: `clean gated scopes: N/5`, + REMINDER line at 5 · exit 0
       exit: 0 written · 1 gate BLOCKED (row untouched) or write did not land · 2 usage · 3 gate could not evaluate
+
+    plans-publish.sh <plans-dir> -m <msg> -- <path>...
+      Commits ONLY the named paths; on the repo's trunk also rebases onto origin (only if
+      origin moved), pushes, retries a rejected push once, reads back with merge-base.
+      Off trunk: commit only.
+      exit: 0 published / committed off trunk · 2 usage · 3 conflict or repo busy — HALT,
+            commit kept, nothing pushed · 4 not pushed (offline, auth) — commit kept
+
+    ff-local-trunk.sh <repo> [<trunk>]      trunk default: origin/HEAD's target
+      Fast-forward only, wherever trunk is checked out (primary or linked worktree), else
+      the ref itself. Read back against origin/<trunk>.
+      exit: 0 current or advanced · 2 usage · 3 ahead/diverged or blocked, nothing
+            changed · 4 fetch failed
 
     plans-folder.sh <plans-dir> <folder-name> [--slug S] [--move FILE]... [--dry-run]
       exit: 0 ok · 1 a move refused (destination exists) or failed to land · 2 usage

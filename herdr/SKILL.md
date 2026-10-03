@@ -1,6 +1,6 @@
 ---
 name: herdr
-version: 0.1.5
+version: 0.1.6
 description: |
   Alex's herdr WORKFLOW layer — the single source of truth for how we drive
   herdr (terminal workspace manager for AI agents) for agent work: naming, the
@@ -86,7 +86,9 @@ isolation) and opt-in for a solo `/plan`. herdr manages the checkout path under
   (repo-bound spaces only; a plain space on a non-repo umbrella dir stays blank).
 - **Teardown** (on `/closeout`, after merge):
   `herdr worktree remove --workspace <id>`, then
-  `git -C <repo> branch -D <branch>` and `git -C <repo> worktree prune`.
+  `git -C <repo> branch -D <branch>` and `git -C <repo> worktree prune`, then
+  `~/Projects/ai-skills/scripts/ff-local-trunk.sh <repo>` so the primary checkout's
+  trunk carries the merge (fast-forward only; exit 3 is reported, never forced).
   Never leave a dangling worktree or branch (same discipline as no orphaned WIP).
 
 ## 4. Worker launch + trust (autonomous dispatch)

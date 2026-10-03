@@ -158,10 +158,11 @@ def execute(row, projects, run_id, unit, rev, bases=None, scope=None):
         rec["dirty"] = bool(git(repo_path, "status", "--porcelain")[1])
     if row["is_judge"]:
         # the row's own unit, not the run's: an all-row run spans phases (review 7.1-r4-03)
-        n = rejections(scope, row["owner"].split("/")[0]) if REJECTIONS_ROW.search(row["check_id"]) else None
+        own = row["owner"].split("/")[0]
+        n = rejections(scope, own) if REJECTIONS_ROW.search(row["check_id"]) else None
         if n == 0:
             # nothing to audit: decided here from the review log, never sent to a judge (Alex, 2026-10-02)
-            rec.update(command=f"{vl.AUTO_PREFIX}no rejected disposition in review-{unit}.jsonl", result="pass",
+            rec.update(command=f"{vl.AUTO_PREFIX}no rejected disposition in review-{own}.jsonl", result="pass",
                        rung_reached=4, reason="0 rejected dispositions in the review log — nothing to audit")
             return rec
         rec.update(result="inconclusive", reason="judge row: awaiting judge")

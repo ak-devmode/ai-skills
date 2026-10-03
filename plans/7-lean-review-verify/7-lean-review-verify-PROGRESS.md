@@ -208,3 +208,9 @@ review round (round 4) on the new work; proceed.
 - **Low, fixed:** ARCHITECTURE.md catalog versions (review 3.7.0, verify 0.7.0); this
   Resume Context.
 
+### Task 1.V — run 2 (codex gpt-6.1-sol, full) — ✅ PASS
+- Run `7.1-20261003T015746-eea3`: 6/6 checks pass, 0 blocks, 0 not judged; the report
+  header reads `mode: full (flag)`. `[CONVERGENCE] verify 7.1 run 2 of 2: STOP`.
+- One low finding (an all-row auto-pass labelled the run's unit's review log) is fixed in
+  the next commit. Not re-verified: the run cap is reached, and the fix changes no result.
+

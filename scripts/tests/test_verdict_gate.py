@@ -591,7 +591,7 @@ class TestIndexEnforcement(Fixture):
         rid = p.stdout.split("run_id: ")[1].split()[0]
         got = {r["check_id"]: r["command"] for r in map(json.loads, open(self.log))
                if r.get("run_id") == rid and r["run_state"] == "pending"}
-        self.assertTrue(got["p1-rejections-justified"].startswith("auto: "))
+        self.assertEqual(got["p1-rejections-justified"], "auto: no rejected disposition in review-5.1.jsonl")
         self.assertEqual(got["p2-rejections-justified"], "judge")
 
     def test_pass_writes_done_clean(self):

@@ -1,11 +1,12 @@
 ---
 name: herdr
-version: 0.1.5
+version: 0.2.0
 description: |
   Alex's herdr WORKFLOW layer — the single source of truth for how we drive
   herdr (terminal workspace manager for AI agents) for agent work: naming, the
   model-B worktree-per-scope lifecycle, worker launch + trust handling, the
-  default concurrency pane layout, model routing, and the gotchas. Load it
+  default concurrency pane layout, model + account routing, driving the second
+  machine (homelab2026) through the two-server view, and the gotchas. Load it
   whenever a skill is about to create a herdr worktree-workspace, dispatch a
   worker pane, name an agent, or lay out a herd. Referenced by /concurrency
   (dispatch), /plan (driver + worktree create), and /closeout (worktree
@@ -164,6 +165,39 @@ seats are new rows.
 | `glm` | `ANTHROPIC_BASE_URL=https://openrouter.ai/api ANTHROPIC_AUTH_TOKEN=$(security find-generic-password -s openrouter-api-key -w) ANTHROPIC_SMALL_FAST_MODEL=z-ai/glm-5-turbo claude --model z-ai/glm-5.2` | mechanical/bulk: migrations-by-pattern, test scaffolds, sweeps |
 
 Dispatched claude/glm workers append `--dangerously-skip-permissions` (§4).
+
+**Account-aware launch.** Two accounts per seat — `alex` (alex@work) and `int`
+(integrations) — on both machines (dev-workbench `config/accounts/accounts.tsv`). A
+worker for a placed lane launches through the account launcher instead of the bare
+CLI: `claude-<account>` for `opus`, `codex-<account> -m gpt-5.6-sol` for `codex`
+(e.g. `claude-int --dangerously-skip-permissions`). The launchers exist on both
+machines and work from non-interactive shells; the machine's default account runs with
+its real dirs, the other with its own login and shared config. `glm` bills OpenRouter,
+not an account, so it keeps its row unchanged. Which account and machine a lane gets is
+`/concurrency` §5.1's call (`scripts/placement.py`); this table only says how to start it.
+
+### 6.1 Two machines — the two-server view (herdr 0.9)
+
+homelab2026 is a saved herdr machine (`herdr machine list`); its spaces show in the
+MBA's sidebar beside the local ones. Driving it from the MBA:
+
+- **Every command for a box pane carries `herdr --machine homelab2026 …`**, discovery
+  and every later call alike. Without it the command hits the local server, even while
+  the TUI has the box selected. Never combine it with `--session` / `--remote`.
+- **Ids are per server.** The box has its own `w1:p1` and its own agent names: read
+  them from that server's JSON, never reuse a local id, and never `--current`.
+- **Worktrees on the box:** `herdr --machine homelab2026 worktree create --cwd
+  ~/Projects/<repo> --base origin/<trunk> --branch <b> --no-focus` — remote paths must
+  be `~/`-relative or absolute. Fetch the box's clone first (`ssh homelab2026 git -C
+  ~/Projects/<repo> fetch -q origin`); it never sees a commit that is not on origin.
+- **Routing rule.** A lane goes to the box only when its base is on origin
+  (`placement.py check-base`); its branch comes back to the MBA by `placement.py
+  fetch-back` (git fetch over ssh), never by a worker push. Usage headroom, job size and
+  Alex's plans decide the rest (`/concurrency` §5.1).
+- A failed `--machine` call does not prove nothing happened on the box: read its state
+  (`herdr --machine homelab2026 workspace list`) before retrying a mutation.
+- The box does not publish its own usage block (dev-workbench ENG-2); the MBA's block
+  already merges both machines.
 
 **Env-leak rule:** provider overrides live ONLY in the seat's launch command,
 inline. Secrets resolve from Keychain at spawn — never via herdr `--env`

@@ -16,7 +16,7 @@
 
 set -uo pipefail
 
-usage() { sed -n '9,14p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 2; }
+usage() { sed -n '9,15p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 2; }
 command -v herdr >/dev/null || { echo "herdr-pane: herdr not installed" >&2; exit 3; }
 
 cmd="${1:-}"; shift || true

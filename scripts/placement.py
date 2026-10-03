@@ -190,6 +190,8 @@ def git(repo, *args, timeout=60):
         return subprocess.run(["git", "-C", repo, *args], capture_output=True, text=True, timeout=timeout)
     except subprocess.TimeoutExpired:
         return subprocess.CompletedProcess(args, 124, "", f"timed out after {timeout}s")
+    except FileNotFoundError:
+        return subprocess.CompletedProcess(args, 127, "", "git not found")
 
 
 def check_base(a):
@@ -203,7 +205,11 @@ def check_base(a):
         return 3
     sha = sha.stdout.strip()
     # one ref per line; "origin/HEAD -> origin/main" names origin/main once
-    lines = git(a.repo, "branch", "-r", "--contains", sha).stdout.splitlines()
+    br = git(a.repo, "branch", "-r", "--contains", sha)
+    if br.returncode:
+        print(f"cannot check: git branch -r --contains failed in {a.repo}: {br.stderr.strip()}")
+        return 3
+    lines = br.stdout.splitlines()
     refs = sorted({ln.split()[0] for ln in lines if ln.strip().startswith("origin/")})
     if refs:
         print(f"ok: {sha[:7]} is on origin ({', '.join(refs[:3])})")
@@ -219,7 +225,8 @@ def fetch_back(a):
     url = a.remote_url or f"{a.machine}:{rel}"
     f = git(repo, "fetch", url, f"refs/heads/{a.branch}:refs/heads/{a.branch}", timeout=120)
     if f.returncode:
-        print(f"failed: git fetch {url} {a.branch}: {f.stderr.strip().splitlines()[-1:]}")
+        tail = (f.stderr.strip().splitlines() or ["(no message)"])[-1]
+        print(f"failed: git fetch {url} {a.branch}: {tail}")
         return 1
     want = git(repo, "ls-remote", url, f"refs/heads/{a.branch}").stdout.split()
     have = git(repo, "rev-parse", "--verify", f"refs/heads/{a.branch}").stdout.strip()

@@ -12,13 +12,16 @@
 # aborts and exits 3 so /plan halts and asks. A failed push (offline, auth, a race that
 # repeats) keeps the commit and exits 4; the next publish carries it.
 #
-# Off trunk (a feature branch or worktree — ai-skills, whose plans live in the code
-# repo), it only commits: /plan §8.5a's push-per-phase applies there.
+# Off trunk (a feature branch or a worktree on one) it only commits: /plan §8.5a's
+# push-per-phase applies there. A code repo whose trunk is itself shared (ai-skills on
+# `main`) publishes too, and that push carries any code commits before it — on a trunk
+# every machine writes, no commit should sit unpublished.
 #
 # Usage:  plans-publish.sh <plans-dir> -m <message> -- <path>...
 #         paths are relative to <plans-dir>, or absolute
-# Exit:   0 published (or committed off trunk) · 2 usage · 3 conflict / repo busy, HALT
-#         · 4 not published, commit kept, warn and continue
+# Exit:   0 published (or committed off trunk) · 2 usage · 3 HALT — conflict or stash not
+#         re-applied (commit kept, nothing pushed), or repo busy / add / commit failed
+#         (nothing committed) · 4 not published (commit kept), warn and continue
 
 set -euo pipefail
 
@@ -54,17 +57,18 @@ done
 
 # 1. Commit only these paths. `commit -- <paths>` leaves anything else a sibling session
 #    staged where it was (a real rebase below can unstage it — content is kept).
-g add -- "${paths[@]}"
+err="$(g add -- "${paths[@]}" 2>&1)" || die 3 "git add failed, nothing committed — HALT: ${err##*$'\n'}"
 if g diff --cached --quiet -- "${paths[@]}"; then
   echo "plans-publish: nothing new in the given paths" >&2
 else
-  g commit -q -m "$msg" -- "${paths[@]}"
+  err="$(g commit -q -m "$msg" -- "${paths[@]}" 2>&1)" || die 3 "git commit failed, nothing committed — HALT: ${err##*$'\n'}"
 fi
 
 trunk="$(g symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null || true)"
 trunk="${trunk#origin/}"
+[ -n "$trunk" ] || die 4 "origin/HEAD is not set, so trunk is unknown — commit kept, NOT pushed. Fix: git -C $repo remote set-head origin -a"
 branch="$(g symbolic-ref --short -q HEAD || true)"
-if [ -z "$trunk" ] || [ "$branch" != "$trunk" ]; then
+if [ "$branch" != "$trunk" ]; then
   echo "committed on ${branch:-detached HEAD} (not trunk ${trunk:-unknown}) — push per phase, /plan §8.5a"
   exit 0
 fi
@@ -91,9 +95,10 @@ sync() {
 
 sync
 # 3. Push; origin moving between fetch and push is a race, retried once.
-if ! g push -q origin "HEAD:$trunk" 2>/dev/null; then
+if ! g push -q origin "HEAD:$trunk" >/dev/null 2>&1; then
   sync
-  g push -q origin "HEAD:$trunk" 2>/dev/null || die 4 "push to origin/$trunk failed twice — commit kept locally, retried on the next publish"
+  err="$(g push -q origin "HEAD:$trunk" 2>&1)" \
+    || die 4 "push to origin/$trunk failed twice — commit kept locally, retried on the next publish. git: ${err##*$'\n'}"
 fi
 
 # 4. Read back: an exit code is not proof that origin has it.

@@ -43,8 +43,8 @@ where="$(g worktree list --porcelain | awk -v ref="branch refs/heads/$trunk" '
   /^worktree / { wt = substr($0, 10) }  $0 == ref { print wt; exit }')"
 
 if [ -n "$where" ]; then
-  git -C "$where" merge -q --ff-only "origin/$trunk" 2>/dev/null \
-    || die 3 "$trunk is checked out at $where and could not fast-forward (local changes in the way?) — nothing changed"
+  err="$(git -C "$where" merge -q --ff-only "origin/$trunk" 2>&1)" \
+    || die 3 "$trunk is checked out at $where and could not fast-forward — nothing changed. git: ${err//$'\n'/ }"
 else
   where="(ref only — $trunk is not checked out)"
   g fetch -q origin "$trunk:$trunk" || die 3 "could not fast-forward the $trunk ref — nothing changed"

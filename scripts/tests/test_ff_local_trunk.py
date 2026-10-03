@@ -97,6 +97,7 @@ class FfLocalTrunk(unittest.TestCase):
             fh.write("untracked local copy\n")
         r = self.ff()
         self.assertEqual(r.returncode, 3, r.stdout + r.stderr)
+        self.assertIn("would be overwritten", r.stderr)
         self.assertEqual(self.git(self.primary, "rev-parse", "main"), before)
         with open(os.path.join(self.primary, "merged-0.txt"), encoding="utf-8") as fh:
             self.assertEqual(fh.read(), "untracked local copy\n")

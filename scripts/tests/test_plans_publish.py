@@ -187,6 +187,33 @@ class PlansPublish(unittest.TestCase):
         self.assertEqual(r.returncode, 3, r.stderr)
         self.assertIn("busy", r.stderr)
 
+    def test_l_unset_origin_head_is_not_a_silent_success(self):
+        self.git(self.a, "remote", "set-head", "origin", "-d")
+        before = self.origin_main()
+        self.write(self.a, "plans/progress.md", "line one\nline two\nno trunk known\n")
+        r = self.publish("progress.md")
+        self.assertEqual(r.returncode, 4, r.stdout + r.stderr)
+        self.assertIn("set-head", r.stderr)
+        self.assertEqual(self.origin_main(), before)
+        self.assertEqual(self.git(self.a, "log", "-1", "--format=%s"), "plan: [Task 1.1] test")
+
+    def test_m_failed_add_halts_inside_the_contract(self):
+        r = self.publish("no-such-file.md")
+        self.assertEqual(r.returncode, 3, r.stdout + r.stderr)
+        self.assertIn("git add failed", r.stderr)
+        self.assertIn("did not match", r.stderr)
+
+    def test_n_rejected_push_says_why(self):
+        hook = os.path.join(self.origin, "hooks", "pre-receive")
+        with open(hook, "w", encoding="utf-8") as fh:
+            fh.write("#!/usr/bin/env bash\necho 'protected branch says no' >&2\nexit 1\n")
+        os.chmod(hook, 0o755)
+        self.write(self.a, "plans/progress.md", "line one\nline two\nrefused\n")
+        r = self.publish("progress.md")
+        self.assertEqual(r.returncode, 4, r.stdout + r.stderr)
+        self.assertIn("git:", r.stderr)
+        self.assertEqual(self.git(self.a, "log", "-1", "--format=%s"), "plan: [Task 1.1] test")
+
 
 if __name__ == "__main__":
     unittest.main()

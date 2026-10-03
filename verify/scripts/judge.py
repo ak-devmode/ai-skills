@@ -413,6 +413,10 @@ def cmd_report(a):
     lines += [f"- `{c['check_id']}` — `{c['lever_id']}` · gap: {c['gap']} · lever: {c['lever']} · run `{a.run_id}`"
               for c in vl.levers(final, raw)] or ["None."]
     lines += ["", "## 4. Feature map", "", f"`{raw.get('feature_map', 'n/a')}`", ""]
+    # the gate's block list lives here, not in the marker the index status carries (§5.4)
+    blocked = [x.split(None, 2)[1:] for x in gate.stdout.splitlines() if x.startswith("BLOCK  ")]
+    lines += ["## 5. Gate blocks", ""] + ([f"- `{b[0]}` — {b[1] if len(b) > 1 else ''}" for b in blocked]
+                                         or ["None."]) + [""]
     out = os.path.join(p["art"], f"verify-{a.unit}-report.md")
     with open(out, "w", encoding="utf-8") as fh:
         fh.write("\n".join(lines))

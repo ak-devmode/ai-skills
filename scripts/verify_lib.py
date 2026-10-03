@@ -37,6 +37,27 @@ def _git_lines(path, *args):
     return p.stdout.splitlines() if p.returncode == 0 else []
 
 
+# a worktree beside its repo: `<repo>.worktrees/<name>` (149.2 logged supply-chain's 4 rounds so)
+WORKTREE_KEY = re.compile(r"\.worktrees/.+$")
+
+
+def canonical_key(key, projects=None):
+    """A logged repo key as its primary checkout's key, so one repo's records count together
+    however a review reached it (review adhoc-06). A live path resolves through git (its common
+    dir's owner); a gone worktree by its `<repo>.worktrees/<name>` name. Older logs keyed a
+    worktree by its path. Shared by review.py and verdict-gate.py."""
+    if not key:
+        return key
+    projects = projects or PROJECTS
+    path = os.path.join(projects, key)
+    if not os.path.isdir(path):
+        return WORKTREE_KEY.sub("", key)
+    common = _git_lines(path, "rev-parse", "--path-format=absolute", "--git-common-dir")
+    main = os.path.dirname(common[0]) if common else path
+    rel = os.path.relpath(os.path.realpath(main), os.path.realpath(projects))
+    return os.path.basename(os.path.realpath(main)) if rel.startswith("..") else rel
+
+
 def repo_root(projects, repo, scope=None):
     """Where a finish-table `repo` cell is checked (§3.2.1): `<projects>/<repo>`, unless the
     scope folder sits in a linked git worktree of that same repo — then that worktree. A

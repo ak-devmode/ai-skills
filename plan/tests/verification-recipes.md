@@ -197,7 +197,7 @@ tasks, the pre-5.3 shape, one AI task that commits a file to `svc`), no
    not reported empty.
 4. `/verify 9.2`. Plant a failing deliverable row first (`finish-table.py add`, `check`
    = `exit 1`). **Advisory:** 9.2 is marked Done and its index row carries
-   `⚠ verify advisory: 1 blocked (…)`. **Blocking** (re-run the status step with
+   `⚠ verify advisory: 1 blocked — see …`. **Blocking** (re-run the status step with
    `--blocking`): refused, the row is unchanged, the task is logged ❌ FAILED.
 5. `/plan 9.2 --skip-verify "env down"` → the §6.7 header shows `⚠ SKIPPED: env down`
    and the index row carries `⚠ verify skipped: env down`.

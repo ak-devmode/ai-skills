@@ -453,19 +453,10 @@ def reviews_of(recs, unit):
     return [tuple(by[n]) for n in sorted(by)]
 
 
-# a worktree beside its repo: `<repo>.worktrees/<name>` (149.2 logged supply-chain's 4 rounds so)
-WORKTREE_KEY = re.compile(r"\.worktrees/.+$")
-
-
 @functools.lru_cache(maxsize=None)
 def canonical(key):
-    """A logged repo key as its primary checkout's key, so the rounds of one repo count together
-    however a review reached it (review adhoc-06). A live path resolves through git; a gone
-    worktree by its `<repo>.worktrees/<name>` name. Older logs keyed a worktree by its path."""
-    if not key:
-        return key
-    path = os.path.join(vl.PROJECTS, key)
-    return repo_key(main_worktree(path)) if os.path.isdir(path) else WORKTREE_KEY.sub("", key)
+    """A logged repo key as its primary checkout's key (verify_lib.canonical_key)."""
+    return vl.canonical_key(key)
 
 
 def repo_round(recs, unit, review_id):

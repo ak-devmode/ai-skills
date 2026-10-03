@@ -46,12 +46,13 @@ def main(argv):
         rec["tail"] = a.tail
     line = json.dumps(rec, ensure_ascii=False)
 
-    os.makedirs(os.path.dirname(a.log), exist_ok=True)
+    os.makedirs(os.path.dirname(a.log) or ".", exist_ok=True)
     with open(a.log, "a", encoding="utf-8") as fh:
         fh.write(line + "\n")
+    # parallel lanes append to the same log, so ours may no longer be the last line
     with open(a.log, encoding="utf-8") as fh:
-        last = fh.read().rstrip("\n").rsplit("\n", 1)[-1]
-    if last != line:
+        recent = fh.read().splitlines()[-64:]
+    if line not in recent:
         print(f"dispatch-log: record did not land in {a.log}", file=sys.stderr)
         return 1
     print(line)

@@ -32,9 +32,10 @@ for key in ("alex", "int"):
     STUBS[f"claude-{key}"] = (
         f'case " ${{STUB_DEAD:-}} " in *" ${{STUB_ON:-mba}}:{key}:opus "*) '
         f'echo \'{{"loggedIn": false}}\';; *) echo \'{{"loggedIn": true}}\';; esac')
-    STUBS[f"codex-{key}"] = (
+    STUBS[f"codex-{key}"] = (                  # :codex0 = dead login that still exits 0
         f'case " ${{STUB_DEAD:-}} " in *" ${{STUB_ON:-mba}}:{key}:codex "*) '
-        f'echo "Not logged in" >&2; exit 1;; *) echo "Logged in using ChatGPT" >&2;; esac')
+        f'echo "Not logged in" >&2; exit 1;; *" ${{STUB_ON:-mba}}:{key}:codex0 "*) '
+        f'echo "Not logged in" >&2;; *) echo "Logged in using ChatGPT" >&2;; esac')
 
 MAP = ("host\tkey\tdisplay\tclaude_dir\tcodex_home\tkeychain\tdefault\n"
        "mba\talex\talex@work\t~/.claude\t~/.codex\tsvc\tyes\n"
@@ -119,6 +120,14 @@ class Recommend(unittest.TestCase):
             ("stale window is unknown headroom", merged(int_claude_7d=win(5, age=3600)), {}, "opus",
              ("mba", "alex"),
              lambda o: self.assertIsNone(self.cand(o, "box", "int")["headroom"])),
+            ("over quota is exhausted, not negative headroom", merged(oai_int=(120, 5)), {},
+             "codex", None,
+             lambda o: self.assertEqual(self.cand(o, "box", "int", "codex")["headroom"], 0)),
+            ("a dead codex login that exits 0 is still dead", merged(oai_alex=(50, 60)),
+             {"STUB_DEAD": "box:int:codex0 mba:int:codex0"}, "codex", ("mba", "alex"), None),
+            ("ssh failing while herdr answers: box login unverified, not recommended", merged(),
+             {"STUB_SSH_FAIL": "1"}, "opus", ("mba", "int"),
+             lambda o: self.assertFalse(self.cand(o, "box", "int")["login"])),
             ("only unknown headroom left: still recommended, flagged",
              merged(int_claude_5h=win(0, inferred=True), alex_claude_7d=win(1, age=99999)),
              {"STUB_DEAD": ""}, "opus", ("box", "int"), None),
@@ -135,6 +144,22 @@ class Recommend(unittest.TestCase):
         self.assertTrue(out["candidates"])
         self.assertTrue(all(c["headroom"] is None for c in out["candidates"]))
         self.assertIn("no usable merged.json", out["candidates"][0]["notes"][0])
+
+    def test_bad_map_is_could_not_check(self):
+        e = dict(os.environ, PATH=self.bin + os.pathsep + os.environ["PATH"])
+        p = run("placement.py", "recommend", "--accounts", self.map + ".missing", env=e)
+        self.assertEqual(p.returncode, 3, p.stderr)
+        with open(self.map, "a") as fh:
+            fh.write("-oProxyCommand=x\tint\tintegrations\t~/.claude\t~/.codex\t-\tno\n")
+        p = run("placement.py", "recommend", "--accounts", self.map, env=e)
+        self.assertEqual(p.returncode, 3, p.stdout)
+        self.assertIn("unsafe host", p.stderr)
+
+    def test_mixed_case_host_is_local(self):
+        with open(self.map, "w") as fh:
+            fh.write(MAP.replace("mba\t", "MBA\t"))
+        out = self.rec(merged(), "--seat", "opus", STUB_HERDR_RC="1", STUB_SSH_FAIL="1")
+        self.assertTrue(self.cand(out, "mba", "int")["eligible"])
 
     def test_unknown_schema_is_not_trusted(self):
         out = self.rec({"schema": 2, "accounts": merged()["accounts"]})
@@ -188,6 +213,14 @@ class Git(unittest.TestCase):
         p = run("placement.py", "check-base", "--repo", self.local, "--base", "nope")
         self.assertEqual(p.returncode, 3, p.stdout)
 
+    def test_check_base_deleted_origin_branch_does_not_vouch(self):
+        git(self.local, "checkout", "-q", "-b", "tmp")
+        git(self.local, "commit", "-q", "--allow-empty", "-m", "on tmp only")
+        git(self.local, "push", "-q", "origin", "tmp")
+        git(self.box, "push", "-q", "origin", "--delete", "tmp")    # gone from origin
+        p = run("placement.py", "check-base", "--repo", self.local)
+        self.assertEqual(p.returncode, 1, p.stdout)
+
     def test_fetch_back(self):
         git(self.box, "checkout", "-q", "-b", "concurrency/3-lane")
         git(self.box, "commit", "-q", "--allow-empty", "-m", "lane work")
@@ -200,6 +233,21 @@ class Git(unittest.TestCase):
                 "--branch", "concurrency/missing", "--remote-url", self.box)
         self.assertEqual(p.returncode, 1, p.stdout)
         self.assertIn("failed", p.stdout)
+
+    def test_fetch_back_never_overwrites_local_work(self):
+        git(self.box, "checkout", "-q", "-b", "lane")
+        git(self.box, "commit", "-q", "--allow-empty", "-m", "box side")
+        git(self.local, "checkout", "-q", "-b", "lane")
+        git(self.local, "commit", "-q", "--allow-empty", "-m", "local side")
+        mine = git(self.local, "rev-parse", "lane")
+        for case in ("checked out", "diverged"):
+            with self.subTest(case=case):
+                if case == "diverged":
+                    git(self.local, "checkout", "-q", "main")
+                p = run("placement.py", "fetch-back", "--repo", self.local, "--machine", "box",
+                        "--branch", "lane", "--remote-url", self.box)
+                self.assertEqual(p.returncode, 1, p.stdout)
+                self.assertEqual(git(self.local, "rev-parse", "lane"), mine)
 
 
 if __name__ == "__main__":

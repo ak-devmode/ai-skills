@@ -188,8 +188,11 @@ MBA's sidebar beside the local ones. Driving it from the MBA:
   them from that server's JSON, never reuse a local id, and never `--current`.
 - **Worktrees on the box:** `herdr --machine homelab2026 worktree create --cwd
   ~/Projects/<repo> --base origin/<trunk> --branch <b> --no-focus` — remote paths must
-  be `~/`-relative or absolute. Fetch the box's clone first (`ssh homelab2026 git -C
-  ~/Projects/<repo> fetch -q origin`); it never sees a commit that is not on origin.
+  be `~/`-relative or absolute. Fetch the box's clone first, quoted so `~` expands on
+  the box (`ssh homelab2026 'git -C ~/Projects/<repo> fetch -q origin'`); it never sees a
+  commit that is not on origin.
+- **Naming a box pane:** `scripts/herdr-pane.sh name <pane> <task> <seat> --machine
+  homelab2026` (§2 — the same two calls, against the box's server).
 - **Routing rule.** A lane goes to the box only when its base is on origin
   (`placement.py check-base`); its branch comes back to the MBA by `placement.py
   fetch-back` (git fetch over ssh), never by a worker push. Usage headroom, job size and

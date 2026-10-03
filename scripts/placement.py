@@ -3,7 +3,7 @@
 
 Approach: placement has a judgment half (job size, what Alex is doing) and a fact half
 (which machine is up, whose login is live, how much of each account's usage is left).
-The fact half has one right answer, so it lives here (CLAUDE.md §3.6.1); /concurrency §5.2
+The fact half has one right answer, so it lives here (CLAUDE.md §3.6.1); /concurrency §5.1
 reads it and adds the judgment. Usage comes from dev-workbench's herdr-usage merged file
 (`~/.cache/herdr-usage/merged.json`, schema 1), which already merges both machines'
 fetches; machines and accounts come from dev-workbench's accounts.tsv. Usage is
@@ -31,6 +31,7 @@ Exit:   0 ok · 1 check-base refused / fetch-back failed · 2 usage · 3 could n
 import argparse
 import json
 import os
+import re
 import socket
 import subprocess
 import sys
@@ -39,6 +40,7 @@ import time
 MERGED = os.path.expanduser("~/.cache/herdr-usage/merged.json")
 ACCOUNTS = os.environ.get("WORKBENCH_ACCOUNTS") or os.path.expanduser(
     "~/Projects/dev-workbench/config/accounts/accounts.tsv")
+NAME = re.compile(r"^[A-Za-z0-9._][A-Za-z0-9._-]*$")   # map keys/hosts reach a shell and ssh argv
 SEATS = {"opus": ("claude", "claude-{key} auth status --json"),
          "codex": ("oai", "codex-{key} login status")}
 
@@ -69,7 +71,9 @@ def read_accounts(path):
             f = line.rstrip("\n").split("\t")
             if len(f) < 7 or f[1] == "key":
                 continue
-            rows.append({"host": f[0], "key": f[1], "display": f[2], "default": f[6] == "yes"})
+            if not (NAME.match(f[0]) and NAME.match(f[1])):
+                raise ValueError(f"unsafe host or key in {path}: {f[0]!r} {f[1]!r}")
+            rows.append({"host": f[0].lower(), "key": f[1], "display": f[2], "default": f[6] == "yes"})
     return rows
 
 
@@ -91,7 +95,9 @@ def login_live(host, local, key, seat, timeout):
         except ValueError:
             ok = False
     else:
-        ok = rc == 0 and "logged in" in (out + err).lower()   # codex prints its status on stderr
+        # codex prints its status on stderr; "Not logged in" must not read as live
+        status = (out + err).strip().lower()
+        ok = rc == 0 and status.startswith("logged in")
     return ok, "login live" if ok else f"{cmd.split()[0]} not logged in (rc {rc})"
 
 
@@ -109,7 +115,7 @@ def headroom(windows, now, max_age):
         elif now - (v.get("observed_at") or 0) > max_age:
             notes.append(f"{w} stale ({(now - (v.get('observed_at') or 0)) // 60} min old)")
     known = not notes and all(isinstance(u, (int, float)) for u in used.values())
-    left = round(100 - max(used.values())) if known else None
+    left = max(0, round(100 - max(used.values()))) if known else None   # over quota = exhausted
     return left, used.get("5h"), used.get("7d"), notes
 
 
@@ -118,6 +124,9 @@ def recommend(a):
         rows = read_accounts(a.accounts)
     except OSError as exc:
         print(f"placement: cannot read accounts map {a.accounts}: {exc.strerror}", file=sys.stderr)
+        return 3
+    except ValueError as exc:
+        print(f"placement: {exc}", file=sys.stderr)
         return 3
     merged, why = {}, ""
     try:
@@ -176,11 +185,15 @@ def recommend(a):
 
 
 def git(repo, *args, timeout=60):
-    return subprocess.run(["git", "-C", repo, *args], capture_output=True, text=True, timeout=timeout)
+    """git -C repo ...; a timeout comes back as rc 124 with a message, never a traceback."""
+    try:
+        return subprocess.run(["git", "-C", repo, *args], capture_output=True, text=True, timeout=timeout)
+    except subprocess.TimeoutExpired:
+        return subprocess.CompletedProcess(args, 124, "", f"timed out after {timeout}s")
 
 
 def check_base(a):
-    f = git(a.repo, "fetch", "--quiet", "origin")
+    f = git(a.repo, "fetch", "--quiet", "--prune", "origin")   # a deleted branch must not vouch
     if f.returncode:
         print(f"cannot check: git fetch origin failed in {a.repo}: {f.stderr.strip()}")
         return 3
@@ -208,8 +221,7 @@ def fetch_back(a):
     if f.returncode:
         print(f"failed: git fetch {url} {a.branch}: {f.stderr.strip().splitlines()[-1:]}")
         return 1
-    want = subprocess.run(["git", "ls-remote", url, f"refs/heads/{a.branch}"],
-                          capture_output=True, text=True, timeout=60).stdout.split()
+    want = git(repo, "ls-remote", url, f"refs/heads/{a.branch}").stdout.split()
     have = git(repo, "rev-parse", "--verify", f"refs/heads/{a.branch}").stdout.strip()
     if not want or want[0] != have:
         print(f"failed: {a.branch} here is {have[:7] or 'missing'}, on {a.machine} "

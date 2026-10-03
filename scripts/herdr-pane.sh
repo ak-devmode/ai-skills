@@ -8,31 +8,42 @@
 # helper-pane geometry: split your OWN pane right at half size, no focus steal.
 #
 # Usage:
-#   herdr-pane.sh name <pane-id> <task> <seat> [--source SKILL]   (default source: concurrency)
+#   herdr-pane.sh name <pane-id> <task> <seat> [--source SKILL] [--machine HOST]
+#                      (default source: concurrency; --machine: a pane on a saved herdr
+#                       machine, e.g. homelab2026 — pane ids are per server)
 #   herdr-pane.sh helper [--cwd DIR]                               (prints the new pane id)
 # Exit: 0 ok · 1 herdr call failed or label did not land · 2 usage · 3 not inside herdr / no server
 
 set -uo pipefail
 
-usage() { sed -n '9,12p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 2; }
+usage() { sed -n '9,14p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 2; }
 command -v herdr >/dev/null || { echo "herdr-pane: herdr not installed" >&2; exit 3; }
-herdr workspace list >/dev/null 2>&1 || { echo "herdr-pane: herdr server not answering — report and stop (never start it mid-skill)" >&2; exit 3; }
 
 cmd="${1:-}"; shift || true
+H=(herdr)
 case "$cmd" in
   name)
     [ $# -ge 3 ] || usage
     pane="$1"; task="$2"; seat="$3"; shift 3; source=concurrency
-    [ "${1:-}" = "--source" ] && source="${2:?--source needs a value}"
+    while [ $# -gt 0 ]; do
+      case "$1" in
+        --source)  source="${2:?--source needs a value}"; shift 2 ;;
+        --machine) H=(herdr --machine "${2:?--machine needs a value}"); shift 2 ;;
+        *) usage ;;
+      esac
+    done
+    "${H[@]}" workspace list >/dev/null 2>&1 \
+      || { echo "herdr-pane: ${H[*]} server not answering — report and stop (never start it mid-skill)" >&2; exit 3; }
     label="$task @$seat"
-    herdr pane rename "$pane" "$label" >/dev/null || { echo "herdr-pane: rename failed for $pane" >&2; exit 1; }
-    herdr pane report-metadata "$pane" --source "$source" --display-agent "$label" >/dev/null \
+    "${H[@]}" pane rename "$pane" "$label" >/dev/null || { echo "herdr-pane: rename failed for $pane" >&2; exit 1; }
+    "${H[@]}" pane report-metadata "$pane" --source "$source" --display-agent "$label" >/dev/null \
       || { echo "herdr-pane: report-metadata failed for $pane" >&2; exit 1; }
-    herdr pane get "$pane" 2>/dev/null | grep -qF "$label" \
+    "${H[@]}" pane get "$pane" 2>/dev/null | grep -qF "$label" \
       || { echo "herdr-pane: label '$label' not visible on $pane after rename" >&2; exit 1; }
-    echo "named $pane: $label (source $source)"
+    echo "named $pane: $label (source $source${H[2]:+, machine ${H[2]}})"
     ;;
   helper)
+    herdr workspace list >/dev/null 2>&1 || { echo "herdr-pane: herdr server not answering — report and stop (never start it mid-skill)" >&2; exit 3; }
     [ "${HERDR_ENV:-}" = 1 ] || { echo "herdr-pane: helper must run inside a herdr pane" >&2; exit 3; }
     cwd="$PWD"; [ "${1:-}" = "--cwd" ] && cwd="${2:?--cwd needs a dir}"
     out="$(herdr pane split --current --direction right --ratio 0.5 --cwd "$cwd" --no-focus 2>&1)" \

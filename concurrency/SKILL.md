@@ -143,11 +143,14 @@ recommendation that rides the §5.2 confirmation, never a silent choice.
    has said he is doing (leaving or moving the MBA within hours ⇒ long jobs off the MBA;
    do not ask when he has said nothing); spread a train across accounts rather than
    draining one. Ties go to the account's home machine (the script already orders them).
-3. **Box gates — check before recommending the box:** the lane's base commit must be on
-   origin, because the box builds from its own clone (`placement.py check-base --repo
-   <repo> --base <base>`; exit 1 ⇒ place the lane locally or ask Alex to push — never
-   push yourself). Then fetch the box's clone: `ssh <box> git -C ~/<repo path under
-   $HOME> fetch -q origin`.
+3. **Box gates — check before recommending the box:** the box builds from its own clone,
+   so the commit the lane's brief builds on must be on origin. That base is
+   `origin/<trunk>` for a fresh lane — which passes by construction — or the driver's
+   HEAD / scope branch when the lane needs work not yet on trunk; check the real one:
+   `placement.py check-base --repo <repo> --base <that commit>` (exit 1 ⇒ place the lane
+   locally or ask Alex to push — never push yourself). Then fetch the box's clone, quoting
+   the command so `~` expands on the box: `ssh <box> 'git -C ~/<repo path under $HOME>
+   fetch -q origin'`.
 4. **Show it:** every lane line in the §5.2 plan carries `machine=` and `account=` with
    the deciding reason, and any unknown headroom is stated, not hidden. Alex's one
    `[y/N]` confirms placement too; an override ("lane 2 local") re-prints the plan and
@@ -185,9 +188,11 @@ Per partition, in this order (syntax authority: `herdr --skill`):
    override is inline in its launch command; `herdr` skill §6). Workspace label = run name only (`<scope> run`); seat identity
    goes on the PANE per the `herdr` skill §2 (naming).
 1b. **Layout + naming: `herdr` §5 and §2** — no tabs. Pane identity in one call
-   (rename + sidebar metadata, read back): `~/Projects/ai-skills/scripts/herdr-pane.sh name <pane> <task> <seat>`.
-2. Launch the seat's command (§3) in the created pane via `pane run` — claude/glm
-   workers append `--dangerously-skip-permissions` (`herdr` skill §4: clears the
+   (rename + sidebar metadata, read back): `~/Projects/ai-skills/scripts/herdr-pane.sh name <pane> <task> <seat>`
+   (`--machine <host>` for a box pane).
+2. Launch the seat's command (§3) in the created pane via `pane run` — under the placed
+   account: `claude-<account>` / `codex-<account>` (`herdr` skill §6), on either machine.
+   claude/glm workers append `--dangerously-skip-permissions` (`herdr` skill §4: clears the
    fresh-worktree trust dialog + tool prompts; safe via worktree +
    no-push isolation). Never on the driver.
 3. First instruction in every dispatched prompt: the task brief, then: commit locally when done; NEVER push,
@@ -206,9 +211,11 @@ Per partition, in this order (syntax authority: `herdr --skill`):
 point — `herdr` skill §6.1 has the mechanics:
 - every herdr command carries `herdr --machine <host>`, and every pane/workspace id comes
   from that server's JSON (ids are per server: the box has its own `w1:p1`);
-- `--cwd ~/<repo path under $HOME>` (remote worktree paths must start with `~/`);
-- the worker launches as `claude-<account>` / `codex-<account>` (`herdr` skill §6),
-  which is also how a local lane runs under the non-default account.
+- `--cwd ~/<repo path under $HOME>` (remote worktree paths must start with `~/`) and
+  `--base` = the origin ref §5.1 step 3 checked, not always `origin/<trunk>`;
+- the box runs its own clones at the same `$HOME`-relative paths, ai-skills included
+  (`~/Projects/ai-skills`, which the brief's `herdr-pane.sh helper` line calls) — pull
+  it there when this skill changes.
 
 ## 7. Supervision & coordination
 
@@ -288,8 +295,10 @@ zero-cost-basis silent defeat that build/test/disjointness passes all missed).
   test evidence from the pane tail. Split fixed vs NOT-fixed explicitly.
 - **A box lane comes home by fetch, never by push:** `~/Projects/ai-skills/scripts/
   placement.py fetch-back --repo <local repo> --machine <host> --branch <b>` copies the
-  lane branch from the box's clone into the local one and reads it back. Its review pane
-  (§7.3) runs on the box, in the lane's worktree, before the fetch.
+  lane branch from the box's clone into the local one and reads it back. It assumes the
+  box clone sits at the same `$HOME`-relative path (`--remote-url` overrides) and refuses
+  to touch a local branch of that name that is checked out or has diverged. Its review
+  pane (§7.3) runs on the box, in the lane's worktree, before the fetch.
 - Landing is MANUAL and Alex's: hand him per-branch merge commands, bare.
 - `herdr worktree remove` (`herdr --machine <host> worktree remove` for a box lane) only
   after Alex confirms the branch is landed or abandoned — worktrees with unmerged commits

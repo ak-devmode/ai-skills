@@ -1,6 +1,6 @@
 ---
 name: closeout
-version: 1.5.0
+version: 1.6.0
 description: |
   Local repo self-heal after a /plan run. Consumes closeout-prep.md and leaves the
   repo healthier than /plan found it: re-runs tests, spot-checks pattern references,
@@ -719,7 +719,9 @@ skip the gate and note "archive gate not run (dry-run)."
 
 Next:
   - Review the diff: `git diff`
-  - Commit when satisfied
+  - Commit when satisfied — plans-dir files via
+    `~/Projects/ai-skills/scripts/plans-publish.sh <plans-dir> -m "<msg>" -- <paths>`,
+    so a docs trunk gets pushed and read back, not left ahead
   - For cross-repo healing: `/closeout-extended`
 ```
 

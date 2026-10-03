@@ -57,7 +57,19 @@ done
 
 # 1. Commit only these paths. `commit -- <paths>` leaves anything else a sibling session
 #    staged where it was (a real rebase below can unstage it — content is kept).
-err="$(g add -- "${paths[@]}" 2>&1)" || die 3 "git add failed, nothing committed — HALT: ${err##*$'\n'}"
+# A path gone from disk AND index but still in HEAD is an already-staged move or delete
+# (`git mv` for an archive) — nothing to add, yet it must still be named to the commit.
+# Anything else goes to `git add`, so a path git knows nowhere still fails loud.
+to_add=()
+for p in "${paths[@]}"; do
+  if [ ! -e "$p" ] && [ -z "$(g ls-files -- "$p")" ] && [ -n "$(g ls-tree -r --name-only HEAD -- "$p" 2>/dev/null)" ]; then
+    continue
+  fi
+  to_add+=("$p")
+done
+if [ ${#to_add[@]} -gt 0 ]; then
+  err="$(g add -- "${to_add[@]}" 2>&1)" || die 3 "git add failed, nothing committed — HALT: ${err##*$'\n'}"
+fi
 if g diff --cached --quiet -- "${paths[@]}"; then
   echo "plans-publish: nothing new in the given paths" >&2
 else

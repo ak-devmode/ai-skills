@@ -1,6 +1,6 @@
 ---
 name: repo-cleanup
-version: 1.3.0
+version: 1.4.0
 description: |
   Branch hygiene and repo upkeep. Classifies all non-protected branches against the
   trunk(s) using layered signals (PR merge state, ancestry, gone-upstream, patch
@@ -434,7 +434,9 @@ For each ARCHIVE item:
    pre-existing dirty set and report them ("left uncommitted — modified by another
    context"). Verify the branch first (docs repos like `pmg-docs` commit direct to
    `main` — confirm the repo's convention) and **ask before committing** (respect
-   commit-gating).
+   commit-gating). On the yes, commit through `~/Projects/ai-skills/scripts/plans-publish.sh
+   <plans-dir> -m "<msg>" -- <those paths>`, not `git commit`: on a shared trunk it also
+   rebases, pushes and reads back. Exit 3 → halt and ask; exit 4 → report "not pushed".
 4. Log to the §1.4 destination (same file as branch hygiene): verdict table,
    what was archived + where, leftovers extracted, index-hygiene fixes, Open Questions.
 

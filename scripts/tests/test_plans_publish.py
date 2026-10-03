@@ -214,6 +214,22 @@ class PlansPublish(unittest.TestCase):
         self.assertIn("git:", r.stderr)
         self.assertEqual(self.git(self.a, "log", "-1", "--format=%s"), "plan: [Task 1.1] test")
 
+    def test_o_archive_move_publishes_old_and_new_paths(self):
+        """/scope §7.2: folder move + index row in one publish; the old path is gone on disk."""
+        self.write(self.a, "plans/9-x/scope.md", "scope\n")
+        self.git(self.a, "add", "plans/9-x")
+        self.git(self.a, "commit", "-q", "-m", "scope 9")
+        self.git(self.a, "push", "-q", "origin", "main")
+        os.makedirs(os.path.join(self.a, "plans/archive"))
+        self.git(self.a, "mv", "plans/9-x", "plans/archive/9-x")
+        self.write(self.a, "plans/PLANS-INDEX.md", "index\n9 archived\n")
+        r = self.publish("9-x", "archive/9-x", "PLANS-INDEX.md", msg="scope: [9] archived")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        files = self.git(self.origin, "show", "--name-status", "--format=", "main").split("\n")
+        self.assertIn("R100\tplans/9-x/scope.md\tplans/archive/9-x/scope.md", files)
+        self.assertIn("M\tplans/PLANS-INDEX.md", files)
+        self.assertEqual(self.git(self.a, "status", "--porcelain"), "")
+
 
 if __name__ == "__main__":
     unittest.main()

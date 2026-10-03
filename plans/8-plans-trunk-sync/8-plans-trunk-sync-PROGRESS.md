@@ -112,3 +112,15 @@
   marker `⚠ judge: claude-lean` (review and verify both lean).
 - **Judge notes acted on:** recorded the ai-skills-main decision and the review-driven
   guards in Decisions above.
+
+#### Unplanned: publish wired into `/scope`, `/repo-cleanup`, `/closeout` (2026-10-03)
+- **Files modified:** `scope/SKILL.md` (3.11.0: publish after 5.8 to reserve the number on
+  origin, 5.10.2 stubs + table, §7.2 archive move as one publish, §8.3 explicit paths),
+  `repo-cleanup/SKILL.md` (1.4.0: §6 commit via publish after the yes),
+  `closeout/SKILL.md` (1.6.0: summary's commit line names the publish command),
+  `scripts/plans-publish.sh` + `scripts/tests/test_plans_publish.py` (case o).
+- **Why:** the follow-up plan §1.6 deferred; Alex approved it as direct small edits. The new
+  archive-move test caught a real defect: after `git mv`, the old folder is in neither the
+  tree nor the index, so `git add` failed. Paths that exist only in HEAD now skip the add
+  and are still named to the commit. The closing TO-DO item for this follow-up is
+  therefore not needed.

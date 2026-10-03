@@ -1,6 +1,6 @@
 ---
 name: scope
-version: 3.10.0
+version: 3.11.0
 description: |
   Task scoping, skill router, and progress tracker. Reads current context (git diff,
   branch, CLAUDE.md, open files), eliminates assumptions via two rounds of open-ended
@@ -631,6 +631,16 @@ start at 1.
 > **Why the shape is enforced in code.** An undeclared column once shifted every
 > cell right, so 39 PMG Active rows rendered their description nowhere.
 
+**Then publish 5.4–5.8 in one call — this is what reserves the number.**
+`claim-scope-number.sh` cannot see a number that exists only on this disk; on origin,
+every other machine's claim does:
+```bash
+~/Projects/ai-skills/scripts/plans-publish.sh "$PLANS_DIR" -m "scope: [$N] draft — {slug}" \
+  -- "$N-{slug}" PLANS-INDEX.md
+```
+Exit 3 (conflict, typically another machine's row in the same spot) → halt and ask; never
+hand-merge the index. Exit 4 → say the number is not yet reserved, and continue.
+
 ### 5.9 Generate plan stubs (phased scopes only)
 
 If the scope is **phased** (Step 3), generate a plan stub file for each phase.
@@ -729,6 +739,9 @@ Never approve on the user's behalf, and never read "continue" as a yes to rows t
 not seen. Edits they ask for go through `add`, then the plain-English list again. The
 gate blocks every unit until the current revision is approved (`verify-contracts.md` §3.1.1).
 
+**5.10.2 Publish the stubs and the table** the same way as 5.8, naming the scope folder:
+`plans-publish.sh "$PLANS_DIR" -m "scope: [$N] stubs + finish table" -- "$N-{slug}"`.
+
 ---
 
 ## Step 6 — Handoff Summary
@@ -774,7 +787,9 @@ instead — never the repo-wide archive (ADR-029 §2.3.4). Detect membership by 
 7.2 **The index row moves in the same commit as the folder**, via
 `scripts/plans-index.py move --num {N} --to archived`. Omit `--folder` unless the path
 actually changes — the row's existing path is usually right, and the script refuses a
-path that does not resolve.
+path that does not resolve. That commit is one publish naming the old folder, the new one
+and the index: `plans-publish.sh "$PLANS_DIR" -m "scope: [{N}] archived" -- "{N}-{slug}"
+"archive/{N}-{slug}" PLANS-INDEX.md` (exit 3 → halt and ask).
 
 7.3 **Program members:** flip the member's row in `{slug}-brief.md` to Archived and
 point it at the new path. The brief stays the members registry across the lifecycle.
@@ -795,8 +810,10 @@ walking `CROSS-REPO.md`, test execution, and memory writes for cross-cutting fin
 
 Verify all changes are committed and pushed:
 - Run `git status` to check for uncommitted changes
-- Commit any remaining changes (scope archive, doc updates from /closeout-extended)
-- Push to remote
+- Plans-dir changes (scope archive, TO-DO, index) go through `plans-publish.sh` with
+  their explicit paths — never `git add -A`; a sibling session's files may be in the tree
+- Code-repo changes (doc updates from /closeout-extended): commit by path, push to the
+  branch
 
 ### 8.4 Context clearing & next scope
 

@@ -180,6 +180,7 @@ Resumed/restarted phases append a SECOND block:
 - ai-skills · test: `scripts/tests/test_plans_publish.py` (new) — Task 1.2
 - ai-skills · code: `scripts/ff-local-trunk.sh` (new) — Task 1.3
 - ai-skills · test: `scripts/tests/test_ff_local_trunk.py` (new) — Task 1.4
+- ai-skills · doc: `plan/SKILL.md` §8.2, §8.3, §8.5a/b, §8.7, §11.4, §11.5, version 3.12.0 — Task 1.5
 
 ### §3 Patterns Followed (additional)
 - `scripts/plans-publish.sh` ← `scripts/claim-scope-number.sh:1` (approach header, exit-code contract, stderr provenance)

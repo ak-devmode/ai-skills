@@ -62,3 +62,11 @@
   unchanged, (e) untracked file in the way → 3, file intact, (f) unreachable origin → 4,
   (g) explicit `develop`, (h) trunk checked out in a linked worktree → advanced there,
   (i) usage → 2. All pass first run.
+
+### Task 1.5 — ✅ DONE — `/plan` SKILL.md
+- **Files:** `plan/SKILL.md` (3.11.0 → 3.12.0)
+- **Result:** §8.5 split: 8.5a code repo (push per phase, unchanged), 8.5b plans repo —
+  every plans-dir commit goes through `plans-publish.sh`, exit-code handling inline, a
+  "record a plans-repo SHA only after publish returns 0" rule (plan risk 4.3), and the
+  2026-10-03 incident as the why. One-line pointers to 8.5b in §8.2, §8.3, §8.7, §11.4
+  (folder move + row in one publish), §11.5. Lint: 0 issues.

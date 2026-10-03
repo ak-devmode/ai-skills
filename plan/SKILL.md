@@ -1,6 +1,6 @@
 ---
 name: plan
-version: 3.11.0
+version: 3.12.0
 description: |
   Execute tasks from a structured plan document step by step, logging progress and
   stopping at human checkpoints. Plan files follow the naming convention *-PLAN.md
@@ -586,13 +586,23 @@ This bias reflects the structural truth that trunk leads, leaves inherit. Parall
 
 8.1 **Never modify the plan file** — the one exception is the §3.1 `Executed by` stamp. The plan is the source of truth. If something in the plan is wrong, tell the human and stop. Deepening a stub's task detail at start of run is not a modification: it goes in a `### Task Detail` block in the plan's `progress.md` section (`/markdown-style` §8.9.2).
 
-8.2 **Always append to the resolved progress file.** Never delete or overwrite previous entries (Resume Context blocks excepted, per §4). The log is an audit trail. For child plans, "the progress file" means the `## Plan {N}.{P}: ...` subsection of the scope `progress.md` — see §2.3 + §4. Never write child-plan task entries to a `<plan-stem>-PROGRESS.md` file.
+8.2 **Always append to the resolved progress file.** Never delete or overwrite previous entries (Resume Context blocks excepted, per §4). The log is an audit trail, and each append is published per §8.5b. For child plans, "the progress file" means the `## Plan {N}.{P}: ...` subsection of the scope `progress.md` — see §2.3 + §4. Never write child-plan task entries to a `<plan-stem>-PROGRESS.md` file.
 
-8.3 **Be explicit about file changes.** Every task that creates or modifies files must list them in the progress log. Use workspace-relative paths. At the same time, append the same file list to `closeout-prep.md §2` — both logs must be updated together. Never update one without the other.
+8.3 **Be explicit about file changes.** Every task that creates or modifies files must list them in the progress log. Use workspace-relative paths. At the same time, append the same file list to `closeout-prep.md §2` — both logs must be updated together, and published together (§8.5b). Never update one without the other.
 
 8.4 **Stay in scope.** Each task has defined inputs, actions, and outputs. Don't do extra work beyond what the task specifies — the plan is sequenced deliberately. When a genuine side-path fix is warranted anyway (broken thing found mid-task), it is allowed but MUST be logged per §8.10 — unlogged side work is the primary dropped-work class.
 
-8.5 **Commit after each task; push after each phase.** If git is initialized, commit after each completed AI task with message format: `plan: [Task X.Y] [brief description]`. When all tasks in a phase are complete (at a CHECKPOINT or phase boundary), run `git push origin <branch>` to back up progress to the remote. PRs are created manually — do not open them.
+8.5 **Commit after each task.** If git is initialized, commit after each completed AI task with message format: `plan: [Task X.Y] [brief description]`. When to push depends on which repo the commit is in:
+
+8.5a **Code repo — push after each phase.** The run owns its feature branch, so at a CHECKPOINT or phase boundary run `git push origin <branch>` to back up progress. PRs are created manually — do not open them.
+
+8.5b **Plans repo — publish every write.** Any commit that touches the plans directory (progress per §8.2, the ledger per §8.3, the scope `progress.md` per §8.7/§11.5, PLANS-INDEX per §11.4) goes through one call, never a bare `git commit`:
+```bash
+~/Projects/ai-skills/scripts/plans-publish.sh "$PLANS_DIR" -m "plan: [Task X.Y] …" -- <paths this task wrote>
+```
+On a shared trunk (kalpa-docs, pmg-docs, iris-docs `main`) it commits only the named paths, rebases onto origin, pushes and reads it back. Off trunk (ai-skills, where plans ride the feature branch) it only commits, and §8.5a applies. Exit **0** continue · **4** not pushed (offline, auth) — warn once and continue; the next publish carries it · **3** conflict or another session mid-rebase — **HALT**: show the files it names and ask; never resolve a `progress.md` conflict yourself, it is the record the next resume reasons from. Record a plans-repo SHA anywhere (review log, ledger) only after its publish returns 0 — a rebase rewrites it.
+
+> **Why.** Commit-per-task with push-per-phase left a phase-long window on a trunk every machine writes. On 2026-10-03 homelab2026 sat 11 ahead / 21 behind on kalpa-docs `main`, with 153.2's progress on one disk only, while the MBA closed 153.1 in the same files.
 
 8.6 **On resume, summarize what happened.** If the user returns after a break, read the progress file and give a brief summary of where things stand before continuing.
 
@@ -601,6 +611,7 @@ This bias reflects the structural truth that trunk leads, leaves inherit. Parall
 - Update the scope-level Plans table status to `Done`
 - Update the scope-level Resume Context (top of file) to point at the next plan or note "all plans complete"
 - The child plan's own subsection Resume Context is updated to reflect final state ("Plan complete — N/N tasks done") — do not delete the subsection.
+- Publish these writes per §8.5b.
 
 8.8 **gstack review targeting.** When recommending or triggering a gstack review skill
 (`/plan-ceo-review`, `/plan-eng-review`, `/plan-design-review`, `/plan-devex-review`,
@@ -786,7 +797,8 @@ For a **standalone plan** or a **closing scope**, move the row between tables to
 match what just happened on disk:
 
 - Scope folder moved to `archive/` → move its row from **Active Plans** to
-  **Completed / Archived**, in the same commit as the folder move. A row whose
+  **Completed / Archived**, in the same commit as the folder move (one §8.5b publish
+  naming both paths). A row whose
   table disagrees with the folder's location is the drift the SessionStart hook
   reports; do not leave it for the hook to find.
 - Compress the moved row: `| {n} | ✅ Done ({date}) | {archive path} | {one
@@ -805,6 +817,7 @@ For child plans (per §2.3), all progress already lives in the scope `progress.m
 - Update the scope-level Plans table status to `Done`
 - Update the scope-level Resume Context — point at the next plan in the scope, or note "all plans complete" if this was the last
 - Update the child plan's subsection Resume Context to reflect final state ("Plan complete — N/N tasks done"). Do not delete the subsection.
+- Publish per §8.5b.
 
 For standalone plans (no parent scope), this step is N/A.
 

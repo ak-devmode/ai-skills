@@ -189,8 +189,9 @@ def check_base(a):
         print(f"cannot check: {a.base!r} is not a commit in {a.repo}")
         return 3
     sha = sha.stdout.strip()
-    refs = git(a.repo, "branch", "-r", "--contains", sha).stdout.split()
-    refs = [r for r in refs if r.startswith("origin/") and r != "->"]
+    # one ref per line; "origin/HEAD -> origin/main" names origin/main once
+    lines = git(a.repo, "branch", "-r", "--contains", sha).stdout.splitlines()
+    refs = sorted({ln.split()[0] for ln in lines if ln.strip().startswith("origin/")})
     if refs:
         print(f"ok: {sha[:7]} is on origin ({', '.join(refs[:3])})")
         return 0

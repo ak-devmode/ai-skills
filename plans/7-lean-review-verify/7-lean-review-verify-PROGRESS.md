@@ -7,11 +7,12 @@
 
 ## Resume Context
 
-- **Last completed:** 1.R closed. Rounds 1–3 had 14 findings, all fixed; Alex accepted the
-  outcomes (`a1be8c3`).
-- **Next action:** Task 1.10 (scaffolding severity cap), then 1.11 and 1.12, then one review
-  round on 1.10–1.12 (round 4, allowed by Alex), then 1.V `/verify 7.1 --full`.
-- **Open blockers:** none. Task 1.9's env line is uncommitted in `dev-workbench`.
+- **Last completed:** 1.R closed after 4 rounds (17 findings, all fixed; Alex accepted, `c42e04d`).
+  1.V run 1 (`7.1-20261003T015010-3144`, codex, full): advisory, 1 block. The `/verify`
+  report header lacked the mode line (§2.1). Fixed along with two low findings.
+- **Next action:** 1.V run 2 — the last under the run cap. Then Task 1.9 (Alex: commit
+  the dev-workbench env line, announce), mark 7 Done, and closeout.
+- **Open blockers:** none.
 
 ---
 
@@ -197,4 +198,13 @@ review round (round 4) on the new work; proceed.
 - **1.12** `235943e` — retry prompt, NOT-JUDGED (advisory marker / blocking refusal),
   a big scope.md inlines the unit's phase only, zero-rejection auto-pass.
 - 214 tests pass; names-resolve clean. Next: review round 4 on `a1be8c3..HEAD`.
+
+### Task 1.V — run 1 (codex gpt-6.1-sol, full) — ADVISORY, 1 block
+- Report: `artifacts/verify-7.1-report.md`. 5 of 6 checks pass. `rejections-justified`
+  was auto-passed by the runner (1.12(c), live).
+- **Block — `p1-scope-deliverables`:** the `/verify` report header had no mode line
+  (Agreed Design §2.1); only `/review`'s did. Fixed: `judge.py report --mode`, and
+  `/verify` §3.8 passes `$MODE`.
+- **Low, fixed:** ARCHITECTURE.md catalog versions (review 3.7.0, verify 0.7.0); this
+  Resume Context.
 

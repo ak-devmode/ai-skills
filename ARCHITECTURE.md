@@ -244,9 +244,9 @@ graphs.
 | `prd` | 1.1.0 | Step 0 = `context-gather.sh`. |
 | `concurrency` | 0.5.0 | Dedup'd against herdr; pane naming + dispatch log via scripts. |
 | `herdr` | 0.1.5 | Opus seat = 5.5 (`opus[1m]`). |
-| `review` | 3.6.0 | Plan 7: lean default (one Sonnet pass over a packed bundle), `--full` / `AI_SKILLS_REVIEW_MODE=full` for the codex gate; codex gate; rules extracted to `review/rules/` (IRIS group §3.9); dispositions enforced, `deferred` past a repo's round 3 (rounds per repo); §5.1 convergence; `accept` records the user's yes. |
+| `review` | 3.7.0 | Plan 7: lean default (one Sonnet pass over a packed bundle), `--full` / `AI_SKILLS_REVIEW_MODE=full` for the codex gate; codex gate; rules extracted to `review/rules/` (IRIS group §3.9); dispositions enforced, `deferred` past a repo's round 3 (rounds per repo); §5.1 convergence; `accept` records the user's yes. |
 | `ready-to-clear` | 1.1.0 | |
-| `verify` | 0.6.0 | Plan 7: lean judge by default, fix loop capped at 2 runs. Scope 5. Advisory gate until 5 clean scopes; codex effort scales with the diff; `--demo` on the planted-defect fixture; stale-clone line. |
+| `verify` | 0.7.0 | Plan 7: lean judge by default, fix loop capped at 2 runs; a judge failure is NOT-JUDGED, never a block. Scope 5. Advisory gate until 5 clean scopes; codex effort scales with the diff; `--demo` on the planted-defect fixture; stale-clone line. |
 | `kalpa-*` | unversioned | Flattened 2026-08-09. |
 
 ### 6.2 Active scope

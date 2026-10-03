@@ -17,7 +17,7 @@ Usage:
     --lean    one self-contained bundle for a single Sonnet pass: every input inlined, the diff capped (plan 7)
   judge.py record  --scope DIR --unit N.P --run-id ID --judge LINE --input FILE [--prompt FILE]
     --prompt  on a refused answer, write <prompt>-retry.md naming what was wrong (printed `retry-prompt:`)
-  judge.py report  --scope DIR --unit N.P --run-id ID
+  judge.py report  --scope DIR --unit N.P --run-id ID [--mode LINE]
     --range   overrides the ledger's base for REPO (older scopes have no recorded base)
     --no-commits  the unit declares no commits (its stub has no Review task — /scope §5.9):
               a repo with no base is judged on runner evidence alone. Refused when any
@@ -393,7 +393,7 @@ def cmd_report(a):
     marker = next((x for x in gate.stdout.splitlines() if x.startswith("marker:")), "")
     stop = run_cap_line(p["log"], a.unit, a.run_id)
     by_pend = {r["check_id"]: r for r in recs if r.get("run_state") == "pending"}   # auto rows too
-    lines = [f"# Verify report — unit {a.unit}", "",
+    lines = [f"# Verify report — unit {a.unit}", "", *([f"**{a.mode}**", ""] if a.mode else []),
              f"**Run:** `{a.run_id}` · **Judge:** {final['judge']} · **Table revision:** {final['table_rev']}",
              f"**Gate:** {gate_line.replace('verdict: ', '')}" + (f" · {marker.replace('marker: ', '')}" if marker else ""),
              *(["", f"**{stop}**"] if stop else []),
@@ -441,6 +441,8 @@ def main(argv):
             s.add_argument("--judge", required=True)
             s.add_argument("--input", required=True)
             s.add_argument("--prompt", help="the prompt the judge answered; a refused answer gets a retry prompt")
+        if name == "report":
+            s.add_argument("--mode", help="review-mode.py's line, first in the report header (plan 7 §2.1)")
     try:
         a = ap.parse_args(argv)
     except SystemExit as exc:

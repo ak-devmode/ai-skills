@@ -146,7 +146,7 @@ judge rows **NOT-JUDGED**, which is never a block (`verify-contracts.md` §5.4.3
 `--judge 'none <reason>'` when §3.6 did not record). This applies the authority rule and
 writes the one `final` line.
 
-3.8 **Gate and report.** `$V/judge.py report --scope $SCOPE --unit $UNIT --run-id $RUN`
+3.8 **Gate and report.** `$V/judge.py report --scope $SCOPE --unit $UNIT --run-id $RUN --mode "$MODE"`
 writes `artifacts/verify-$UNIT-report.md` and prints the gate verdict. Advisory mode is
 the default until five scopes pass cleanly: blocks are reported, the unit is not held.
 Its exit status is the gate's — `1` blocked, `3` the gate itself errored (the report says

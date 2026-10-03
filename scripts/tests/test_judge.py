@@ -289,9 +289,10 @@ class TestJudge(unittest.TestCase):
         self.ledger(self.base)
         self.judge("record", "--judge", "claude-fallback codex not authed", "--input", self.answer())
         run("verify-run.py", "finalize", "--log", self.log, "--run-id", self.rid, env=self.env)
-        p = self.judge("report")
+        p = self.judge("report", "--mode", "mode: full (env)")
         self.assertEqual(p.returncode, 0, p.stderr)
         text = read(os.path.join(self.scope, "artifacts", "verify-9.1-report.md"))
+        self.assertIn("**mode: full (env)**", text.split("**Run:**")[0])   # plan 7 §2.1: the header names the mode
         self.assertIn("**Judge:** claude-fallback codex not authed", text)
         self.assertIn("| jr | pass | 2/2 |", text)
         self.assertIn("**low** · over-build · `jr`", text)

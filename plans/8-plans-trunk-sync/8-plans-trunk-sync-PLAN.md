@@ -1,12 +1,12 @@
-# Plans-repo trunk sync — PLAN
+# Plans-repo trunk sync + local trunk fast-forward — PLAN
 
-**Version:** 0.1
+**Version:** 0.2
 **Date:** 2026-10-03
 **Plan #:** 8
 **Created by:** Alex
 **Executed by:**
 **ADR:** N/A
-**Status:** Draft — awaiting Alex's go
+**Status:** Ready to execute
 **Branch:** feature/8-plans-trunk-sync
 
 ---
@@ -39,7 +39,16 @@ machines (now two, target three).
 only the paths this run wrote, rebase onto origin, push, and read back that origin has it.
 A real conflict stops the run and asks — it is never auto-resolved.
 
-1.4 **Not in this plan:** `/scope`, `/closeout`, `/repo-cleanup` also write to plans
+1.4 **Second gap, same shape: merged worktree work never reaches the primary checkout.**
+A unit runs in a herdr worktree, its branch merges on GitHub, `/closeout` §13.6 removes
+the worktree and deletes the branch — and the primary checkout's trunk (`develop` or
+`main`) is still where it was before the work started. The disk Alex works from lacks
+what was just merged, silently, until someone pulls by hand.
+
+1.5 **Fix for 1.4.** Teardown ends by fast-forwarding the primary checkout's trunk to
+origin — fast-forward only, never a merge or reset — and reading it back.
+
+1.6 **Not in this plan:** `/scope`, `/closeout`, `/repo-cleanup` also write to plans
 trunks (scope birth, archive moves). They get the same helper in a follow-up, recorded
 in `plans/TO-DO.md`. The code-repo half of §8.5 is unchanged.
 
@@ -88,7 +97,19 @@ reasons from (§8.6 resume). A wrong auto-merge corrupts the record the next res
 trusts. Conflicts should be rare once pushes are immediate — the window shrinks from a
 phase to seconds — so asking is cheap.
 
-2.6 **`/plan` wiring.** §8.5 splits in two:
+2.6 **`scripts/ff-local-trunk.sh <repo> [<trunk>]`** — called at the end of every
+worktree teardown.
+- Trunk defaults to the repo's `origin/HEAD` target; `git fetch origin <trunk>` first.
+- Primary checkout **on** trunk: `git merge --ff-only origin/<trunk>` (git itself refuses
+  if a dirty file would be overwritten — that refusal is exit 3, not a forced update).
+- Primary checkout on **another** branch: `git fetch origin <trunk>:<trunk>` updates the
+  local trunk ref without a checkout; git rejects it unless it is a fast-forward.
+- Local trunk has commits origin lacks (diverged or ahead): exit 3, print the counts,
+  change nothing.
+- Read-back: local `<trunk>` equals `origin/<trunk>`. Exit 0 current or advanced;
+  3 needs Alex; 4 fetch failed.
+
+2.7 **`/plan` wiring.** §8.5 splits in two:
 - **8.5a Code repo** — unchanged: commit per task, push per phase.
 - **8.5b Plans repo** — every commit that touches the plans dir (progress entries per
   §8.2, `closeout-prep.md` per §8.3, scope `progress.md` per §8.7/§11.5, PLANS-INDEX per
@@ -118,20 +139,44 @@ phase to seconds — so asking is cheap.
   pathspec → 2.
 - **Output**: `ai-skills/scripts/tests/test_plans_publish.py`
 
-### 1.3 `/plan` SKILL.md
+### 1.3 `ff-local-trunk.sh`
 - **Type**: AI
 - **Input**: §2.6
+- **Action**: Write the script per §2.6, same house style as 1.1.
+- **Output**: `ai-skills/scripts/ff-local-trunk.sh`
+
+### 1.4 Tests for 1.3
+- **Type**: AI
+- **Action**: `test_ff_local_trunk.py`, temp bare origin + primary clone + linked worktree.
+  Cases: (a) primary on trunk, behind → advanced, 0; (b) primary on a feature branch,
+  trunk behind → trunk ref advanced, checkout untouched, 0; (c) already current → 0;
+  (d) local trunk ahead/diverged → 3, nothing changed; (e) primary on trunk with a dirty
+  file the merge would overwrite → 3, file intact; (f) unreachable origin → 4;
+  (g) `develop` trunk passed explicitly.
+- **Output**: `ai-skills/scripts/tests/test_ff_local_trunk.py`
+
+### 1.5 `/plan` SKILL.md
+- **Type**: AI
+- **Input**: §2.7
 - **Action**: Split §8.5 into 8.5a/8.5b. In §8.2, §8.3, §8.7, §11.4, §11.5 replace "commit"
   for plans-dir writes with a `plans-publish.sh` call, including the exit-3 halt text.
   Keep the edit surgical — no other sections move.
 - **Output**: `ai-skills/plan/SKILL.md`
 
-### 1.4 Script index
+### 1.6 `/closeout` + `herdr` teardown
 - **Type**: AI
-- **Action**: Add `plans-publish.sh` to `scripts/README.md` with its exit contract.
+- **Input**: §2.6; `closeout/SKILL.md` §13.6; `herdr/SKILL.md` §3 Teardown
+- **Action**: Append `ff-local-trunk.sh <primary-repo>` as the last teardown step in both,
+  with the exit-3 text (report, never force). Surgical edits only.
+- **Output**: `ai-skills/closeout/SKILL.md`, `ai-skills/herdr/SKILL.md`
+
+### 1.7 Script index
+- **Type**: AI
+- **Action**: Add `plans-publish.sh` and `ff-local-trunk.sh` to `scripts/README.md` with
+  their exit contracts.
 - **Output**: `ai-skills/scripts/README.md`
 
-### 1.5 Live check on kalpa-docs
+### 1.8 Live check on kalpa-docs
 - **Type**: AI+HUMAN_REVIEW
 - **Input**: the next real `/plan` run that writes to kalpa-docs
 - **Action**: Confirm each progress commit lands on origin within the task (`git status
@@ -148,7 +193,7 @@ phase to seconds — so asking is cheap.
 
 ### 🔲 CHECKPOINT: plans writes publish immediately
 - [ ] Suite green, including `test_plans_publish.py`
-- [ ] `plan/SKILL.md` lints clean
+- [ ] `plan`, `closeout`, `herdr` SKILL.md lint clean
 - [ ] One live publish observed on kalpa-docs with no `ahead` left behind
 
 ---

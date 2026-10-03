@@ -10,6 +10,7 @@ as the write.
 Usage:
   dispatch-log.py --scope S --task T --status {dispatched,done,blocked,failed}
                   [--seat X] [--branch B] [--worktree W] [--pane P] [--tail TEXT]
+                  [--machine HOST] [--account KEY]   (a box lane: pane ids are per server)
                   [--log PATH]          (default ~/.config/herdr/concurrency-log.jsonl)
 Output: the written JSON line on stdout.
 Exit:   0 written + verified · 1 write did not land · 2 usage
@@ -29,7 +30,7 @@ def main(argv):
     ap.add_argument("--scope", required=True)
     ap.add_argument("--task", required=True)
     ap.add_argument("--status", required=True, choices=STATUSES)
-    for opt in ("seat", "branch", "worktree", "pane", "tail"):
+    for opt in ("seat", "branch", "worktree", "pane", "machine", "account", "tail"):
         ap.add_argument(f"--{opt}")
     ap.add_argument("--log", default=os.path.expanduser("~/.config/herdr/concurrency-log.jsonl"))
     a = ap.parse_args(argv)
@@ -37,6 +38,10 @@ def main(argv):
     rec = {"ts": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
            "scope": a.scope, "task": a.task, "seat": a.seat, "branch": a.branch,
            "worktree": a.worktree, "pane_id": a.pane, "status": a.status}
+    # pane ids are per herdr server, so a box lane's record says which machine (scope 3, plan 3.4)
+    for key in ("machine", "account"):
+        if getattr(a, key):
+            rec[key] = getattr(a, key)
     if a.tail:
         rec["tail"] = a.tail
     line = json.dumps(rec, ensure_ascii=False)

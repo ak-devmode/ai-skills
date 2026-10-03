@@ -187,10 +187,15 @@ MBA's sidebar beside the local ones. Driving it from the MBA:
 - **Ids are per server.** The box has its own `w1:p1` and its own agent names: read
   them from that server's JSON, never reuse a local id, and never `--current`.
 - **Worktrees on the box:** `herdr --machine homelab2026 worktree create --cwd
-  ~/Projects/<repo> --base origin/<trunk> --branch <b> --no-focus` — remote paths must
-  be `~/`-relative or absolute. Fetch the box's clone first, quoted so `~` expands on
+  ~/Projects/<repo> --base <origin ref> --branch <b> --no-focus` — the ref `placement.py
+  check-base` passed (`origin/<trunk>` for a fresh lane, the pushed scope branch when the
+  lane needs it); remote paths must be `~/`-relative or absolute. Fetch the box's clone first, quoted so `~` expands on
   the box (`ssh homelab2026 'git -C ~/Projects/<repo> fetch -q origin'`); it never sees a
   commit that is not on origin.
+- **Trust on the box:** the first lane in a repo's box worktrees stops at Claude Code's
+  folder-trust dialog (§4 — pre-trusting through `~/.claude.json` is refused to agent
+  sessions). Alex answers it once in the pane; a later worktree of the same repo opened
+  with no dialog (2026-10-03, dev-workbench). Expect it once per repo.
 - **Naming a box pane:** `scripts/herdr-pane.sh name <pane> <task> <seat> --machine
   homelab2026` (§2 — the same two calls, against the box's server).
 - **Routing rule.** A lane goes to the box only when its base is on origin

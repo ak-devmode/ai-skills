@@ -111,7 +111,8 @@ permission prompt (the auto-mode classifier blocks it, correctly). Fix it at
   launch, pre-trust every worker cwd outside `~/.herdr/worktrees/` (the narrower
   alternative below: load, set, atomic replace, read back) and remove those entries at
   teardown. A worker already at the dialog: `agent send-keys <name> esc` cancels it
-  (exits, grants nothing), then pre-trust and re-`agent start` in the same pane.
+  (exits, grants nothing), then pre-trust and re-`agent start` in the same pane. On the
+  box the pre-trust edit was refused to an agent session — §6.1.
 - Safe here *specifically* because each worker is sandboxed: isolated worktree,
   disjoint touch-set, never pushes/PRs/merges (not `/freeze` — its state is one
   global file; `/concurrency` §10). That is the "no human in the
@@ -187,15 +188,18 @@ MBA's sidebar beside the local ones. Driving it from the MBA:
 - **Ids are per server.** The box has its own `w1:p1` and its own agent names: read
   them from that server's JSON, never reuse a local id, and never `--current`.
 - **Worktrees on the box:** `herdr --machine homelab2026 worktree create --cwd
-  ~/Projects/<repo> --base <origin ref> --branch <b> --no-focus` — the ref `placement.py
-  check-base` passed (`origin/<trunk>` for a fresh lane, the pushed scope branch when the
-  lane needs it); remote paths must be `~/`-relative or absolute. Fetch the box's clone first, quoted so `~` expands on
+  ~/Projects/<repo> --base <base> --branch <b> --no-focus` — `<base>` is the commit
+  `placement.py check-base` passed, named so the box can resolve it: `origin/<trunk>`
+  for a fresh lane, the pushed `origin/<branch>` or a SHA on origin when the lane needs
+  more; remote paths must be `~/`-relative or absolute. Fetch the box's clone first, quoted so `~` expands on
   the box (`ssh homelab2026 'git -C ~/Projects/<repo> fetch -q origin'`); it never sees a
   commit that is not on origin.
-- **Trust on the box:** the first lane in a repo's box worktrees stops at Claude Code's
-  folder-trust dialog (§4 — pre-trusting through `~/.claude.json` is refused to agent
-  sessions). Alex answers it once in the pane; a later worktree of the same repo opened
-  with no dialog (2026-10-03, dev-workbench). Expect it once per repo.
+- **Trust on the box (one observation, 2026-10-03, dev-workbench):** the first herdr
+  worktree lane stopped at Claude Code's folder-trust dialog, and pre-trusting through
+  the box's `~/.claude.json` (§4) was refused to the agent session as self-modification,
+  so Alex answered it in the pane. A second herdr worktree of the same repo then opened
+  with no dialog. Assume one approval per repo only for herdr-created worktrees; expect
+  the dialog again for a new repo or a plain `git worktree add` path (§4).
 - **Naming a box pane:** `scripts/herdr-pane.sh name <pane> <task> <seat> --machine
   homelab2026` (§2 — the same two calls, against the box's server).
 - **Routing rule.** A lane goes to the box only when its base is on origin

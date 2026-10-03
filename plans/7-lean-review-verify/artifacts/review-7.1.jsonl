@@ -37,3 +37,4 @@
 {"by": "Alex / Claude", "disposition": "fixed", "finding_id": "7.1-r4-01", "reason": null, "record": "disposition", "repo": "ai-skills", "schema": "verify/1", "sha": "324653319de03a4c63460048a0e12befca77a7f6", "ts": "2026-10-02T09:44:36Z", "via": "anchor"}
 {"by": "Alex / Claude", "disposition": "fixed", "finding_id": "7.1-r4-02", "reason": null, "record": "disposition", "repo": "ai-skills", "schema": "verify/1", "sha": "324653319de03a4c63460048a0e12befca77a7f6", "ts": "2026-10-02T09:44:36Z", "via": "anchor"}
 {"by": "Alex / Claude", "disposition": "fixed", "finding_id": "7.1-r4-03", "reason": null, "record": "disposition", "repo": "ai-skills", "schema": "verify/1", "sha": "324653319de03a4c63460048a0e12befca77a7f6", "ts": "2026-10-02T09:44:36Z", "via": "anchor"}
+{"by": "Alex", "deferred": 0, "findings": 17, "fixed": 17, "record": "acceptance", "rejected": 0, "schema": "verify/1", "ts": "2026-10-03T01:49:58Z"}

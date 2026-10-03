@@ -7,16 +7,23 @@
 
 ## Resume Context
 
-- **Status:** Tasks 1.1–1.7 done; 1.R round 1 recorded (8 findings, none blocking), all
-  fixed in `2d31d12` + the docs commit after it; awaiting Alex's accept of the outcomes.
-- **Next action:** dispositions → Alex accepts → Task 1.V `/verify 8.1` → merge to `main`
-  → Task 1.8 live check on the next real kalpa-docs `/plan` run (needs the merged skill).
-- **Open blockers:** finding 8.1-r1-02 is a design call for Alex: ai-skills `main` counts as
-  a shared trunk and publishes per task.
+- **Status:** Phase 1 tasks 1.1–1.7, 1.R and 1.V done. Review r1 accepted by Alex; verify
+  PASS (lean judge, advisory gate).
+- **Next action:** fast-forward ai-skills `main` to this branch and push; then Task 1.8 —
+  observe the next real kalpa-docs `/plan` run publish with no `ahead` left behind.
+- **Open blockers:** none.
+
+## Decisions
+
+| Date | Decision | By |
+|---|---|---|
+| 2026-10-03 | ai-skills `main` is a shared trunk and publishes per task, like the docs repos (plan §2.2 had placed ai-skills off trunk; review 8.1-r1-02 surfaced it) | Alex |
+| 2026-10-03 | Guards added beyond plan §2.4 — busy repo, stash not re-applied, failed add/commit (exit 3), unset origin/HEAD (exit 4) — came from tests and review r1, each with a test | Alex (review accept) |
 
 ## Artifacts
 
 - `artifacts/review-8.1-r1.md` — lean review round 1 (DEGRADED: single Sonnet pass)
+- `artifacts/verify-8.1-report.md` — verify PASS, lean judge (DEGRADED: not codex)
 
 ---
 
@@ -98,3 +105,10 @@
   CLAUDE.md §4 and ARCHITECTURE §1.4 · 08 this Resume Context.
 - **Tests:** +3 (l unset origin/HEAD, m failed add, n rejected push says why) and a
   message assertion on ff case e. 23/23 in the two files.
+
+### Task 1.V — ✅ DONE — `/verify 8.1`
+- **Run:** `8.1-20261003T081128-05be`, lean judge. names-resolve, tests-green, skills-lint
+  pass at rung 4; scope-deliverables, no-overbuild pass at rung 2. Gate: PASS, advisory,
+  marker `⚠ judge: claude-lean` (review and verify both lean).
+- **Judge notes acted on:** recorded the ai-skills-main decision and the review-driven
+  guards in Decisions above.

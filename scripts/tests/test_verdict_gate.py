@@ -296,7 +296,7 @@ class TestGate(Fixture):
         self.assertEqual(p.returncode, 0)
         self.assertIn("[WARN]", p.stdout)
         self.assertIn("ADVISORY", p.stdout)
-        self.assertIn("marker: ⚠ judge: none not configured ⚠ verify advisory: 1 blocked (bad)", p.stdout)
+        self.assertIn("marker: ⚠ judge: none not configured ⚠ verify advisory: 1 blocked — see verdict-gate.py --unit 5.1", p.stdout)
 
     def test_index_gate_mode_line_makes_the_default_blocking(self):
         self.set_table([row("bad", "exit 1")])
@@ -451,6 +451,107 @@ class TestReviewRequired(Fixture):
         self.verify("codex gpt-test", [self.v("ok", "pass")])
         code, doc = self.gate_json("--blocking")
         self.assertIn("review:svc", [b["id"] for b in doc["blocks"]])
+
+
+APP = "".join(f"func f{i}() int {{\n\treturn value{i}\n}}\n\n" for i in range(10))
+
+
+class TestLandedThroughSquash(Fixture):
+    """§5.2.2: a lane's fix that reached the trunk by squash or rebase counts as merged, and so
+    does a review of that lane; a fix that never reached it still blocks.
+
+    Each row: the unit's lane holds L (reviewed in r1, one blocking finding), F (its fix,
+    reviewed in r2) and, when `follow` is set, F2 — a fix for an r2 finding pushed after the
+    lane was squashed, never merged. Verification ran on the lane; then the lane lands on main
+    as `land` says and is deleted, so its commits are reachable from nothing but the logs."""
+
+    def write(self, old, new):
+        path = os.path.join(self.svc, "app.go")
+        text = ""
+        if old:
+            with open(path) as fh:
+                text = fh.read()
+            self.assertEqual(text.count(old), 1, old)
+        with open(path, "w") as fh:
+            fh.write(text.replace(old, new) if old else new)
+        git(self.svc, "add", "-A")
+
+    def commit(self, msg):
+        git(self.svc, "commit", "-q", "-m", msg)
+        return git(self.svc, "rev-parse", "HEAD")
+
+    def append(self, *recs):
+        with open(os.path.join(self.scope, "artifacts", "review-5.1.jsonl"), "a") as fh:
+            fh.writelines(json.dumps(dict({"schema": "verify/1", "ts": "t"}, **r)) + "\n" for r in recs)
+
+    def review(self, rid, base, head, key="svc"):
+        return {"record": "review", "review_id": rid, "reviewer": "codex gpt-test", "range": {key: f"{base}..{head}"},
+                "shas": {"base": base, "head": head}, "passes": "p", "findings": 1, "verdict": "FIX"}
+
+    def finding(self, rid, n, base, head, key="svc"):
+        return {"record": "finding", "review_id": rid, "finding_id": f"{rid}-0{n}", "reviewer": "codex gpt-test",
+                "range": {key: f"{base}..{head}"}, "file": "app.go", "line": 1, "severity": "blocking"}
+
+    def fixed(self, fid, sha):
+        return {"record": "disposition", "finding_id": fid, "disposition": "fixed", "sha": sha, "repo": "svc",
+                "via": "anchor", "by": "t"}
+
+    def build(self, land, follow=False, key="svc"):
+        self.write(None, APP)
+        self.commit("app")
+        self.ledger()
+        b = git(self.svc, "rev-parse", "HEAD")
+        git(self.svc, "checkout", "-q", "-b", "lane")
+        self.write("\treturn value3\n", "\tif value3 < 0 {\n\t\tlog.Print(\"negative value3\")\n\t}\n\treturn value3\n")
+        lc = self.commit("L handler")
+        self.write('\t\tlog.Print("negative value3")\n', '\t\treturn fmt.Errorf("negative value3: %d", value3)\n')
+        fc = self.commit("F fail loud")
+        self.append(self.review("5.1-r1", b, lc, key), self.finding("5.1-r1", 1, b, lc, key), self.fixed("5.1-r1-01", fc),
+                 self.review("5.1-r2", lc, fc, key))
+        self.verify("codex gpt-test", [self.v("ok", "pass")])  # evidence at the lane's head
+        git(self.svc, "checkout", "-q", "main")
+        self.write("\treturn value0\n", "\treturn value0 + trunkOffset\n")
+        self.commit("unrelated trunk work")
+        if land == "squash":
+            git(self.svc, "merge", "-q", "--squash", "lane")
+            self.commit("lane (#1)")
+        elif land == "rebase":
+            for c in (lc, fc):
+                git(self.svc, "cherry-pick", c)
+        if follow:
+            git(self.svc, "checkout", "-q", "lane")
+            self.write("\treturn value7\n", "\tif value7 > limitSeven {\n\t\treturn clampSeven(value7)\n\t}\n"
+                       "\treturn value7\n")
+            f2 = self.commit("F2 follow-up, never merged")
+            self.append(self.finding("5.1-r2", 1, lc, fc, key), self.fixed("5.1-r2-01", f2))
+            git(self.svc, "checkout", "-q", "main")
+        git(self.svc, "branch", "-q", "-D", "lane")
+
+    def test_landings(self):
+        # (name, how the lane lands, follow-up F2, review-log repo key, block ids that must
+        #  appear, block ids that must not)
+        gone = "svc.worktrees/fix-5"  # a review run in a worktree since removed
+        cases = [
+            ("squash merge", "squash", False, "svc", [], ["unmerged:5.1-r1-01", "review:svc", "ok"]),
+            ("rebase merge", "rebase", False, "svc", [], ["unmerged:5.1-r1-01", "review:svc", "ok"]),
+            ("squash merge, logged under a gone worktree's key", "squash", False, gone, [],
+             ["unmerged:5.1-r1-01", "review:svc", "rereview:5.1-r1-01"]),
+            ("lane never merged", None, False, "svc", ["unmerged:5.1-r1-01", "ok"], []),
+            ("follow-up pushed after the squash", "squash", True, "svc", ["unmerged:5.1-r2-01"],
+             ["unmerged:5.1-r1-01", "review:svc"]),
+        ]
+        for name, land, follow, key, must, mustnt in cases:
+            with self.subTest(name):
+                self.tearDown()
+                self.setUp()
+                self.build(land, follow, key)
+                code, doc = self.gate_json("--blocking")
+                ids = [b["id"] for b in doc["blocks"]]
+                for i in must:
+                    self.assertIn(i, ids, doc["messages"])
+                for i in mustnt:
+                    self.assertNotIn(i, ids, doc["messages"])
+                self.assertEqual(code, 1 if must else 0, ids)
 
 
 class TestLedgerBase(Fixture):
@@ -608,7 +709,8 @@ class TestIndexEnforcement(Fixture):
         self.verify()
         p = self.status("--advisory")
         self.assertEqual(p.returncode, 0, p.stderr)
-        self.assertIn("⚠ verify advisory: 1 blocked (bad)", self.row51())
+        self.assertIn("⚠ verify advisory: 1 blocked — see verdict-gate.py --unit 5.1", self.row51())
+        self.assertNotIn("(bad)", self.row51())  # a count, never the ID list (149.2: 9,400 chars)
         self.assertEqual(self.validate().returncode, 0)
 
     def test_hand_edited_done_caught_by_validate(self):
@@ -756,7 +858,7 @@ class TestPredatesAndCloseout(Fixture):
         rows = ""
         for n in range(1, 7):
             self.archived_scope(n)
-            mark = " ⚠ verify advisory: 1 blocked (x)" if n == 6 else ""
+            mark = " ⚠ verify advisory: 1 blocked — see artifacts/verify-x-report.md" if n == 6 else ""
             rows += (f"| {n} | ✅ Done | `archive/{n}-s/` | s | t |\n"
                      f"| {n}.1 | ✅ Done{mark} | `archive/{n}-s/` | p | t |\n")
         with open(self.index, "a") as fh:

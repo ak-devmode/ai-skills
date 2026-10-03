@@ -11,7 +11,7 @@ Optimized for agent consumption: Claude Code reads this file at session
 start to understand which skills exist and how they fit together.
 -->
 
-**Last refreshed:** 2026-09-25 (/closeout, scope 2 skills-relook — toolkit scripts, kalpa flatten, catalog)
+**Last refreshed:** 2026-10-03 (/closeout, plan 7 lean-review-verify — lean default, NOT-JUDGED, scaffolding cap)
 **Maintained by:** manual edits + /closeout when invoked by plans rooted here
 
 ---
@@ -88,7 +88,8 @@ start to understand which skills exist and how they fit together.
   survey, guarded edits, the accretion linter (`lint-skill.py`), and the
   verification toolchain (`resolve-identifiers.py`, `verify-run.py`,
   `verdict-gate.py`, `codex-exec.py`, `verify_lib.py`, `finish-table.py`,
-  `lever-candidates.py`) and onboarding checks (`verify-prereqs.sh`, run by
+  `lever-candidates.py`, and `review-mode.py`, which decides lean vs full for /review and
+  /verify) and onboarding checks (`verify-prereqs.sh`, run by
   `setup.sh`; `clone-behind.py`, run by /verify and /plan). Contracts and exit codes:
   `scripts/README.md`; tests: `python3 -m unittest discover scripts/tests`.
 

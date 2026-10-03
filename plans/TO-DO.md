@@ -416,3 +416,19 @@ Source: ~/.herdr/worktrees/kalpa-iris/feature/1-code-inventory/iris-docs/plans/1
 Touches: ai-skills · verify/scripts/judge.py prompt · scripts/verify_lib.py authority rule · templates/verify-contracts.md
 
 - [ ] The judge downgraded runner pass `c0-demand-exists` (rung 4, `test -s demand.md`) to inconclusive while stating that git shows demand.md was committed before the lanes — i.e. it verified the row's deliverable ("written before the lanes run") and still marked it down because the command is weaker than the row's wording. A judge that confirms the deliverable from evidence should pass the row at the rung it established (or raise a low "command weaker than deliverable" finding), not block. Seventh item after the six fixed in d23aee8. Owner: Alex.
+
+## Lean /review and /verify (Plan 7)
+Source: plans/archive/7-lean-review-verify/7-lean-review-verify-PROGRESS.md
+Touches: ai-skills · review/scripts/review.py · verify/scripts/judge.py · scripts/verify-run.py · scripts/verdict-gate.py · scripts/resolve-identifiers.py · scripts/ledger-init.sh
+
+- [ ] Announce plan 7 to the team (CLAUDE.md §2.1): `git pull` the ai-skills clone. `/review` and `/verify` now default to lean (one Sonnet pass; ~163k tokens per unit, measured); `--full` or `AI_SKILLS_REVIEW_MODE=full` restores codex. Scaffolding findings never block, a judge failure is NOT-JUDGED rather than blocked, and `/verify` stops after 2 runs per unit. Owner: Alex.
+- [ ] Push `dev-workbench` main (`34fc320`, the `AI_SKILLS_REVIEW_MODE=full` line). The same line is still uncommitted on the `feature/3-multi-account-agents` checkout; it matches main and resolves when that branch merges main. Owner: Alex.
+  Touches: dev-workbench · config/claude-code/settings.json
+- [ ] `resolve-identifiers.py` ENV_USE matches `process.env.X` / `os.getenv("X")` inside Python docstrings and trailing `#` comments, which reads them as env references (hit on its own source during plan 7's dry run; the two instances were reworded in `ca44e9a`, but the scanner is not fixed). Skip docstring bodies and text after an unquoted `#` in `.py` files.
+  Touches: ai-skills · scripts/resolve-identifiers.py
+- [ ] `ledger-init.sh` labels a standalone plan's base after the plan filename (`- base: 7-lean-review-verify-PLAN …`) because unit detection only parses `N.P-…-PLAN.md`. `/verify` and the runner look the base up by `N.P`, so plan 7 needed a hand-added `- base: 7.1 …` line. Read the plan's `**Plan #:**` field and default a standalone plan to `<N>.1`.
+  Touches: ai-skills · scripts/ledger-init.sh
+- [ ] `judge.py` assumes a `scope.md`. A standalone plan has none, so plan 7 added a pointer file. The lean bundle now inlines the unit's own `*-PLAN.md`, but the full prompt's `Scope:` input still names the missing file. Fall back to the plan file when there is no `scope.md`.
+  Touches: ai-skills · verify/scripts/judge.py · verify/prompts/judge.md
+- [ ] Two notes from plan 7's lean dry-run review of the resolver fixes (never dispositioned: it was a measurement, not a review of record). (1) `is_comment(sh=True)` treats only `#` as a comment in `.sh`, so a `// process.env.X` line inside a `node -e` body now counts as an env read. That's a false-positive risk, not fail-open. (2) A `case` nested on the same line as an arm pattern isn't counted, so the depth drifts; it falls back to fail-closed.
+  Touches: ai-skills · scripts/resolve-identifiers.py

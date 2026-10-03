@@ -7,10 +7,10 @@
 
 ## Resume Context
 
-- **Last completed:** 1.V PASS (run 2, codex, full; Alex stopped at the cap). Task 1.9: the env
-  line is committed to `dev-workbench` main (`34fc320`).
-- **Next action:** merge `feature/7-lean-review-verify` → `main`, push, mark 7.1 Done through
-  the gate, then `/closeout`. Team announcement after the push.
+- **Plan complete — all tasks done** (1.1–1.12, 1.R, 1.V, 1.9). Archived 2026-10-03 by
+  `/closeout`.
+- **Next action:** none in this plan. Residuals are in `plans/TO-DO.md` § "Lean /review and
+  /verify (Plan 7)": the team announcement, the `dev-workbench` push, and four tooling items.
 - **Open blockers:** none.
 
 ---
@@ -220,4 +220,12 @@ review round (round 4) on the new work; proceed.
   uncommitted there and matches main.
 - Read back through `~/.claude/settings.json`: `full`.
 - Alex accepted verify run 2's PASS and stopped at the cap (2026-10-03).
+
+### /closeout — 2026-10-03
+- Tests 217 OK; `verdict-gate --all` PASS; no lever candidates.
+- Doc drift: CLAUDE.md §4 and §9.2, scripts/README, ARCHITECTURE.md (stamp + scripts
+  list), CROSS-REPO.md (the stale `kalpa/` line, teammates' clones as consumers, the gstack
+  checklist read).
+- Memory: two new entries, one updated. Six residuals, each verified open on trunk, went
+  to TO-DO. Folder moved to `archive/`; rows 7 and 7.1 archived.
 

@@ -185,11 +185,12 @@ closeout-extended/tests/upward-traversal-recipe.md
 cross-repo-init/SKILL.md        — trio bootstrap + maintenance (invoked by /closeout Step 8)
 cross-repo-init/templates/      — CROSS-REPO / ARCHITECTURE / CLAUDE templates + examples
 markdown-style/SKILL.md         — markdown formatting rules
-review/SKILL.md                 — pre-landing review: codex gate, Claude (gstack engine) fallback
-review/rules/                   — domain.md (Kalpa/PMG groups) + lenses.md, read by both executors
+review/SKILL.md                 — pre-landing review: lean by default (one Sonnet pass over a packed bundle); full = codex gate, Claude (gstack engine) fallback
+review/rules/                   — domain.md (Kalpa/PMG groups) + lenses.md (§7: scaffolding never blocks), read by every executor
+review/prompts/                 — review.md (codex/full) + review-lean.md (the lean bundle's head)
 review/scripts/review.py        — review prompt / findings log (stable IDs) / dispositions
-verify/SKILL.md                 — independent verification: runner + codex judge + gate
-verify/scripts/judge.py         — judge prompt render / answer record / report (both executors)
+verify/SKILL.md                 — independent verification: runner + judge (lean Sonnet, or codex in full mode) + gate; fix loop capped at 2 runs
+verify/scripts/judge.py         — judge prompt render (--lean bundle) / answer record (+ retry prompt) / report (every executor)
 verify/scripts/demo.py          — `/verify --demo`; also the eval (`VERIFY_EVAL=1` runs it from the suite)
 verify/tests/fixtures/notes/    — the planted-defect fixture (6 defects, clean control, repaired copies)
 templates/verify-contracts.md   — verification contracts: finish table, verdict log, gate, dispositions
@@ -319,7 +320,13 @@ is distinct from `~/Projects/pmg/pmg-docs/plans/` and
 `~/Projects/wellmed/kalpa-docs/plans/` (which track work in those
 projects). `scripts/resolve-plans-dir.sh` resolves it for `/scope` and `/plan`.
 
-9.2 **Recent work:** `plans/archive/5-verify-lever/` (closed 2026-09-29) — the
+9.2 **Recent work:** `plans/archive/7-lean-review-verify/` (closed 2026-10-03) — lean
+`/review` and `/verify` became the default, so they fit a teammate's regular Claude seat:
+one packed bundle (the diff capped at 1,500 lines, only this project's rules) read by one
+Sonnet subagent, about 163k tokens per unit against codex's 262–437k per call. Full mode
+(`AI_SKILLS_REVIEW_MODE=full` / `--full`) is today's codex gate. The same plan made
+scaffolding findings never block (lenses §7), made a judge failure NOT-JUDGED rather than
+blocked, and capped `/verify`'s fix loop at 2 runs. Before that, `plans/archive/5-verify-lever/` (closed 2026-09-29) — the
 verification lever: `/verify` (deterministic runner + codex judge that can only
 downgrade, evidence rungs, verdict gate enforced through `plans-index.py`), `/review` on
 codex with every finding dispositioned, both wired into `/scope` (finish tables),

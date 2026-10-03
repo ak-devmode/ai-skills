@@ -9,8 +9,6 @@ Completed, a live folder at `plans/` root belongs in Active.
 
 | # | Status | Folder | Description | Created by |
 |---|--------|--------|-------------|------------|
-| 7 | Active — Ready to execute (approved 2026-10-02) | 7-lean-review-verify/ | Lean /review and /verify — default mode for teammates with no codex and a regular Claude seat: one self-contained bundle (diff capped at 1,500 lines, only this project's rules) read by one Sonnet subagent, no gstack engine or specialists. Review keeps its 3-round cap; /verify gains a 2-run cap on its fix loop in both modes. Today's codex/full path stays, via AI_SKILLS_REVIEW_MODE=full or --full; every header names the mode. | Alex |
-| 7.1 | ✅ Done (2026-10-03) — verify PASS (codex, run 2); review 4 rounds, 17 fixed, accepted | 7-lean-review-verify/ | Phase 1 — lean /review + /verify (mode resolver, packed bundles, Sonnet subagents), scaffolding cap, NOT-JUDGED, run cap. Gate A. | Alex |
 
 ## Completed / Archived
 
@@ -25,3 +23,5 @@ Completed, a live folder at `plans/` root belongs in Active.
 | 5.1 | ✅ Done (2026-09-26) — Phase 1 approved at gate A ⚠ verify advisory: 4 blocked (scripts-tests-green, names-resolve, gate-semantics-tested, scope-deliverables) | archive/5-verify-lever/ | Phase 1 — Contracts + deterministic scripts — finish table, verdict + disposition JSONL, feature-map and adapter contracts, resolve-identifiers.py, verify-run.py, verdict-gate.py + plans-index status/validate enforcement. Gate A. | Alex |
 | 5.2 | ✅ Done (2026-09-29) — Phase 2 approved at gate A; own review r1–r3 fixed ⚠ verify advisory: 2 blocked (p2-fixtures, p2-scope-deliverables) | archive/5-verify-lever/ | Phase 2 — /verify skill + /review on codex — dogfood on 5.1 (class B). The class-A trial moved to kalpa-docs test-suite T2 (Alex, 2026-09-29). Gate A. | Alex |
 | 5.3 | ✅ Done (2026-09-29) — Phase 3 wired, rolled out; announced by Alex ⚠ verify advisory: 2 blocked (p3-scope-deliverables, p3-rejections-justified) | archive/5-verify-lever/ | Phase 3 — Wiring into /scope, /plan (self-heal), /closeout; ledger-template fix; team rollout. Gate A. | Alex |
+| 7 | ✅ Done (2026-10-03) | archive/7-lean-review-verify/ | Lean /review and /verify — default mode for teammates with no codex and a regular Claude seat: one self-contained bundle (diff capped at 1,500 lines, only this project's rules) read by one Sonnet subagent, no gstack engine or specialists. Review keeps its 3-round cap; /verify gains a 2-run cap on its fix loop in both modes. Today's codex/full path stays, via AI_SKILLS_REVIEW_MODE=full or --full; every header names the mode. | Alex |
+| 7.1 | ✅ Done (2026-10-03) — verify PASS (codex, run 2); review 4 rounds, 17 fixed, accepted | archive/7-lean-review-verify/ | Phase 1 — lean /review + /verify (mode resolver, packed bundles, Sonnet subagents), scaffolding cap, NOT-JUDGED, run cap. Gate A. | Alex |

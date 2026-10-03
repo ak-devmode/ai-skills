@@ -30,7 +30,7 @@ already caused real data loss. Prose cannot enforce itself — the same reasonin
 | `verdict-gate.py` | "verify ran, so it's done" — applies §5 to the latest final verdict per owned check (range, rung, revision, disposition coverage); `--all` is /closeout's whole-scope view; `**Predates gate:**` phases exempt; advisory until 5 clean scopes | `plans-index.py status`/`validate`, `/plan`, `/closeout` |
 | `finish-table.py` | a finish table typed by hand — standard rows per phase, Revision + Changelog on every change, read back through the runner's parser | /scope Step 5.10, /plan §5.6.2a self-heal |
 | `review-mode.py` | each skill deciding lean vs full on its own — flag > `AI_SKILLS_REVIEW_MODE` > default `lean`; a bad env value is an error, never a silent lean | `/review`, `/verify` (plan 7) |
-| `verify_lib.py` | (library, not a CLI) one table parser, message formatter and verified JSONL appender for the verify scripts | `verify-run.py`, `verdict-gate.py`, `resolve-identifiers.py` |
+| `verify_lib.py` | (library, not a CLI) one table parser, message formatter and verified JSONL appender for the verify scripts, and `capped_diff` — the one 1,500-line cap both lean bundles use | `verify-run.py`, `verdict-gate.py`, `resolve-identifiers.py`, `review.py`, `judge.py` |
 
 **Tests:** `python3 -m unittest discover scripts/tests` from the repo root (stdlib only,
 Python >= 3.9). One `test_<name>.py` per script; `_helpers.py` runs a script as a

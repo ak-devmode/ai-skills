@@ -55,6 +55,9 @@ skills from this repo via symlinks), not contract-based.
   inherits the skills published here. Changes to high-traffic skills
   (`/plan`, `/scope`, `/prd`, `/closeout`, `/markdown-style`) affect work
   across PMG, WellMed, and personal projects.
+- **Teammates' clones** — the team runs these skills from their own clone,
+  which only changes on `git pull` (CLAUDE.md §2.1). Their default is lean
+  `/review` / `/verify`; Alex's machine sets `AI_SKILLS_REVIEW_MODE=full`.
 
 ### Cross-skill reference notes
 
@@ -62,11 +65,14 @@ skills from this repo via symlinks), not contract-based.
   are a separate skills repo also symlinked into `~/.claude/skills/`. Some
   skills in ai-skills follow shared conventions (SKILL.md frontmatter,
   numbered inline questions, allowed-tools enumeration) but ai-skills
-  does NOT derive code from gstack — they are independent.
-- **kalpa/** subdirectory in this repo holds WellMed/Kalpa-project-specific
-  skills (`/coding-standards`, `/generate-api`, `/kalpa-context`,
-  `/migrate`, `/review`, `/satu-sehat-fhir`). These are personal-authored
-  skills, not derived from kalpa-docs.
+  does NOT derive code from gstack — they are independent. One runtime
+  read: `/review` uses gstack's `review/checklist.md` (and its engine in
+  the full fallback); the lean bundle inlines that checklist read-only.
+- **`kalpa-*`** top-level directories hold the WellMed/Kalpa-project-specific
+  skills (`/kalpa-coding-standards`, `/kalpa-generate-api`, `/kalpa-context`,
+  `/kalpa-migrate`, `/kalpa-satu-sehat-fhir`), flattened from a `kalpa/`
+  container on 2026-08-09 (CLAUDE.md §3.8). `/review` is a top-level skill.
+  These are personal-authored skills, not derived from kalpa-docs.
 
 ## Traversal Config
 
@@ -75,4 +81,4 @@ skills from this repo via symlinks), not contract-based.
 
 ---
 
-<!-- Last scaffolded/audited by /cross-repo-init: 2026-09-25 (via /closeout, scope 2) -->
+<!-- Last scaffolded/audited by /cross-repo-init: 2026-10-03 (via /closeout, plan 7) -->

@@ -1,6 +1,6 @@
 ---
 name: concurrency
-version: 0.6.0
+version: 0.7.0
 description: |
   ONE responsibility: map what can run in parallel and what cannot, against a
   clear set of rules — re-derived from repo ground truth on every run, never
@@ -10,9 +10,11 @@ description: |
   controlled home for no-human-in-the-loop agent trains. Use when asked to
   "/concurrency", "dispatch this scope concurrently", "run these phases in
   parallel", "start an agent train", or "herd this scope". It first judges
-  whether parallelism is worth it (recommends plain /plan if not), shows the
-  dispatch plan, and asks once inline before dispatching — no separate flag,
-  refuse-to-parallelize by default. Do NOT use for
+  whether parallelism is worth it (recommends plain /plan if not), recommends
+  where each lane runs (this machine or homelab2026, and which account) from
+  usage headroom, job size and Alex's plans, shows the dispatch plan, and asks
+  once inline before dispatching — no separate flag, refuse-to-parallelize by
+  default. Do NOT use for
   single-task work or as a substitute for /plan; this skill consumes /scope
   and /plan output, it does not replace them.
 allowed-tools:
@@ -124,14 +126,44 @@ Not worth parallelizing: <one-line reason, e.g. "only 91.2 is ready; 91.1 human-
 Recommend: run this with /plan sequentially.
 ```
 
-**5.1 Otherwise, present the plan and ask once, inline.** Print this shape and
+**5.1 Where does this run — recommend each lane's machine and account.** Two
+machines (this MacBook Air and homelab2026) and two accounts per seat (Alex's and
+integrations — dev-workbench `config/accounts/accounts.tsv`; scope 3). Placement is a
+recommendation that rides the §5.2 confirmation, never a silent choice.
+1. **Facts — a script, not a guess:** `~/Projects/ai-skills/scripts/placement.py
+   recommend --seat <opus|codex>`. It reads the usage herdr-usage merges from both
+   machines (`~/.cache/herdr-usage/merged.json`, schema 1), checks each machine answers
+   (`herdr --machine`) and each account's login is live there, and ranks by headroom.
+   An inferred window (its reset passed since the last fetch) or one older than 15 min
+   is unknown headroom, not free headroom, and the output says so; an unreachable
+   machine, a dead login or an exhausted seat is never recommended. The `glm` seat bills
+   OpenRouter, not an account — place it on CPU alone.
+2. **Judgment on top:** job size and duration (a long or CPU-heavy lane — Go/Node
+   builds, DB suites — goes to the box, which lifts the MBA's CPU cap, §9.3); what Alex
+   has said he is doing (leaving or moving the MBA within hours ⇒ long jobs off the MBA;
+   do not ask when he has said nothing); spread a train across accounts rather than
+   draining one. Ties go to the account's home machine (the script already orders them).
+3. **Box gates — check before recommending the box:** the box builds from its own clone,
+   so the commit the lane's brief builds on must be on origin. That base is
+   `origin/<trunk>` for a fresh lane — which passes by construction — or the driver's
+   HEAD / scope branch when the lane needs work not yet on trunk; check the real one:
+   `placement.py check-base --repo <repo> --base <that commit>` (exit 1 ⇒ place the lane
+   locally or ask Alex to push — never push yourself). Then fetch the box's clone, quoting
+   the command so `~` expands on the box: `ssh <box> 'git -C ~/<repo path under $HOME>
+   fetch -q origin'`.
+4. **Show it:** every lane line in the §5.2 plan carries `machine=` and `account=` with
+   the deciding reason, and any unknown headroom is stated, not hidden. Alex's one
+   `[y/N]` confirms placement too; an override ("lane 2 local") re-prints the plan and
+   asks again.
+
+**5.2 Otherwise, present the plan and ask once, inline.** Print this shape and
 wait for a single confirmation — there is NO separate flag and NO re-invocation:
 
 ```
 CONCURRENCY PLAN — <scope> @ <repo>
 ready frontier (cap N):
-  <task>  seat=<seat>  branch=concurrency/<scope>-<task>
-          worktree=<path>
+  <task>  seat=<seat>  machine=<host>  account=<display>  (<why: headroom / size / plans>)
+          branch=concurrency/<scope>-<task>  worktree=<path>
           pane label: <task> @<seat>
 excluded:
   <task>  HUMAN-GATED: <what Alex must do>
@@ -148,7 +180,7 @@ is itself the authorization to dispatch (per CLAUDE.md, a skill with `Agent` in
 allowed-tools *is* a dispatch request); the prompt is the last look, not a second
 opt-in. On anything but an explicit `y`, stop without dispatching.
 
-## 6. Dispatch — on `y` from §5.1 (pane cap 5 per tab, ~6 lanes total — §9.3)
+## 6. Dispatch — on `y` from §5.2 (pane cap 5 per tab, ~6 lanes total — §9.3)
 
 Per partition, in this order (syntax authority: `herdr --skill`):
 1. `herdr worktree create --cwd <repo> --base origin/<trunk>
@@ -156,9 +188,11 @@ Per partition, in this order (syntax authority: `herdr --skill`):
    override is inline in its launch command; `herdr` skill §6). Workspace label = run name only (`<scope> run`); seat identity
    goes on the PANE per the `herdr` skill §2 (naming).
 1b. **Layout + naming: `herdr` §5 and §2** — no tabs. Pane identity in one call
-   (rename + sidebar metadata, read back): `~/Projects/ai-skills/scripts/herdr-pane.sh name <pane> <task> <seat>`.
-2. Launch the seat's command (§3) in the created pane via `pane run` — claude/glm
-   workers append `--dangerously-skip-permissions` (`herdr` skill §4: clears the
+   (rename + sidebar metadata, read back): `~/Projects/ai-skills/scripts/herdr-pane.sh name <pane> <task> <seat>`
+   (`--machine <host>` for a box pane).
+2. Launch the seat's command (§3) in the created pane via `pane run` — under the placed
+   account: `claude-<account>` / `codex-<account>` (`herdr` skill §6), on either machine.
+   claude/glm workers append `--dangerously-skip-permissions` (`herdr` skill §4: clears the
    fresh-worktree trust dialog + tool prompts; safe via worktree +
    no-push isolation). Never on the driver.
 3. First instruction in every dispatched prompt: the task brief, then: commit locally when done; NEVER push,
@@ -170,8 +204,18 @@ Per partition, in this order (syntax authority: `herdr --skill`):
    size, prints its id) — never a new workspace, never split down (down is
    reserved for primaries)."
 4. Log it — `~/Projects/ai-skills/scripts/dispatch-log.py --scope <scope> --task <task> --seat <seat>
-   --branch <b> --worktree <w> --pane <id> --status dispatched` (appends to
-   `~/.config/herdr/concurrency-log.jsonl` and reads the line back).
+   --branch <b> --worktree <w> --pane <id> --machine <host> --account <key> --status dispatched`
+   (appends to `~/.config/herdr/concurrency-log.jsonl` and reads the line back).
+
+**Placed on the box** (`machine=homelab2026`), steps 1–3 change only in where they
+point — `herdr` skill §6.1 has the mechanics:
+- every herdr command carries `herdr --machine <host>`, and every pane/workspace id comes
+  from that server's JSON (ids are per server: the box has its own `w1:p1`);
+- `--cwd ~/<repo path under $HOME>` (remote worktree paths must start with `~/`) and
+  `--base` = the origin ref §5.1 step 3 checked, not always `origin/<trunk>`;
+- the box runs its own clones at the same `$HOME`-relative paths, ai-skills included
+  (`~/Projects/ai-skills`, which the brief's `herdr-pane.sh helper` line calls) — pull
+  it there when this skill changes.
 
 ## 7. Supervision & coordination
 
@@ -249,9 +293,16 @@ zero-cost-basis silent defeat that build/test/disjointness passes all missed).
 
 - Report per partition: branch, commit shas, `PARTITION-DONE` seen or not,
   test evidence from the pane tail. Split fixed vs NOT-fixed explicitly.
+- **A box lane comes home by fetch, never by push:** `~/Projects/ai-skills/scripts/
+  placement.py fetch-back --repo <local repo> --machine <host> --branch <b>` copies the
+  lane branch from the box's clone into the local one and reads it back. It assumes the
+  box clone sits at the same `$HOME`-relative path (`--remote-url` overrides) and refuses
+  to touch a local branch of that name that is checked out or has diverged. Its review
+  pane (§7.3) runs on the box, in the lane's worktree, before the fetch.
 - Landing is MANUAL and Alex's: hand him per-branch merge commands, bare.
-- `herdr worktree remove` only after Alex confirms the branch is landed or
-  abandoned — worktrees with unmerged commits are never removed automatically.
+- `herdr worktree remove` (`herdr --machine <host> worktree remove` for a box lane) only
+  after Alex confirms the branch is landed or abandoned — worktrees with unmerged commits
+  are never removed automatically.
 - Teardown boundary (who tidies): an atomic-unit agent may close its OWN pane
   when done, but NEVER removes its worktree — a worktree with unmerged commits
   is the ORCHESTRATOR's to remove, and only after land/abandon (above). Losing
@@ -279,6 +330,8 @@ zero-cost-basis silent defeat that build/test/disjointness passes all missed).
 5. HUMAN-GATED tasks never go to a worker pane; the driver does their credential-free parts and surfaces the gate (§4.1).
 6. Every dispatch and every outcome lands in the JSONL log.
 7. Provider env overrides are per-pane only (`herdr` skill §6 env-leak rule).
+8. Placement is recommended, then confirmed in the same `[y/N]` (§5.1); a box lane needs
+   its base on origin and comes back by `fetch-back`, never a push.
 
 ## 10. Known traps
 

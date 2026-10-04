@@ -52,10 +52,11 @@ start to understand which skills exist and how they fit together.
   the gstack engine and specialists as fallback. Findings are logged with stable IDs and
   dispositioned through `review/scripts/review.py`.
 - `scope-review/` — altitude-ordered review of a team member's scope.
-- `concurrency/` — partition a scope into a verified DAG, dispatch the ready
-  frontier to named herdr panes (worktree per writer), supervise.
+- `concurrency/` — partition a scope into a verified DAG, place each lane (machine +
+  account, `scripts/placement.py`), dispatch the ready frontier to named herdr panes
+  (worktree per writer), supervise.
 - `herdr/` — herdr workflow layer: naming, worktree lifecycle, worker launch,
-  layout, model routing. `herdr --skill` owns raw CLI syntax.
+  layout, model + account routing, the two-server view. `herdr --skill` owns raw CLI syntax.
 - `research/` — deep research: visible pane lanes (`research/scripts/lanes.py`) or
   the background `deep-research-lean` workflow.
 - `repo-cleanup/`, `repo-cleanup-all/` — branch hygiene (+ plans hygiene in docs repos).
@@ -245,8 +246,8 @@ graphs.
 | `cross-repo-init` | 1.5.0 | Branch survey = `repo-survey.sh`; CLAUDE template no longer writes memory paths. |
 | `markdown-style` | 1.3.1 | Child plans have no own progress file; Draft→Ready is the go signal; stub deepening lands in progress.md. |
 | `prd` | 1.1.0 | Step 0 = `context-gather.sh`. |
-| `concurrency` | 0.5.0 | Dedup'd against herdr; pane naming + dispatch log via scripts. |
-| `herdr` | 0.1.5 | Opus seat = 5.5 (`opus[1m]`). |
+| `concurrency` | 0.7.0 | §5.1 placement (machine + account from usage headroom, recommend then confirm); box lanes need a pushed base, come back by fetch (dev-workbench scope 3). |
+| `herdr` | 0.2.0 | Account-aware launch (`claude-<acct>` / `codex-<acct>`); §6.1 two-server view (`--machine`, per-server ids); teardown fast-forwards local trunk (plan 8). |
 | `review` | 3.7.0 | Plan 7: lean default (one Sonnet pass over a packed bundle), `--full` / `AI_SKILLS_REVIEW_MODE=full` for the codex gate; codex gate; rules extracted to `review/rules/` (IRIS group §3.9); dispositions enforced, `deferred` past a repo's round 3 (rounds per repo); §5.1 convergence; `accept` records the user's yes. |
 | `ready-to-clear` | 1.1.0 | |
 | `verify` | 0.7.0 | Plan 7: lean judge by default, fix loop capped at 2 runs; a judge failure is NOT-JUDGED, never a block. Scope 5. Advisory gate until 5 clean scopes; codex effort scales with the diff; `--demo` on the planted-defect fixture; stale-clone line. |

@@ -211,6 +211,7 @@ scripts/stamp-executed-by.sh    — /plan §3.1 `Executed by` stamp from git con
 scripts/repo-graph-check.py     — /plan §5.6.1 Repo Graph freshness gate (exit-coded)
 scripts/ledger-init.sh          — /plan §5.13 closeout-prep.md bootstrap / phase header
 scripts/dispatch-log.py         — /concurrency JSONL dispatch log, read-back verified
+scripts/placement.py            — /concurrency §5.1 facts: headroom per machine × account × seat, box base check, fetch-back
 scripts/herdr-pane.sh           — herdr pane identity (rename + metadata) + helper split
 scripts/repo-survey.sh          — /cross-repo-init default/survey branch + MERGED/SQUASHED/LIVE
 scripts/lint-skill.py           — accretion linter for SKILL.md (dup-number/frontmatter/stale-name fail; growth/duplicate/size advise)
@@ -239,9 +240,10 @@ CLAUDE.md
 ## 5. Environment variables
 
 Skills run inside Claude Code's session and inherit its environment. No SSM,
-no API keys managed at this layer. The verification scripts read six optional
+no API keys managed at this layer. The scripts read seven optional
 overrides, declared in `.env.example` (so `resolve-identifiers.py` can resolve
-them): `AI_SKILLS_REVIEW_MODE` (`full` restores the codex gate + full Claude fallback
+them): `WORKBENCH_ACCOUNTS` (dev-workbench's accounts map, read by `placement.py`;
+default `~/Projects/dev-workbench/config/accounts/accounts.tsv`), `AI_SKILLS_REVIEW_MODE` (`full` restores the codex gate + full Claude fallback
 for `/review` and `/verify`; unset means `lean`; set it in `~/.claude/settings.json` →
 `env`), `VERIFY_PROJECTS` (root for finish-table `repo` cells, default
 `~/Projects`), `VERIFY_CODEX_BIN` (codex binary; tests use fakes),

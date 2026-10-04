@@ -53,6 +53,12 @@ fleet doc's `Last verified` stamp and inventory freshness alongside the other
 three. No template exists for it — never scaffold one; only audit what's declared.
 ("Quartet" here is the doc set — not the PG/ES/Redis/RMQ stateful quartet.)
 
+**Optional `fleet-list:`.** A docs hub may also declare `fleet-list: <repo path>
+<rev>:<path>` — the list fleet-wide syncs loop over (kalpa-docs:
+`~/Projects/wellmed/wellmed-infrastructure origin/develop:operations/fleet.txt`).
+`/closeout` §8.7b runs `scripts/fleet-drift.py` against it. Audit that the path resolves
+(`git -C <repo path> cat-file -e <rev>:<path>`); never scaffold one.
+
 - **If a file is absent:** scaffold from template, auto-detect what can be detected,
   present proposal to user, write on approval.
 - **If a file is present:** audit for drift, propose targeted additions / corrections,

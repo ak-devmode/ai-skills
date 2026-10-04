@@ -351,6 +351,27 @@ project's canonical fleet doc (WellMed: `kalpa-docs/FLEET.md`) to the Pass 1 doc
 list even if the ledger's §7 omits it, refresh its inventory tables, and bump its
 `Last verified` stamp.
 
+8.7b **Fleet-list drift (gated on a `fleet-list:`).** If the repo's CROSS-REPO.md
+Traversal Config declares `fleet-list: <repo path> <rev>:<path>` (kalpa-docs:
+`~/Projects/wellmed/wellmed-infrastructure origin/develop:operations/fleet.txt`), run it
+on **every** closeout, not only infra-touching ones — it is one script call:
+
+```bash
+~/Projects/ai-skills/scripts/fleet-drift.py --arch ARCHITECTURE.md --fleet-git <repo path> <rev>:<path>
+```
+
+It compares every repo in ARCHITECTURE.md's port-allocation table against the fleet list
+and its dated exclusions (`EXCLUDED, dated (… YYYY-MM-DD)` header, `#   <repo> — excluded`
+rows). Exit 0 → log the `ok:` line. Exit 1 → each `missing:` repo is a deployed service
+that every fleet-wide sync silently skips: health line `NOT HEALED — fleet drift <repos>`,
+and propose the fleet-list row (or a dated exclusion) as a cross-repo edit — never commit
+it from here. Exit 3 → the check could not evaluate: report it in the header and treat it
+as failed. Fetch the fleet repo first (`git -C <repo path> fetch -q`) so `<rev>` is current.
+
+> **Why.** WellMed scope 149 found bpjs and finance in neither `fleet.txt` nor the
+> Prometheus scrape map: two live services skipped by every fleet-wide CI sync, found by
+> reading, not by any check. Decided as a /closeout check, not CI (Alex, 2026-09-26).
+
 8.7a **Service-doc sweep for retired/renamed contracts (the docs-hub blind spot).**
 Fires whenever the scope **retired, renamed, or replaced a cross-MS contract** — a
 proto, RPC, service, table, saga, or env var. Repo trios (`CLAUDE.md` /

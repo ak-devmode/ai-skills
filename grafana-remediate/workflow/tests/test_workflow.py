@@ -275,10 +275,6 @@ def _ctx():
             "annotation": "a", "evidence": "{}"}
 
 
-if __name__ == "__main__":
-    unittest.main(verbosity=2)
-
-
 class TestFailLoudRoute(unittest.TestCase):
     """WellMed 149.3 fail-loud alerts (control=fail-loud) go to INVESTIGATE in every env."""
     def test_fail_loud_investigates(self):
@@ -286,3 +282,7 @@ class TestFailLoudRoute(unittest.TestCase):
             inc = {"alertName": "Best-effort path failing repeatedly", "labels": {"control": "fail-loud", "env": env}}
             cls, route, _ = classify.classify(inc)
             self.assertEqual((cls, route), ("maybe-defect", "INVESTIGATE"), env)
+
+
+if __name__ == "__main__":
+    unittest.main(verbosity=2)

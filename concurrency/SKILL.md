@@ -308,6 +308,9 @@ zero-cost-basis silent defeat that build/test/disjointness passes all missed).
   is the ORCHESTRATOR's to remove, and only after land/abandon (above). Losing
   an unlanded worktree loses work. Default: agents report and go idle; the
   orchestrator tidies panes and worktrees once it has verified and landed.
+- **Wave teardown = one script for Alex**, from `templates/teardown.sh.template` (`/closeout`
+  §13.6a): lane worktrees, merged lane branches (local + origin), lane DBs/containers, the trust
+  entries the dispatch added. Run it from outside the lane worktrees; never close panes from it.
 - Progress log is the DRIVER's job, ALWAYS (Alex, 2026-08-24): the orchestrator
   updates the scope's `progress.md` — landed shas, review-artifact paths, what
   remains — never a spawned agent. A worker or review pane sees only its own

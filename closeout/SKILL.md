@@ -669,6 +669,16 @@ unmerged commits. If the scope used no worktree (docs-only, or Primary repo
 "none"), skip. Under `--dry-run`, log the teardown commands without running them.
 Full lifecycle: `herdr` skill §3.
 
+13.6a **Anything more than one worktree → a teardown script, from the template.** When the
+scope leaves more behind than its own worktree — lane worktrees, local branches across repos,
+remote lane branches, local DBs, containers, Claude trust entries — write one
+`~/cc/<scope>-teardown.sh` from `~/Projects/ai-skills/templates/teardown.sh.template` and hand
+Alex the single `bash ~/cc/<scope>-teardown.sh` line (auto mode refuses most of it to the agent).
+Keep the template's shape: a `== N. step` header per step, one line per thing done, idempotent,
+guarded deletes (merged-only branches, exact name patterns), never closing a pane from inside, a
+final read-back with the expected values. Alex (2026-10-04): "exactly the verbosity that i want …
+all scopes run it." Read the read-back he pastes; a non-zero count is a finding, not a pass.
+
 ## 14. Step 12 — Summary
 
 14.0 **RUN THE ARCHIVE GATE FIRST — before printing anything.** Prose cannot enforce

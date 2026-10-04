@@ -1,0 +1,84 @@
+#!/usr/bin/env bash
+# <SCOPE> teardown — after every lane / branch of the scope merged. Idempotent; each step reports,
+# nothing aborts the rest. Branch deletes are guarded: deleted only when the tip is an ancestor of the
+# remote trunk (merged); anything else is reported and KEPT. Ends with a read-back of what is left.
+#
+# Template: ~/Projects/ai-skills/templates/teardown.sh.template (Alex, 2026-10-04: "exactly the
+# verbosity that i want"). Copy to ~/cc/<scope>-teardown.sh, fill the <…> lists, DELETE steps the
+# scope has nothing for (don't leave empty loops). Hand Alex the single `bash ~/cc/…` line — auto
+# mode refuses most of these to the agent (branch -D, DB drops, container rm, config edits).
+#
+# Properties the template exists to keep — don't lose them when adapting it:
+#   - one `== N. <step>` header per step, one line per thing done ("removed …", "deleted …",
+#     "KEPT (not merged into …)") — no other output; silence means nothing to do
+#   - every step idempotent (a re-run after a crash finishes the job, reports the rest as gone)
+#   - destructive steps guarded (ancestry for branches, exact name patterns for DBs/containers)
+#   - never closes a pane / tab from inside the script (v1 of 149.3's closed its own pane and died)
+#   - refuses to run from inside what it removes
+#   - a final read-back with the expected values printed, so 0 / 0 / 0 is checkable at a glance
+set -uo pipefail
+W=<REPO PARENT, e.g. ~/Projects/wellmed>
+REPOS="<repo short names, e.g. backbone consultation cashier>"
+LANE_WT=<worktree dir name under <repo>.worktrees/, e.g. fix-149-3b>
+TRUNK=<origin/develop | origin/main>
+
+case "${PWD}" in *.worktrees/${LANE_WT}*) echo "run this from a shell outside the lane worktrees (it removes them)"; exit 2;; esac
+
+echo "== 1. worktrees"
+for r in $REPOS; do
+  wt=$W/<prefix>$r.worktrees/$LANE_WT
+  [ -d "$wt" ] && git -C $W/<prefix>$r worktree remove --force "$wt" && echo "removed $wt"
+  git -C $W/<prefix>$r worktree prune
+done
+# + any herdr worktree (~/.herdr/worktrees/<repo>/<branch>) and side-repo worktrees the scope used
+
+echo "== 2. local branches (merged only)"
+del_merged() {  # del_merged <repo dir> <trunk ref> <branch...>
+  local d=$1 t=$2; shift 2
+  for b in "$@"; do
+    git -C "$d" rev-parse -q --verify "refs/heads/$b" >/dev/null || continue
+    if git -C "$d" merge-base --is-ancestor "$b" "$t"; then git -C "$d" branch -D "$b" >/dev/null && echo "  deleted $(basename $d) $b"
+    else echo "  KEPT (not merged into $t): $(basename $d) $b"; fi
+  done
+}
+for r in $REPOS; do
+  d=$W/<prefix>$r; git -C $d fetch -q origin
+  del_merged $d $TRUNK $(git -C $d for-each-ref --format='%(refname:short)' 'refs/heads/<branch glob, e.g. fix/149-*>')
+done
+
+echo "== 3. remote lane branches (merged only)"
+for r in $REPOS; do
+  d=$W/<prefix>$r
+  for rb in $(git -C $d for-each-ref --format='%(refname:short)' 'refs/remotes/origin/<branch glob>'); do
+    b=${rb#origin/}
+    if git -C $d merge-base --is-ancestor "$rb" $TRUNK; then git -C $d push -q origin --delete "$b" 2>/dev/null && echo "  deleted origin $r $b"
+    else echo "  KEPT origin (not merged): $r $b"; fi
+  done
+done
+
+echo "== 4. docker + databases"
+for c in <container names>; do docker rm -f $c >/dev/null 2>&1 && echo "  removed container $c"; done
+for db in $(psql -h localhost -U postgres -tAc "select datname from pg_database where datname like '<lane db pattern>'"); do
+  psql -h localhost -U postgres -qc "DROP DATABASE IF EXISTS \"$db\" WITH (FORCE)" && echo "  dropped $db"
+done
+
+echo "== 5. Claude trust entries for the lane worktrees"
+python3 - <<'PY'
+import json,os,tempfile
+for cfg in ["~/.claude.json","~/.claude-int/.claude.json"]:
+    f=os.path.expanduser(cfg)
+    if not os.path.exists(f): continue
+    d=json.load(open(f)); pr=d.get("projects",{})
+    gone=[k for k in pr if ".worktrees/<LANE_WT>" in k]
+    for k in gone: pr.pop(k)
+    fd,tmp=tempfile.mkstemp(dir=os.path.dirname(f)); os.write(fd,json.dumps(d,indent=2).encode()); os.close(fd); os.replace(tmp,f)
+    print(f"  {cfg}: removed {len(gone)}")
+PY
+
+echo "== 6. fast-forward local trunks"
+for r in $REPOS; do ~/Projects/ai-skills/scripts/ff-local-trunk.sh $W/<prefix>$r >/dev/null 2>&1; echo "  $r: $(git -C $W/<prefix>$r status -sb | head -1)"; done
+
+echo "== read-back (expect 0 / 0 / 0)"
+n=0; for r in $REPOS; do [ -d $W/<prefix>$r.worktrees/$LANE_WT ] && n=$((n+1)); done; echo "lane worktrees left: $n"
+echo "lane DBs left: $(psql -h localhost -U postgres -tAc "select count(*) from pg_database where datname like '<lane db pattern>'")"
+echo "lane containers left: $(docker ps -a --format '{{.Names}}' | grep -c '<container pattern>')"

@@ -79,6 +79,13 @@ def classify(inc):
         return ("deploy-hygiene", "PROPOSE" if prod else "DROP",
                 f"hygiene ({env}); not a code fix")
 
+    # 3b) fail-loud (WellMed scope 149.3): a counted best-effort swallow, SATU SEHAT
+    # usage errors or a stalled saga consumer firing. A possible defect, never
+    # capacity or hygiene — and not crash-shaped, so not the fix pipeline either.
+    if control == "fail-loud":
+        return ("maybe-defect", "INVESTIGATE",
+                f"fail-loud signal ({env}); read the runbook in the alert description")
+
     # 4) code-defect (panic/crash) -> full pipeline (unless a known-issue caught it above)
     if DEFECT_RE.search(name):
         return ("code-defect", "PIPELINE",

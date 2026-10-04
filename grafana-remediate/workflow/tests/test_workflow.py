@@ -26,6 +26,7 @@ import email_ses
 import heartbeat
 import remediate
 import worktree as wt
+import classify
 
 
 # ---- fake agent runner: dispatch on each prompt's unique opening phrase ----
@@ -276,3 +277,12 @@ def _ctx():
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
+class TestFailLoudRoute(unittest.TestCase):
+    """WellMed 149.3 fail-loud alerts (control=fail-loud) go to INVESTIGATE in every env."""
+    def test_fail_loud_investigates(self):
+        for env in ("prod", "develop"):
+            inc = {"alertName": "Best-effort path failing repeatedly", "labels": {"control": "fail-loud", "env": env}}
+            cls, route, _ = classify.classify(inc)
+            self.assertEqual((cls, route), ("maybe-defect", "INVESTIGATE"), env)

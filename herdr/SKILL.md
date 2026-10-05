@@ -1,6 +1,6 @@
 ---
 name: herdr
-version: 0.2.0
+version: 0.3.0
 description: |
   Alex's herdr WORKFLOW layer — the single source of truth for how we drive
   herdr (terminal workspace manager for AI agents) for agent work: naming, the
@@ -163,11 +163,13 @@ seats are new rows.
 
 | Seat | Launch inside pane | Route to it |
 |------|-------------------|-------------|
-| `opus` | `claude` (global default `opus[1m]` → Opus 5.5, `claude-opus-5-5`) | judgment, design-adjacent implementation, prod-shaped decisions |
-| `codex` | `codex -m gpt-5.6-sol` (headless: `codex exec -m gpt-5.6-sol`) | secondary implementation, independent review passes |
-| `glm` | `ANTHROPIC_BASE_URL=https://openrouter.ai/api ANTHROPIC_AUTH_TOKEN=$(security find-generic-password -s openrouter-api-key -w) ANTHROPIC_SMALL_FAST_MODEL=z-ai/glm-5-turbo claude --model z-ai/glm-5.2` | mechanical/bulk: migrations-by-pattern, test scaffolds, sweeps |
+| `opus` | worker: `CLAUDE_CODE_DISABLE_1M_CONTEXT=1 claude --model opus` (Opus 5.5, 200k). Driver only: bare `claude` (`opus[1m]`) | judgment, design-adjacent implementation, prod-shaped decisions |
+| `sonnet` | `CLAUDE_CODE_DISABLE_1M_CONTEXT=1 claude --model sonnet` (Sonnet 5.5, 200k) | **default for mechanical lanes**: apply a known pattern across a module, sweeps, test scaffolds, migrations-by-pattern |
+| `codex` | `codex -m gpt-5.6-sol` (headless: `codex exec -m gpt-5.6-sol`) | secondary implementation, independent review passes; bills OpenAI, not Claude limits |
+| `glm` | `ANTHROPIC_BASE_URL=https://openrouter.ai/api ANTHROPIC_AUTH_TOKEN=$(security find-generic-password -s openrouter-api-key -w) ANTHROPIC_SMALL_FAST_MODEL=z-ai/glm-5-turbo claude --model z-ai/glm-5.2` | mechanical/bulk when both Claude accounts are low on headroom (bills OpenRouter) |
 
-Dispatched claude/glm workers append `--dangerously-skip-permissions` (§4).
+Dispatched claude/glm workers append `--dangerously-skip-permissions` (§4). The token rules
+in §6.2 apply to every worker.
 
 **Account-aware launch.** Two accounts per seat — `alex` (alex@work) and `int`
 (integrations) — on both machines (dev-workbench `config/accounts/accounts.tsv`). A
@@ -212,6 +214,30 @@ MBA's sidebar beside the local ones. Driving it from the MBA:
   (`herdr --machine homelab2026 workspace list`) before retrying a mutation.
 - The box does not publish its own usage block (dev-workbench ENG-2); the MBA's block
   already merges both machines.
+
+### 6.2 Worker token budget
+
+Measured 2026-10-05: 78% of a weekly Claude limit went in ~45h. The `fe-fail-loud`
+lanes each ran 500–1,300 turns as one Opus `[1m]` session at a 200–300k median
+context. Cache reads, which re-read the whole context every turn, were ~67% of the
+weighted spend; output was negligible. Context size × turn count is the bill, so:
+
+- **Workers never run a 1M window.** A 200k window auto-compacts; a 1M window lets a
+  lane carry 500k of stale history into every turn. The model alias does not cap it:
+  under Claude Code 2.1.288, `--model opus`, `--model claude-opus-5-5` and `--model
+  sonnet` all report a 1,000,000 window, and `CLAUDE_CODE_AUTO_COMPACT_WINDOW` does not
+  change it. `CLAUDE_CODE_DISABLE_1M_CONTEXT=1`, inline before the launcher, does
+  (reads back 200,000 in `--output-format json` `modelUsage.contextWindow`). Only the
+  driver keeps 1M.
+- **One unit per session.** A brief covers one coherent unit. A lane with several
+  units gets a fresh worker per unit, handed off through commits and the hand-back
+  file, never a re-prompt of the same session. Fix writers and review panes are
+  fresh sessions too (`/concurrency` §7.3).
+- **Pick the cheapest seat that can do it.** Pattern work goes to `sonnet`; `opus`
+  only when the lane needs judgment. When Claude headroom is low, push mechanical
+  lanes to `codex` or `glm`, which bill elsewhere.
+- **Small tool output.** Bash output was 83% of tool-result bytes. Every brief
+  carries the output rule in `/concurrency` §6 step 3.
 
 **Env-leak rule:** provider overrides live ONLY in the seat's launch command,
 inline. Secrets resolve from Keychain at spawn — never via herdr `--env`

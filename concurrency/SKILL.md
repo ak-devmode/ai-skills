@@ -1,11 +1,11 @@
 ---
 name: concurrency
-version: 0.7.0
+version: 0.8.0
 description: |
   ONE responsibility: map what can run in parallel and what cannot, against a
   clear set of rules — re-derived from repo ground truth on every run, never
   from a scope's dependency claims. Then dispatch each parallel unit to a
-  visible, named herdr pane running the right model seat (Opus / codex / GLM)
+  visible, named herdr pane running the right model seat (Opus / Sonnet / codex / GLM)
   and supervise by agent state plus in-pane status markers the supervisor reads. The single
   controlled home for no-human-in-the-loop agent trains. Use when asked to
   "/concurrency", "dispatch this scope concurrently", "run these phases in
@@ -56,8 +56,8 @@ Design record: `plans/archive/3-concurrency/scope.md` (ai-skills, archived).
 
 ## 3. Model routing table
 
-**Lives in the `herdr` skill §6 — the single source.** Seats: `opus`, `codex`,
-`glm`; launch commands, route-to guidance, the env-leak rule, and the GLM launch
+**Lives in the `herdr` skill §6 — the single source.** Seats: `opus`, `sonnet`,
+`codex`, `glm`; launch commands, route-to guidance, the env-leak rule, and the GLM launch
 traps are all there. Never copy the table back here — a second copy drifts, and
 both copies calling themselves canonical is how it did.
 
@@ -151,7 +151,11 @@ recommendation that rides the §5.2 confirmation, never a silent choice.
    locally or ask Alex to push — never push yourself). Then fetch the box's clone, quoting
    the command so `~` expands on the box: `ssh <box> 'git -C ~/<repo path under $HOME>
    fetch -q origin'`.
-4. **Show it:** every lane line in the §5.2 plan carries `machine=` and `account=` with
+4. **Seat — the cheapest that can do the lane** (`herdr` §6.2). A lane that applies a
+   known pattern goes to `sonnet`; `opus` only when the brief needs judgment, and the
+   plan line says why. When `placement.py` shows both Claude accounts low, offer
+   `codex`/`glm` for the mechanical lanes instead of draining the last headroom.
+5. **Show it:** every lane line in the §5.2 plan carries `machine=` and `account=` with
    the deciding reason, and any unknown headroom is stated, not hidden. Alex's one
    `[y/N]` confirms placement too; an override ("lane 2 local") re-prints the plan and
    asks again.
@@ -203,6 +207,11 @@ Per partition, in this order (syntax authority: `herdr --skill`):
    run `~/Projects/ai-skills/scripts/herdr-pane.sh helper` (splits your OWN pane right at half
    size, prints its id) — never a new workspace, never split down (down is
    reserved for primaries)."
+   Every brief also carries the output rule (`herdr` §6.2): "Keep tool output small —
+   every token you read is re-read on every later turn. Run tests and lint with
+   quiet or failures-only flags and pipe through `| tail -40`; grep logs instead of
+   printing them; read files by line range; never dump a full suite, diff or lint
+   report."
 4. Log it — `~/Projects/ai-skills/scripts/dispatch-log.py --scope <scope> --task <task> --seat <seat>
    --branch <b> --worktree <w> --pane <id> --machine <host> --account <key> --status dispatched`
    (appends to `~/.config/herdr/concurrency-log.jsonl` and reads the line back).
@@ -287,7 +296,9 @@ zero-cost-basis silent defeat that build/test/disjointness passes all missed).
   signal, not the land decision.
 - Findings feed the fix→re-review loop: dispatch a fix writer into the
   partition's worktree (one writer at a time), then re-review in a fresh pane,
-  then land.
+  then land. The fix writer is a **fresh session** given the finding ids and the
+  report path, never the original worker re-prompted: its context already holds
+  the whole partition, and every fix turn would re-read it (`herdr` §6.2).
 
 ## 8. Collection & teardown
 
@@ -327,7 +338,8 @@ zero-cost-basis silent defeat that build/test/disjointness passes all missed).
    drove load to ~100 on 10 cores (renice worker trees `+10`, `herdr` §7), and the
    **token budget**, where the account's usage limit was hit in ~90 minutes. A
    homelab host lifts the CPU limit but not the token limit, so stay near ~6
-   unless Alex raises it. Keep the machine awake while lanes run (`caffeinate
+   unless Alex raises it, and follow the worker token rules (`herdr` §6.2: no 1M-window
+   workers, one unit per session, cheapest seat, small tool output). Keep the machine awake while lanes run (`caffeinate
    -dims`): a sleep mid-turn kills in-flight responses.
 4. Dispatched agents never push, never open PRs, never merge.
 5. HUMAN-GATED tasks never go to a worker pane; the driver does their credential-free parts and surfaces the gate (§4.1).

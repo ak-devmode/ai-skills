@@ -1,6 +1,6 @@
 ---
 name: concurrency
-version: 0.8.0
+version: 0.9.0
 description: |
   ONE responsibility: map what can run in parallel and what cannot, against a
   clear set of rules — re-derived from repo ground truth on every run, never
@@ -184,14 +184,16 @@ is itself the authorization to dispatch (per CLAUDE.md, a skill with `Agent` in
 allowed-tools *is* a dispatch request); the prompt is the last look, not a second
 opt-in. On anything but an explicit `y`, stop without dispatching.
 
-## 6. Dispatch — on `y` from §5.2 (pane cap 5 per tab, ~6 lanes total — §9.3)
+## 6. Dispatch — on `y` from §5.2 (3x2 panes per lanes tab, ~6 lanes total — §9.3)
 
 Per partition, in this order (syntax authority: `herdr --skill`):
 1. `herdr worktree create --cwd <repo> --base origin/<trunk>
    --branch concurrency/<scope>-<task>` — no `--env`, for any seat (the glm
    override is inline in its launch command; `herdr` skill §6). Workspace label = run name only (`<scope> run`); seat identity
    goes on the PANE per the `herdr` skill §2 (naming).
-1b. **Layout + naming: `herdr` §5 and §2** — no tabs. Pane identity in one call
+1b. **Layout + naming: `herdr` §5 and §2.** Agents go in a new `<scope> lanes` tab in the
+   driver's workspace (3x2 max, column by column), never in Alex's main tab and never left
+   in the worktree's own workspace: move the created root pane into its slot. Pane identity in one call
    (rename + sidebar metadata, read back): `~/Projects/ai-skills/scripts/herdr-pane.sh name <pane> <task> <seat>`
    (`--machine <host>` for a box pane).
 2. Launch the seat's command (§3) in the created pane via `pane run` — under the placed
@@ -319,6 +321,11 @@ zero-cost-basis silent defeat that build/test/disjointness passes all missed).
   is the ORCHESTRATOR's to remove, and only after land/abandon (above). Losing
   an unlanded worktree loses work. Default: agents report and go idle; the
   orchestrator tidies panes and worktrees once it has verified and landed.
+- **Teardown is triggered by moving on, not by a separate ask** (`herdr` §3, Alex
+  2026-10-05). Lane, review and fix panes stay open after their markers. When Alex accepts
+  the phase's verification or review, approves the merge, or closes the wave or scope, the
+  driver closes those panes from its own pane and runs (or, if auto mode refuses, hands
+  over in that same reply) the teardown script below. Live and unmerged lanes stay.
 - **Wave teardown = one script for Alex**, from `templates/teardown.sh.template` (`/closeout`
   §13.6a): lane worktrees, merged lane branches (local + origin), lane DBs/containers, the trust
   entries the dispatch added. Run it from outside the lane worktrees; never close panes from it.
@@ -332,7 +339,7 @@ zero-cost-basis silent defeat that build/test/disjointness passes all missed).
 
 1. Evaluate first — bail to `/plan` if parallelism isn't worth it; else present the plan and dispatch on one inline `[y/N]`. No `--dispatch` flag.
 2. Refuse-to-parallelize default; uncertainty serializes.
-3. Pane cap 5 per tab, and **~6 concurrent lanes total** on the MacBook Air. More
+3. Panes: 3x2 per lanes tab, and **~6 concurrent lanes total** on the MacBook Air. More
    partitions queue for the next frontier. Two independent limits bind (WellMed
    149.2, 13 Opus lanes at once, 2026-09-29): **CPU**, where Go lint/test baselines
    drove load to ~100 on 10 cores (renice worker trees `+10`, `herdr` §7), and the

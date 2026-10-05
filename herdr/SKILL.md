@@ -1,6 +1,6 @@
 ---
 name: herdr
-version: 0.3.0
+version: 0.4.0
 description: |
   Alex's herdr WORKFLOW layer — the single source of truth for how we drive
   herdr (terminal workspace manager for AI agents) for agent work: naming, the
@@ -57,10 +57,12 @@ level therefore *lies* about every other seat in that workspace (learned live: a
 codex pane displayed `@opus`). So:
 
 - **Workspace** = the run / scope, never a seat (e.g. `57.3 run`).
-- **Tab** = Alex's. This skill and `/concurrency` do **NOT** create or name tabs.
-  Alex owns tab organization and manual reorg. **One exception:** a `/research`
-  pane-mode run opens its own tab (`research <slug> r<k>`, a fresh one per run)
-  in the caller's workspace and never closes it; Alex closes it by hand.
+- **Tab.** The workspace's main tab is Alex's: he typically runs **two drivers** there.
+  Never split it or put agents in it. Dispatched agents go in a **new tab** the
+  dispatching skill creates in the driver's workspace, labelled for the run (e.g.
+  `153.3 lanes`), at most **3x2 = 6 panes**; a seventh agent opens the next tab
+  (`153.3 lanes 2`). This holds whatever worktree each pane's cwd is in (§5). A `/research`
+  pane-mode run follows the same rule with its own tab (`research <slug> r<k>`).
 - **Pane** = task + seat, set on the PANE:
   `herdr pane rename <pane> "<task> @<seat>"` **plus**
   `herdr pane report-metadata <pane> --source <skill> --display-agent "<task> @<seat>"`
@@ -85,6 +87,23 @@ isolation) and opt-in for a solo `/plan`. herdr manages the checkout path under
 - The created root pane's cwd is the worktree checkout (not the umbrella) — that
   isolation is the point. Branch + commit status then render in the sidebar
   (repo-bound spaces only; a plain space on a non-repo umbrella dir stays blank).
+- **The worktree's workspace is not where the agent lives.** `worktree create` makes
+  a workspace bound to the checkout; move its root pane into the lanes tab right away
+  (`pane move <pane> --tab <lanes tab> --target-pane <p> --split right|down`, §5). The
+  emptied workspace closes by itself and the worktree stays. Alternatively skip the
+  workspace: `git worktree add` plus `pane split --cwd <checkout>` in the lanes tab
+  (pre-trust that path, §4). Either way a later `herdr worktree remove --workspace`
+  has no workspace to name: tear the checkout down with `git -C <repo> worktree remove`.
+- **When teardown happens (Alex, 2026-10-05).** Panes stay open after `PARTITION-DONE`,
+  a review, or a fix round, so Alex can read them. When Alex and the driver **move on
+  together** (he accepts a phase's verification or review, approves a merge, or closes a
+  scope or wave), take that as the signal and tear that work down without pinging him
+  again: he has looked at what he wanted to. Close the finished lane and review panes from
+  the driver's pane (`herdr pane close <pane>`, never from inside the pane or a script),
+  and run the scope's teardown script for merged worktrees and branches (`/concurrency`
+  §8). If auto mode refuses a step, hand him the single `bash ~/cc/<scope>-teardown.sh`
+  line in the same reply, not as a new question. Live or unmerged lanes are never
+  torn down.
 - **Teardown** (on `/closeout`, after merge):
   `herdr worktree remove --workspace <id>`, then
   `git -C <repo> branch -D <branch>` and `git -C <repo> worktree prune`, then
@@ -128,33 +147,34 @@ permission prompt (the auto-mode classifier blocks it, correctly). Fix it at
 
 ## 5. Default concurrency pane layout
 
-Alex, 2026-08-30 (replaces the old tab-per-scope rule). **NO tabs** — Alex owns
-tabs. Since 2026-09-01 his `herdr-new-space` helper (dev-workbench, bound to
-prefix+shift+n) pre-builds every manually-created space with tab "work" (this
-exact seed layout, driver pane already named `driver`) + tab "shell". Skills
-still never create/name tabs — but on dispatch, **check for and REUSE the
-seeded standby panes** in the "work" tab before splitting new ones.
+Alex, 2026-10-05 (replaces the 2026-08-30 "driver left, workers right in one tab,
+no tabs" layout). The main tab holds Alex's drivers (usually two) and nothing else.
+Agents go in their own tab:
 
 ```
-+-------------+------+------+---
-|             |  w1  |  w3  |
-|   driver    +------+------+ ...
-|  (full ht)  |  w2  |  w4  |
-+-------------+------+------+---
-    LEFT           workers grow rightward →
+main tab (Alex's)          "<scope> lanes" tab (the skill's)
++----------+----------+    +------+------+------+
+|          |          |    |  a1  |  a3  |  a5  |
+| driver 1 | driver 2 |    +------+------+------+
+|          |          |    |  a2  |  a4  |  a6  |
++----------+----------+    +------+------+------+
+                            3x2 max; a7 opens "<scope> lanes 2"
 ```
 
-- Driver in a **full-height LEFT pane**.
-- Workers = **half-height panes on the RIGHT**, seeded with 2 placeholders
-  (top-right + bottom-right).
-- Each further worker adds a half-height pane growing **rightward** (new right
-  column, top then bottom half), until Alex manually reorganizes.
-- Build it with pane split/move (exact split syntax: `herdr --skill`): first
-  worker splits the driver **right**; the second splits that pane **down** (half
-  height); later workers add columns to the right, each split **down** into two.
-  `--no-focus` on every split so the driver keeps focus. A helper pane a worker
-  opens splits its OWN pane **right** at half size (`~/Projects/ai-skills/scripts/herdr-pane.sh helper`)
-  — never the herd layout, never a new workspace or tab.
+- **Create the tab** in the driver's workspace: `herdr tab create --workspace
+  $HERDR_WORKSPACE_ID --cwd <first lane's checkout> --label "<scope> lanes"`. Its root
+  pane is slot a1.
+- **Fill column by column:** a2 splits a1 **down**; a3 splits a1 **right**; a4 splits
+  a3 **down**; a5 splits a3 **right**; a6 splits a5 **down**. Use `--cwd <that lane's
+  checkout>` and `--no-focus` on every split, so the driver keeps focus. A lane created
+  by `worktree create` is moved into its slot with `pane move` (§3).
+- **Reviews and fix writers** take the next free slot in the lanes tab, or the next lanes
+  tab. They do not split the lane they serve.
+- **Names:** each pane carries `<task> @<seat>` (§2). The tab label names the run, so
+  Alex can find a lane from its pane name without hunting through workspaces.
+- A helper pane a worker opens splits its OWN pane **right** at half size
+  (`~/Projects/ai-skills/scripts/herdr-pane.sh helper`). Never the main tab, never a
+  new workspace.
 
 ## 6. Model routing table
 
@@ -250,6 +270,12 @@ triggers a blocking dialog); "model not found" on a 200-tested key = plumbing,
 curl both endpoint styles before touching account settings.
 
 ## 7. Gotchas
+
+- **The first herdr worktree of a repo can stop at the folder-trust dialog**, even
+  under `~/.herdr/worktrees/` (hit 2026-10-05 with wellmed-backbone; later worktrees of
+  wellmed-fe never did). Alex answers it in the pane. A launch script that waits for
+  `idle` must not then prompt a pane still showing the dialog: check `pane read` for
+  "trust this folder" first, and resume into the same pane once he has answered.
 
 - **`pane read --source recent` returns empty with no UI client attached** — use
   `--source visible` or `--source detection`. Headless dispatch runs in exactly

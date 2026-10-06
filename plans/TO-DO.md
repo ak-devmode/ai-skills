@@ -439,3 +439,5 @@ Touches: ai-skills · review/scripts/review.py · verify/scripts/judge.py · scr
 Source: kalpa-docs plans/153-fe-fail-loud-sweep/artifacts/verify-153.2-report.md (codex judge, run 153.2-20261003T090643-7ec2)
 Touches: ai-skills · scripts/resolve-identifiers.py
 - [ ] `SRC_EXT` excludes `.vue`, so on a Nuxt FE the names-resolve row says "nothing to resolve" while SFCs add env/route references (153.2: `autolist/payment-method-list` in two pages). Scan `<script>` blocks of `.vue` files.
+
+- [ ] **resolve-identifiers.py: false fails on runner-provided and shell-defaulted env names (WellMed /verify 153.3, 2026-10-06).** It failed `GITHUB_STEP_SUMMARY` (set by the GitHub Actions runner), `SENTRY_READ_TOKEN` (exported into `GITHUB_ENV` by the calling workflow) and, in a bash deploy script, `NGINX_CONF` / `STANDBY_HTTP_PORT` (assigned with `${X:-default}` or in both branches before use). The judge confirmed each is supplied. Teach it the GitHub Actions default env list, names written to `$GITHUB_ENV` by a workflow step, and shell variables assigned in the same script before use. Touches: scripts/resolve-identifiers.py (+ tests).

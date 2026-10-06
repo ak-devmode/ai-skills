@@ -2,13 +2,14 @@
 # herdr pane identity + helper split — the `herdr` skill §2/§5 rules as one call.
 #
 # Approach: the naming rule needs TWO herdr calls to take effect (pane rename AND
-# report-metadata --display-agent — without the metadata the sidebar shows the
-# workspace label for every agent), and forgetting the second is the recurring
-# miss. `name` does both and reads the pane back. `helper` is the one sanctioned
+# report-metadata --display-agent), and forgetting the second is the recurring
+# miss. The name is the task only (`herdr` §2): the sidebar's row 2 already shows
+# the model + account, so a seat suffix only costs row-1 width. `name` does both and reads the pane back. `helper` is the one sanctioned
 # helper-pane geometry: split your OWN pane right at half size, no focus steal.
 #
 # Usage:
-#   herdr-pane.sh name <pane-id> <task> <seat> [--source SKILL] [--machine HOST]
+#   herdr-pane.sh name <pane-id> <name> [--source SKILL] [--machine HOST]
+#                      (a legacy third <seat> argument is accepted and ignored)
 #                      (default source: concurrency; --machine: a pane on a saved herdr
 #                       machine, e.g. homelab2026 — pane ids are per server)
 #   herdr-pane.sh helper [--cwd DIR]                               (prints the new pane id)
@@ -16,15 +17,16 @@
 
 set -uo pipefail
 
-usage() { sed -n '9,15p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 2; }
+usage() { sed -n '10,16p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 2; }
 command -v herdr >/dev/null || { echo "herdr-pane: herdr not installed" >&2; exit 3; }
 
 cmd="${1:-}"; shift || true
 H=(herdr)
 case "$cmd" in
   name)
-    [ $# -ge 3 ] || usage
-    pane="$1"; task="$2"; seat="$3"; shift 3; source=concurrency
+    [ $# -ge 2 ] || usage
+    pane="$1"; label="$2"; shift 2; source=concurrency
+    case "${1:-}" in --*|"") ;; *) shift ;; esac   # legacy <seat> positional
     while [ $# -gt 0 ]; do
       case "$1" in
         --source)  source="${2:?--source needs a value}"; shift 2 ;;
@@ -34,7 +36,6 @@ case "$cmd" in
     done
     "${H[@]}" workspace list >/dev/null 2>&1 \
       || { echo "herdr-pane: ${H[*]} server not answering — report and stop (never start it mid-skill)" >&2; exit 3; }
-    label="$task @$seat"
     "${H[@]}" pane rename "$pane" "$label" >/dev/null || { echo "herdr-pane: rename failed for $pane" >&2; exit 1; }
     "${H[@]}" pane report-metadata "$pane" --source "$source" --display-agent "$label" >/dev/null \
       || { echo "herdr-pane: report-metadata failed for $pane" >&2; exit 1; }

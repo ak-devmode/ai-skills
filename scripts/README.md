@@ -96,7 +96,7 @@ by `test_entrypoint.py`'s compile check.
       exit: 0 written · 2 usage · 3 refused (exists / missing / would not parse — nothing written)
     dispatch-log.py --scope --task --status {dispatched,done,blocked,failed} [--seat --branch --worktree --pane --tail --log]
       exit: 0 written + read back · 1 did not land · 2 usage
-    herdr-pane.sh name <pane> <task> <seat> [--source SKILL]  |  herdr-pane.sh helper [--cwd DIR]
+    herdr-pane.sh name <pane> <name> [--source SKILL]  |  herdr-pane.sh helper [--cwd DIR]
       exit: 0 ok · 1 herdr call failed / label not visible · 2 usage · 3 not in herdr / no server
     repo-survey.sh [repo-dir] [--no-fetch]
       exit: 0 ok · 1 not a git repo. Read-only; never checks out.

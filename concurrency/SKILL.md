@@ -1,6 +1,6 @@
 ---
 name: concurrency
-version: 0.9.0
+version: 0.9.1
 description: |
   ONE responsibility: map what can run in parallel and what cannot, against a
   clear set of rules — re-derived from repo ground truth on every run, never
@@ -168,7 +168,7 @@ CONCURRENCY PLAN — <scope> @ <repo>
 ready frontier (cap N):
   <task>  seat=<seat>  machine=<host>  account=<display>  (<why: headroom / size / plans>)
           branch=concurrency/<scope>-<task>  worktree=<path>
-          pane label: <task> @<seat>
+          pane name: <task>
 excluded:
   <task>  HUMAN-GATED: <what Alex must do>
   <task>  BLOCKED by <task>: <edge reason>
@@ -194,7 +194,7 @@ Per partition, in this order (syntax authority: `herdr --skill`):
 1b. **Layout + naming: `herdr` §5 and §2.** Agents go in a new `<scope> lanes` tab in the
    driver's workspace (3x2 max, column by column), never in Alex's main tab and never left
    in the worktree's own workspace: move the created root pane into its slot. Pane identity in one call
-   (rename + sidebar metadata, read back): `~/Projects/ai-skills/scripts/herdr-pane.sh name <pane> <task> <seat>`
+   (rename + sidebar metadata, read back): `~/Projects/ai-skills/scripts/herdr-pane.sh name <pane> <task>`
    (`--machine <host>` for a box pane).
 2. Launch the seat's command (§3) in the created pane via `pane run` — under the placed
    account: `claude-<account>` / `codex-<account>` (`herdr` skill §6), on either machine.
@@ -284,7 +284,7 @@ Every partition's work runs through `/review` BEFORE it is accepted or landed �
 the cheapest defense against drift (learned live 2026-08-24: on 91.4 the review
 caught a DB-password-in-logs leak, a NOT_SERVING deploy outage, and a §4.9
 zero-cost-basis silent defeat that build/test/disjointness passes all missed).
-- The review is its OWN named herdr pane (e.g. `<scope>#<task>-review@<seat>`),
+- The review is its OWN named herdr pane (`<task> review`, `herdr` §2),
   NOT a hidden background subagent — a subagent buries the verdict in a
   transcript file and defeats the fresh-context-and-visible property that makes
   the gate honest (corrected live 2026-08-24). It reports its verdict as an

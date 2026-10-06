@@ -1,6 +1,6 @@
 ---
 name: herdr
-version: 0.4.0
+version: 0.5.0
 description: |
   Alex's herdr WORKFLOW layer — the single source of truth for how we drive
   herdr (terminal workspace manager for AI agents) for agent work: naming, the
@@ -51,10 +51,12 @@ never duplicates that — it references it.
 
 ## 2. Naming — one rule, applied everywhere
 
-herdr's agents sidebar shows the **workspace** label as every row's main header
-and the pane's **display-agent** as the subheader. A seat name at the workspace
-level therefore *lies* about every other seat in that workspace (learned live: a
-codex pane displayed `@opus`). So:
+herdr's agent rows (dev-workbench `config/herdr/config.toml`) read: row 1 = the
+**pane name** + Claude Code's live title; row 2 = workspace · model · account; row 3 =
+repo/worktree. The model and account are pushed per pane (Claude status line, codex
+launcher), so a name never needs to carry the seat — and a seat name at the workspace
+level *lies* about every other seat in it (learned live: a codex pane displayed
+`@opus`). So:
 
 - **Workspace** = the run / scope, never a seat (e.g. `57.3 run`).
 - **Tab.** The workspace's main tab is Alex's: he typically runs **two drivers** there.
@@ -63,11 +65,11 @@ codex pane displayed `@opus`). So:
   `153.3 lanes`), at most **3x2 = 6 panes**; a seventh agent opens the next tab
   (`153.3 lanes 2`). This holds whatever worktree each pane's cwd is in (§5). A `/research`
   pane-mode run follows the same rule with its own tab (`research <slug> r<k>`).
-- **Pane** = task + seat, set on the PANE:
-  `herdr pane rename <pane> "<task> @<seat>"` **plus**
-  `herdr pane report-metadata <pane> --source <skill> --display-agent "<task> @<seat>"`
-  (without the metadata the sidebar shows the workspace label for every agent).
-  Both in one call, read back: `~/Projects/ai-skills/scripts/herdr-pane.sh name <pane> <task> <seat> --source <skill>`.
+- **Pane** = the task, nothing else: `<task>` for a lane, `<task> review` for its
+  review, `<task> fix` for a fix writer. No scope (the workspace and tab carry it), no
+  seat (row 2 shows the model). Row 1 truncates, so shorter is better. Set with
+  `herdr pane rename` **plus** `herdr pane report-metadata --display-agent`, both in
+  one call, read back: `~/Projects/ai-skills/scripts/herdr-pane.sh name <pane> "<name>" --source <skill>`.
 - **Driver** (a `/plan` session's own agent): `herdr agent rename $HERDR_PANE_ID driver`.
 - Auto-name from context when inside a pane via `$HERDR_PANE_ID` / `$HERDR_WORKSPACE_ID`.
 
@@ -170,7 +172,7 @@ main tab (Alex's)          "<scope> lanes" tab (the skill's)
   by `worktree create` is moved into its slot with `pane move` (§3).
 - **Reviews and fix writers** take the next free slot in the lanes tab, or the next lanes
   tab. They do not split the lane they serve.
-- **Names:** each pane carries `<task> @<seat>` (§2). The tab label names the run, so
+- **Names:** each pane carries its task name (§2). The tab label names the run, so
   Alex can find a lane from its pane name without hunting through workspaces.
 - A helper pane a worker opens splits its OWN pane **right** at half size
   (`~/Projects/ai-skills/scripts/herdr-pane.sh helper`). Never the main tab, never a
@@ -224,7 +226,7 @@ MBA's sidebar beside the local ones. Driving it from the MBA:
   so Alex answered it in the pane. A second herdr worktree of the same repo then opened
   with no dialog. Assume one approval per repo only for herdr-created worktrees; expect
   the dialog again for a new repo or a plain `git worktree add` path (§4).
-- **Naming a box pane:** `scripts/herdr-pane.sh name <pane> <task> <seat> --machine
+- **Naming a box pane:** `scripts/herdr-pane.sh name <pane> "<name>" --machine
   homelab2026` (§2 — the same two calls, against the box's server).
 - **Routing rule.** A lane goes to the box only when its base is on origin
   (`placement.py check-base`); its branch comes back to the MBA by `placement.py

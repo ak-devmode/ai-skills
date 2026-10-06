@@ -15,7 +15,7 @@ Alex's reason.
 | scripts-tests-green | Script test suite passes | 5.1 | B | `python3 -m unittest discover scripts/tests` | ai-skills | . | - | - | 4 | no | runner record: exit 0 |
 | contracts-no-example-rows | Templates generate without example rows | 5.1/1.1 | B | `python3 -m unittest scripts/tests/test_contracts.py` | ai-skills | . | - | 60 | 4 | no | runner record: exit 0 |
 | contracts-cover-scope | Every §4.1 contract has a named reader and writer | 5.1/1.1 | B | judge | ai-skills | . | - | - | 2 | no | judge reason citing verify-contracts.md sections |
-| sign-in-live | Sign-in journey works on the dev tenant | 5.2 | A | `suite sign-in --tenant clinic_3 --json` | wellmed/wellmed-testsuite | . | SUITE_ENV=dev | 180 | 5 | yes: dev VPN is not always up; unreachable is recorded, not passed silently | private runner record + screenshot in the test-suite |
+| sign-in-live | Sign-in journey works on the dev tenant | 5.2 | A | `suite sign-in --tenant clinic_3 --json` | wellmed/kalpa-testsuite | . | SUITE_ENV=dev | 180 | 5 | yes: dev VPN is not always up; unreachable is recorded, not passed silently | private runner record + screenshot in the test-suite |
 
 ## Changelog
 

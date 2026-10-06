@@ -3,7 +3,7 @@
 
 **Schema version:** verify/1
 **Result:** changed
-**Test-suite:** wellmed/wellmed-testsuite
+**Test-suite:** wellmed/kalpa-testsuite
 **Verdict log:** artifacts/verify-5.2.jsonl
 
 `Result` is exactly one of `clean | changed | blocked`. `clean` has no rows; `blocked` names

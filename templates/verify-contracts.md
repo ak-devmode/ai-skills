@@ -94,7 +94,7 @@ resets it to `pending`, because a changed table is a new promise. The gate block
 | `owner` | the plan that must pass it (`5.1`), or a unit within it (`5.1/1.3`) |
 | `class` | `A` behavior (runs against a product env) · `B` conformance (repo content) |
 | `check` | a shell command, or the literal `judge` |
-| `repo` | repo path under `~/Projects/` (`ai-skills`, `wellmed/wellmed-testsuite`) |
+| `repo` | repo path under `~/Projects/` (`ai-skills`, `wellmed/kalpa-testsuite`) |
 | `dir` | working dir relative to the repo root; `.` for the root |
 | `env` | space-separated `KEY=value` pairs, or `-`; names and pointers only, never a secret |
 | `timeout` | seconds, or `-` for the default 120 |
@@ -408,7 +408,7 @@ by `/closeout-extended`.
 
 ## 9. Adapter — what `/verify` consumes from a product test-suite
 
-**Writer:** the product test-suite (e.g. `wellmed-testsuite`). **Readers:** `verify-run.py`
+**Writer:** the product test-suite (e.g. `kalpa-testsuite`). **Readers:** `verify-run.py`
 (finish-table class-A commands call it), `/verify`.
 
 9.1 **Commands:**

@@ -466,6 +466,17 @@ on a direct-to-main repo a branch diff is empty by construction.
    `review.py accept --scope <scope> --unit {N}.{P} --by "<name>"`. Never accept on their
    behalf. Under an approved finish table the gate blocks without it (§6.4); a later round
    with findings reopens it.
+   **Conditional go-ahead.** The user may give that yes in advance, before a further round:
+   "accept and continue unless…". You then run `review.py accept --by "<name>"` yourself
+   after that round, and only if you fixed every finding it raised. Stop and show the user
+   first if the round raised a blocking finding, a design question (a file tripping
+   `/review` §5.1's three-rounds rule is one), or any finding you rejected or deferred —
+   seeing those is what this checkpoint is for. Past the round cap every non-blocking
+   finding is a deferral, so there the go-ahead covers only a round that comes back clean.
+   It covers the one step named and does not carry to the next checkpoint. Offer it in the
+   check-in itself, as one sentence: what you will do next on their confirmation, and what
+   would make you stop instead (Alex, 2026-10-06, IRIS 3.4: "the check in language ive been
+   looking for").
    The table's own approval happens before work starts (§5.6.2b).
 2. **Verify** — the stub's `Task {P}.V`, or the CHECKPOINT on a pre-5.3 stub. Run
    `/verify {N}.{P}`, adding `--no-commits` when the stub has no Review task. If the scope has no table, §5.6.2a runs first. A unit listed under

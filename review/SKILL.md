@@ -232,6 +232,8 @@ first review.
   `review.py accept` ends the loop: the gate lets that acceptance stand in for the re-review
   of fixes disposed before it (`verify-contracts.md` §5.2.1). Ask again before each further
   round. `record` prints `[CONVERGENCE] <repo> round 3 of 3: STOP` as the reminder.
+  The user may answer "another round" and confirm the acceptance that follows it in one
+  go, on conditions: `/plan` §6.8 "Conditional go-ahead" says when that yes may be used.
 - **Round cap.** Past round 3 of one repo in a unit, only `blocking` findings are fixed in the loop.
   `should-fix` and `note` go to the project's `TO-DO.md` and are recorded
   `dispose --deferred "<TO-DO item>"` — never `--rejected`, because a deferral is not a

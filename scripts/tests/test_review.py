@@ -187,6 +187,48 @@ class TestReview(unittest.TestCase):
                 else:
                     self.assertNotIn("rules/domain.md", prompt)
 
+    def test_prepare_runs_the_repos_declared_checks_as_evidence(self):
+        """The reviewer cannot build or test in its sandbox, so the runner does and hands
+        over each check's command, exit status and output — only at the range's own head."""
+        def prepare(*flags):
+            p = run(REVIEW, "prepare", "--repo", self.repo, "--range", self.rng(self.repo), *flags, env=self.env)
+            self.assertEqual(p.returncode, 0, p.stderr)
+            return p.stdout, read(p.stdout.split("prompt: ")[1].split()[0])
+
+        out, prompt = prepare()
+        self.assertIn("checks: none declared", out)
+        self.assertIn("declares none in `.review-checks`", prompt)
+        self.assertNotIn("{{", prompt)
+
+        with open(os.path.join(self.repo, ".review-checks"), "w") as fh:
+            fh.write("# name | command, from the repo root\nbuild | echo built-ok\n"
+                     "tests | sh -c 'echo two failed; exit 3'\nnot a check line\n")
+        git(self.repo, "add", "-A")
+        git(self.repo, "commit", "-q", "-m", "declare checks")
+        out, prompt = prepare()
+        self.assertRegex(out, r"checks: build ✓ \(\d+s\) · tests ✗ exit 3 \(\d+s\)")
+        for want in ("### build — exit 0", "$ echo built-ok", "built-ok", "### tests — exit 3", "two failed",
+                     "Do not list one of them under `cannot_do`"):
+            self.assertIn(want, prompt)
+        self.assertNotIn("not a check line", prompt)
+
+        out, prompt = prepare("--no-checks")
+        self.assertIn("checks: skipped (--no-checks)", out)
+        self.assertNotIn("built-ok", prompt)
+
+        # Evidence of another tree is not evidence of the range: a dirty tree, or a range
+        # whose head is not checked out, runs nothing and says so.
+        with open(os.path.join(self.repo, "a.sh"), "a") as fh:
+            fh.write("# edited, not committed\n")
+        out, prompt = prepare()
+        self.assertIn("checks: not run — the working tree has uncommitted changes", out)
+        self.assertNotIn("built-ok", prompt)
+        git(self.repo, "checkout", "-q", "--", "a.sh")
+        base = git(self.repo, "rev-list", "--max-parents=0", "HEAD")
+        p = run(REVIEW, "prepare", "--repo", self.repo, "--range", f"{base}..HEAD~1", env=self.env)
+        self.assertEqual(p.returncode, 0, p.stderr)
+        self.assertRegex(p.stdout, r"checks: not run — the working tree is at \w{9}, not the range's head \w{9}")
+
     def test_prepare_refuses_empty_and_bad_ranges(self):
         head = git(self.repo, "rev-parse", "HEAD")
         empty = run(REVIEW, "prepare", "--repo", self.repo, "--range", f"{head}..HEAD", env=self.env)

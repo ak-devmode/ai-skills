@@ -90,6 +90,17 @@ prints `prompt:`, `schema:`, a `passes:` line, a `range:` line — the range res
 full SHAs, which the prompt uses — and an `effort:` line; keep all five, pass that `range:`
 to §2.4 and that effort to §2.3.
 
+2.1.1 **Checks, run for the reviewer.** `prepare` also runs the repo's declared checks and
+puts each one's command, exit status and the end of its output in the prompt; its last
+line is `checks: …`. A repo declares them in `.review-checks` at its root, one
+`name | shell command` per line, run from the root (build, vet, lint, tests — whatever
+the reviewer would otherwise report it could not run). They run only when the working
+tree is the range's head with no tracked change; otherwise the line says `not run — <why>`
+and the prompt tells the reviewer so. A failing check does not stop `prepare`: it is
+evidence. `--no-checks` skips them; `REVIEW_CHECK_TIMEOUT` (seconds, default 900) bounds
+each. A repo with no `.review-checks` gets `checks: none declared` — add the file rather
+than read "could not build" in every report.
+
 2.2 **Probe, fresh.** `$S/codex-exec.py probe` — last line `codex <model>` → §2.3;
 `none <reason>` → §3. Never reuse an earlier probe, never gstack's (it caches failures).
 
@@ -108,7 +119,9 @@ own `cannot_do` list plus skipped passes). Exit 3 → the answer was malformed a
 was recorded: re-run once, then fall back (§3).
 
 2.5 **What codex cannot do** (from the spike, and its own `cannot_do`): no network, no
-running services or browser, no write-side tests, no specialist fan-out. Behaviour
+running services or browser, no write-side tests, no specialist fan-out. Its sandbox is
+read-only, so it cannot build, vet, lint or test either — §2.1.1 is how it gets those
+results, from the runner. Behaviour
 checks belong to `/verify`'s runner rows, not here; this is a diff reviewer.
 
 ---

@@ -15,6 +15,10 @@ about the ADR, and must say which.
 
 {{RULES}}
 
+## Checks the runner ran for you
+
+{{CHECKS}}
+
 ## Output
 
 Only the JSON object the schema describes.

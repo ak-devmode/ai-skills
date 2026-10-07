@@ -241,6 +241,74 @@ def prepare_lean(a, n, proj, out_dir):
     return vl.EXIT_PASS
 
 
+# ---------- checks: evidence the reviewer cannot produce in its sandbox --------------
+
+CHECKS_FILE = ".review-checks"   # at the repo root: one `name | shell command` per line
+CHECK_TAIL = 40                  # lines of a check's output handed to the reviewer
+ANSI = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
+
+
+def declared_checks(repo):
+    """[(name, command)] from the repo's .review-checks; [] when it declares none."""
+    path = os.path.join(repo, CHECKS_FILE)
+    if not os.path.isfile(path):
+        return []
+    out = []
+    with open(path, encoding="utf-8") as fh:
+        for line in fh:
+            line = line.strip()
+            if line and not line.startswith("#") and "|" in line:
+                name, cmd = (part.strip() for part in line.split("|", 1))
+                if name and cmd:
+                    out.append((name, cmd))
+    return out
+
+
+def run_checks(repo, rng, skip=False):
+    """Run the repo's declared checks at the range's head and render them for the prompt.
+
+    The reviewer runs read-only: it cannot build, test or lint, and says so in every
+    report. So the runner does it and hands over what happened — the command, its exit
+    status, the end of its output. That is evidence a script produced, never the author's
+    account. It is only evidence of the range if the working tree is that range's head
+    with no tracked change; otherwise nothing runs and the prompt says why. Returns
+    (the prompt section, the one-line summary `prepare` prints)."""
+    none = ("The runner ran no checks ({why}). Building, testing and linting are then yours to "
+            "attempt; each one you cannot run goes in `cannot_do`.")
+    if skip:
+        return none.format(why="`--no-checks`"), "checks: skipped (--no-checks)"
+    checks = declared_checks(repo)
+    if not checks:
+        return none.format(why=f"this repo declares none in `{CHECKS_FILE}`"), "checks: none declared"
+    head, want = git(repo, "rev-parse", "HEAD")[1], rng.split("..")[-1]
+    dirty = git(repo, "status", "--porcelain", "--untracked-files=no")[1]
+    if head != want or dirty:
+        why = "the working tree has uncommitted changes" if head == want else \
+            f"the working tree is at {head[:9]}, not the range's head {want[:9]}"
+        return none.format(why=why), f"checks: not run — {why}"
+    timeout = int(os.environ.get("REVIEW_CHECK_TIMEOUT", "900"))
+    blocks, marks = [], []
+    for name, cmd in checks:
+        started = time.monotonic()
+        try:
+            p = subprocess.run(cmd, shell=True, cwd=repo, capture_output=True, text=True, timeout=timeout)
+            status, output = f"exit {p.returncode}", p.stdout + p.stderr
+            ok = p.returncode == 0
+        except subprocess.TimeoutExpired as exc:
+            status, ok = f"no result in {timeout}s", False
+            output = "".join(part.decode("utf-8", "replace") if isinstance(part, bytes) else part or ""
+                             for part in (exc.stdout, exc.stderr))
+        took = int(time.monotonic() - started)
+        tail = [ANSI.sub("", line)[:300] for line in output.splitlines()][-CHECK_TAIL:]
+        blocks.append(f"### {name} — {status} ({took}s)\n\n    $ {cmd}\n" + "".join(f"    {line}\n" for line in tail))
+        marks.append(f"{name} {'✓' if ok else '✗ ' + status} ({took}s)")
+    intro = (f"The runner ran these at `{want}`, on a working tree with no tracked change, outside your "
+             "sandbox. Each is a fact: the command, its exit status, the end of its output. Do not "
+             "list one of them under `cannot_do`. A check that failed is a finding if the range caused "
+             "it. What none of them covers is still yours to say.")
+    return intro + "\n\n" + "\n".join(blocks), "checks: " + " · ".join(marks)
+
+
 def cmd_prepare(a):
     n, code = count_range(a.repo, a.range)
     if code is not None:
@@ -278,8 +346,9 @@ def cmd_prepare(a):
     rules.append(f"- `{LENSES}` — lenses for every repo (adjacent code, fail-open, silent failure, "
                  "local maxima, dirty comments, doc claims)")
     passes.append("lenses ✓")
+    checks, checks_line = run_checks(a.repo, a.range, skip=a.no_checks)
     fill = {"REPO": os.path.realpath(a.repo), "PROJECT": proj, "RANGE": a.range, "COMMITS": str(n),
-            "RULES": "\n".join(rules)}
+            "RULES": "\n".join(rules), "CHECKS": checks}
     with open(PROMPT, encoding="utf-8") as fh:
         text = fh.read()
     for k, v in fill.items():
@@ -291,7 +360,7 @@ def cmd_prepare(a):
         fh.write(text)
     effort, why = vl.effort_for([vl.diff_stat(a.repo, a.range)])
     print(f"prompt: {prompt}\nschema: {SCHEMA}\npasses: {' · '.join(passes)}\nrange: {a.range}\n"
-          f"effort: {effort} ({why})")
+          f"effort: {effort} ({why})\n{checks_line}")
     return vl.EXIT_PASS
 
 
@@ -887,6 +956,7 @@ def main(argv):
     m.add_argument("--engine-only", action="store_true")
     p.add_argument("--out-dir")
     p.add_argument("--lean", action="store_true", help="write one self-contained bundle for a single Sonnet pass")
+    p.add_argument("--no-checks", action="store_true", help="do not run the repo's .review-checks")
     r = sub.add_parser("record")
     for opt in ("--repo", "--range", "--reviewer", "--input"):
         r.add_argument(opt, required=True)

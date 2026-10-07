@@ -334,7 +334,51 @@ SSM_DECL_TF = re.compile(r"\bname\s*=\s*\"(/[^\"]+)\"")
 SSM_DECL_ANY = re.compile(r"(/" + SEG + r"(?:/" + SEG + r")+)")
 
 GO_LIT_OPEN = re.compile(r"&?\b(\w*(?:pb|proto|v\d+))\.([A-Z]\w*)\{")
-GO_LIT_KEY = re.compile(r"(?:^|[{,])\s*([A-Z]\w*)\s*:")
+GO_LIT_KEY = re.compile(r"([A-Z]\w*)\s*:")
+GO_STRING = re.compile(r'"(?:\\.|[^"\\])*"|`[^`]*`|\'(?:\\.|[^\'\\])+\'')
+
+
+def go_literal_keys(text, stack):
+    """The (message, key) pairs a line of Go sets, given the literals still open before it.
+
+    `stack` holds one entry per open brace — the message name for a pb composite literal,
+    None for any other brace — and is updated in place, so a literal that runs over
+    several lines keeps its nesting. A key belongs to the innermost open brace, and only
+    when that brace is a pb literal: `&pb.Outer{Info: &pb.Inner{` followed by `Id: x` on
+    the next line sets Inner.Id, not Outer.Id. Braces are followed only from a pb
+    literal's opening to its close; string contents are blanked first."""
+    text = GO_STRING.sub(lambda m: " " * len(m.group(0)), text)
+    opens = {m.end() - 1: m.group(2) for m in GO_LIT_OPEN.finditer(text)}
+    out, i, at_key = [], 0, bool(stack)
+    if not stack:
+        if not opens:
+            return out
+        i = min(opens)
+    while i < len(text):
+        c = text[i]
+        if c == "{":
+            stack.append(opens.get(i))
+            at_key = True
+        elif c == "}":
+            stack.pop()
+            at_key = False
+            if not stack:  # the outermost literal closed: skip to the next one, if any
+                later = [o for o in opens if o > i]
+                if not later:
+                    break
+                i = min(later)
+                continue
+        elif c == ",":
+            at_key = True
+        elif not c.isspace():
+            m = GO_LIT_KEY.match(text, i) if at_key and stack[-1] else None
+            at_key = False
+            if m:
+                out.append((stack[-1], m.group(1)))
+                i = m.end()
+                continue
+        i += 1
+    return out
 PY_PB2 = re.compile(r"\b\w+_pb2\.([A-Z]\w*)\(([^)]*)\)")
 PY_KWARG = re.compile(r"\b([a-z_]\w*)\s*=")
 
@@ -496,7 +540,7 @@ def extract(files, full=None):
             continue
         local = shell_assigned((full or {}).get(path, "")) if path.endswith(".sh") else set()
         given = node_eval_given((full or {}).get(path, "")) if path.endswith(".sh") else set()
-        open_msg = None  # (message, depth) for a Go literal opened on an added line
+        go_open, go_prev = [], None  # pb literals open across consecutive added lines
         for lineno, text in lines:
             if is_comment(text, sh=path.endswith(".sh")):
                 continue
@@ -518,18 +562,12 @@ def extract(files, full=None):
             for m in PY_PB2.finditer(text):
                 for k in PY_KWARG.finditer(m.group(2)):
                     refs.append(ref("proto", f"{m.group(1)}.{k.group(1)}", "python", path, lineno))
-            m = GO_LIT_OPEN.search(text)
-            if m:
-                open_msg = [m.group(2), 0]
-                text_after = text[m.end() - 1:]
-            else:
-                text_after = text
-            if open_msg:
-                for k in GO_LIT_KEY.finditer(text_after if m else "{" + text_after):
-                    refs.append(ref("proto", f"{open_msg[0]}.{k.group(1)}", "go", path, lineno))
-                open_msg[1] += text_after.count("{") - text_after.count("}")
-                if open_msg[1] <= 0:
-                    open_msg = None
+            if path.endswith(".go"):
+                if go_prev is not None and lineno != go_prev + 1:
+                    go_open.clear()  # a gap in the added lines: what is open there is unknown
+                go_prev = lineno
+                for msg, key in go_literal_keys(text, go_open):
+                    refs.append(ref("proto", f"{msg}.{key}", "go", path, lineno))
             for m in ROUTE_FETCH.finditer(text):
                 p = None if fetch_external(m.group(1)) else route_path(m.group(1))
                 if p:

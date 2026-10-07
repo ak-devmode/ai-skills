@@ -235,6 +235,22 @@ CASES = [
      {"svc/h.go": "package svc\nvar a = &clinicv1.Invoice{\n\tPatientId: id,\n\tTotal: 3,\n}\n"
                   "var b = &clinicv1.Appointment{Slot: s, Who: w}\n"},
      0, r"found 4 · resolved 4", "message Invoice"),
+    ("a nested literal's fields belong to the nested message, on one line or the next",
+     {"proto/clinic.proto": PROTO + "message Visit { Appointment appt = 1; string note = 2; }\n"},
+     {"svc/h.go": "package svc\nvar a = send(&clinicv1.Visit{Appt: &clinicv1.Appointment{\n"
+                  "\tSlot: s, Who: w,\n}})\n"
+                  "var b = &clinicv1.Visit{Appt: &clinicv1.Appointment{Slot: s}, Note: n}\n"},
+     0, r"found 4 · resolved 4", "message Appointment"),
+    ("a field set on the outer message after a nested literal closes is the outer's",
+     {"proto/clinic.proto": PROTO + "message Visit { Appointment appt = 1; string note = 2; }\n"},
+     {"svc/h.go": "package svc\nvar a = &clinicv1.Visit{\n\tAppt: &clinicv1.Appointment{\n\t\tSlot: s,\n\t},\n"
+                  "\tSlot: s,\n}\n"},
+     1, r"found 3 · resolved 2 · unresolved 1", "field `Slot` in `message Visit`"),
+    ("keys of a non-pb literal or a string inside a pb literal are not its fields",
+     {"proto/clinic.proto": PROTO},
+     {"svc/h.go": "package svc\nvar a = &clinicv1.Invoice{\n\tPatientId: fmt.Sprintf(\"{Bogus: %d}\", 1),\n"
+                  "\tTotal: opts{Limit: 3}.Limit,\n}\nvar after = cfg{Name: n}\n"},
+     0, r"found 2 · resolved 2", ""),
     ("python _pb2 kwarg on the wrong message fails",
      {"proto/clinic.proto": PROTO},
      {"svc/h.py": "a = clinic_pb2.Appointment(slot='x', patient_id='p')\n"},

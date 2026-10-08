@@ -63,12 +63,15 @@ ADR amendment is in-scope for this work.
  EVERY match goes in the table, including the ones ruled out — an "out" row is
  the durable record that the item was seen and deliberately excluded, which is
  what stops the next scope re-litigating it. TO-DO.md itself is NOT edited;
- folded items are found done-with-evidence by the next periodic /todo-sweep.}
+ folded items are found done-with-evidence by the next periodic /todo-sweep.
+
+ In / Out is one of: "In (auto)" — folded in by Step 0.9 without a question;
+ "In" — pulled in by the user; "Out" — with the home it was given in Why.}
 
 | TO-DO item | Origin section | In / Out | Phase | Why |
 |---|---|---|---|---|
-| Prove the new UBL path end to end | Scope 87 — deferred at code-complete | In | 2 | Phase 2 exercises this path already |
-| Drop retired `cashier_YYYY.ubl_*` tables | Scope 87 — deferred at code-complete | Out | — | One-way door, gated on a fresh census |
+| Prove the new UBL path end to end | Scope 87 — deferred at code-complete | In (auto) | 2 | Phase 2 exercises this path already |
+| Drop retired `cashier_YYYY.ubl_*` tables | Scope 87 — deferred at code-complete | Out | — | One-way door, gated on a fresh census. Stays in `TO-DO.md` |
 
 ## NOT in Scope
 {Explicit exclusions to prevent scope creep. If Step 0.6 detected a contract

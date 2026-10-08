@@ -1,6 +1,6 @@
 ---
 name: scope
-version: 3.11.0
+version: 3.12.0
 description: |
   Task scoping, skill router, and progress tracker. Reads current context (git diff,
   branch, CLAUDE.md, open files), eliminates assumptions via two rounds of open-ended
@@ -259,12 +259,13 @@ artifact) so `/plan` and `/plan-eng-review` pick it up.
 
 Accumulated items enter the TO-DO file automatically — `/plan` §11.1-11.2 appends every
 deferral — and leave it by hand. Scoping is the one moment where someone holds both the
-topic and the authority to decide an old item's fate, so this is where the question gets
-asked.
+topic and the authority to decide an old item's fate, so this is where items get pulled
+back into work.
 
 **This step does not verify and it does not sweep.** Checking an item against the code is
 `/todo-sweep`, run periodically as its own activity, and it stays there. This step matches,
-recommends, and asks one question. It writes nothing to `TO-DO.md`.
+folds in what belongs, and asks only about what it would leave out. It writes nothing to
+`TO-DO.md`.
 
 ### 0.9.1 Match on shape, not words
 
@@ -288,61 +289,85 @@ rounds. Tables are the strongest signal available and they aren't computed here.
 accepted — this step has to precede Round 1 to shape the questions, and matching on repos,
 ADRs and paths is enough to surface the items that matter.
 
-Cap the list at ~6. If more than six match, the scope's topic is too broad for this
-question to be useful — say so, list none, and move on rather than pasting twenty rows.
+Cap the **raised** list (0.9.3) at ~6. If more than six related items would be left out,
+the scope's topic is too broad for the question to be useful — say so, raise none, and move
+on rather than pasting twenty rows. Items folded in are not capped by count: each has to
+clear the bar in 0.9.2, and that bar is what bounds them.
 
-### 0.9.2 Do the mapping math before asking
+### 0.9.2 Sort every match: in, out, or already handled
 
-For each match, form a recommendation from **the scope's objective**, not from the item's
-priority marker. A P1 that belongs to a different door is still out; a P3 one-liner in a
-file this scope already edits is in. Three shapes recur:
+Decide each match from **the scope's objective**, not from the item's priority marker. A P1
+that belongs to a different door is still out; a P3 one-liner in a file this scope already
+edits is in. Three shapes recur:
 
 - **In** — it sits on the critical path of what's being built, or lands in a file set this
-  scope already touches. The marginal cost of doing it here is near zero.
-- **Out** — adjacent but a separate door: gated on something else, irreversible enough to
-  want its own rollback, or large enough to be its own scope.
+  scope already touches, and the marginal cost of doing it here is near zero. **An in is
+  accepted without asking (0.9.3), so the bar is strict:** it adds no gate, no repo the
+  scope does not already change, and no table, contract or ADR change of its own. An item
+  that needs any of those is an out, however related. When unsure, it is an out — a wrong
+  out costs one question, a wrong in puts work nobody reviewed into the plan.
+- **Out** — related but a separate door: gated on something else, irreversible enough to
+  want its own rollback, or large enough to be its own scope. Name where it should live
+  instead: it stays in `TO-DO.md`, or it belongs with a named scope or program member. An
+  item you would take only part of is an in for that part and an out for the rest.
 - **Looks already handled** — you read code during Steps 0.5–0.8 that appears to close it.
-  Say so and cite what you saw. This is an observation from the mapping, not a verification
-  pass — the user disposes, and `/todo-sweep` remains the thing that proves it.
+  Treat it as an in: the phase that touches that code gets a one-line task to confirm it
+  against the code and cite the commit in `progress.md`. This is an observation from the
+  mapping, not a verification pass — `/todo-sweep` remains the thing that removes the item.
 
 That third shape is not hypothetical: scope 109 inherited three TO-DO items of which two
 were already fixed, and scope 108.3 hit the same thing three times.
 
-### 0.9.3 Ask, answer by number — as its own message
+### 0.9.3 Fold in the ins; ask only about the outs
 
-Fire this **separately from Round 1**, before it. Round 1 removes assumptions about the new
-work; this disposes of old work. Merging them makes both lists muddier, and the extra round
-is worth it — progress is the objective here, not economy of questions.
+**Ins are not a question.** State them as a notice — the item, its origin, the phase that
+absorbs it, one clause of why — and carry on. The user can take one out by naming it;
+nobody has to approve them.
 
-> **Accumulated TO-DOs matching this scope** — 4 open items map to this work:
+> **Why (Alex, 2026-10-08).** In over a month of harvests no recommended in was turned
+> down. A question whose answer is always yes costs a round and decides nothing, while the
+> TO-DO file grows faster than it drains.
+
+**Outs are the decision points.** Each is a numbered question carrying the home you
+recommend. Number only the outs — the ins are bullets, so an answer by number can only
+mean a decision.
+
+> **TO-DOs folded into this scope** — 3 items, no action needed (name one to take it out):
 >
-> 1. **Prove the new UBL path end to end** (Scope 87, P1) — phase 2 exercises exactly this
->    path; the proof is a test you're writing anyway. **In.**
-> 2. **Drop retired `cashier_YYYY.ubl_*` tables** (Scope 87, P2) — one-way door, gated on a
->    fresh census, no dependency on this work. **Out.**
-> 3. **`wellmed-cashier/CLAUDE.md` §8c documents the deleted dual-write** (Scope 87, P1) —
->    this scope edits that repo; the doc fix is in the same file set. **In.**
-> 4. **ADR reconciliation, scope 87 U.10** (P2) — overlaps ADR-011, which Step 0.7 flagged.
->    **In, but only the §2.4 clause** — the rest is its own scope.
+> - **Prove the new UBL path end to end** (Scope 87, P1) → phase 2, which exercises exactly
+>   this path; the proof is a test you're writing anyway.
+> - **`wellmed-cashier/CLAUDE.md` §8c documents the deleted dual-write** (Scope 87, P1) →
+>   phase 1; this scope edits that file set.
+> - **ADR reconciliation, scope 87 U.10 — the §2.4 clause only** (P2) → phase 1; it overlaps
+>   ADR-011, which Step 0.7 flagged.
 >
-> In, out, or tell me what I've got wrong. Answer by number.
+> **Related, but I would leave these out** — 2 decisions:
+>
+> 1. **Drop retired `cashier_YYYY.ubl_*` tables** (Scope 87, P2) — one-way door, gated on a
+>    fresh census, no dependency on this work. Stays in `TO-DO.md`.
+> 2. **ADR reconciliation, scope 87 U.10 — everything past §2.4** (P2) — its own scope.
+>    Stays in `TO-DO.md`.
+>
+> Agree, pull one in, or name a better home. Answer by number.
 
-Carry the user's answers into Round 1: an item folded in can change which questions are
-worth asking, which is the whole reason this runs first.
+**When it fires.** With outs to decide, send this as its own message before Round 1: an
+out pulled in can change which questions are worth asking. With none, the notice opens the
+Round 1 message and no extra round is spent.
 
 ### 0.9.4 Record the disposition; write nothing to `TO-DO.md`
 
-Every match goes into scope.md's `## Inherited TO-DOs` table — **including the ones ruled
-out**, because that row is the durable record that the item was seen and deliberately
-excluded, which is what stops the next scope from re-litigating it. For each **in**, name
-the phase that absorbs it so Step 5.9 carries it into that phase's plan stub.
+Every match goes into scope.md's `## Inherited TO-DOs` table, marked `In (auto)`, `In`
+(pulled in by the user) or `Out` — **including the ones ruled out**, because that row is
+the durable record that the item was seen and deliberately excluded, which is what stops
+the next scope from re-litigating it. An out's row names the home it was given. For each
+**in**, name the phase that absorbs it so Step 5.9 carries it into that phase's plan stub.
 
 `TO-DO.md` itself is untouched. An item folded in and shipped is found done — with the SHA
 that did it — by the next periodic `/todo-sweep` at near-zero cost, because the work is in
 the code by then. Marking it here would be asserting a completion that hasn't happened yet.
 
 If there is no `TO-DO.md`, or nothing matches: one line in synthesis ("No TO-DO matches for
-this scope's repos/ADRs/paths — harvest N/A"), no question asked.
+this scope's repos/ADRs/paths — harvest N/A"), no notice and no question.
 
 ---
 
@@ -358,7 +383,7 @@ Ask 5–15 open-ended questions in a **single response** as a numbered list. The
 - **If CROSS-REPO.md exists** (Step 0.5 ran): ALWAYS include a cross-repo coordination question that lists the Consumer repos by name and asks which are in-scope vs deferred. Don't ask abstractly ("any other repos?") — name them.
 - **If Step 0.6 detected contract changes:** lead with the cascade-confirmation framing, not a question — the default is that all Consumers update.
 - **If Step 0.7 surfaced ADRs:** confirm conform/extend/contradict before any other questions — premises first, design second.
-- **If Step 0.9 folded in TO-DO items:** treat them as part of the work when generating questions — a folded item can carry its own scope boundary, testing or coordination ambiguity. Do NOT re-ask whether it belongs; that was just answered.
+- **If Step 0.9 folded in TO-DO items:** treat them as part of the work when generating questions — a folded item can carry its own scope boundary, testing or coordination ambiguity. Do NOT ask whether it belongs; Step 0.9 settled that.
 - Skip anything already clear from context — every question must move the design
 
 Cover where ambiguity actually exists — scope boundary, prod vs exploratory, UI
@@ -753,6 +778,7 @@ After writing the files, output to the user:
 3. The recommended first skill to run (first YES in the checklist)
 4. One-line summary of any N/A decisions that might surprise them
 5. Whether this is single-phase or phased, and what Phase 1 ends with
+6. How many TO-DO items Step 0.9 folded in without asking, and which phases carry them
 
 Do NOT re-print the entire scope.md. Just the handoff summary above.
 

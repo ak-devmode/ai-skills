@@ -240,7 +240,7 @@ graphs.
 | Skill | Version | Notes |
 |---|---|---|
 | `plan` | 3.10.0 | Review + verify per unit, Done through the gate; self-heal with `Predates gate`; ledger `--repo` bases; human checkpoints: table approval before work, review-outcome acceptance. |
-| `scope` | 3.10.0 | Step 5.10 writes `finish-conditions.md`, §5.10.1 the user approves it in plain English; stubs carry Review/Verify tasks. |
+| `scope` | 3.12.0 | Step 0.9 folds matching TO-DOs it judges in straight into the plan and asks only about the ones it would leave out. Step 5.10 writes `finish-conditions.md`, §5.10.1 the user approves it in plain English; stubs carry Review/Verify tasks. |
 | `closeout` | 1.4.0 | Step 3a verdict (`--all`), lever candidates, feature-map handoff, clean-scope count. |
 | `closeout-extended` | 1.0.1 | |
 | `cross-repo-init` | 1.5.0 | Branch survey = `repo-survey.sh`; CLAUDE template no longer writes memory paths. |

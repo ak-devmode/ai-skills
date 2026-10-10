@@ -379,7 +379,10 @@ class-A run may carry these fields and no others: `run_id` · `unit` · `check_i
 `rung_required` · `rung_reached` · `result` · `judge` · `ts` · `sha`.
 
 7.3 Never in any verdict, public or private: credentials, tokens, full request bodies, PHI,
-tenant names other than `clinic_3`.
+or a tenant name. One exception: a verdict may name the product suite's own test tenant —
+the one its adapter's allowlist admits for that env, which `env --json` returns as `tenant`
+(§9.1). It names no other tenant. No script checks tenant names: a scope that keeps
+class-A evidence carries a finish row that does.
 
 ---
 

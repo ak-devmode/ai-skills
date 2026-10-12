@@ -227,7 +227,10 @@ passes. The flag stays on the record so a reader can see it; it is not a block.
 
 5.2.1 **Per unit, the gate also blocks when** a repo with a recorded base has commits in
 `base..HEAD` but no `review` record (§6.0) names that repo and covers the unit's first
-commit on the current branch — or whose net diff a squash commit in the range holds (§5.2.2) —
+commit on the current branch (on its lane: the first on HEAD's first-parent line, so commits a
+merge of the trunk brought in are not the unit's; and "covers" is the review's range as git
+reads it, `base..head`, so a review taken from that merge-in on holds the lane's earlier
+commits — kalpa-iris 5.2) — or whose net diff a squash commit in the range holds (§5.2.2) —
 a unit that commits must be reviewed (review 5.3-r1-03);
 when a **blocking** finding's `fixed <sha>` — or any `shipped` finding's fix `via off-anchor`, which
 only a reason ties to the finding (review adhoc-03); a `scaffolding` finding is capped at

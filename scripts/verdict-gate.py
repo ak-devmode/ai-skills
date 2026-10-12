@@ -177,12 +177,15 @@ def review_presence_blocks(review_log, base, projects, scope=None):
         return any(canon(k) == canon(repo) for k in r.get("range", {}))
 
     def inside(path, r, sha):
-        """sha in (r.base, r.head], and r.head landed — on the current branch or the trunk, an
-        ancestor or squash/rebase-merged (§5.2.2)."""
+        """sha is in the range r.base..r.head as git reads one — reachable from the head, not
+        from the base — and r.head landed: on the current branch or the trunk, an ancestor or
+        squash/rebase-merged (§5.2.2). Not "base is an ancestor of sha": a review taken after the
+        trunk was merged into the lane has that merge as its base, and the lane's commits from
+        before it are in its range and were read (kalpa-iris 5.2)."""
         sh = r.get("shas") or {}
         return bool(sh.get("base") and sh.get("head")) and not sha.startswith(sh["base"]) \
             and not sh["base"].startswith(sha) \
-            and git_ok(path, "merge-base", "--is-ancestor", sh["base"], sha) \
+            and not git_ok(path, "merge-base", "--is-ancestor", sha, sh["base"]) \
             and git_ok(path, "merge-base", "--is-ancestor", sha, sh["head"]) \
             and ll.landed(path, sh["head"], known) is not None
 
@@ -210,7 +213,11 @@ def review_presence_blocks(review_log, base, projects, scope=None):
             counted.append(f"{n} commit(s) in {b[:10]}..{tip}")
             # the unit's first commit must sit inside a review on this branch, or a squash
             # commit in the range must hold a review's net diff
-            oldest = (git_out(path, "rev-list", "--reverse", f"{b}..{tip}") or "").splitlines()[:1]
+            # On its lane the unit's own commits are HEAD's first-parent line: what a merge of
+            # the trunk brought in is another unit's, reviewed there, and is not this unit's
+            # first commit (kalpa-iris 5.2: scope 4's commits, merged in from develop, were).
+            own = ("--first-parent",) if tip == "HEAD" else ()
+            oldest = (git_out(path, "rev-list", "--reverse", *own, f"{b}..{tip}") or "").splitlines()[:1]
             if any(oldest and inside(path, r, oldest[0]) for r in mine) \
                     or any(squash_covers(path, r, b, tip) for r in mine):
                 covered = True

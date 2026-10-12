@@ -445,6 +445,42 @@ class TestReviewRequired(Fixture):
         code, doc = self.gate_json("--blocking")
         self.assertIn("review:gone", [b["id"] for b in doc["blocks"]])
 
+    def lane_with_the_trunk_merged_in(self):
+        """The unit's work moves to a lane; the trunk (main) goes back to the base, takes
+        another unit's commit — dated before the unit's, as a long-lived lane meets — and is
+        merged into the lane. Returns the other unit's commit."""
+        git(self.svc, "checkout", "-q", "-b", "lane")
+        git(self.svc, "branch", "-f", "main", self.b)
+        git(self.svc, "checkout", "-q", "main")
+        subprocess.run(["git", "-C", self.svc, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q",
+                        "--allow-empty", "-m", "another unit's work"], check=True,
+                       env=dict(os.environ, GIT_AUTHOR_DATE="2000-01-01T00:00:00", GIT_COMMITTER_DATE="2000-01-01T00:00:00"))
+        other = git(self.svc, "rev-parse", "HEAD")
+        git(self.svc, "checkout", "-q", "lane")
+        git(self.svc, "merge", "-q", "--no-ff", "-m", "merge the trunk into the lane", "main")
+        return other
+
+    def test_trunk_merged_into_the_lane_is_not_the_units_first_commit(self):
+        # kalpa-iris 5.2: another unit's commits arrive by a merge of the trunk into the lane;
+        # the review is taken from that merge-in on. The unit's own first commit is in its range.
+        other = self.lane_with_the_trunk_merged_in()
+        git(self.svc, "commit", "-q", "--allow-empty", "-m", "more unit work")
+        self.review_record(other, git(self.svc, "rev-parse", "HEAD"))
+        self.verify("codex gpt-test", [self.v("ok", "pass")])
+        code, doc = self.gate_json("--blocking")
+        self.assertEqual((code, doc["verdict"]), (0, "pass"), doc)
+
+    def test_review_from_a_trunk_merge_does_not_cover_what_it_did_not_read(self):
+        # the same history, but the review starts after the unit's later commit: the unit's
+        # first commit is in no review's range, and the merge does not hide that
+        self.lane_with_the_trunk_merged_in()
+        merged = git(self.svc, "rev-parse", "HEAD")
+        git(self.svc, "commit", "-q", "--allow-empty", "-m", "more unit work")
+        self.review_record(merged, git(self.svc, "rev-parse", "HEAD"))
+        self.verify("codex gpt-test", [self.v("ok", "pass")])
+        code, doc = self.gate_json("--blocking")
+        self.assertIn("review:svc", [b["id"] for b in doc["blocks"]])
+
     def test_review_that_starts_after_the_base_does_not_cover(self):
         git(self.svc, "commit", "-q", "--allow-empty", "-m", "more")
         self.review_record(self.h, git(self.svc, "rev-parse", "HEAD"))

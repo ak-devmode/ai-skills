@@ -46,6 +46,25 @@ def git_out(path, *args):
     return p.stdout.strip() if p.returncode == 0 else None
 
 
+def first_unit_commit(path, b, tip, heads):
+    """The unit's oldest commit in b..tip. tip's first-parent line from b holds the unit's own
+    commits and merges; a merge brings the unit's work only when its side holds a reviewed head.
+    Any other merge is another unit landing on a shared trunk, or the trunk merged into the lane,
+    and its commits are not the unit's (164.2: backbone's oldest commit since the base was
+    163.2's, infra's 158.3's, so a reviewed unit read "never reviewed"). When no first-parent step
+    is the unit's (no review heads, a history this cannot read), the oldest commit in b..tip
+    stands in, as before."""
+    for c in (git_out(path, "rev-list", "--first-parent", "--reverse", f"{b}..{tip}") or "").split():
+        parents = (git_out(path, "rev-list", "--parents", "-n1", c) or "").split()[1:]
+        if len(parents) <= 1:
+            return c
+        if any(git_ok(path, "merge-base", "--is-ancestor", h, side) for h in heads for side in parents[1:]):
+            brought = (git_out(path, "rev-list", "--reverse", f"{parents[0]}..{c}") or "").split()
+            return brought[0] if brought else c
+    oldest = (git_out(path, "rev-list", "--reverse", f"{b}..{tip}") or "").splitlines()
+    return oldest[0] if oldest else None
+
+
 def coverage_blocks(review_log):
     """§6.3 / §5.2.1 — findings without a valid latest disposition."""
     recs = vl.read_jsonl(review_log)
@@ -216,9 +235,10 @@ def review_presence_blocks(review_log, base, projects, scope=None):
             # On its lane the unit's own commits are HEAD's first-parent line: what a merge of
             # the trunk brought in is another unit's, reviewed there, and is not this unit's
             # first commit (kalpa-iris 5.2: scope 4's commits, merged in from develop, were).
-            own = ("--first-parent",) if tip == "HEAD" else ()
-            oldest = (git_out(path, "rev-list", "--reverse", *own, f"{b}..{tip}") or "").splitlines()[:1]
-            if any(oldest and inside(path, r, oldest[0]) for r in mine) \
+            # On a shared trunk the same holds for other units' PR merges (first_unit_commit).
+            heads = [h for h in ((r.get("shas") or {}).get("head") for r in mine) if h]
+            first = first_unit_commit(path, b, tip, heads)
+            if any(first and inside(path, r, first) for r in mine) \
                     or any(squash_covers(path, r, b, tip) for r in mine):
                 covered = True
                 break

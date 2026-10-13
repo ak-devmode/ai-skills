@@ -481,6 +481,49 @@ class TestReviewRequired(Fixture):
         code, doc = self.gate_json("--blocking")
         self.assertIn("review:svc", [b["id"] for b in doc["blocks"]])
 
+    def trunk_with_another_unit_landed_first(self):
+        """The unit works on a lane and merges the trunk in; meanwhile another unit lands on the
+        shared trunk first. The lane is merged back (a PR merge commit) and HEAD is the clean
+        trunk. Returns (the other unit's commit, the lane's tip)."""
+        git(self.svc, "checkout", "-q", "-b", "lane")                 # unit work = self.h
+        git(self.svc, "branch", "-f", "main", self.b)
+        git(self.svc, "checkout", "-q", "-b", "other", self.b)
+        subprocess.run(["git", "-C", self.svc, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q",
+                        "--allow-empty", "-m", "another unit's work"], check=True,  # older than the unit's work
+                       env=dict(os.environ, GIT_AUTHOR_DATE="2000-01-01T00:00:00", GIT_COMMITTER_DATE="2000-01-01T00:00:00"))
+        other = git(self.svc, "rev-parse", "HEAD")
+        git(self.svc, "checkout", "-q", "main")
+        git(self.svc, "merge", "-q", "--no-ff", "-m", "merge the other unit's PR", "other")
+        git(self.svc, "checkout", "-q", "lane")
+        git(self.svc, "merge", "-q", "--no-ff", "-m", "merge the trunk into the lane", "main")
+        git(self.svc, "commit", "-q", "--allow-empty", "-m", "more unit work")
+        tip = git(self.svc, "rev-parse", "HEAD")
+        git(self.svc, "checkout", "-q", "main")
+        git(self.svc, "merge", "-q", "--no-ff", "-m", "merge the unit's PR", "lane")
+        return other, tip
+
+    def test_another_units_earlier_landing_is_not_the_units_first_commit(self):
+        # 164.2: on a shared trunk the oldest commit since the unit's base was another scope's
+        # (backbone 163.2, infra 158.3), so a fully reviewed unit read "never reviewed"
+        # reviews split at the trunk merge-in, as there: the first ends before it, the next
+        # starts after it, so neither range holds the other unit's commit
+        _, tip = self.trunk_with_another_unit_landed_first()
+        self.review_record(self.b, self.h)
+        self.review_record(git(self.svc, "rev-parse", f"{tip}^"), tip, "5.1-r2")
+        self.verify("codex gpt-test", [self.v("ok", "pass")])
+        code, doc = self.gate_json("--blocking")
+        self.assertEqual((code, doc["verdict"]), (0, "pass"), doc)
+
+    def test_another_units_landing_does_not_hide_an_unreviewed_first_commit(self):
+        # the same history, reviewed only from the trunk merge-in on: the unit's own first
+        # commit is still in no review's range
+        _, tip = self.trunk_with_another_unit_landed_first()
+        merge_in = git(self.svc, "rev-parse", f"{tip}^")
+        self.review_record(merge_in, tip)
+        self.verify("codex gpt-test", [self.v("ok", "pass")])
+        code, doc = self.gate_json("--blocking")
+        self.assertIn("review:svc", [b["id"] for b in doc["blocks"]])
+
     def test_review_that_starts_after_the_base_does_not_cover(self):
         git(self.svc, "commit", "-q", "--allow-empty", "-m", "more")
         self.review_record(self.h, git(self.svc, "rev-parse", "HEAD"))

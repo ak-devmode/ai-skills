@@ -524,6 +524,34 @@ class TestReviewRequired(Fixture):
         code, doc = self.gate_json("--blocking")
         self.assertIn("review:svc", [b["id"] for b in doc["blocks"]])
 
+    def test_an_unreviewed_first_pr_of_the_unit_still_blocks(self):
+        # review of the gate fix, finding 1: the unit lands U through M1 and V through M2, and only
+        # V is reviewed. M1's side holds no reviewed head, but its branch names the unit, so U is
+        # the unit's first commit and it was never reviewed.
+        git(self.svc, "checkout", "-q", "-b", "feature/5.1-u")   # U = self.h
+        git(self.svc, "checkout", "-q", "main")
+        git(self.svc, "reset", "-q", "--hard", self.b)
+        git(self.svc, "merge", "-q", "--no-ff", "-m", "Merge pull request #1 from org/feature/5.1-u", "feature/5.1-u")
+        m1 = git(self.svc, "rev-parse", "HEAD")
+        git(self.svc, "checkout", "-q", "-b", "fix/5.1-v")
+        git(self.svc, "commit", "-q", "--allow-empty", "-m", "V")
+        v = git(self.svc, "rev-parse", "HEAD")
+        git(self.svc, "checkout", "-q", "main")
+        git(self.svc, "merge", "-q", "--no-ff", "-m", "Merge pull request #2 from org/fix/5.1-v", "fix/5.1-v")
+        self.review_record(m1, v)
+        self.verify("codex gpt-test", [self.v("ok", "pass")])
+        code, doc = self.gate_json("--blocking")
+        self.assertIn("review:svc", [b["id"] for b in doc["blocks"]])
+
+    def test_a_failed_history_query_blocks_instead_of_guessing(self):
+        # review of the gate fix, finding 2: a git failure is never "not a merge"
+        self.trunk_with_another_unit_landed_first()
+        self.review_record(self.b, "0123456789abcdef0123456789abcdef01234567")  # a head git cannot read
+        self.verify("codex gpt-test", [self.v("ok", "pass")])
+        code, doc = self.gate_json("--blocking")
+        found = [b for b in doc["blocks"] if b["id"] == "review:svc"]
+        self.assertTrue(found and "cannot determine" in json.dumps(found), doc["blocks"])
+
     def test_review_that_starts_after_the_base_does_not_cover(self):
         git(self.svc, "commit", "-q", "--allow-empty", "-m", "more")
         self.review_record(self.h, git(self.svc, "rev-parse", "HEAD"))

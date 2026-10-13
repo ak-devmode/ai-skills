@@ -552,6 +552,45 @@ class TestReviewRequired(Fixture):
         found = [b for b in doc["blocks"] if b["id"] == "review:svc"]
         self.assertTrue(found and "cannot determine" in json.dumps(found), doc["blocks"])
 
+    def test_an_unreadable_review_base_blocks(self):
+        # review round 2, finding 1: a git error on the base read as "not an ancestor", so a
+        # nonexistent base made every commit "inside" the review
+        self.review_record("0123456789abcdef0123456789abcdef01234567", self.h)
+        self.verify("codex gpt-test", [self.v("ok", "pass")])
+        code, doc = self.gate_json("--blocking")
+        found = [b for b in doc["blocks"] if b["id"] == "review:svc"]
+        self.assertTrue(found and "cannot determine" in json.dumps(found), doc["blocks"])
+
+    def test_a_later_squash_does_not_clear_an_unreviewed_first_pr(self):
+        # review round 2, finding 2: the unit lands U by a named merge, then V by squash; a
+        # review of only M1..V matched the squash landing and cleared U
+        # (a two-commit lane editing an existing file, so it lands by squash arrival, not patch-id)
+        git(self.svc, "checkout", "-q", "-b", "feature/5.1-u")   # U = self.h
+        git(self.svc, "checkout", "-q", "main")
+        git(self.svc, "reset", "-q", "--hard", self.b)
+        app = os.path.join(self.svc, "app.go")
+        with open(app, "w") as fh:
+            fh.write(APP)
+        git(self.svc, "add", "app.go")
+        git(self.svc, "commit", "-q", "-m", "seed")
+        git(self.svc, "merge", "-q", "--no-ff", "-m", "Merge pull request #1 from org/feature/5.1-u", "feature/5.1-u")
+        m1 = git(self.svc, "rev-parse", "HEAD")
+        git(self.svc, "checkout", "-q", "-b", "fix/5.1-v")
+        for n, word in ((2, "offsetTwo"), (7, "offsetSeven")):
+            with open(app) as fh:
+                text = fh.read()
+            with open(app, "w") as fh:
+                fh.write(text.replace(f"\treturn value{n}\n", f"\treturn value{n} + {word}\n"))
+            git(self.svc, "commit", "-q", "-am", f"V{n}")
+        v = git(self.svc, "rev-parse", "HEAD")
+        git(self.svc, "checkout", "-q", "main")
+        git(self.svc, "merge", "-q", "--squash", "fix/5.1-v")
+        git(self.svc, "commit", "-q", "-m", "V (#2)")
+        self.review_record(m1, v)
+        self.verify("codex gpt-test", [self.v("ok", "pass")])
+        code, doc = self.gate_json("--blocking")
+        self.assertIn("review:svc", [b["id"] for b in doc["blocks"]])
+
     def test_review_that_starts_after_the_base_does_not_cover(self):
         git(self.svc, "commit", "-q", "--allow-empty", "-m", "more")
         self.review_record(self.h, git(self.svc, "rev-parse", "HEAD"))

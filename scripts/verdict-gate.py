@@ -57,6 +57,15 @@ def _git_list(path, *args):
     return out.split()
 
 
+def is_ancestor(path, a, b):
+    """git merge-base --is-ancestor a b: True / False, and HistoryError when git cannot answer
+    (an unknown sha). Never negate git_ok for this — a git error would read as "not an ancestor"."""
+    r = subprocess.run(["git", "-C", path, "merge-base", "--is-ancestor", a, b], capture_output=True, text=True)
+    if r.returncode not in (0, 1):
+        raise HistoryError(f"git merge-base --is-ancestor {a} {b}")
+    return r.returncode == 0
+
+
 def names_unit(path, sha, unit):
     """The commit's subject names the unit (`164.2` in `Merge pull request #514 from
     org/feature/164.2-etude-connector`, or in a squash merge's PR title). Branches carry the
@@ -88,14 +97,7 @@ def first_unit_commit(path, b, tip, heads, unit=None):
             if tip == "HEAD" or names_unit(path, c, unit):
                 return c
             continue
-        holds = False
-        for h in heads:
-            for side in parents[1:]:
-                r = subprocess.run(["git", "-C", path, "merge-base", "--is-ancestor", h, side],
-                                   capture_output=True, text=True)
-                if r.returncode not in (0, 1):
-                    raise HistoryError(f"git merge-base --is-ancestor {h} {side}")
-                holds = holds or r.returncode == 0
+        holds = any(is_ancestor(path, h, side) for h in heads for side in parents[1:])
         if holds or names_unit(path, c, unit):
             brought = _git_list(path, "rev-list", "--reverse", f"{parents[0]}..{c}")
             return brought[0] if brought else c
@@ -241,16 +243,17 @@ def review_presence_blocks(review_log, base, projects, scope=None, unit=None):
         sh = r.get("shas") or {}
         return bool(sh.get("base") and sh.get("head")) and not sha.startswith(sh["base"]) \
             and not sh["base"].startswith(sha) \
-            and not git_ok(path, "merge-base", "--is-ancestor", sha, sh["base"]) \
-            and git_ok(path, "merge-base", "--is-ancestor", sha, sh["head"]) \
+            and not is_ancestor(path, sha, sh["base"]) \
+            and is_ancestor(path, sha, sh["head"]) \
             and ll.landed(path, sh["head"], known) is not None
 
     def squash_covers(path, r, b, tip):
-        """§5.2.2: the review's net diff (base..head) arrived in a commit S on tip's first-parent
-        line after the unit's base — S, not the lane commits, is what base..tip holds."""
+        """§5.2.2: the commit S on tip's first-parent line after the unit's base in which the
+        review's net diff (base..head) arrived — S, not the lane commits, is what base..tip holds —
+        or None."""
         sh = r.get("shas") or {}
         s = sh.get("base") and sh.get("head") and ll.arrival(path, sh["base"], sh["head"], tip)
-        return bool(s) and not s.startswith(b) and git_ok(path, "merge-base", "--is-ancestor", b, s)
+        return s if s and not s.startswith(b) and is_ancestor(path, b, s) else None
 
     for repo, b in sorted(base.items()):
         path = root(repo)
@@ -273,19 +276,24 @@ def review_presence_blocks(review_log, base, projects, scope=None, unit=None):
             # the trunk brought in is another unit's, reviewed there, and is not this unit's
             # first commit (kalpa-iris 5.2: scope 4's commits, merged in from develop, were).
             # On a shared trunk the same holds for other units' PR merges (first_unit_commit).
+            # A squash landing covers only when it IS the unit's first landing: a later squash
+            # reviewed from the unit's first merge on must not clear an unreviewed first PR.
             heads = [h for h in ((r.get("shas") or {}).get("head") for r in mine) if h]
             try:
-                first = first_unit_commit(path, b, tip, heads, unit)
+                found = first_unit_commit(path, b, tip, heads, unit)
+                first = found
+                if first is None:
+                    oldest = (git_out(path, "rev-list", "--reverse", f"{b}..{tip}") or "").splitlines()[:1]
+                    first = oldest[0] if oldest else None
+                landings = [s for s in (squash_covers(path, r, b, tip) for r in mine) if s]
+                ok = any(first and inside(path, r, first) for r in mine) \
+                    or any(found is None or s == found for s in landings)
             except HistoryError as e:
                 blocks.append((f"review:{repo}", "cannot determine the unit's first commit", f"{e} in {repo}",
                                "git failed", f"{path}", "environment"))
                 covered = True  # reported; one block per repo
                 break
-            if first is None:
-                oldest = (git_out(path, "rev-list", "--reverse", f"{b}..{tip}") or "").splitlines()[:1]
-                first = oldest[0] if oldest else None
-            if any(first and inside(path, r, first) for r in mine) \
-                    or any(squash_covers(path, r, b, tip) for r in mine):
+            if ok:
                 covered = True
                 break
         if counted and not covered:
@@ -337,8 +345,13 @@ def review_presence_blocks(review_log, base, projects, scope=None, unit=None):
         later = [r for r in reviews if round_no(r.get("review_id")) > round_no(f.get("review_id")) >= 0]
         for repo in ([d["repo"]] if d.get("repo") else (f.get("range") or {})):
             path = root(repo)
-            if not any(inside(path, r, d["sha"]) for r in later if names(r, repo)) \
-                    and not stopped(repo, f["finding_id"]):
+            try:
+                seen = any(inside(path, r, d["sha"]) for r in later if names(r, repo))
+            except HistoryError as e:
+                blocks.append((f"rereview:{f['finding_id']}", "cannot read the fix's history",
+                               f"{e} in {repo}", "git failed", f"{path}", "environment"))
+                continue
+            if not seen and not stopped(repo, f["finding_id"]):
                 capped = sum(1 for r in reviews if names(r, repo)) >= vl.ROUND_CAP
                 blocks.append((f"rereview:{f['finding_id']}", f"{why} was never reviewed",
                                f"a later /review whose range contains {d['sha'][:10]}" + (

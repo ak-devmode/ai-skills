@@ -456,3 +456,10 @@ Touches: ai-skills · scripts/verdict-gate.py · scripts/verify-run.py · script
 - [ ] **The runner executes a row in `~/Projects/<repo>` whatever branch that checkout is on.** For wellmed-infrastructure it was on `main`, 82 commits behind its remote, while the unit's work sat in a herdr worktree. 162.3 was run with `VERIFY_PROJECTS` pointed at a scratch projects root of symlinks. The runner could refuse a checkout that does not contain the unit's head, or take the worktree from the ledger.
 - [ ] **`resolve-identifiers.py` reads a shell parameter expansion as an SSM path.** `/wellmed/${pair#*:}/backbone/DEPLOY_STATE_TAG` in a `for pair in dev:develop …` loop is reported as the undeclared path `/wellmed/${pair`. Sighted on 162.3 `p3-names-resolve` (the judge called it the scanner's fault; the runner failure stayed binding).
 - [ ] **Operator captures are downgraded every time.** A class-A row whose evidence is a file captured over SSM by the user is marked inconclusive by a judge that cannot reach the host (162.3 `image-label-confirmed`, `tag-series-live`). Second sighting of the report's lever candidate `authenticated-monitoring-readback` would justify building it: keep the SSM command id beside the capture so the judge can cite it.
+
+## verdict-gate — shared-trunk first-commit fix, round 3 residual (2026-10-13)
+Source: branch fix/verdict-gate-shared-trunk (dc258cc, 3a63eb8, 17cb4d9); codex review round 3 (SHIP)
+Touches: scripts/verdict-gate.py · scripts/landed_lib.py · verify-contracts.md §5.2.2
+
+- [ ] Round 3 should-fix: a fully reviewed multi-commit **rebase** merge (lane B→U1→U2 landed as R1→R2, R1 naming the unit) can report "never reviewed": `found` is R1, which is outside the review's ancestry, while `arrival(B, U2)` returns R2. Fails closed (a false block, never a false pass). Fix: when the unit's first landing is a rebase copy, accept a review whose base..head maps onto the landed run R1..Rn by patch-id. **P3.**
+- [ ] Accepted residual (documented in `first_unit_commit`): a unit PR whose subject omits the unit number and whose side holds no reviewed head is not counted. Branch naming carries the number by convention.

@@ -481,6 +481,116 @@ class TestReviewRequired(Fixture):
         code, doc = self.gate_json("--blocking")
         self.assertIn("review:svc", [b["id"] for b in doc["blocks"]])
 
+    def trunk_with_another_unit_landed_first(self):
+        """The unit works on a lane and merges the trunk in; meanwhile another unit lands on the
+        shared trunk first. The lane is merged back (a PR merge commit) and HEAD is the clean
+        trunk. Returns (the other unit's commit, the lane's tip)."""
+        git(self.svc, "checkout", "-q", "-b", "lane")                 # unit work = self.h
+        git(self.svc, "branch", "-f", "main", self.b)
+        git(self.svc, "checkout", "-q", "-b", "other", self.b)
+        subprocess.run(["git", "-C", self.svc, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q",
+                        "--allow-empty", "-m", "another unit's work"], check=True,  # older than the unit's work
+                       env=dict(os.environ, GIT_AUTHOR_DATE="2000-01-01T00:00:00", GIT_COMMITTER_DATE="2000-01-01T00:00:00"))
+        other = git(self.svc, "rev-parse", "HEAD")
+        git(self.svc, "checkout", "-q", "main")
+        git(self.svc, "merge", "-q", "--no-ff", "-m", "merge the other unit's PR", "other")
+        git(self.svc, "checkout", "-q", "lane")
+        git(self.svc, "merge", "-q", "--no-ff", "-m", "merge the trunk into the lane", "main")
+        git(self.svc, "commit", "-q", "--allow-empty", "-m", "more unit work")
+        tip = git(self.svc, "rev-parse", "HEAD")
+        git(self.svc, "checkout", "-q", "main")
+        git(self.svc, "merge", "-q", "--no-ff", "-m", "merge the unit's PR", "lane")
+        return other, tip
+
+    def test_another_units_earlier_landing_is_not_the_units_first_commit(self):
+        # 164.2: on a shared trunk the oldest commit since the unit's base was another scope's
+        # (backbone 163.2, infra 158.3), so a fully reviewed unit read "never reviewed"
+        # reviews split at the trunk merge-in, as there: the first ends before it, the next
+        # starts after it, so neither range holds the other unit's commit
+        _, tip = self.trunk_with_another_unit_landed_first()
+        self.review_record(self.b, self.h)
+        self.review_record(git(self.svc, "rev-parse", f"{tip}^"), tip, "5.1-r2")
+        self.verify("codex gpt-test", [self.v("ok", "pass")])
+        code, doc = self.gate_json("--blocking")
+        self.assertEqual((code, doc["verdict"]), (0, "pass"), doc)
+
+    def test_another_units_landing_does_not_hide_an_unreviewed_first_commit(self):
+        # the same history, reviewed only from the trunk merge-in on: the unit's own first
+        # commit is still in no review's range
+        _, tip = self.trunk_with_another_unit_landed_first()
+        merge_in = git(self.svc, "rev-parse", f"{tip}^")
+        self.review_record(merge_in, tip)
+        self.verify("codex gpt-test", [self.v("ok", "pass")])
+        code, doc = self.gate_json("--blocking")
+        self.assertIn("review:svc", [b["id"] for b in doc["blocks"]])
+
+    def test_an_unreviewed_first_pr_of_the_unit_still_blocks(self):
+        # review of the gate fix, finding 1: the unit lands U through M1 and V through M2, and only
+        # V is reviewed. M1's side holds no reviewed head, but its branch names the unit, so U is
+        # the unit's first commit and it was never reviewed.
+        git(self.svc, "checkout", "-q", "-b", "feature/5.1-u")   # U = self.h
+        git(self.svc, "checkout", "-q", "main")
+        git(self.svc, "reset", "-q", "--hard", self.b)
+        git(self.svc, "merge", "-q", "--no-ff", "-m", "Merge pull request #1 from org/feature/5.1-u", "feature/5.1-u")
+        m1 = git(self.svc, "rev-parse", "HEAD")
+        git(self.svc, "checkout", "-q", "-b", "fix/5.1-v")
+        git(self.svc, "commit", "-q", "--allow-empty", "-m", "V")
+        v = git(self.svc, "rev-parse", "HEAD")
+        git(self.svc, "checkout", "-q", "main")
+        git(self.svc, "merge", "-q", "--no-ff", "-m", "Merge pull request #2 from org/fix/5.1-v", "fix/5.1-v")
+        self.review_record(m1, v)
+        self.verify("codex gpt-test", [self.v("ok", "pass")])
+        code, doc = self.gate_json("--blocking")
+        self.assertIn("review:svc", [b["id"] for b in doc["blocks"]])
+
+    def test_a_failed_history_query_blocks_instead_of_guessing(self):
+        # review of the gate fix, finding 2: a git failure is never "not a merge"
+        self.trunk_with_another_unit_landed_first()
+        self.review_record(self.b, "0123456789abcdef0123456789abcdef01234567")  # a head git cannot read
+        self.verify("codex gpt-test", [self.v("ok", "pass")])
+        code, doc = self.gate_json("--blocking")
+        found = [b for b in doc["blocks"] if b["id"] == "review:svc"]
+        self.assertTrue(found and "cannot determine" in json.dumps(found), doc["blocks"])
+
+    def test_an_unreadable_review_base_blocks(self):
+        # review round 2, finding 1: a git error on the base read as "not an ancestor", so a
+        # nonexistent base made every commit "inside" the review
+        self.review_record("0123456789abcdef0123456789abcdef01234567", self.h)
+        self.verify("codex gpt-test", [self.v("ok", "pass")])
+        code, doc = self.gate_json("--blocking")
+        found = [b for b in doc["blocks"] if b["id"] == "review:svc"]
+        self.assertTrue(found and "cannot determine" in json.dumps(found), doc["blocks"])
+
+    def test_a_later_squash_does_not_clear_an_unreviewed_first_pr(self):
+        # review round 2, finding 2: the unit lands U by a named merge, then V by squash; a
+        # review of only M1..V matched the squash landing and cleared U
+        # (a two-commit lane editing an existing file, so it lands by squash arrival, not patch-id)
+        git(self.svc, "checkout", "-q", "-b", "feature/5.1-u")   # U = self.h
+        git(self.svc, "checkout", "-q", "main")
+        git(self.svc, "reset", "-q", "--hard", self.b)
+        app = os.path.join(self.svc, "app.go")
+        with open(app, "w") as fh:
+            fh.write(APP)
+        git(self.svc, "add", "app.go")
+        git(self.svc, "commit", "-q", "-m", "seed")
+        git(self.svc, "merge", "-q", "--no-ff", "-m", "Merge pull request #1 from org/feature/5.1-u", "feature/5.1-u")
+        m1 = git(self.svc, "rev-parse", "HEAD")
+        git(self.svc, "checkout", "-q", "-b", "fix/5.1-v")
+        for n, word in ((2, "offsetTwo"), (7, "offsetSeven")):
+            with open(app) as fh:
+                text = fh.read()
+            with open(app, "w") as fh:
+                fh.write(text.replace(f"\treturn value{n}\n", f"\treturn value{n} + {word}\n"))
+            git(self.svc, "commit", "-q", "-am", f"V{n}")
+        v = git(self.svc, "rev-parse", "HEAD")
+        git(self.svc, "checkout", "-q", "main")
+        git(self.svc, "merge", "-q", "--squash", "fix/5.1-v")
+        git(self.svc, "commit", "-q", "-m", "V (#2)")
+        self.review_record(m1, v)
+        self.verify("codex gpt-test", [self.v("ok", "pass")])
+        code, doc = self.gate_json("--blocking")
+        self.assertIn("review:svc", [b["id"] for b in doc["blocks"]])
+
     def test_review_that_starts_after_the_base_does_not_cover(self):
         git(self.svc, "commit", "-q", "--allow-empty", "-m", "more")
         self.review_record(self.h, git(self.svc, "rev-parse", "HEAD"))

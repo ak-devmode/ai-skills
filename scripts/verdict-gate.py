@@ -46,6 +46,64 @@ def git_out(path, *args):
     return p.stdout.strip() if p.returncode == 0 else None
 
 
+class HistoryError(Exception):
+    """A git query the coverage check depends on failed; the caller blocks, never guesses."""
+
+
+def _git_list(path, *args):
+    out = git_out(path, *args)
+    if out is None:
+        raise HistoryError("git " + " ".join(args))
+    return out.split()
+
+
+def is_ancestor(path, a, b):
+    """git merge-base --is-ancestor a b: True / False, and HistoryError when git cannot answer
+    (an unknown sha). Never negate git_ok for this — a git error would read as "not an ancestor"."""
+    r = subprocess.run(["git", "-C", path, "merge-base", "--is-ancestor", a, b], capture_output=True, text=True)
+    if r.returncode not in (0, 1):
+        raise HistoryError(f"git merge-base --is-ancestor {a} {b}")
+    return r.returncode == 0
+
+
+def names_unit(path, sha, unit):
+    """The commit's subject names the unit (`164.2` in `Merge pull request #514 from
+    org/feature/164.2-etude-connector`, or in a squash merge's PR title). Branches carry the
+    unit number by convention (/concurrency `concurrency/<scope>-<task>`, `fix/<N.P>-…`)."""
+    if not unit:
+        return False
+    subject = git_out(path, "log", "-1", "--format=%s", sha)
+    if subject is None:
+        raise HistoryError(f"git log -1 {sha}")
+    return re.search(rf"(?<![\d.]){re.escape(unit)}(?![\d])", subject) is not None
+
+
+def first_unit_commit(path, b, tip, heads, unit=None):
+    """The unit's oldest commit in b..tip, or None when no first-parent step is evidently the
+    unit's (the caller then falls back to the oldest commit in b..tip, as before).
+
+    On a shared trunk other units land between the unit's base and its own merge (164.2:
+    backbone's oldest commit since the base was 163.2's, infra's 158.3's, so a reviewed unit read
+    "never reviewed"). Git alone cannot tell this unit's PR from another's, so a first-parent step
+    counts as the unit's only on evidence: its side holds one of the unit's reviewed heads, or its
+    subject names the unit. On the lane (tip = HEAD) a non-merge first-parent commit is the unit's
+    own. Residual: a unit PR whose name omits the unit number and whose side holds no reviewed
+    head is not counted — the naming convention carries that case. A failed git query raises
+    HistoryError; it is never read as "not a merge"."""
+    for c in _git_list(path, "rev-list", "--first-parent", "--reverse", f"{b}..{tip}"):
+        line = _git_list(path, "rev-list", "--parents", "-n1", c)
+        parents = line[1:]
+        if len(parents) <= 1:
+            if tip == "HEAD" or names_unit(path, c, unit):
+                return c
+            continue
+        holds = any(is_ancestor(path, h, side) for h in heads for side in parents[1:])
+        if holds or names_unit(path, c, unit):
+            brought = _git_list(path, "rev-list", "--reverse", f"{parents[0]}..{c}")
+            return brought[0] if brought else c
+    return None
+
+
 def coverage_blocks(review_log):
     """§6.3 / §5.2.1 — findings without a valid latest disposition."""
     recs = vl.read_jsonl(review_log)
@@ -141,7 +199,7 @@ def known_shas(recs):
     return {s for r in recs for s in [*(r.get("shas") or {}).values(), r.get("sha")] if s}
 
 
-def review_presence_blocks(review_log, base, projects, scope=None):
+def review_presence_blocks(review_log, base, projects, scope=None, unit=None):
     """§5.2.1 — a unit with commits must have been reviewed (review 5.3-r1-03).
 
     For every repo whose ledger base has commits in base..HEAD, some `review` record must
@@ -185,16 +243,17 @@ def review_presence_blocks(review_log, base, projects, scope=None):
         sh = r.get("shas") or {}
         return bool(sh.get("base") and sh.get("head")) and not sha.startswith(sh["base"]) \
             and not sh["base"].startswith(sha) \
-            and not git_ok(path, "merge-base", "--is-ancestor", sha, sh["base"]) \
-            and git_ok(path, "merge-base", "--is-ancestor", sha, sh["head"]) \
+            and not is_ancestor(path, sha, sh["base"]) \
+            and is_ancestor(path, sha, sh["head"]) \
             and ll.landed(path, sh["head"], known) is not None
 
     def squash_covers(path, r, b, tip):
-        """§5.2.2: the review's net diff (base..head) arrived in a commit S on tip's first-parent
-        line after the unit's base — S, not the lane commits, is what base..tip holds."""
+        """§5.2.2: the commit S on tip's first-parent line after the unit's base in which the
+        review's net diff (base..head) arrived — S, not the lane commits, is what base..tip holds —
+        or None."""
         sh = r.get("shas") or {}
         s = sh.get("base") and sh.get("head") and ll.arrival(path, sh["base"], sh["head"], tip)
-        return bool(s) and not s.startswith(b) and git_ok(path, "merge-base", "--is-ancestor", b, s)
+        return s if s and not s.startswith(b) and is_ancestor(path, b, s) else None
 
     for repo, b in sorted(base.items()):
         path = root(repo)
@@ -216,10 +275,25 @@ def review_presence_blocks(review_log, base, projects, scope=None):
             # On its lane the unit's own commits are HEAD's first-parent line: what a merge of
             # the trunk brought in is another unit's, reviewed there, and is not this unit's
             # first commit (kalpa-iris 5.2: scope 4's commits, merged in from develop, were).
-            own = ("--first-parent",) if tip == "HEAD" else ()
-            oldest = (git_out(path, "rev-list", "--reverse", *own, f"{b}..{tip}") or "").splitlines()[:1]
-            if any(oldest and inside(path, r, oldest[0]) for r in mine) \
-                    or any(squash_covers(path, r, b, tip) for r in mine):
+            # On a shared trunk the same holds for other units' PR merges (first_unit_commit).
+            # A squash landing covers only when it IS the unit's first landing: a later squash
+            # reviewed from the unit's first merge on must not clear an unreviewed first PR.
+            heads = [h for h in ((r.get("shas") or {}).get("head") for r in mine) if h]
+            try:
+                found = first_unit_commit(path, b, tip, heads, unit)
+                first = found
+                if first is None:
+                    oldest = (git_out(path, "rev-list", "--reverse", f"{b}..{tip}") or "").splitlines()[:1]
+                    first = oldest[0] if oldest else None
+                landings = [s for s in (squash_covers(path, r, b, tip) for r in mine) if s]
+                ok = any(first and inside(path, r, first) for r in mine) \
+                    or any(found is None or s == found for s in landings)
+            except HistoryError as e:
+                blocks.append((f"review:{repo}", "cannot determine the unit's first commit", f"{e} in {repo}",
+                               "git failed", f"{path}", "environment"))
+                covered = True  # reported; one block per repo
+                break
+            if ok:
                 covered = True
                 break
         if counted and not covered:
@@ -271,8 +345,13 @@ def review_presence_blocks(review_log, base, projects, scope=None):
         later = [r for r in reviews if round_no(r.get("review_id")) > round_no(f.get("review_id")) >= 0]
         for repo in ([d["repo"]] if d.get("repo") else (f.get("range") or {})):
             path = root(repo)
-            if not any(inside(path, r, d["sha"]) for r in later if names(r, repo)) \
-                    and not stopped(repo, f["finding_id"]):
+            try:
+                seen = any(inside(path, r, d["sha"]) for r in later if names(r, repo))
+            except HistoryError as e:
+                blocks.append((f"rereview:{f['finding_id']}", "cannot read the fix's history",
+                               f"{e} in {repo}", "git failed", f"{path}", "environment"))
+                continue
+            if not seen and not stopped(repo, f["finding_id"]):
                 capped = sum(1 for r in reviews if names(r, repo)) >= vl.ROUND_CAP
                 blocks.append((f"rereview:{f['finding_id']}", f"{why} was never reviewed",
                                f"a later /review whose range contains {d['sha'][:10]}" + (
@@ -400,7 +479,7 @@ def evaluate(scope, unit, projects):
             continue
         report.append(f"pass   {cid}  {res['result']} · rung {res['rung_reached']}/{row['rung']} · "
                       f"{final.get('judge')}")
-    for bid, what, exp, found, where, cause in review_presence_blocks(review, base, projects, scope):
+    for bid, what, exp, found, where, cause in review_presence_blocks(review, base, projects, scope, unit):
         blocks.append((bid, what, exp, found, where, cause,
                        f"/review --scope {scope} --unit {unit} on the unit's base..HEAD"))
         report.append(f"BLOCK  {bid}  {what}")

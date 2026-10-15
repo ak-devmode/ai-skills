@@ -244,6 +244,13 @@ def shell_binds(syntax):
         return []
     if words[0] == "for" and len(words) >= 3 and words[2] == "in" and SH_NAME.match(words[1]):
         return [words[1]]
+    # `IFS= read -r NAME`: assignments before `read` hold only for that command, so they
+    # bind nothing in the script; read's destinations still do
+    lead = 0
+    while lead < len(words) - 1 and SH_ASSIGN_WORD.match(words[lead]):
+        lead += 1
+    if lead and words[lead] == "read":
+        words = words[lead:]
     if words[0] == "read":
         names, skip = [], False
         for w in words[1:]:

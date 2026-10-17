@@ -228,9 +228,22 @@ class TestGate(Fixture):
         self.assertIn("contradicts its own evidence", doc["report"][0])
 
     def test_table_revision_change_blocks(self):
+        # a revision that changed the row the verdict checked expires it
         self.ledger()
         self.verify()
-        self.set_table([row("ok", "true")], rev=2)
+        self.set_table([row("ok", "true && true")], rev=2)
+        code, doc = self.gate_json("--blocking")
+        self.assertEqual(code, 1)
+        self.assertIn("predates the current finish table", doc["report"][0])
+
+    def test_revision_that_left_the_row_alone_keeps_its_verdict(self):
+        # kalpa-iris 6: a bump for another unit's rows expired every earlier unit's verdict
+        self.ledger()
+        self.verify()
+        self.set_table([row("ok", "true"), row("later", "true", owner="5.2")], rev=2)
+        code, doc = self.gate_json("--blocking")
+        self.assertEqual((code, doc["verdict"]), (0, "pass"))
+        self.set_table([row("ok", "true", rung="3")], rev=3)
         code, doc = self.gate_json("--blocking")
         self.assertEqual(code, 1)
         self.assertIn("predates the current finish table", doc["report"][0])

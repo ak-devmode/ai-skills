@@ -361,6 +361,21 @@ def review_presence_blocks(review_log, base, projects, scope=None, unit=None):
     return blocks
 
 
+def row_unchanged(row, pend):
+    """The table row is still the one the run checked: same deliverable, check, class, rung,
+    repo and dir as the run's pending record. A runner-decided judge row is recorded as
+    `auto: …` and counts as `judge`. No record to compare is never unchanged."""
+    if not pend:
+        return False
+    ran = pend.get("command") or ""
+    if ran.startswith(vl.AUTO_PREFIX):
+        ran = "judge"
+    return (pend.get("deliverable"), ran, pend.get("class"), pend.get("rung_required"),
+            pend.get("dir")) == (row["deliverable"], row["check"], row["class"], row["rung"],
+                                 row["dir"]) and vl.canonical_key(pend.get("repo") or "", None) \
+        == vl.canonical_key(row["repo"], None)
+
+
 def evidence_line(pend):
     """The one output line that says why: the first [FAIL]/[BLOCK]/[ERROR] line, else the last
     non-empty line of the runner's output_tail (§10: actual values, not adjectives)."""
@@ -429,7 +444,10 @@ def evaluate(scope, unit, projects):
                       f"{res['result']} · rung {res['rung_reached']} in the final record", "tooling",
                       "re-run the checks; never edit a final record")
                 continue
-        if final.get("table_rev") != table["revision"]:
+        # A revision expires a verdict only when it changed the row that verdict checked. The
+        # run's own record holds the row as it ran it; a bump for another unit's rows leaves
+        # it standing (kalpa-iris 6: rev 16–17 changed 6.4's rows and expired 6.1–6.3's 91).
+        if final.get("table_rev") != table["revision"] and not row_unchanged(row, pend):
             block("verdict predates the current finish table", f"table_rev {table['revision']}",
                   f"table_rev {final.get('table_rev')}", "code")
             continue

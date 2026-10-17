@@ -398,7 +398,7 @@ Touches: scripts/{resolve-identifiers,verdict-gate,finish-table,lever-candidates
 ## /verify + the verification lever — scope closeout (Scope 5)
 Source: plans/archive/5-verify-lever/progress.md · `verdict-gate.py --scope plans/archive/5-verify-lever --all`
 Touches: scripts/verdict-gate.py · scripts/verify_lib.py · scripts/finish-table.py · templates/verify-contracts.md §5.2
-- [ ] **A finish-table revision bump invalidates every unit's verdict** (`verdict-gate.py`: "verdict predates the current
+- [x] (fixed 2026-10-17: a verdict now stands across a revision that left its row unchanged — `row_unchanged` in `verdict-gate.py`; second sighting, kalpa-iris scope 6) **A finish-table revision bump invalidates every unit's verdict** (`verdict-gate.py`: "verdict predates the current
       finish table"). Adding 5.3's rows (rev 5, 6) made 15 complete 5.1/5.2 checks read as failed at closeout. Fix: bind a
       verdict to the revision of the rows *it owns* (e.g. a per-row revision, or the changelog's last change touching that
       owner), so appending a later phase's rows doesn't expire earlier phases. This is the main reason scope 5 archived `⚠ verify failed`.

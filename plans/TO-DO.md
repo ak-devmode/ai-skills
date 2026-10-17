@@ -463,3 +463,10 @@ Touches: scripts/verdict-gate.py · scripts/landed_lib.py · verify-contracts.md
 
 - [ ] Round 3 should-fix: a fully reviewed multi-commit **rebase** merge (lane B→U1→U2 landed as R1→R2, R1 naming the unit) can report "never reviewed": `found` is R1, which is outside the review's ancestry, while `arrival(B, U2)` returns R2. Fails closed (a false block, never a false pass). Fix: when the unit's first landing is a rebase copy, accept a review whose base..head maps onto the landed run R1..Rn by patch-id. **P3.**
 - [ ] Accepted residual (documented in `first_unit_commit`): a unit PR whose subject omits the unit number and whose side holds no reviewed head is not counted. Branch naming carries the number by convention.
+
+## /verify on a shared direct-to-main docs repo — unit path scope (WellMed 171.1, 2026-10-17)
+Source: ~/Projects/wellmed/kalpa-docs/plans/171-etude-catalogue-areas/artifacts/verify-171.1-report.md (run 171.1-20261017T123505-c3fc)
+Touches: scripts/resolve-identifiers.py · scripts/verify-run.py · scripts/ledger-init.sh · scripts/finish-table.py · review/scripts/review.py · verify/scripts/judge.py · templates/verify-contracts.md
+
+- [ ] **A unit on a shared trunk has no way to say which paths are its own.** kalpa-docs is direct-to-main and written by many sessions, so 171.1's `base..HEAD` held 207–247 commits, almost all other scopes'. `p1-names-resolve` (`resolve-identifiers.py --range $VERIFY_BASE..HEAD`) failed on `JOB`/`USER`/`PW` in scopes 166 and 163's scripts while 171.1's diff was markdown only; the judge agreed the failure is the runner's scope, not the unit's. `review.py prepare` and `judge.py prepare` have the same gap — both prompts were hand-scoped to the unit's 11 paths that session. Fix: the ledger records a unit's paths (`ledger-init.sh --paths`, or derived from `closeout-prep.md` §2), `verify-run.py` exports `VERIFY_PATHS`, `resolve-identifiers.py` takes `--paths`, and `review.py` / `judge.py prepare` restrict the diff they render. Alex, 2026-10-17: "i thought this already happened". **P2.**
+

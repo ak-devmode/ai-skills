@@ -234,6 +234,11 @@ CASES = [
      {"proto/clinic.proto": PROTO},
      {"svc/h.go": "package svc\nvar a = &clinicv1.Appointment{PatientId: id}\n"},
      1, r"unresolved 1", "field `PatientId` in `message Appointment`"),
+    ("an SDK struct literal is not a proto message (kalpa-iris 6.2: sesv2)",
+     {"proto/clinic.proto": PROTO},
+     {"svc/h.go": "package svc\nimport \"github.com/aws/aws-sdk-go-v2/service/sesv2\"\n"
+                  "var a = &sesv2.SendEmailInput{Content: c}\n"},
+     0, r"found 0 · resolved 0", ""),
     ("field on its own message passes (multi-line literal, oneof)",
      {"proto/clinic.proto": PROTO},
      {"svc/h.go": "package svc\nvar a = &clinicv1.Invoice{\n\tPatientId: id,\n\tTotal: 3,\n}\n"

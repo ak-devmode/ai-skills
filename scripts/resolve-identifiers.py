@@ -345,7 +345,23 @@ GO_LIT_KEY = re.compile(r"([A-Z]\w*)\s*:")
 GO_STRING = re.compile(r'"(?:\\.|[^"\\])*"|`[^`]*`|\'(?:\\.|[^\'\\])+\'')
 
 
-def go_literal_keys(text, stack):
+GO_IMPORT = re.compile(r'^\s*(?:import\s+)?(\w+\s+)?"([^"]+)"', re.M)
+
+
+def go_non_proto(text):
+    """Package names this Go file imports from a path that is not generated proto (no
+    `/gen/`, `proto` or `pb` in it): `sesv2.SendEmailInput{` from the AWS SDK names a struct,
+    not a message. A name the file does not import stays a candidate, as before."""
+    out = set()
+    for m in GO_IMPORT.finditer(text):
+        path = m.group(2)
+        if re.search(r"/gen/|proto|pb", path):
+            continue
+        out.add((m.group(1) or "").strip() or path.rsplit("/", 1)[-1])
+    return out
+
+
+def go_literal_keys(text, stack, skip=frozenset()):
     """The (message, key) pairs a line of Go sets, given the literals still open before it.
 
     `stack` holds one entry per open brace — the message name for a pb composite literal,
@@ -355,7 +371,7 @@ def go_literal_keys(text, stack):
     the next line sets Inner.Id, not Outer.Id. Braces are followed only from a pb
     literal's opening to its close; string contents are blanked first."""
     text = GO_STRING.sub(lambda m: " " * len(m.group(0)), text)
-    opens = {m.end() - 1: m.group(2) for m in GO_LIT_OPEN.finditer(text)}
+    opens = {m.end() - 1: m.group(2) for m in GO_LIT_OPEN.finditer(text) if m.group(1) not in skip}
     out, i, at_key = [], 0, bool(stack)
     if not stack:
         if not opens:
@@ -548,6 +564,7 @@ def extract(files, full=None):
         local = shell_assigned((full or {}).get(path, "")) if path.endswith(".sh") else set()
         given = node_eval_given((full or {}).get(path, "")) if path.endswith(".sh") else set()
         go_open, go_prev = [], None  # pb literals open across consecutive added lines
+        go_skip = go_non_proto((full or {}).get(path, "")) if path.endswith(".go") else set()
         for lineno, text in lines:
             if is_comment(text, sh=path.endswith(".sh")):
                 continue
@@ -573,7 +590,7 @@ def extract(files, full=None):
                 if go_prev is not None and lineno != go_prev + 1:
                     go_open.clear()  # a gap in the added lines: what is open there is unknown
                 go_prev = lineno
-                for msg, key in go_literal_keys(text, go_open):
+                for msg, key in go_literal_keys(text, go_open, go_skip):
                     refs.append(ref("proto", f"{msg}.{key}", "go", path, lineno))
             for m in ROUTE_FETCH.finditer(text):
                 p = None if fetch_external(m.group(1)) else route_path(m.group(1))
@@ -862,7 +879,7 @@ def main(argv):
                               "check the unit's base SHA — an empty range is a failure, not a clean pass"),
                       file=sys.stderr)
                 return 3
-            sh = [p for p in files if p.endswith(".sh") and is_source(p)]
+            sh = [p for p in files if (p.endswith(".sh") or p.endswith(".go")) and is_source(p)]
             full = Tree(a.repo, head).read(sh) if sh else {}
             refs, rev = extract(files, full), a.decl_rev or head
             scanned = [f for f in files if is_source(f) and not TEST_FILE.search(f)]

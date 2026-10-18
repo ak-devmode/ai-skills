@@ -475,3 +475,10 @@ Touches: scripts/resolve-identifiers.py · scripts/verify-run.py · scripts/ledg
 ## verdict-gate — review coverage read from a closeout branch (kalpa-iris scope 6, 2026-10-18)
 
 - [ ] `first_unit_commit` treats every non-merge first-parent commit after the base as the unit's own when `tip == "HEAD"`, assuming HEAD is the unit's lane. Run from a closeout branch off the trunk (kalpa-iris `fix/6-closeout`), it picks the scope's draft commit (`a87db943`, made on develop before any lane) as the first commit of 6.1–6.4, which no review can cover, so all four units read "commits in range were never reviewed" although each has accepted reviews. Treat HEAD as a lane only when it is not a descendant of the trunk's merge of the unit, or skip commits that only touch the scope's plan folder.
+
+## Review lineage counts the next unit as a re-review (PR #15 follow-up) (2026-10-19)
+Source: WellMed scope 171 reviews 171.2-r15 (backbone u2) and 171.3-r5 (etude 3.3)
+Touches: scripts/verify_lib.py (review_lineage) · scripts/tests/test_review.py
+
+- [ ] **`review_lineage` continues a lineage whenever a range starts at a previous review's head** — but the next unit of a lane starts there too (u2 right after u1's fix range), so a first review of new code was counted round 4/5 and told to stop and defer. Continue a lineage only when the range contains a fix commit named by a disposition of the earlier review's findings (or the session passes `--continues <review id>`); otherwise start at round 1. Test: unit u2 after u1's fix range → round 1; a fix re-review → previous + 1. **P1** — it makes the standing policy fire wrongly on every multi-unit lane.
+

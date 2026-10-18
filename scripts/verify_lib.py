@@ -444,6 +444,22 @@ def review_lineage(reviews, path_of):
         out[rid] = (out[parent][0], out[parent][1] + 1) if parent else (rid, 1)
         seen.append((rid, repo, base, head))
     return out
+
+
+def accepted_nits(recs):
+    """[(finding, disposition)] for every finding in review-log records `recs` whose latest
+    disposition is `accepted` — a process nit (review/SKILL.md §5.1). The gate lists them apart
+    from rejections; the /verify judge spot-checks each, inside its run (verify-contracts.md §4.4)."""
+    latest, found = {}, {}
+    for r in recs:
+        if r.get("record") == "disposition":
+            latest[r.get("finding_id")] = r
+        elif r.get("record") == "finding":
+            found[r.get("finding_id")] = r
+    return [(found.get(fid, {"finding_id": fid}), d) for fid, d in sorted(latest.items())
+            if d.get("disposition") == "accepted"]
+
+
 # a judge row the runner decided itself (verify-run.py: zero rejections to audit); the judge never sees it
 AUTO_PREFIX = "auto: "
 # verify/SKILL.md §3.9: finalized /verify runs of one unit before the fix loop stops and asks.

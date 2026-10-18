@@ -70,7 +70,7 @@ class TestJudge(unittest.TestCase):
                             for c, r in (("ok", 4), ("jr", 2), ("away", 4))],
                "findings": [{"check_id": "jr", "lens": "over-build", "severity": "low", "where": "a.py:1",
                              "text": "registry for one caller"}],
-               "lever_candidates": [], "feature_map": "n/a"}
+               "nit_checks": [], "lever_candidates": [], "feature_map": "n/a"}
         doc.update(over)
         path = os.path.join(self.tmp.name, "answer.json")
         with open(path, "w") as fh:
@@ -305,6 +305,44 @@ class TestJudge(unittest.TestCase):
         p = self.judge("report")  # a second run finds the report and points at it
         self.assertIn("⚠ verify advisory: 1 blocked — see artifacts/verify-9.1-report.md", p.stdout)
         self.assertNotIn("(review:svc", p.stdout)
+
+    def test_accepted_nits_are_spot_checked_inside_the_run(self):
+        # Alex 2026-10-18 (verify-contracts §4.4.1): one judge line per accepted nit, in the same
+        # run; only `misfiled` surfaces, as a finding of the run — no gate block, no new run
+        self.ledger(self.base)
+        review = os.path.join(self.scope, "artifacts", "review-9.1.jsonl")
+        with open(review, "w") as fh:
+            for r in ({"record": "finding", "finding_id": "9.1-r1-01", "severity": "note", "file": "a.py", "line": 3,
+                       "text": "comment says retries 3"},
+                      {"record": "finding", "finding_id": "9.1-r1-02", "severity": "should-fix", "file": "b.py",
+                       "line": 9, "text": "no tenant filter"},
+                      {"record": "disposition", "finding_id": "9.1-r1-01", "disposition": "accepted",
+                       "reason": "comment drift"},
+                      {"record": "disposition", "finding_id": "9.1-r1-02", "disposition": "accepted",
+                       "reason": "wording"}):
+                fh.write(json.dumps(r) + "\n")
+        _, prompt = self.prepared()
+        self.assertIn("`9.1-r1-02` · should-fix · b.py:9 — no tenant filter · accepted as: wording", prompt)
+        nit = lambda fid, v: {"finding_id": fid, "verdict": v, "reason": f"looked at {fid}"}
+        for name, checks, problem in (
+                ("one skipped", [nit("9.1-r1-01", "nit")], "no nit_check for accepted nit `9.1-r1-02`"),
+                ("one invented", [nit("9.1-r1-01", "nit"), nit("9.1-r1-02", "nit"), nit("9.1-r1-09", "nit")],
+                 "`9.1-r1-09`, which is not an accepted nit")):
+            with self.subTest(case=name):
+                p = self.judge("record", "--judge", "codex gpt-test", "--input", self.answer(nit_checks=checks))
+                self.assertEqual(p.returncode, 3, p.stdout)
+                self.assertIn(problem, p.stderr)
+        both = [nit("9.1-r1-01", "nit"), nit("9.1-r1-02", "misfiled")]
+        p = self.judge("record", "--judge", "codex gpt-test", "--input", self.answer(nit_checks=both))
+        self.assertEqual(p.returncode, 0, p.stderr)
+        run("verify-run.py", "finalize", "--log", self.log, "--run-id", self.rid, env=self.env)
+        p = self.judge("report")
+        text = read(os.path.join(self.scope, "artifacts", "verify-9.1-report.md"))
+        self.assertIn("- **medium** · nit-check · `9.1-r1-02` — misfiled: this is a defect", text)
+        self.assertNotIn("`9.1-r1-01` — misfiled", text)
+        self.assertIn("Accepted nits spot-checked: 2, 1 misfiled.", text)
+        self.assertNotIn("9.1-r1-0", text.split("## 5. Gate blocks")[1])   # no gate block of its own
+        self.assertNotIn("[CONVERGENCE]", p.stdout)                          # and no extra run
 
     def test_lean_judge_line_is_accepted_and_marked(self):
         self.ledger(self.base)

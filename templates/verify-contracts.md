@@ -151,6 +151,14 @@ else `null`) · `command` · `exit_code` (`null` if not run) · `duration_s` · 
 4.4 **`judged`** — one record per check the judge assessed: `check_id` · `judge` (§4.6) ·
 `verdict` (`pass | fail | inconclusive`) · `rung_reached` · `reason`.
 
+4.4.1 **Accepted nits are spot-checked inside the run** (Alex, 2026-10-18). The judge's output
+(`verify/schemas/judge-output.schema.json`) carries `nit_checks`: exactly one line per finding whose
+latest disposition is `accepted` (§6.2.2) — `finding_id` · `verdict` (`nit | misfiled`) · `reason`.
+`judge.py record` refuses an answer that skips one or checks an ID that is not an accepted nit. A
+`misfiled` line ("this is a defect") is a finding of that run, in its report; it changes no check's
+verdict, is no gate block, and never triggers another verify run on its own (`verify/SKILL.md` §3.9).
+The raw judge output keeps the lines; there is no separate record.
+
 4.5 **`final`** — one record per run: `judge` · `table_rev` · `results`, a map of
 `check_id → {result, rung_reached, reason}` computed by the §5.1 authority rule.
 
@@ -360,7 +368,8 @@ it fails closed: the review continues the repo's highest round in the unit, with
 
 6.2.2 **`accepted`** is a process nit — a comment that doesn't match, a stale table, a timestamp,
 doc wording — noted, never given another round. It counts as dispositioned (§6.3), the gate never
-wants it re-reviewed (§5.2.1), and it is not a rejection: `rejections-justified` never audits it.
+wants it re-reviewed (§5.2.1), and it is not a rejection: `rejections-justified` never audits it —
+the `/verify` judge spot-checks it instead, one line inside the same run (§4.4.1).
 The gate report and `review.py accept` list accepted nits apart from rejections.
 
 6.3 **Coverage rule.** Every `finding_id` has at least one disposition; the latest one

@@ -1,6 +1,6 @@
 ---
 name: verify
-version: 0.8.0
+version: 0.9.0
 description: |
   Independent verification of a unit of scoped work. A deterministic runner executes
   every finish-condition row the unit owns and records evidence; a judge from the
@@ -138,7 +138,7 @@ writes nothing usable, the judge line is `none <reason>`, as in §3.5. Never esc
 
 3.6 **Record the verdict.** `$V/judge.py record --scope $SCOPE --unit $UNIT --run-id $RUN
 --judge "<judge line>" --input <OUT> --prompt <PROMPT>`. Exit 3 (malformed answer — a check
-missing, an unknown lens) records nothing and prints `retry-prompt: <path>`: the prompt plus
+missing, an unknown lens, an accepted nit with no `nit_checks` line) records nothing and prints `retry-prompt: <path>`: the prompt plus
 exactly what was wrong. Re-run the same judge once on that path and record again. Refused
 twice → finalize with `--judge 'none malformed judge output'`. The gate then reports those
 judge rows **NOT-JUDGED**, which is never a block (`verify-contracts.md` §5.4.3).
@@ -166,6 +166,11 @@ follows run 1 without asking: fix what the first run found, then run again. At t
   reported. Ask again before each further run.
 
 Lean and full runs count toward the same cap.
+
+**Accepted nits are spot-checked inside the run, never in one of their own.** The judge gives
+every `accepted` disposition one `nit_checks` line (`verify-contracts.md` §4.4.1). Only a
+`misfiled` line — "this is a defect" — surfaces, as a finding of that run in its report; treat it
+like any other finding at the stop above. It never triggers another run on its own.
 
 > **Why (Alex, 2026-10-18, WellMed scope 171).** A per-run check-in stopped every unit for
 > a yes that was always given, and nits drew whole extra runs. The loop now runs on its own

@@ -68,6 +68,19 @@ def err(what, expected, found, where, nxt, cause="tooling"):
     return vl.EXIT_EVAL
 
 
+def nits_of(review):
+    """The unit's accepted process nits from its review log, [(finding, disposition)]; none
+    without a log. Every one is spot-checked by the judge inside the run (§4.4)."""
+    return vl.accepted_nits(vl.read_jsonl(review)) if os.path.exists(review) else []
+
+
+def nit_lines(nits):
+    """The ACCEPTED_NITS prompt block: one line per accepted nit, or `none`."""
+    return "\n".join(f"  - `{f.get('finding_id')}` · {f.get('severity', '?')} · {f.get('file', '?')}:"
+                     f"{f.get('line', '?')} — {cell(f.get('text', ''))} · accepted as: {cell(d.get('reason', ''))}"
+                     for f, d in nits) or "none"
+
+
 def pending_of(log, run_id):
     """(the pending records the judge must answer, every record of the run). A row the runner
     decided itself (`auto: …`, e.g. zero rejections to audit) is never sent to the judge."""
@@ -148,6 +161,7 @@ def cmd_prepare(a):
             "TEST_PLAN": ", ".join(f"`{x}`" for x in plans) or "none",
             "REVIEW_LOG": f"`{p['review']}`" if os.path.exists(p["review"]) else "none",
             "PROGRESS": f"`{p['progress']}`" if p["progress"] else "none",
+            "ACCEPTED_NITS": nit_lines(nits_of(p["review"])),
             "CHECKS": "\n".join(checks)}
     with open(PROMPT, encoding="utf-8") as fh:
         text = fh.read()
@@ -261,7 +275,7 @@ def lean_bundle(full, p, unit, run_id, plans, judged):
 
 # ---------- record -----------------------------------------------------------------
 
-def validate(doc, check_ids):
+def validate(doc, check_ids, nit_ids=()):
     with open(SCHEMA, encoding="utf-8") as fh:
         problems = vl.schema_problems(doc, json.load(fh))
     if problems:
@@ -295,6 +309,17 @@ def validate(doc, check_ids):
             problems.append(f"lever candidate names unknown check `{c.get('check_id')}`")
     if doc["feature_map"] not in ("clean", "changed", "blocked", "n/a"):
         problems.append(f"feature_map {doc['feature_map']!r}")
+    # §4.4: one spot-check line per accepted process nit — none skipped, none invented
+    checked = [n.get("finding_id") for n in doc["nit_checks"]]
+    for fid in sorted(set(nit_ids) - set(checked)):
+        problems.append(f"no nit_check for accepted nit `{fid}`")
+    for fid in sorted(set(checked) - set(nit_ids)):
+        problems.append(f"nit_check for `{fid}`, which is not an accepted nit")
+    for fid in sorted({c for c in checked if checked.count(c) > 1}):
+        problems.append(f"{checked.count(fid)} nit_checks for `{fid}`")
+    for n in doc["nit_checks"]:
+        if not str(n.get("reason", "")).strip():
+            problems.append(f"empty reason for nit_check `{n.get('finding_id')}`")
     return problems
 
 
@@ -322,7 +347,7 @@ def cmd_record(a):
     try:
         with open(a.input, encoding="utf-8") as fh:
             doc = json.load(fh)
-        problems = validate(doc, ids)
+        problems = validate(doc, ids, [d.get("finding_id") for _, d in nits_of(p["review"])])
     except (OSError, ValueError) as exc:
         problems = [str(exc)]
     if problems:
@@ -403,11 +428,17 @@ def cmd_report(a):
         lines.append(f"| {cid} | {res['result']} | {res['rung_reached']}/{need} | {cell(res['reason'])} |")
     lines += ["", "## 2. Findings", ""]
     findings = raw.get("findings", [])
-    if not findings:
+    # §4.4: a misfiled accepted nit is a finding of this run, nothing more — never another run
+    misfiled = [n for n in raw.get("nit_checks", []) if n.get("verdict") == "misfiled"]
+    if not findings and not misfiled:
         lines.append("None." if raw else "No judge output (judge line: " + final["judge"] + ").")
     for sev in ("high", "medium", "low"):
         for f in [f for f in findings if f["severity"] == sev]:
             lines.append(f"- **{sev}** · {f['lens']} · `{f['check_id']}` · {f['where']} — {f['text']}")
+        lines += [f"- **medium** · nit-check · `{n['finding_id']}` — misfiled: this is a defect, not a process "
+                  f"nit — {n['reason']}" for n in misfiled if sev == "medium"]
+    if raw.get("nit_checks"):
+        lines += ["", f"Accepted nits spot-checked: {len(raw['nit_checks'])}, {len(misfiled)} misfiled."]
     lines += ["", "## 3. Lever candidates", "",
               "Recorded, not built: a lever is built on the second sighting (verify-contracts.md §4.9)."]
     lines += [f"- `{c['check_id']}` — `{c['lever_id']}` · gap: {c['gap']} · lever: {c['lever']} · run `{a.run_id}`"

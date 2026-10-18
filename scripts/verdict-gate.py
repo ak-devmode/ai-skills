@@ -157,9 +157,7 @@ def coverage_blocks(review_log):
 def accepted_nits(review_log):
     """The finding IDs whose latest disposition is `accepted` — process nits, listed apart from
     rejections (review/SKILL.md §5.1); `/verify` never audits them as rejections."""
-    latest = {r.get("finding_id"): r.get("disposition") for r in vl.read_jsonl(review_log)
-              if r.get("record") == "disposition"}
-    return sorted(fid for fid, d in latest.items() if d == "accepted")
+    return [d.get("finding_id") for _, d in vl.accepted_nits(vl.read_jsonl(review_log))]
 
 
 def accepted(review_log):

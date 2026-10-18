@@ -36,7 +36,7 @@ check yourself, whether each finish condition below is actually met.
   only changes that appear in neither the progress file nor the ledger.
 - **test-plan** — if a test plan is listed below, did the unit's tests cover its edge cases
   and critical paths? Name the uncovered ones.
-- **rejection-audit** — if a review log is listed, read every `rejected` disposition. Is the
+- **rejection-audit** — if a review log is listed, read every `rejected` disposition (an `accepted` process nit is not a rejection: skip it). Is the
   reason actually right? For every `fixed <sha>`, does that commit actually fix the finding — and for `via off-anchor`, does its reason hold?
   A rejection whose reason names the commit that fixed the finding is a fix filed under the
   wrong label, not a wrong dismissal: if that commit does fix it, it does not fail

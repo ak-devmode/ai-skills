@@ -239,7 +239,7 @@ graphs.
 
 | Skill | Version | Notes |
 |---|---|---|
-| `plan` | 3.10.0 | Review + verify per unit, Done through the gate; self-heal with `Predates gate`; ledger `--repo` bases; human checkpoints: table approval before work, review-outcome acceptance. |
+| `plan` | 3.13.0 | Review + verify per unit, Done through the gate; self-heal with `Predates gate`; ledger `--repo` bases; human checkpoint: table approval before work. Review outcomes run on the standing policy (WellMed 171): a SHIP proceeds to `/verify`, stops only for design, repeats, no SHIP by round 3, or a cascade. |
 | `scope` | 3.12.0 | Step 0.9 folds matching TO-DOs it judges in straight into the plan and asks only about the ones it would leave out. Step 5.10 writes `finish-conditions.md`, §5.10.1 the user approves it in plain English; stubs carry Review/Verify tasks. |
 | `closeout` | 1.4.0 | Step 3a verdict (`--all`), lever candidates, feature-map handoff, clean-scope count. |
 | `closeout-extended` | 1.0.1 | |
@@ -248,9 +248,9 @@ graphs.
 | `prd` | 1.1.0 | Step 0 = `context-gather.sh`. |
 | `concurrency` | 0.9.1 | Pane name = task only (no seat; sidebar row 2 shows model + account). Worker token rules: cheapest seat per lane (`sonnet` for pattern work), output rule in every brief, fresh fix writers. §5.1 placement (machine + account from usage headroom, recommend then confirm); box lanes need a pushed base, come back by fetch (dev-workbench scope 3). |
 | `herdr` | 0.5.0 | §2 naming: pane = `<task>` / `<task> review`, matching the dense agent rows (workspace · model · account). `sonnet` seat; §6.2 worker token budget (no 1M-window workers, one unit per session). Account-aware launch (`claude-<acct>` / `codex-<acct>`); §6.1 two-server view (`--machine`, per-server ids); teardown fast-forwards local trunk (plan 8). |
-| `review` | 3.7.0 | Plan 7: lean default (one Sonnet pass over a packed bundle), `--full` / `AI_SKILLS_REVIEW_MODE=full` for the codex gate; codex gate; rules extracted to `review/rules/` (IRIS group §3.9); dispositions enforced, `deferred` past a repo's round 3 (rounds per repo); §5.1 convergence; `accept` records the user's yes. |
+| `review` | 3.8.0 | Plan 7: lean default (one Sonnet pass over a packed bundle), `--full` / `AI_SKILLS_REVIEW_MODE=full` for the codex gate; codex gate; rules extracted to `review/rules/` (IRIS group §3.9); dispositions enforced, `deferred` past round 3, `accepted` for process nits; rounds per review lineage; §5.1 standing policy (WellMed 171): `[CONVERGENCE]` / `[CASCADE]` stops, `accept` by the session on a SHIP. |
 | `ready-to-clear` | 1.1.0 | |
-| `verify` | 0.7.0 | Plan 7: lean judge by default, fix loop capped at 2 runs; a judge failure is NOT-JUDGED, never a block. Scope 5. Advisory gate until 5 clean scopes; codex effort scales with the diff; `--demo` on the planted-defect fixture; stale-clone line. |
+| `verify` | 0.8.0 | Plan 7: lean judge by default, fix loop capped at 2 runs (standing policy: process nits noted, never another run); a judge failure is NOT-JUDGED, never a block. Scope 5. Advisory gate until 5 clean scopes; codex effort scales with the diff; `--demo` on the planted-defect fixture; stale-clone line. |
 | `kalpa-*` | unversioned | Flattened 2026-08-09. |
 
 ### 6.2 Active scope

@@ -186,7 +186,7 @@ item flips to `BUILD NOW`, once.
 4.10 **Run cap.** A unit's fix loop stops at `VERIFY_RUN_CAP` (2) finalized runs, counted from
 its verdict log's `final` lines in log order. From the 2nd run on, `judge.py report` prints
 `[CONVERGENCE] verify <unit> run <n> of 2: STOP` and writes it under the report's Gate line.
-`/verify` then asks before another run (`verify/SKILL.md` §3.9). Lean and full runs count
+`/verify` then asks before another run, unless only process nits are left (`verify/SKILL.md` §3.9). Lean and full runs count
 toward the same cap. The cap stops the loop; it never changes a verdict.
 
 ---
@@ -237,9 +237,9 @@ only a reason ties to the finding (review adhoc-03); a `scaffolding` finding is 
 should-fix by `record` and never forces a round (`review/rules/lenses.md` §7) — sits in no later review's range (a higher `r<n>`
 than the finding's — an earlier review never saw the fix as a fix, review adhoc-05) of the repo
 holding it (the disposition's `repo`, else the finding's) — the fixes are reviewed again (`/plan` §6.8, 5.3-r2-03),
-unless that repo has had `ROUND_CAP` (3) reviews in the unit and an `acceptance` record follows the
-disposition: past the cap the loop stops on the user's yes (`/review` §5.1), and that yes stands in
-for the re-review; when any
+unless the finding's review lineage (§6.2) has reached round `ROUND_CAP` (3) and an `acceptance` record follows the
+disposition: at the cap the loop stops on the user's "stop here" (`/review` §5.1), and that acceptance stands in
+for the re-review; an `accepted` disposition (§6.2) never wants one; when any
 finding's `fixed <sha>` in its own repo is an ancestor of the head its review saw — the reviewed
 code recorded as its own fix (review adhoc-01); when a `fixed <sha>` has not landed (§5.2.2) in
 the repo holding it — a fix on a branch that never merged (review r2-04); when git cannot count the range (a block,
@@ -342,13 +342,24 @@ exclusive lock on the log, so concurrent or clean reviews never share an ID.
 `text` · `fix`. IDs are assigned in severity order.
 
 6.2 **`disposition`** records: `schema` · `ts` · `finding_id` · `disposition`
-(`fixed | rejected | deferred`) · `sha` (required for `fixed`, the full SHA) · `repo` (`fixed`
+(`fixed | rejected | deferred | accepted`) · `sha` (required for `fixed`, the full SHA) · `repo` (`fixed`
 only: the repo key holding `sha` — the finding's own, or `dispose --fixed-in`'s) · `via` (`fixed` only:
 `anchor` — the commit changes the finding's file in the finding's own repo · `off-anchor` —
 anything else (a test-only fix, another file, another repo), and `reason` says how it fixes
 the finding) ·
-`reason` (required for `rejected` and for a `fixed` via `off-anchor`; for `deferred`, a note; the link is the finding ID, which must lead an open `- [ ]` item line in the project's `TO-DO.md` as `[review <id>]` followed by the work left, and the gate rechecks that item still exists, open or closed into `archive/TO-DO-archive.md` — never on a `blocking` finding or before round 4 *of the finding's repo* (rounds count the unit's reviews of that repo, not the unit-wide `r<n>`), `review/SKILL.md` §5.1) ·
+`reason` (required for `rejected` and for a `fixed` via `off-anchor`; for `deferred`, a note; the link is the finding ID, which must lead an open `- [ ]` item line in the project's `TO-DO.md` as `[review <id>]` followed by the work left, and the gate rechecks that item still exists, open or closed into `archive/TO-DO-archive.md` — never on a `blocking` finding or before round 4 *of the finding's review lineage*, `review/SKILL.md` §5.1; for `accepted`, the process nit — required, never on a `blocking` finding) ·
 `by`.
+
+6.2.1 **Rounds count per review lineage** (WellMed scope 171, 2026-10-18), not per repo and not by the
+unit-wide `r<n>`. A review continues an earlier review of the same repo (its primary checkout,
+worktrees included) when its base is that review's head (a fix re-review), its range is the same,
+or the two ranges share a commit; it takes the highest such round plus one. A range over code no
+earlier review covered starts at round 1. `verify_lib.review_lineage` is the one implementation.
+
+6.2.2 **`accepted`** is a process nit — a comment that doesn't match, a stale table, a timestamp,
+doc wording — noted, never given another round. It counts as dispositioned (§6.3), the gate never
+wants it re-reviewed (§5.2.1), and it is not a rejection: `rejections-justified` never audits it.
+The gate report and `review.py accept` list accepted nits apart from rejections.
 
 6.3 **Coverage rule.** Every `finding_id` has at least one disposition; the latest one
 decides — so a re-disposition supersedes an earlier one (`review.py misfiled` lists the
@@ -359,9 +370,10 @@ at write time, and the gate blocks an `off-anchor` fix without a reason. Nothing
 dismissed, nothing silently dropped. A re-review mints a new `review_id`; the old findings
 stay.
 
-6.4 **`acceptance`** records — the human checkpoint on review outcomes: `schema` · `ts` ·
-`by` · `findings` · `fixed` · `rejected` · `deferred`. Written by `review.py accept --by
-<name>` on the user's yes, refused while any finding lacks a disposition. Under a table
+6.4 **`acceptance`** records — the record of review outcomes: `schema` · `ts` ·
+`by` · `findings` · `fixed` · `rejected` · `deferred` · `accepted`. Written by `review.py accept --by
+<name>` — by the session under the standing policy on a SHIP (`--by "<owner> (standing policy)"`),
+by the user's answer at a stop (`review/SKILL.md` §5.1) — refused while any finding lacks a disposition. Under a table
 with an `**Approved:**` line (§3.1.1), the gate blocks (`review-acceptance`) when a
 `finding` or `disposition` record follows the last acceptance — a new round reopens it.
 

@@ -1,6 +1,6 @@
 ---
 name: verify
-version: 0.7.1
+version: 0.8.0
 description: |
   Independent verification of a unit of scoped work. A deterministic runner executes
   every finish-condition row the unit owns and records evidence; a judge from the
@@ -18,7 +18,8 @@ description: |
   **Lean is the default** (plan 7): the runner and gate are unchanged, and the judge is
   one Sonnet subagent reading one packed bundle (every input inlined, the diff capped at
   1,500 lines), with no codex. `AI_SKILLS_REVIEW_MODE=full` or `--full` restores the codex
-  judge. A unit's fix loop stops at 2 runs and asks.
+  judge. A unit's fix loop runs to 2 runs on its own; past that it asks, unless only
+  process nits are left (noted as accepted).
 allowed-tools:
   - Bash
   - Read
@@ -152,11 +153,23 @@ the default until five scopes pass cleanly: blocks are reported, the unit is not
 Its exit status is the gate's — `1` blocked, `3` the gate itself errored (the report says
 `GATE ERROR` and stderr carries the cause); report a `3`, never read it as a pass.
 
-3.9 **Run cap — the fix loop stops at 2.** From a unit's second finalized run on, `report`
-prints `[CONVERGENCE] verify <unit> run <n> of 2: STOP` (`verify-contracts.md` §4.10).
-Don't start another run until the user answers, inline: `1.` one more run, or `2.` stop
-here and accept the gate as reported. Ask again before each further run. Lean and full
-runs count toward the same cap.
+3.9 **Run cap — standing policy at 2 runs.** From a unit's second finalized run on, `report`
+prints `[CONVERGENCE] verify <unit> run <n> of 2: STOP` (`verify-contracts.md` §4.10). Run 2
+follows run 1 without asking: fix what the first run found, then run again. At the STOP:
+
+- **Only process nits left** — a comment that doesn't match, a stale table, a timestamp more
+  than an hour old, doc wording: note each as accepted in the unit's closing summary and
+  accept the gate as reported. Never another run for a nit.
+- **Anything else** — a failed or downgraded check that is not a nit, a design decision, the
+  same check failing in both runs, or a fix that raised a new edge case (propose the reframe):
+  bring it to the user, inline: `1.` one more run, or `2.` stop here and accept the gate as
+  reported. Ask again before each further run.
+
+Lean and full runs count toward the same cap.
+
+> **Why (Alex, 2026-10-18, WellMed scope 171).** A per-run check-in stopped every unit for
+> a yes that was always given, and nits drew whole extra runs. The loop now runs on its own
+> and stops only where the user's judgment is the input (`review/SKILL.md` §5.1).
 
 ---
 

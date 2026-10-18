@@ -1,6 +1,6 @@
 ---
 name: review
-version: 3.7.0
+version: 3.8.0
 description: |
   Pre-landing code review with codex as the gate: the opposing model family, headless
   and read-only, reviews an explicit revision range against gstack's review checklist,
@@ -9,9 +9,11 @@ description: |
   isolation, PHI/credential leakage, stack footguns) and the lenses every repo gets —
   fail-open verification, silent failure, local maxima, dirty comments, doc claims.
   Every finding is logged under a stable ID and must be dispositioned (fixed in a commit
-  that touches it, rejected with a reason, or — past a repo's round 3, non-blocking — deferred to
-  a written TO-DO item); the loop stops on [CONVERGENCE] signals, and the user's yes to
-  the outcomes is recorded with `accept` before the unit can be marked Done. When codex cannot run, a Claude pass (gstack's engine + the same rules) is the
+  that touches it, rejected with a reason, accepted as a non-blocking process nit, or — past
+  a lineage's round 3, non-blocking — deferred to a written TO-DO item). Loops run under a
+  standing policy: fix and re-review through round 3, SHIP proceeds to /verify with the
+  outcomes recorded by `accept`; the user is asked only on a design decision, a repeat, no
+  SHIP by round 3, or an edge-case cascade ([CONVERGENCE] / [CASCADE] signals). When codex cannot run, a Claude pass (gstack's engine + the same rules) is the
   fallback, and the report says so in its header.
 
   **Lean is the default** (plan 7): one packed bundle — the diff capped at 1,500 lines,
@@ -192,6 +194,7 @@ Each finding ID gets exactly one current disposition, through the script only:
 $RV dispose --scope $SCOPE --unit $UNIT --finding <ID> --fixed <sha>          # the fixing commit
 $RV dispose --scope $SCOPE --unit $UNIT --finding <ID> --fixed <sha> --fixed-in <repo path>   # fixed in another repo
 $RV dispose --scope $SCOPE --unit $UNIT --finding <ID> --rejected "<why the finding is wrong>"
+$RV dispose --scope $SCOPE --unit $UNIT --finding <ID> --accepted "<the process nit, noted>"   # non-blocking only, §5.1
 ```
 
 **A fix in another repo** — at the source the finding traces to, or a hand-back file in a
@@ -218,9 +221,9 @@ again: `$RV misfiled --scope $SCOPE --unit $UNIT` lists every rejection whose re
 it was fixed (`fixed` or `resolved`, any case) and prints the `dispose` line for each SHA in
 an affirmative claim's clause that resolves (here or in a repo beside it) — a negated `not
 fixed` gets no line, nor a SHA cited for anything else;
-it writes nothing — fill each `--off-anchor` reason yourself, then re-`accept`. When every ID has one, the user's yes is recorded with
-`$RV accept --scope $SCOPE --unit $UNIT --by "<name>"` (`verify-contracts.md` §6.4) —
-never on their behalf. `verdict-gate.py` refuses Done while any ID lacks one, and `/verify`
+it writes nothing — fill each `--off-anchor` reason yourself, then re-`accept`. When every ID has one, the outcomes are recorded with
+`$RV accept --scope $SCOPE --unit $UNIT --by "<name>"` (`verify-contracts.md` §6.4) — by
+the session under the §5.1 standing policy on a SHIP, otherwise on the user's yes. `verdict-gate.py` refuses Done while any ID lacks one, and `/verify`
 audits whether each rejection was *right*. Nothing silently dismissed, nothing silently
 dropped.
 
@@ -229,37 +232,55 @@ a finish-table row, progress/plan notes or procedure prose the session added is 
 `should-fix` by `record` (shown as "scaffolding, capped from blocking"), and the gate never
 wants it re-reviewed. Shipped code is still held to `blocking`.
 
-5.1 **Convergence — a review loop must end.** Every repo, every unit. `record` prints a
-`[CONVERGENCE]` line when either trips; act on it, don't re-run past it.
+5.1 **The loop — standing policy, and where it stops.** Every repo, every unit. Review
+loops run without a per-round check-in (Alex's standing approval):
 
-**Rounds count per repo.** Review IDs number every review of the unit (`<unit>-r<n>`),
-but each rule below counts the reviews of *that repo* within the unit — `record` prints
-`round: <k> of <repo>`. A repo is its primary checkout: a review through a worktree, even
-one logged by its `<repo>.worktrees/<name>` path and since removed, counts as that repo's. A unit spanning 13 repos (149.2) otherwise hit the cap on a lane's
-first review.
+- **Rounds 1–3:** fix every finding you do not disagree with, dispose it, review the fix
+  commits again, keep going. Reject, with the reason, what you do disagree with.
+- **SHIP proceeds.** A round whose verdict is `SHIP`, once every finding is dispositioned
+  and `verdict-gate.py` wants nothing re-reviewed (`rereview:` — an off-anchor fix still
+  needs its round), goes straight to `/verify`. Record the outcomes yourself:
+  `review.py accept --by "<owner> (standing policy)"`. `accept` prints every rejection and
+  every accepted nit; put both in the unit's closing summary.
+- **Process nits are noted, never another round.** A finding that is only process — a
+  comment that doesn't match, a stale table, a timestamp more than an hour old, doc wording —
+  is `dispose --accepted "<the nit>"`. It counts as dispositioned, the gate never wants it
+  re-reviewed, `/verify` never audits it as a rejection, and reports list it apart.
+  `dispose` refuses it on a `blocking` finding.
 
-- **Hard stop at round 3.** After a repo's third round in a unit is dispositioned, stop. Do
-  not start another round — and that includes the re-review of blocking or off-anchor fixes —
-  until the user answers, inline: `1.` another round, or `2.` stop here. Show the open
-  `rereview:` blocks from `verdict-gate.py` with the question. On "stop", their
-  `review.py accept` ends the loop: the gate lets that acceptance stand in for the re-review
-  of fixes disposed before it (`verify-contracts.md` §5.2.1). Ask again before each further
-  round. `record` prints `[CONVERGENCE] <repo> round 3 of 3: STOP` as the reminder.
-  The user may answer "another round" and confirm the acceptance that follows it in one
-  go, on conditions: `/plan` §6.8 "Conditional go-ahead" says when that yes may be used.
-- **Round cap.** Past round 3 of one repo in a unit, only `blocking` findings are fixed in the loop.
-  `should-fix` and `note` go to the project's `TO-DO.md` and are recorded
-  `dispose --deferred "<TO-DO item>"` — never `--rejected`, because a deferral is not a
-  claim that the finding is wrong. Write the item to `TO-DO.md` first, carrying the finding
-  ID as the item's leading marker — `- [ ] [review <ID>] <what is left>`; the marker is
-  the link, and an ID mentioned elsewhere on a line or a marker with no text is not. `dispose` refuses a deferral
-  with no open item naming the ID, one from its repo's round 3 or earlier, and any blocking finding.
-- **Same place, three rounds.** A file drawing findings in each of the repo's last three rounds
-  — or, for a file outside the reviewed repos (a hand-back doc), in each of the unit's last
-  three reviews, whichever lanes they were — is a design that is wrong, not a patch that is incomplete. Stop fixing it and raise it to
-  the user as one design finding: replace it, narrow what it promises, or cut it.
-- **Findings that argue opposite sides** (fixing one reopens another) mean the contract is
-  ambiguous. Stop and ask which side the user wants; don't pick one and reject the other.
+**Stop and bring it to the user only for:**
+1. **A design decision** — a finding against an accepted ADR (§6.4), a contract with two
+   readings, a trade-off that is the user's.
+2. **The same thing blocking across rounds** — the same defect back after its fix, or a
+   file drawing findings in each of its lineage's last three rounds (`[CONVERGENCE] <file>`):
+   a design that is wrong, not a patch that is incomplete. Raise it as one design finding:
+   replace it, narrow what it promises, or cut it. Findings that argue opposite sides
+   (fixing one reopens another) are this too: ask which side the user wants.
+3. **No SHIP by round 3** — `record` prints `[CONVERGENCE] <repo> round 3 of 3: STOP`. Ask,
+   inline: `1.` another round, or `2.` stop here. Show the open `rereview:` blocks with the
+   question. On "stop", `accept` ends the loop: the gate lets it stand in for the re-review
+   of fixes disposed before it (`verify-contracts.md` §5.2.1). Ask again before each further
+   round.
+4. **An edge-case cascade** — a fix for one edge case raises another, sequential or net
+   new. `record` prints `[CASCADE] <file>` when a new finding lands on a line an earlier
+   finding's fix commit in the unit last changed. That is a local maximum: a better way to
+   think about the original solution exists. Stop fixing and bring the user a proposed
+   reframe. You may propose a reframe at any time, cascade or not.
+
+**Rounds count per review lineage, not per repo.** IDs number every review of the unit
+(`<unit>-r<n>`); `record` prints `round: <k> of <repo>` for this review's lineage. A review
+whose range starts at an earlier review's head (a fix re-review), or shares a commit with
+one, continues that review's count; a range over code no earlier review covered starts at
+round 1. A repo is its primary checkout, worktrees included.
+
+**Round cap.** Past round 3 of a lineage (only on the user's "another round"), only
+`blocking` findings are fixed in the loop. `should-fix` and `note` go to the project's
+`TO-DO.md` and are recorded `dispose --deferred "<TO-DO item>"` — never `--rejected`,
+because a deferral is not a claim that the finding is wrong. Write the item first, carrying
+the finding ID as its leading marker — `- [ ] [review <ID>] <what is left>`; the marker is
+the link, and an ID mentioned elsewhere on a line or a marker with no text is not. `dispose`
+refuses a deferral with no open item naming the ID, one from round 3 or earlier of its
+lineage, and any blocking finding.
 
 **Verification scaffolding is review surface.** A checker, generator or script a session
 adds to verify its own deliverable is code, and every round reviews it. On a docs scope,
@@ -271,7 +292,13 @@ Why: scope 5.3 ran twelve rounds, eight of them patching one heuristic shell sca
 ending with two findings on opposite sides — the local-maxima failure this skill exists
 to catch, inside the skill. kalpa-iris 1.1 (a docs scope) ran five codex rounds and four
 verify runs; round 1 found the real defects and every later round found holes in checkers
-the session had added. Review outcomes are a human checkpoint (`/plan` §6.8).
+the session had added.
+
+> **Why a standing policy (Alex, 2026-10-18, WellMed scope 171).** A per-round hard stop and
+> a per-unit outcome checkpoint put the user in every loop, mostly to say "yes, continue";
+> 171.2 also hit the round-3 cap on a first review of new code, because rounds counted per
+> repo and two lanes shared one. The user is now asked only where their judgment changes
+> the outcome: design, a repeat, no SHIP, a cascade. Process nits stopped earning rounds.
 
 ---
 
@@ -328,6 +355,6 @@ did not cover". The gate marks the unit `⚠ judge: review claude-lean …` unti
 review covers it.
 
 7.5 **Everything after recording is unchanged.** §4 reporting, §5 dispositions,
-`accept`, and the §5.1 round rules (hard stop at round 3) apply as written. A re-review
+`accept`, and the §5.1 loop (standing policy, stop on no SHIP by round 3) apply as written. A re-review
 round is another lean pass on its range. §3.4's telemetry check doesn't apply: lean never
 runs gstack's engine.

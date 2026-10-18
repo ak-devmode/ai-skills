@@ -49,7 +49,7 @@ doc = {"verdicts": [{"check_id": c, "rung_reached": 2 if c in ("no-overbuild", "
                      "verdict": miss if bad and c in ("no-overbuild", "changelog-entry") else "pass",
                      "reason": "fake"} for c in ids],
        "findings": stray if bad else [],
-       "lever_candidates": [], "feature_map": "n/a"}
+       "nit_checks": [], "lever_candidates": [], "feature_map": "n/a"}
 if out:
     with open(out, "w") as fh:
         json.dump(doc if cd else {"verdicts": []}, fh)

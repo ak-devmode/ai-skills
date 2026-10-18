@@ -1,6 +1,6 @@
 ---
 name: plan
-version: 3.12.0
+version: 3.13.0
 description: |
   Execute tasks from a structured plan document step by step, logging progress and
   stopping at human checkpoints. Plan files follow the naming convention *-PLAN.md
@@ -451,32 +451,29 @@ on a direct-to-main repo a branch diff is empty by construction.
    the CHECKPOINT for every repo whose range is non-empty. Run `/review` per repo with
    `RANGE=<base>..HEAD` and `--scope <scope folder> --unit {N}.{P}`. **If the stub has a
    Review task and every range is empty, the task is ❌ FAILED**, never a clean review:
-   the phase declared commits and none are in range. Disposition every finding ID. Fix it
-   in a commit that touches the file and record `fixed <sha>`, or record
-   `rejected <reason>` — or, past that repo's round 3, `deferred "<TO-DO item>"` for a non-blocking
-   finding (`/review` §5.1; act on every `[CONVERGENCE]` line). After fixing any blocking
-   finding, review the fix commits again — through that repo's round 3. Then stop and ask
-   the user before any further round, re-review included (`/review` §5.1 hard stop); their
-   `accept` ends the loop. Verification scaffolding (checkers, generators) added during a
-   docs scope is itself review surface — bias against adding it. The gate enforces this: a repo with commits in
-   range and no covering review record blocks the unit (`verify-contracts.md` §5.2.1).
-   **Human checkpoint — review outcomes.** Once every ID is dispositioned, stop and show
-   the user, in plain English: what each blocking finding was and how it was fixed, every
-   rejection with its reason, every deferral with its TO-DO line. On their explicit yes,
-   `review.py accept --scope <scope> --unit {N}.{P} --by "<name>"`. Never accept on their
-   behalf. Under an approved finish table the gate blocks without it (§6.4); a later round
-   with findings reopens it.
-   **Conditional go-ahead.** The user may give that yes in advance, before a further round:
-   "accept and continue unless…". You then run `review.py accept --by "<name>"` yourself
-   after that round, and only if you fixed every finding it raised. Stop and show the user
-   first if the round raised a blocking finding, a design question (a file tripping
-   `/review` §5.1's three-rounds rule is one), or any finding you rejected or deferred —
-   seeing those is what this checkpoint is for. Past the round cap every non-blocking
-   finding is a deferral, so there the go-ahead covers only a round that comes back clean.
-   It covers the one step named and does not carry to the next checkpoint. Offer it in the
-   check-in itself, as one sentence: what you will do next on their confirmation, and what
-   would make you stop instead (Alex, 2026-10-06, IRIS 3.4: "the check in language ive been
-   looking for").
+   the phase declared commits and none are in range. Disposition every finding ID: fix it
+   in a commit that touches the file and record `fixed <sha>`, record `rejected <reason>`,
+   record `accepted "<nit>"` for a non-blocking process nit, or — past round 3 of its
+   lineage — `deferred "<TO-DO item>"` for a non-blocking finding. Run the loop under
+   `/review` §5.1's standing policy, without a per-round check-in: through round 3, fix
+   every finding you don't disagree with and review the fixes again; a SHIP round goes
+   straight to Verify. Verification scaffolding (checkers, generators) added during a docs
+   scope is itself review surface — bias against adding it. The gate enforces this: a repo
+   with commits in range and no covering review record blocks the unit
+   (`verify-contracts.md` §5.2.1).
+   **Review outcomes.** On a SHIP with every ID dispositioned, run
+   `review.py accept --scope <scope> --unit {N}.{P} --by "<owner> (standing policy)"`
+   yourself and go on to Verify. Under an approved finish table the gate blocks without it
+   (`verify-contracts.md` §6.4); a later round with findings reopens it. The unit's completion
+   summary (§11.7) lists, in plain English, every rejection with its reason and every
+   accepted nit — `accept` prints both.
+   **Stop and ask instead** — inline, numbered — only on `/review` §5.1's four stops: a
+   design decision, the same thing blocking across rounds, no SHIP by round 3, or an
+   edge-case cascade (`[CASCADE]`: bring a proposed reframe). Then the user's yes is what
+   `accept` records.
+   *Why:* WellMed scope 171 (Alex, 2026-10-18) — the per-unit outcome checkpoint and its
+   conditional go-ahead asked the user to say "continue" on every unit; the standing policy
+   keeps them for the cases their judgment changes.
    The table's own approval happens before work starts (§5.6.2b).
 2. **Verify** — the stub's `Task {P}.V`, or the CHECKPOINT on a pre-5.3 stub. Run
    `/verify {N}.{P}`, adding `--no-commits` when the stub has no Review task. If the scope has no table, §5.6.2a runs first. A unit listed under

@@ -394,8 +394,15 @@ class TestReview(unittest.TestCase):
 
     def test_lean_rounds_stop_at_three_like_codex(self):
         for rnd in (1, 2, 3):
-            p = self.record(reviewer="claude-lean mode lean (default)", findings=[], verdict="SHIP")
+            p = self.record(reviewer="claude-lean mode lean (default)", findings=[], verdict="DO NOT SHIP")
             self.assertEqual("round 3 of 3: STOP" in p.stdout, rnd == 3, p.stdout)
+
+    def test_a_ship_at_round_three_proceeds(self):
+        # §5.1 standing policy (WellMed 171, 2026-10-18): the STOP is "no SHIP by round 3"
+        for _ in range(3):
+            p = self.record(findings=[], verdict="SHIP")
+        self.assertIn("round: 3 of ", p.stdout)
+        self.assertNotIn("STOP", p.stdout)
 
     def test_scaffolding_findings_are_capped_and_force_no_rereview(self):
         # lenses §7 (Alex, 2026-10-02): block only when shipped work is wrong
@@ -567,6 +574,22 @@ class TestReview(unittest.TestCase):
                 p = run(REVIEW, "accept", "--scope", self.scope, "--unit", "9.1", "--by", "Alex", env=self.env)
                 self.assertEqual(p.returncode, 0, p.stderr)
                 self.assertEqual([b[0] for b in blocks()], [] if waived else [f"rereview:9.1-r{n}-01"])
+
+    def test_a_ship_rounds_standing_accept_never_waives_a_rereview(self):
+        # §5.1: the waiver is the user's "stop" on no SHIP by round 3. A round-3 SHIP's standing
+        # accept is the session's own, and SHIP proceeds only once nothing wants re-reviewing.
+        gate = load("verdict-gate.py")
+        one = [{"file": "pkg/res.go", "line": 3, "severity": "blocking", "category": "engine", "group": "",
+                "text": "t", "fix": ""}]
+        blocks = lambda: gate.review_presence_blocks(self.log, {}, self.projects)
+        for n in (1, 2, 3):
+            self.assertEqual(self.record(findings=one, **({"verdict": "SHIP"} if n == 3 else {})).returncode, 0)
+            fix = self.commit(self.repo, "internal/other.go")
+            self.assertEqual(self.dispose(f"9.1-r{n}-01", "--fixed", fix, "--off-anchor", "moved").returncode, 0)
+        self.assertNotIn("review.py accept", blocks()[-1][2])
+        p = run(REVIEW, "accept", "--scope", self.scope, "--unit", "9.1", "--by", "t (standing policy)", env=self.env)
+        self.assertEqual(p.returncode, 0, p.stderr)
+        self.assertEqual([b[0] for b in blocks()], ["rereview:9.1-r3-01"])
 
     def test_a_fix_off_the_current_branch_blocks(self):
         # review r2-04: a fix on a side branch passes dispose (it is after the review) but is
@@ -936,7 +959,7 @@ class TestReview(unittest.TestCase):
                 if code:
                     self.assertIn("round 3 ≤ 3" if fid != "9.1-r4-02" else "round 2 ≤ 3", p.stderr)
 
-    def test_repo_round_reads_logs_without_review_records(self):
+    def test_review_round_reads_logs_without_review_records(self):
         rr = load(REVIEW)
         f = lambda rid, repo: {"record": "finding", "review_id": rid, "range": {repo: "a..b"}, "file": "x"}
         recs = [f("9.1-r1", "a"), f("9.1-r2", "b"), f("9.1-r3", "a"), f("9.1-r10", "a")]
@@ -944,7 +967,7 @@ class TestReview(unittest.TestCase):
                  ("9.1-r9", (None, 0))]
         for rid, want in cases:
             with self.subTest(rid=rid):
-                self.assertEqual(rr.repo_round(recs, "9.1", rid), want)
+                self.assertEqual(rr.review_round(recs, "9.1", rid), want)
 
 
     def test_rounds_of_one_repo_count_together_across_worktree_keys(self):
@@ -958,12 +981,98 @@ class TestReview(unittest.TestCase):
         # in a subprocess: verify_lib reads VERIFY_PROJECTS at import, and is shared in-process
         out = subprocess.run([sys.executable, "-c", "import json,sys; sys.path.insert(0, sys.argv[1]); "
                               "from _helpers import load; rr = load('review/scripts/review.py'); "
-                              "print(json.dumps([rr.repo_round(json.loads(sys.argv[2]), '9.1', i) "
+                              "print(json.dumps([rr.review_round(json.loads(sys.argv[2]), '9.1', i) "
                               "for i in ('9.1-r1', '9.1-r2', '9.1-r3', '9.1-r4')]))",
                               os.path.dirname(os.path.abspath(__file__)), json.dumps(recs)],
                              env=self.env, capture_output=True, text=True, check=True).stdout
         self.assertEqual(json.loads(out), [["wellmed/svc", 1], ["wellmed/svc", 2], ["wellmed/other", 1],
                                            ["wellmed/svc", 3]])
+
+    # ---- standing review policy (WellMed 171, 2026-10-18)
+    def branch(self, name, *files):
+        """A branch off `work` with its own commits; returns its full range."""
+        git(self.repo, "checkout", "-q", "-b", name, "main")
+        self.commit(self.repo, *files)
+        rng = f"{git(self.repo, 'rev-parse', 'main')}..{git(self.repo, 'rev-parse', 'HEAD')}"
+        git(self.repo, "checkout", "-q", "main")
+        return rng
+
+    def record_range(self, rng, **over):
+        return run(REVIEW, "record", "--repo", self.repo, "--range", rng, "--reviewer", "codex gpt-test",
+                   "--input", self.answer(**over), "--scope", self.scope, "--unit", "9.1", "--passes", "p",
+                   env=self.env)
+
+    def test_rounds_count_per_review_lineage(self):
+        # two lanes' disjoint ranges in one repo each start at round 1; a fix re-review continues
+        one, two = self.branch("lane-1", "one.txt"), self.branch("lane-2", "two.txt")
+        for rng, rid, rnd in ((one, "9.1-r1", 1), (two, "9.1-r2", 1)):
+            p = self.record_range(rng)
+            self.assertEqual(p.returncode, 0, p.stderr)
+            self.assertIn(f"review {rid}:", p.stdout)
+            self.assertIn(f"round: {rnd} of ", p.stdout)
+        git(self.repo, "checkout", "-q", "lane-1")
+        head = git(self.repo, "rev-parse", "HEAD")
+        self.commit(self.repo, "one.txt")
+        p = self.record_range(f"{head}..{git(self.repo, 'rev-parse', 'HEAD')}")
+        self.assertIn("review 9.1-r3:", p.stdout)
+        self.assertIn("round: 2 of ", p.stdout)
+
+    def test_an_undecidable_lineage_fails_closed(self):
+        # git cannot read the ranges (a gone checkout): a restart at round 1 would disable the
+        # round-3 STOP, so the review continues the repo's highest round, with a warning
+        import contextlib
+        import io
+        vl = load("verify_lib.py")
+        gone = os.path.join(self.tmp.name, "gone")
+        revs = [("9.1-r1", "svc", "a1", "b1"), ("9.1-r2", "svc", "b1", "c1"), ("9.1-r3", "other", "x", "y"),
+                ("9.1-r4", "svc", "d1", "e1")]
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            lin = vl.review_lineage(revs, lambda key: gone)
+        self.assertEqual(lin, {"9.1-r1": ("9.1-r1", 1), "9.1-r2": ("9.1-r1", 2), "9.1-r3": ("9.1-r3", 1),
+                               "9.1-r4": ("9.1-r1", 3)})
+        self.assertIn("[WARN] lineage of 9.1-r4", err.getvalue())
+        self.assertIn("continuing 9.1-r2 (round 2)", err.getvalue())
+        self.assertNotIn("lineage of 9.1-r2", err.getvalue())   # an exact head-is-base match needs no git
+
+    def test_accepted_is_a_process_nit_never_a_rejection(self):
+        self.record()
+        gate, vr = load("verdict-gate.py"), load("verify-run.py")
+        # refused on a blocking finding, and with no reason
+        p = self.dispose("9.1-r1-01", "--accepted", "comment drift")
+        self.assertEqual(p.returncode, 1)
+        self.assertIn("a blocking finding cannot be accepted", p.stderr)
+        self.assertEqual(self.dispose("9.1-r1-03", "--accepted", "  ").returncode, 1)
+        # accepted on a note: dispositioned, never wanted re-reviewed, not audited as a rejection
+        self.assertEqual(self.dispose("9.1-r1-03", "--accepted", "comment drift, noted").returncode, 0)
+        blocks, _ = gate.coverage_blocks(self.log)
+        self.assertNotIn("9.1-r1-03", str(blocks))
+        self.assertNotIn("9.1-r1-03", str(gate.review_presence_blocks(self.log, {}, self.projects)))
+        self.assertEqual(gate.accepted_nits(self.log), ["9.1-r1-03"])
+        self.assertEqual(vr.rejections(self.scope, "9.1"), 0)
+        fix = self.commit(self.repo, "a.sh")
+        self.dispose("9.1-r1-01", "--fixed", fix)
+        self.dispose("9.1-r1-02", "--rejected", "the filter is in the repo layer")
+        self.assertEqual(vr.rejections(self.scope, "9.1"), 1)
+        p = run(REVIEW, "accept", "--scope", self.scope, "--unit", "9.1", "--by", "t (standing policy)",
+                env=self.env)
+        self.assertEqual(p.returncode, 0, p.stderr)
+        self.assertIn("accepted (process nit): 9.1-r1-03 — comment drift, noted", p.stdout)
+        self.assertIn("rejected: 9.1-r1-02 — the filter is in the repo layer", p.stdout)
+
+    def test_cascade_when_a_new_finding_lands_on_a_fix(self):
+        mk = lambda line: [{"file": "a.sh", "line": line, "severity": "should-fix", "category": "fail-open",
+                            "group": "", "text": "t", "fix": "f", "target": "shipped"}]
+        self.record(findings=mk(2))
+        with open(os.path.join(self.repo, "a.sh"), "w") as fh:
+            fh.write("#!/bin/sh\ncurl x\nexit 0\n")   # the fix rewrites line 2, adds line 3
+        git(self.repo, "commit", "-qam", "fix")
+        self.assertEqual(self.dispose("9.1-r1-01", "--fixed", git(self.repo, "rev-parse", "HEAD")).returncode, 0)
+        p = self.record(findings=mk(1))   # the shebang predates the fix: no cascade
+        self.assertNotIn("[CASCADE]", p.stdout)
+        p = self.record(findings=mk(3))
+        self.assertIn("[CASCADE] a.sh — 9.1-r3-01 (line 3)", p.stdout)
+        self.assertIn("to fix 9.1-r1-01", p.stdout)
 
 
 if __name__ == "__main__":

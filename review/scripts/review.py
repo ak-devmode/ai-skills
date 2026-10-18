@@ -20,9 +20,10 @@ Usage:
   review.py record  --repo PATH --range BASE..HEAD --reviewer LINE --input FILE
                     [--scope DIR --unit N.P] [--passes TEXT] [--mode LINE]
   review.py dispose --scope DIR --unit N.P --finding ID (--fixed SHA [--off-anchor REASON] | --rejected REASON |
-                    --deferred TODO) [--by NAME]
+                    --deferred TODO | --accepted REASON) [--by NAME]
+                    --accepted: a non-blocking process nit, noted and never re-reviewed (SKILL.md §5.1)
   review.py dispose ... --fixed SHA --fixed-in REPO_PATH     (the fix lives in another repo)
-  review.py accept  --scope DIR --unit N.P --by NAME     (the user's yes to the outcomes, §6.4)
+  review.py accept  --scope DIR --unit N.P --by NAME     (the outcomes accepted — the user, or the standing policy, §6.4)
   review.py misfiled --scope DIR --unit N.P              (rejections that say "fixed/resolved <sha>" → dispose lines)
 Output: prepare prints `prompt:`, `schema:`, `passes:`, `range:`, `effort:` (+ an `uncovered:` count
         with --lean; record recomputes that list for a claude-lean reviewer); record prints the report path (or the
@@ -58,8 +59,8 @@ LENSES = os.path.join(SKILL, "rules", "lenses.md")
 ENGINE = os.path.expanduser("~/.claude/skills/gstack/review/checklist.md")
 DOCS = f"{vl.CONTRACT} §6 · review/SKILL.md"
 SEVERITIES = ("blocking", "should-fix", "note")
-# SKILL.md §5.1 convergence: past this many rounds on one unit, only blocking findings are
-# fixed in the loop; a file drawing findings REPEAT rounds running is a design problem.
+# SKILL.md §5.1 convergence: past this many rounds of one review lineage, only blocking findings
+# are fixed in the loop; a file drawing findings REPEAT rounds running is a design problem.
 ROUND_CAP, REPEAT = vl.ROUND_CAP, 3
 CATEGORIES = ("engine", "domain", "local-maxima", "silent-failure", "dirty-comment", "doc-claim", "fail-open")
 GROUPS = {"wellmed": "§3.1–§3.8", "pmg": "§3.1, §3.5, §3.6, §3.7 only",
@@ -486,10 +487,11 @@ def cmd_record(a):
         out = os.path.join(art, f"review-{review_id}.md")
         with open(out, "w", encoding="utf-8") as fh:
             fh.write(report)
-    repo, rnd = repo_round(vl.read_jsonl(log), a.unit, review_id)
+    recs = vl.read_jsonl(log)
+    repo, rnd = review_round(recs, a.unit, review_id)
     print(f"review {review_id}: {len(findings)} finding(s) logged -> {log}\nreport: {out}\nverdict: {doc['verdict']}\n"
-          f"round: {rnd} of {repo} in {a.unit}")
-    for line in convergence(vl.read_jsonl(log), a.unit):
+          f"round: {rnd} of {repo} in {a.unit} (this review's lineage)")
+    for line in convergence(recs, a.unit) + cascades(recs, review_id, a.repo, key, a.range.split("..")[1]):
         print(line)
     return vl.EXIT_PASS
 
@@ -508,18 +510,26 @@ def lean_uncovered(a):
 
 
 def reviews_of(recs, unit):
-    """[(review_id, repo, files with findings)] for `unit`, in review order. Logs from before
-    `review` records existed (§6.0) carry the repo on each finding."""
+    """[{id, repo, files, base, head, verdict}] for `unit`, in review order: `files` are the
+    files with findings. Logs from before `review` records existed (§6.0) carry the repo and
+    the range on each finding."""
     pat, by = re.compile(rf"^{re.escape(unit)}-r(\d+)$"), {}
     for r in recs:
         m = pat.match(str(r.get("review_id", "")))
         if not m or r.get("record") not in ("review", "finding"):
             continue
-        e = by.setdefault(int(m.group(1)), [r["review_id"], None, set()])
-        e[1] = e[1] or canonical(next(iter(r.get("range") or {}), None))
-        if r.get("record") == "finding":
-            e[2].add(r.get("file"))
-    return [tuple(by[n]) for n in sorted(by)]
+        e = by.setdefault(int(m.group(1)), {"id": r["review_id"], "repo": None, "files": set(), "base": None,
+                                            "head": None, "verdict": None})
+        key, rng = next(iter((r.get("range") or {}).items()), (None, ""))
+        e["repo"] = e["repo"] or canonical(key)
+        if not e["head"]:
+            sh, (b, _, h) = r.get("shas") or {}, str(rng).partition("..")
+            e["base"], e["head"] = sh.get("base") or b or None, sh.get("head") or h or None
+        if r.get("record") == "review":
+            e["verdict"] = r.get("verdict")
+        else:
+            e["files"].add(r.get("file"))
+    return [by[n] for n in sorted(by)]
 
 
 @functools.lru_cache(maxsize=None)
@@ -528,35 +538,45 @@ def canonical(key):
     return vl.canonical_key(key)
 
 
-def repo_round(recs, unit, review_id):
-    """(repo, round): the round counts THAT repo's reviews within the unit, never the unit's.
-    IDs stay `<unit>-r<n>` across every repo, but 149.2 reviewed 13 repos in one unit, so
-    bpjs's first look was r5 and the round cap fired on it (review/SKILL.md §5.1)."""
+def rounds(recs, unit):
+    """(reviews_of, {review_id: (lineage root, round)}): SKILL.md §5.1 rounds count per review
+    lineage — a fix re-review continues its review's count, new code starts at round 1
+    (verify_lib.review_lineage). IDs stay `<unit>-r<n>` across every repo and lineage."""
     revs = reviews_of(recs, unit)
-    ids = [rid for rid, _, _ in revs]
-    if review_id not in ids:
+    return revs, vl.review_lineage([(e["id"], e["repo"], e["base"], e["head"]) for e in revs],
+                                   lambda key: os.path.join(vl.PROJECTS, key))
+
+
+def review_round(recs, unit, review_id):
+    """(repo, round) of `review_id` in its lineage. Neither the unit's `r<n>` nor the repo's
+    count: 149.2 reviewed 13 repos in one unit (bpjs's first look was r5), and WellMed 171.2 ran
+    two lanes in one repo, so both counts hit the cap on a first review of new code."""
+    revs, lin = rounds(recs, unit)
+    e = next((e for e in revs if e["id"] == review_id), None)
+    if e is None:
         return None, 0  # an unknown review is round 0: below every cap, so nothing is released early
-    i = ids.index(review_id)
-    return revs[i][1], sum(1 for _, rp, _ in revs[:i + 1] if rp == revs[i][1])
+    return e["repo"], lin[review_id][1]
 
 
 def convergence(recs, unit):
-    """SKILL.md §5.1 signals for the latest review of `unit`, counted over the reviews of
-    that review's repo: [CONVERGENCE] lines, or none. A loop that keeps finding edge cases
-    in one place is patching a design that is wrong (5.3 ran 12 rounds on one heuristic,
-    two findings ending on opposite sides)."""
-    revs = reviews_of(recs, unit)
+    """SKILL.md §5.1 signals for the latest review of `unit`, counted over that review's
+    lineage: [CONVERGENCE] lines, or none. A loop that keeps finding edge cases in one place is
+    patching a design that is wrong (5.3 ran 12 rounds on one heuristic, two findings ending on
+    opposite sides)."""
+    revs, lin = rounds(recs, unit)
     if not revs:
         return []
-    repo = revs[-1][1]
-    mine = [files for _, rp, files in revs if rp == repo]
-    last, out = len(mine), []
-    if last >= ROUND_CAP:
-        # the hard stop: no further round — re-review of fixes included — without the user's yes
-        # (kalpa-iris 1.1 ran five rounds finding holes in checkers it had added itself)
-        out.append(f"[CONVERGENCE] {repo} round {last} of {ROUND_CAP}: STOP after these dispositions — ask "
-                   "the user: another round (re-review of the fixes included), or `review.py accept` to stop "
-                   "here (review/SKILL.md §5.1)")
+    latest = revs[-1]
+    repo, (root, last) = latest["repo"], lin[latest["id"]]
+    mine = [e["files"] for e in revs if lin[e["id"]][0] == root]
+    out = []
+    if last >= ROUND_CAP and latest["verdict"] != "SHIP":
+        # no SHIP by round 3 is a stop under the standing policy (WellMed 171, 2026-10-18); kalpa-iris
+        # 1.1 ran five rounds finding holes in checkers it had added itself
+        out.append(f"[CONVERGENCE] {repo} round {last} of {ROUND_CAP}: STOP — no SHIP by round {ROUND_CAP} "
+                   f"(verdict {latest['verdict'] or 'unrecorded'}); ask the user after these dispositions: "
+                   "another round (re-review of the fixes included), or `review.py accept` to stop here "
+                   "(review/SKILL.md §5.1)")
     if last > ROUND_CAP:
         out.append(f"[CONVERGENCE] {repo} round {last} > {ROUND_CAP}: fix blocking findings only; defer "
                    "should-fix/note with `dispose --deferred \"<TO-DO item>\"` (review/SKILL.md §5.1)")
@@ -568,12 +588,39 @@ def convergence(recs, unit):
                        "patching — raise it to the user as a design finding (replace, narrow, or cut) before "
                        "another fix")
     # a file outside the reviewed repo (a hand-back doc) is cited by every lane's reviews, so its
-    # streak runs across repos — per-repo counting alone never sees it (review adhoc-08)
+    # streak runs across repos — per-lineage counting alone never sees it (review adhoc-08)
     if len(revs) >= REPEAT:
-        sets = [{x for x in (foreign(f, rp) for f in files) if x} for _, rp, files in revs[-REPEAT:]]
+        sets = [{x for x in (foreign(f, e["repo"]) for f in e["files"]) if x} for e in revs[-REPEAT:]]
         for f in sorted(set.intersection(*sets) - seen):
             out.append(f"[CONVERGENCE] {f} (outside the reviewed repos) drew findings in each of the unit's last "
                        f"{REPEAT} reviews: stop patching — raise it to the user as a design finding")
+    return out
+
+
+def cascades(recs, review_id, repo, key, head):
+    """SKILL.md §5.1 edge-case cascade: [CASCADE] lines for each finding of `review_id` on a line
+    that, at the review's head, an earlier finding's fix commit in this unit last changed (git
+    blame — line drift after the fix is git's to follow). Conservative: only the latest `fixed`
+    disposition of each finding, only fixes in this repo, only files inside it; a line git
+    cannot blame is no signal."""
+    own = {r.get("finding_id"): next(iter(r.get("range") or {}), None) for r in recs if r.get("record") == "finding"}
+    latest = {r.get("finding_id"): r for r in recs if r.get("record") == "disposition"}
+    fixes = {d["sha"]: fid for fid, d in latest.items() if d.get("disposition") == "fixed" and d.get("sha")
+             and canonical(d.get("repo") or own.get(fid)) == canonical(key)}
+    out = []
+    for f in recs:
+        if f.get("record") != "finding" or f.get("review_id") != review_id or not fixes:
+            continue
+        file, line = str(f.get("file") or ""), f.get("line")
+        if not file or os.path.isabs(file) or os.path.normpath(file).startswith("..") or not isinstance(line, int) \
+                or line < 1:
+            continue
+        rc, blame, _ = git(repo, "blame", "--porcelain", "-L", f"{line},{line}", head, "--", file)
+        sha = blame.split(" ", 1)[0] if rc == 0 and blame else ""
+        if sha in fixes:
+            out.append(f"[CASCADE] {file} — {f['finding_id']} (line {line}) is on a line {sha[:10]} changed to fix "
+                       f"{fixes[sha]}: a fix raised a new edge case. Stop fixing; bring the user a reframe of the "
+                       "original solution (review/SKILL.md §5.1)")
     return out
 
 
@@ -614,7 +661,7 @@ def build(a, doc, ordered, key, n, review_id):
               f"**Review:** `{review_id}` · **Reviewer:** {a.reviewer} · **Passes:** {a.passes or 'unrecorded'}"] \
         + ([f"**{a.mode}**"] if a.mode else []) + degraded + [f"**Findings:** {len(findings)} — every ID needs a disposition: "
                       f"`review.py dispose --scope <scope> --unit {a.unit or '<unit>'} --finding <ID> "
-                      "(--fixed <sha> | --rejected \"<reason>\" | --deferred \"<TO-DO>\")`"]
+                      "(--fixed <sha> | --rejected \"<reason>\" | --deferred \"<TO-DO>\" | --accepted \"<process nit>\")`"]
     report = "\n".join(render(doc, findings, header)) + "\n"
     # record only accepts the immutable range, so it is the commits the reviewer saw
     # (review 5.2-r2-01, -r3-01).
@@ -662,11 +709,16 @@ def _accept(a, log):
     if not a.by.strip():
         return err("accept needs --by", "the person accepting", "empty", "--by", "--by \"<name>\"",
                    code=vl.EXIT_USAGE)
-    counts = {k: sum(1 for f in findings if latest[f] == k) for k in ("fixed", "rejected", "deferred")}
+    counts = {k: sum(1 for f in findings if latest[f] == k) for k in ("fixed", "rejected", "deferred", "accepted")}
     vl.append_verified(log, [{"schema": vl.SCHEMA, "ts": now(), "record": "acceptance", "by": a.by.strip(),
                               "findings": len(findings), **counts}])
-    print(f"{a.unit}: outcomes accepted by {a.by.strip()} — {len(findings)} findings "
-          f"({counts['fixed']} fixed, {counts['rejected']} rejected, {counts['deferred']} deferred)")
+    print(f"{a.unit}: outcomes accepted by {a.by.strip()} — {len(findings)} findings ({counts['fixed']} fixed, "
+          f"{counts['rejected']} rejected, {counts['deferred']} deferred, {counts['accepted']} accepted as process nits)")
+    # the unit's closing summary shows rejections, and accepted nits apart from them (SKILL.md §5.1)
+    reasons = {r["finding_id"]: r.get("reason") for r in recs if r.get("record") == "disposition"}
+    for kind, title in (("rejected", "rejected"), ("accepted", "accepted (process nit)")):
+        for fid in (f for f in findings if latest[f] == kind):
+            print(f"  {title}: {fid} — {reasons[fid]}")
     return vl.EXIT_PASS
 
 
@@ -727,6 +779,16 @@ def _dispose(a, log):
     if a.rejected is not None and not a.rejected.strip():
         return err("`rejected` needs a reason", "the reason the finding is wrong", "empty", a.finding,
                    "--rejected \"<why the finding is wrong>\"", cause="code", code=vl.EXIT_FAIL)
+    if a.accepted is not None:
+        # SKILL.md §5.1: a process nit (a comment that doesn't match, a stale table, doc
+        # wording) is noted, never given another round — but a blocking finding is never a nit
+        if not a.accepted.strip():
+            return err("`accepted` needs the reason", "what the process nit is and why it stands", "empty",
+                       a.finding, "--accepted \"<the nit, noted>\"", cause="code", code=vl.EXIT_FAIL)
+        if f.get("severity") == "blocking":
+            return err("a blocking finding cannot be accepted as a process nit", "`--fixed <sha>` or "
+                       "`--rejected \"<why>\"`", "severity blocking", a.finding,
+                       "fix it, or reject it with the reason it is wrong", cause="code", code=vl.EXIT_FAIL)
     if a.deferred is not None:
         if not a.deferred.strip():
             return err("`deferred` needs the TO-DO item", "the TO-DO entry that carries it", "empty", a.finding,
@@ -737,11 +799,11 @@ def _dispose(a, log):
                        cause="code", code=vl.EXIT_FAIL)
         # SKILL.md §5.1: deferral is the round cap's release valve, not a way to skip a
         # finding early, and the follow-up must exist (review adhoc-03). The round is the
-        # finding's repo's, not the unit's (149.2-r10-05 was satu-sehat's first review).
-        repo, rnd = repo_round(recs, a.unit, f.get("review_id"))
+        # finding's lineage's, not the unit's or the repo's (149.2-r10-05 was satu-sehat's first review).
+        repo, rnd = review_round(recs, a.unit, f.get("review_id"))
         if rnd <= ROUND_CAP:
             return err(f"deferral before the round cap ({repo} round {rnd} ≤ {ROUND_CAP})",
-                       f"a finding from round {ROUND_CAP + 1} or later of {repo}", f"round {rnd}", a.finding,
+                       f"a finding from round {ROUND_CAP + 1} or later of its {repo} review lineage", f"round {rnd}", a.finding,
                        "fix it, or reject it with the reason it is wrong", cause="code", code=vl.EXIT_FAIL)
         if not vl.todo_has_item(a.scope, a.finding, open_only=True):
             return err(f"no open TO-DO item carries `{a.finding}`",
@@ -753,8 +815,9 @@ def _dispose(a, log):
     if not by:
         rc, name, _ = git(a.scope, "config", "user.name")
         by = f"{name or 'unknown'} / Claude"
-    kind = "fixed" if a.fixed else ("deferred" if a.deferred is not None else "rejected")
-    reason = {"fixed": a.off_anchor, "deferred": a.deferred, "rejected": a.rejected}[kind]
+    kind = "fixed" if a.fixed else "deferred" if a.deferred is not None else \
+        "accepted" if a.accepted is not None else "rejected"
+    reason = {"fixed": a.off_anchor, "deferred": a.deferred, "accepted": a.accepted, "rejected": a.rejected}[kind]
     rec = {"schema": vl.SCHEMA, "ts": now(), "record": "disposition", "finding_id": a.finding,
            "disposition": kind, "sha": fix.get("sha"), "reason": reason, "by": by}
     if fix:
@@ -972,6 +1035,7 @@ def main(argv):
     x.add_argument("--fixed", metavar="SHA")
     x.add_argument("--rejected", metavar="REASON")
     x.add_argument("--deferred", metavar="TODO", help="non-blocking only: the TO-DO item that carries it")
+    x.add_argument("--accepted", metavar="REASON", help="non-blocking only: a process nit, noted and never re-reviewed")
     d.add_argument("--fixed-in", metavar="REPO_PATH", help="with --fixed: the repo holding the fix, when it is "
                    "not the finding's own (a fix at the source, or in a docs repo)")
     d.add_argument("--off-anchor", metavar="REASON",

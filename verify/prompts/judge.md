@@ -36,12 +36,18 @@ check yourself, whether each finish condition below is actually met.
   only changes that appear in neither the progress file nor the ledger.
 - **test-plan** — if a test plan is listed below, did the unit's tests cover its edge cases
   and critical paths? Name the uncovered ones.
-- **rejection-audit** — if a review log is listed, read every `rejected` disposition. Is the
+- **rejection-audit** — if a review log is listed, read every `rejected` disposition (an `accepted` process nit is not a rejection: it goes to `nit-check`). Is the
   reason actually right? For every `fixed <sha>`, does that commit actually fix the finding — and for `via off-anchor`, does its reason hold?
   A rejection whose reason names the commit that fixed the finding is a fix filed under the
   wrong label, not a wrong dismissal: if that commit does fix it, it does not fail
   `rejections-justified` — raise a `low` finding to relabel it (`review.py misfiled`). Fail
   only a rejection that leaves a real defect unfixed.
+- **nit-check** — every accepted process nit listed under Inputs gets exactly one `nit_checks`
+  line: `nit` when it really is only process (a comment that doesn't match, a stale table, an
+  old timestamp, doc wording), `misfiled` when it is a defect — behaviour, a missing check, a
+  wrong contract — dismissed as a nit. One line each, a short look at the finding's file and
+  line; it is a spot-check, not a re-review. A `misfiled` line is reported as a finding of
+  this run; do not also repeat it under `findings`, and do not fail a check for it.
 - **faithful-port** — where the scope says to port or follow a source artifact, was the
   source read and the result diffed against it per unit? A port with no source read is a
   high finding.
@@ -77,6 +83,8 @@ carries the same slug — that match is what counts as a second sighting.
 {{RANGES}}
 - Test plan: {{TEST_PLAN}}
 - Review disposition log: {{REVIEW_LOG}}
+- Accepted process nits to spot-check (`nit_checks`, one line each; `[]` when none):
+{{ACCEPTED_NITS}}
 
 ## Checks to judge (run {{RUN_ID}})
 

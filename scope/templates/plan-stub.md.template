@@ -31,7 +31,9 @@
 - **Type**: AI
 - **Action**: `/review` on each repo's `base..HEAD` (base from `closeout-prep.md`), with
   `--scope`/`--unit {N}.{P}`; disposition every finding ID (/plan §6.8)
-- **Acceptance**: range non-empty; every finding `fixed <sha>` or `rejected <reason>`
+- **Acceptance**: range non-empty; every finding `fixed <sha>`, `rejected <reason>`, `accepted "<nit>"`
+  (non-blocking process nit) or, past round 3 of its lineage, `deferred "<TO-DO item>"`; on a SHIP,
+  `review.py accept --by "<owner> (standing policy)"` (/review §5.1)
 
 ### Task {P}.V: Verify
 - **Type**: AI

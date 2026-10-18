@@ -3,7 +3,7 @@
   "title": "verify judge output (templates/verify-contracts.md §4.4)",
   "type": "object",
   "additionalProperties": false,
-  "required": ["verdicts", "findings", "lever_candidates", "feature_map"],
+  "required": ["verdicts", "findings", "nit_checks", "lever_candidates", "feature_map"],
   "properties": {
     "verdicts": {
       "type": "array",
@@ -32,6 +32,19 @@
           "severity": {"type": "string", "enum": ["high", "medium", "low"]},
           "where": {"type": "string"},
           "text": {"type": "string"}
+        }
+      }
+    },
+    "nit_checks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["finding_id", "verdict", "reason"],
+        "properties": {
+          "finding_id": {"type": "string"},
+          "verdict": {"type": "string", "enum": ["nit", "misfiled"]},
+          "reason": {"type": "string"}
         }
       }
     },

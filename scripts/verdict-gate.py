@@ -122,7 +122,8 @@ def coverage_blocks(review_log):
         fid, d = f.get("finding_id"), latest.get(f.get("finding_id"))
         where = f"{review_log} · {fid} ({f.get('file')}:{f.get('line')})"
         if d is None:
-            blocks.append((fid, "review finding has no disposition", "`fixed <sha>` or `rejected <reason>`",
+            blocks.append((fid, "review finding has no disposition", "`fixed <sha>`, `rejected <reason>`, "
+                           "`deferred <TO-DO>` or `accepted <process nit>`",
                            "no disposition recorded", where, "code"))
         elif d.get("disposition") == "fixed" and not d.get("sha"):
             blocks.append((fid, "`fixed` disposition without a commit", "the fixing commit's SHA",
@@ -141,10 +142,24 @@ def coverage_blocks(review_log):
             blocks.append((fid, "`deferred` disposition on a blocking finding, or its TO-DO item is gone",
                            "a non-blocking finding whose TO-DO item exists (open, or closed into the archive)",
                            f"severity {f.get('severity')}, reason {d.get('reason')!r}", where, "code"))
-        elif d.get("disposition") not in ("fixed", "rejected", "deferred"):
-            blocks.append((fid, "unknown disposition", "`fixed`, `rejected` or `deferred`",
+        elif d.get("disposition") == "accepted" and (
+                f.get("severity") == "blocking" or not str(d.get("reason") or "").strip()):
+            # a process nit, noted (review/SKILL.md §5.1) — never a blocking finding, never unexplained
+            blocks.append((fid, "`accepted` disposition on a blocking finding, or without a reason",
+                           "a non-blocking process nit with the reason it stands",
+                           f"severity {f.get('severity')}, reason {d.get('reason')!r}", where, "code"))
+        elif d.get("disposition") not in ("fixed", "rejected", "deferred", "accepted"):
+            blocks.append((fid, "unknown disposition", "`fixed`, `rejected`, `deferred` or `accepted`",
                            repr(d.get("disposition")), where, "tooling"))
     return blocks, len(findings)
+
+
+def accepted_nits(review_log):
+    """The finding IDs whose latest disposition is `accepted` — process nits, listed apart from
+    rejections (review/SKILL.md §5.1); `/verify` never audits them as rejections."""
+    latest = {r.get("finding_id"): r.get("disposition") for r in vl.read_jsonl(review_log)
+              if r.get("record") == "disposition"}
+    return sorted(fid for fid, d in latest.items() if d == "accepted")
 
 
 def accepted(review_log):
@@ -209,7 +224,8 @@ def review_presence_blocks(review_log, base, projects, scope=None, unit=None):
     *blocking* finding must itself sit inside a later review's range, which is /plan §6.8's
     "review the fixes again" (5.3-r2-03) — and so must every `off-anchor` fix, whatever the
     severity: nothing but a reason ties that commit to the finding (review adhoc-03) — until the
-    repo reaches the round cap and the user's acceptance follows the disposition (`stopped`).
+    finding's review lineage reaches the round cap and an acceptance follows the disposition
+    (`stopped`).
     A git call that fails is a block, never a zero (5.3-r2-02)."""
     ll.reset()
     recs = vl.read_jsonl(review_log) if os.path.exists(review_log) else []
@@ -306,11 +322,22 @@ def review_presence_blocks(review_log, base, projects, scope=None, unit=None):
         if r.get("record") == "disposition":
             latest[r.get("finding_id")], at[r.get("finding_id")] = r, i
 
-    def stopped(repo, fid):
-        """review/SKILL.md §5.1 hard stop: past ROUND_CAP rounds of `repo`, the user chose to
-        stop the loop — their `accept`, recorded after this disposition, stands in for the
+    # rounds count per review lineage, not per repo (verify_lib.review_lineage; WellMed 171.2)
+    ordered = sorted(reviews, key=lambda r: round_no(r.get("review_id")))
+    lineage = vl.review_lineage(
+        [(r.get("review_id"), canon(next(iter(r.get("range") or {}), "")), (r.get("shas") or {}).get("base"),
+          (r.get("shas") or {}).get("head")) for r in ordered], root)
+
+    def capped(review_id):
+        """The finding's review lineage has reached ROUND_CAP rounds."""
+        mine = lineage.get(review_id)
+        return bool(mine) and max(rnd for rt, rnd in lineage.values() if rt == mine[0]) >= vl.ROUND_CAP
+
+    def stopped(fid, review_id):
+        """review/SKILL.md §5.1 stop: the finding's lineage reached ROUND_CAP rounds without SHIP
+        and the loop stopped there — an `accept` recorded after this disposition stands in for the
         re-review (kalpa-iris 1.1: five rounds re-reviewing its own checkers)."""
-        return sum(1 for r in reviews if names(r, repo)) >= vl.ROUND_CAP and any(
+        return capped(review_id) and any(
             r.get("record") == "acceptance" and str(r.get("by") or "").strip() for r in recs[at[fid] + 1:])
 
     for f in recs:
@@ -351,12 +378,11 @@ def review_presence_blocks(review_log, base, projects, scope=None, unit=None):
                 blocks.append((f"rereview:{f['finding_id']}", "cannot read the fix's history",
                                f"{e} in {repo}", "git failed", f"{path}", "environment"))
                 continue
-            if not seen and not stopped(repo, f["finding_id"]):
-                capped = sum(1 for r in reviews if names(r, repo)) >= vl.ROUND_CAP
+            if not seen and not stopped(f["finding_id"], f.get("review_id")):
                 blocks.append((f"rereview:{f['finding_id']}", f"{why} was never reviewed",
                                f"a later /review whose range contains {d['sha'][:10]}" + (
-                                   f" — or, {repo} being at round {vl.ROUND_CAP}+, the user's "
-                                   "`review.py accept` to stop the loop here" if capped else ""),
+                                   f" — or, its review lineage being at round {vl.ROUND_CAP}+, "
+                                   "`review.py accept` to stop the loop here" if capped(f.get("review_id")) else ""),
                                f"no review record covers it", f"{review_log} · {f['finding_id']}", "code"))
     return blocks
 
@@ -515,6 +541,9 @@ def evaluate(scope, unit, projects):
                            f"--unit {unit} --by <name>"))
             report.append("BLOCK  review-acceptance  review outcomes not accepted")
         report.append(f"review {n} finding(s), {n - len(cov)} dispositioned")
+        nits = accepted_nits(review)
+        if nits:
+            report.append(f"review accepted as process nits ({len(nits)}): {', '.join(nits)}")
         for line in fallback_markers(review, projects, scope):
             judges.add(line)
     return report, blocks, sorted(j for j in judges if j)

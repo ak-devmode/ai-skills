@@ -400,9 +400,40 @@ def authority(p, j):
 
 
 KEBAB = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
-# review/SKILL.md §5.1: rounds of one repo in a unit before the loop stops and asks the user.
-# review.py's deferral rule and verdict-gate.py's re-review waiver read the same number.
+# review/SKILL.md §5.1: rounds of one review lineage before a loop without SHIP stops and asks
+# the user. review.py's deferral rule and verdict-gate.py's re-review waiver read the same number.
 ROUND_CAP = 3
+
+
+def _ranges_share(path, a, b):
+    """Do the ranges a=(base, head) and b share a commit, as git reads them? Reachable from both
+    heads (their merge bases), from neither base. None when git cannot tell."""
+    bases = _git_lines(path, "merge-base", "--all", a[1], b[1])
+    if not bases:
+        return None
+    out = _git_lines(path, "rev-list", "--count", *bases, f"^{a[0]}", f"^{b[0]}")
+    return int(out[0]) > 0 if out and out[0].isdigit() else None
+
+
+def review_lineage(reviews, path_of):
+    """{review_id: (root review_id, round)} for `reviews`, [(review_id, repo, base, head)] in
+    review order (repo a canonical key; `path_of(repo)` is where git reads it). Rounds follow
+    the code, not the repo (WellMed 171.2: two lanes in one repo hit the round cap on a first
+    review of new code). A review continues an earlier review of the same repo whose head is
+    its base (a fix re-review) or whose range shares a commit with its own — the highest-round
+    one when several do; anything else starts a lineage at round 1. When git cannot tell, only an exact SHA match continues."""
+    out, seen = {}, []
+    for rid, repo, base, head in reviews:
+        parent = None
+        for prid, prepo, pbase, phead in reversed(seen):
+            if prepo != repo or not (base and head and pbase and phead):
+                continue
+            if base == phead or (base, head) == (pbase, phead) or \
+                    _ranges_share(path_of(repo), (base, head), (pbase, phead)):
+                parent = prid if parent is None or out[prid][1] > out[parent][1] else parent
+        out[rid] = (out[parent][0], out[parent][1] + 1) if parent else (rid, 1)
+        seen.append((rid, repo, base, head))
+    return out
 # a judge row the runner decided itself (verify-run.py: zero rejections to audit); the judge never sees it
 AUTO_PREFIX = "auto: "
 # verify/SKILL.md §3.9: finalized /verify runs of one unit before the fix loop stops and asks.

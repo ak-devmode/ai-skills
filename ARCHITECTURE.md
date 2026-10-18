@@ -11,7 +11,7 @@ Optimized for agent consumption: Claude Code reads this file at session
 start to understand which skills exist and how they fit together.
 -->
 
-**Last refreshed:** 2026-10-03 (/closeout, plan 7 lean-review-verify — lean default, NOT-JUDGED, scaffolding cap)
+**Last refreshed:** 2026-10-18 (review standing policy — lineage rounds, accepted nits, cascade signal; WellMed 171)
 **Maintained by:** manual edits + /closeout when invoked by plans rooted here
 
 ---

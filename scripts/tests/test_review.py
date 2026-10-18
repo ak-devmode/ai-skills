@@ -575,6 +575,22 @@ class TestReview(unittest.TestCase):
                 self.assertEqual(p.returncode, 0, p.stderr)
                 self.assertEqual([b[0] for b in blocks()], [] if waived else [f"rereview:9.1-r{n}-01"])
 
+    def test_a_ship_rounds_standing_accept_never_waives_a_rereview(self):
+        # §5.1: the waiver is the user's "stop" on no SHIP by round 3. A round-3 SHIP's standing
+        # accept is the session's own, and SHIP proceeds only once nothing wants re-reviewing.
+        gate = load("verdict-gate.py")
+        one = [{"file": "pkg/res.go", "line": 3, "severity": "blocking", "category": "engine", "group": "",
+                "text": "t", "fix": ""}]
+        blocks = lambda: gate.review_presence_blocks(self.log, {}, self.projects)
+        for n in (1, 2, 3):
+            self.assertEqual(self.record(findings=one, **({"verdict": "SHIP"} if n == 3 else {})).returncode, 0)
+            fix = self.commit(self.repo, "internal/other.go")
+            self.assertEqual(self.dispose(f"9.1-r{n}-01", "--fixed", fix, "--off-anchor", "moved").returncode, 0)
+        self.assertNotIn("review.py accept", blocks()[-1][2])
+        p = run(REVIEW, "accept", "--scope", self.scope, "--unit", "9.1", "--by", "t (standing policy)", env=self.env)
+        self.assertEqual(p.returncode, 0, p.stderr)
+        self.assertEqual([b[0] for b in blocks()], ["rereview:9.1-r3-01"])
+
     def test_a_fix_off_the_current_branch_blocks(self):
         # review r2-04: a fix on a side branch passes dispose (it is after the review) but is
         # not in what ships until merged

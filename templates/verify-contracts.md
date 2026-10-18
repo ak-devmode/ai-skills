@@ -237,9 +237,9 @@ only a reason ties to the finding (review adhoc-03); a `scaffolding` finding is 
 should-fix by `record` and never forces a round (`review/rules/lenses.md` §7) — sits in no later review's range (a higher `r<n>`
 than the finding's — an earlier review never saw the fix as a fix, review adhoc-05) of the repo
 holding it (the disposition's `repo`, else the finding's) — the fixes are reviewed again (`/plan` §6.8, 5.3-r2-03),
-unless the finding's review lineage (§6.2) has reached round `ROUND_CAP` (3) and an `acceptance` record follows the
-disposition: at the cap the loop stops on the user's "stop here" (`/review` §5.1), and that acceptance stands in
-for the re-review; an `accepted` disposition (§6.2) never wants one; when any
+unless the finding's review lineage (§6.2) has reached round `ROUND_CAP` (3), the lineage's latest review is not
+`SHIP`, and an `acceptance` record follows the disposition: at the cap the loop stops on the user's "stop here"
+(`/review` §5.1), and that acceptance stands in for the re-review — a SHIP round's standing accept never does; an `accepted` disposition (§6.2) never wants one; when any
 finding's `fixed <sha>` in its own repo is an ancestor of the head its review saw — the reviewed
 code recorded as its own fix (review adhoc-01); when a `fixed <sha>` has not landed (§5.2.2) in
 the repo holding it — a fix on a branch that never merged (review r2-04); when git cannot count the range (a block,

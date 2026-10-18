@@ -333,11 +333,18 @@ def review_presence_blocks(review_log, base, projects, scope=None, unit=None):
         mine = lineage.get(review_id)
         return bool(mine) and max(rnd for rt, rnd in lineage.values() if rt == mine[0]) >= vl.ROUND_CAP
 
+    def unshipped(review_id):
+        """The latest review in the finding's lineage has a verdict other than SHIP."""
+        mine = lineage.get(review_id)
+        last = [r for r in ordered if mine and (lineage.get(r.get("review_id")) or ("",))[0] == mine[0]][-1:]
+        return bool(last) and str(last[0].get("verdict") or "").strip() != "SHIP"
+
     def stopped(fid, review_id):
         """review/SKILL.md §5.1 stop: the finding's lineage reached ROUND_CAP rounds without SHIP
         and the loop stopped there — an `accept` recorded after this disposition stands in for the
-        re-review (kalpa-iris 1.1: five rounds re-reviewing its own checkers)."""
-        return capped(review_id) and any(
+        re-review (kalpa-iris 1.1: five rounds re-reviewing its own checkers). A SHIP's standing
+        accept never does: SHIP proceeds only once nothing wants re-reviewing (§5.1)."""
+        return capped(review_id) and unshipped(review_id) and any(
             r.get("record") == "acceptance" and str(r.get("by") or "").strip() for r in recs[at[fid] + 1:])
 
     for f in recs:
@@ -381,8 +388,9 @@ def review_presence_blocks(review_log, base, projects, scope=None, unit=None):
             if not seen and not stopped(f["finding_id"], f.get("review_id")):
                 blocks.append((f"rereview:{f['finding_id']}", f"{why} was never reviewed",
                                f"a later /review whose range contains {d['sha'][:10]}" + (
-                                   f" — or, its review lineage being at round {vl.ROUND_CAP}+, "
-                                   "`review.py accept` to stop the loop here" if capped(f.get("review_id")) else ""),
+                                   f" — or, its review lineage being at round {vl.ROUND_CAP}+ without SHIP, "
+                                   "`review.py accept` to stop the loop here"
+                                   if capped(f.get("review_id")) and unshipped(f.get("review_id")) else ""),
                                f"no review record covers it", f"{review_log} · {f['finding_id']}", "code"))
     return blocks
 

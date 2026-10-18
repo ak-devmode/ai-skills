@@ -803,7 +803,7 @@ def _dispose(a, log):
         repo, rnd = review_round(recs, a.unit, f.get("review_id"))
         if rnd <= ROUND_CAP:
             return err(f"deferral before the round cap ({repo} round {rnd} ≤ {ROUND_CAP})",
-                       f"a finding from round {ROUND_CAP + 1} or later of {repo}", f"round {rnd}", a.finding,
+                       f"a finding from round {ROUND_CAP + 1} or later of its {repo} review lineage", f"round {rnd}", a.finding,
                        "fix it, or reject it with the reason it is wrong", cause="code", code=vl.EXIT_FAIL)
         if not vl.todo_has_item(a.scope, a.finding, open_only=True):
             return err(f"no open TO-DO item carries `{a.finding}`",

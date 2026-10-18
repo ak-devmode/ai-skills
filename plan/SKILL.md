@@ -464,9 +464,9 @@ on a direct-to-main repo a branch diff is empty by construction.
    **Review outcomes.** On a SHIP with every ID dispositioned, run
    `review.py accept --scope <scope> --unit {N}.{P} --by "<owner> (standing policy)"`
    yourself and go on to Verify. Under an approved finish table the gate blocks without it
-   (§6.4); a later round with findings reopens it. The unit's closing summary (§6.7) lists,
-   in plain English, every rejection with its reason and every accepted nit — `accept`
-   prints both.
+   (`verify-contracts.md` §6.4); a later round with findings reopens it. The unit's completion
+   summary (§11.7) lists, in plain English, every rejection with its reason and every
+   accepted nit — `accept` prints both.
    **Stop and ask instead** — inline, numbered — only on `/review` §5.1's four stops: a
    design decision, the same thing blocking across rounds, no SHIP by round 3, or an
    edge-case cascade (`[CASCADE]`: bring a proposed reframe). Then the user's yes is what

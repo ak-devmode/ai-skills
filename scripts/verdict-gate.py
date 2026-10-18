@@ -224,7 +224,7 @@ def review_presence_blocks(review_log, base, projects, scope=None, unit=None):
     *blocking* finding must itself sit inside a later review's range, which is /plan §6.8's
     "review the fixes again" (5.3-r2-03) — and so must every `off-anchor` fix, whatever the
     severity: nothing but a reason ties that commit to the finding (review adhoc-03) — until the
-    finding's review lineage reaches the round cap and an acceptance follows the disposition
+    finding's review lineage reaches the round cap without SHIP and an acceptance follows the disposition
     (`stopped`).
     A git call that fails is a block, never a zero (5.3-r2-02)."""
     ll.reset()
@@ -541,12 +541,13 @@ def evaluate(scope, unit, projects):
             blocks.append((fid, what, exp, found, where, cause, "record the disposition through /review's log writer"))
             report.append(f"BLOCK  {fid}  {what}")
         if appr is not None and n and not cov and not accepted(review):
-            # §6.4 — a table under the human checkpoint puts review outcomes there too
-            blocks.append(("review-acceptance", "review outcomes not accepted by a human since the last "
+            # §6.4 — a table under the human checkpoint wants review outcomes recorded too: by the
+            # session on a SHIP (standing policy), by the user's answer at a /review §5.1 stop
+            blocks.append(("review-acceptance", "review outcomes not accepted since the last "
                            "finding or disposition", "an `acceptance` record after every finding and disposition",
                            "none, or an older one", review, "code",
-                           f"show the user the outcomes; on their yes: review.py accept --scope {scope} "
-                           f"--unit {unit} --by <name>"))
+                           f"on a SHIP: review.py accept --scope {scope} --unit {unit} --by \"<owner> (standing "
+                           f"policy)\"; at a /review §5.1 stop, on the user's answer: --by <name>"))
             report.append("BLOCK  review-acceptance  review outcomes not accepted")
         report.append(f"review {n} finding(s), {n - len(cov)} dispositioned")
         nits = accepted_nits(review)

@@ -10,6 +10,7 @@ import json
 import os
 import re
 import shlex
+import sys
 
 SCHEMA = "verify/1"
 CONTRACT = "templates/verify-contracts.md"
@@ -421,16 +422,25 @@ def review_lineage(reviews, path_of):
     the code, not the repo (WellMed 171.2: two lanes in one repo hit the round cap on a first
     review of new code). A review continues an earlier review of the same repo whose head is
     its base (a fix re-review) or whose range shares a commit with its own — the highest-round
-    one when several do; anything else starts a lineage at round 1. When git cannot tell, only an exact SHA match continues."""
+    one when several do; anything else starts a lineage at round 1. When git cannot tell, it
+    fails closed: the review continues the repo's highest round in the unit, with a warning on
+    stderr — a silent round 1 would disable the round-3 STOP."""
     out, seen = {}, []
     for rid, repo, base, head in reviews:
-        parent = None
+        parent, unsure = None, False
         for prid, prepo, pbase, phead in reversed(seen):
             if prepo != repo or not (base and head and pbase and phead):
                 continue
-            if base == phead or (base, head) == (pbase, phead) or \
-                    _ranges_share(path_of(repo), (base, head), (pbase, phead)):
+            share = base == phead or (base, head) == (pbase, phead) or \
+                _ranges_share(path_of(repo), (base, head), (pbase, phead))
+            unsure = unsure or share is None
+            if share:
                 parent = prid if parent is None or out[prid][1] > out[parent][1] else parent
+        if parent is None and unsure:
+            parent = max((p for p, prepo, *_ in seen if prepo == repo), key=lambda p: out[p][1])
+            print(f"[WARN] lineage of {rid}: git cannot tell whether its range overlaps an earlier {repo} review; "
+                  f"continuing {parent} (round {out[parent][1]}) rather than restarting at round 1",
+                  file=sys.stderr)
         out[rid] = (out[parent][0], out[parent][1] + 1) if parent else (rid, 1)
         seen.append((rid, repo, base, head))
     return out

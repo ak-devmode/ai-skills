@@ -354,7 +354,9 @@ the finding) ·
 unit-wide `r<n>`. A review continues an earlier review of the same repo (its primary checkout,
 worktrees included) when its base is that review's head (a fix re-review), its range is the same,
 or the two ranges share a commit; it takes the highest such round plus one. A range over code no
-earlier review covered starts at round 1. `verify_lib.review_lineage` is the one implementation.
+earlier review covered starts at round 1. When git cannot tell whether two ranges share a commit,
+it fails closed: the review continues the repo's highest round in the unit, with a `[WARN]` line.
+`verify_lib.review_lineage` is the one implementation.
 
 6.2.2 **`accepted`** is a process nit — a comment that doesn't match, a stale table, a timestamp,
 doc wording — noted, never given another round. It counts as dispositioned (§6.3), the gate never

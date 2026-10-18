@@ -1017,6 +1017,24 @@ class TestReview(unittest.TestCase):
         self.assertIn("review 9.1-r3:", p.stdout)
         self.assertIn("round: 2 of ", p.stdout)
 
+    def test_an_undecidable_lineage_fails_closed(self):
+        # git cannot read the ranges (a gone checkout): a restart at round 1 would disable the
+        # round-3 STOP, so the review continues the repo's highest round, with a warning
+        import contextlib
+        import io
+        vl = load("verify_lib.py")
+        gone = os.path.join(self.tmp.name, "gone")
+        revs = [("9.1-r1", "svc", "a1", "b1"), ("9.1-r2", "svc", "b1", "c1"), ("9.1-r3", "other", "x", "y"),
+                ("9.1-r4", "svc", "d1", "e1")]
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            lin = vl.review_lineage(revs, lambda key: gone)
+        self.assertEqual(lin, {"9.1-r1": ("9.1-r1", 1), "9.1-r2": ("9.1-r1", 2), "9.1-r3": ("9.1-r3", 1),
+                               "9.1-r4": ("9.1-r1", 3)})
+        self.assertIn("[WARN] lineage of 9.1-r4", err.getvalue())
+        self.assertIn("continuing 9.1-r2 (round 2)", err.getvalue())
+        self.assertNotIn("lineage of 9.1-r2", err.getvalue())   # an exact head-is-base match needs no git
+
     def test_accepted_is_a_process_nit_never_a_rejection(self):
         self.record()
         gate, vr = load("verdict-gate.py"), load("verify-run.py")

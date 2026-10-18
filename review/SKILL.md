@@ -271,7 +271,8 @@ loops run without a per-round check-in (Alex's standing approval):
 (`<unit>-r<n>`); `record` prints `round: <k> of <repo>` for this review's lineage. A review
 whose range starts at an earlier review's head (a fix re-review), or shares a commit with
 one, continues that review's count; a range over code no earlier review covered starts at
-round 1. A repo is its primary checkout, worktrees included.
+round 1 (when git cannot tell, the repo's highest round continues, with a `[WARN]`). A repo is
+its primary checkout, worktrees included.
 
 **Round cap.** Past round 3 of a lineage (only on the user's "another round"), only
 `blocking` findings are fixed in the loop. `should-fix` and `note` go to the project's

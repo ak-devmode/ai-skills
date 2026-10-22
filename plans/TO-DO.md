@@ -482,3 +482,9 @@ Touches: scripts/verify_lib.py (review_lineage) · scripts/tests/test_review.py
 
 - [ ] **`review_lineage` continues a lineage whenever a range starts at a previous review's head** — but the next unit of a lane starts there too (u2 right after u1's fix range), so a first review of new code was counted round 4/5 and told to stop and defer. Continue a lineage only when the range contains a fix commit named by a disposition of the earlier review's findings (or the session passes `--continues <review id>`); otherwise start at round 1. Test: unit u2 after u1's fix range → round 1; a fix re-review → previous + 1. **P1** — it makes the standing policy fire wrongly on every multi-unit lane.
 
+
+## `review.py dispose` has no disposition for a user-chosen reframe (WellMed 158.3, 2026-10-22)
+Source: WellMed scope 158.3 reviews 158.3-r21-02, r23-01, r23-02 (kalpa-docs plans/158-terraform-footprint-factory/artifacts/review-158.3.jsonl)
+Touches: review/scripts/review.py (dispose) · scripts/verify_lib.py · review/SKILL.md §5.1 (the [CASCADE] stop)
+
+- [ ] **A `[CASCADE]` stop has no way to record its outcome.** §5.1 says stop and bring the user a reframe; when the user takes it, the cascading fix is reverted and its findings move to a TO-DO, but `dispose --deferred` refuses any finding before round 4 of its lineage, `--accepted` is for process nits, and a stale `--fixed` points at a reverted commit. 158.3 had to record three such findings as `--rejected` with a reason saying they were not wrong (Alex's call). Add `--reframed "<TO-DO item>" --by <user>`: allowed at any round when the finding's file carries a `[CASCADE]`, it needs an open item carrying the ID like `--deferred`, the gate treats it like a deferral, and `/verify` never audits it as a rejection. Also have `dispose` warn when a `--fixed` SHA has since been reverted on HEAD.

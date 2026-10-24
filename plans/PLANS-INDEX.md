@@ -10,6 +10,10 @@ Completed, a live folder at `plans/` root belongs in Active.
 | # | Status | Folder | Description | Created by |
 |---|--------|--------|-------------|------------|
 | 8 | 🟡 Built, reviewed, verified (2026-10-03) — live check (Task 1.8) pending on next kalpa-docs /plan run | 8-plans-trunk-sync/ | Publish every /plan write to a shared plans trunk immediately (commit listed paths, rebase, push, read back on origin; halt on conflict). Fixes kalpa-docs drifting ahead 11 / behind 21 across machines. | Alex |
+| 9 | 📝 Draft (2026-10-24) | `9-generated-plans-index/` | Each scope's index row moves into a script-owned block in its own progress.md and PLANS-INDEX.md becomes generated output, so concurrent sessions stop conflicting on one shared file. On kalpa-docs a GitHub Action is the only writer of the rendered index (about 1 min lag) and overwrites hand edits with a note to update ai-skills; pmg-docs, IRIS and ai-skills render locally. Also clears closed work: /closeout on 168 and pmg candidates, 155/161 archived as superseded by 196, and the 52 orphaned phase rows fixed by the migration. | Alex |
+| 9.1 | 📝 Draft (2026-10-24) | `9-generated-plans-index/` | Phase 1 — records in progress.md, render/migrate/check, render mode per graph, backlog archive guard, readers + skill prose moved off the shared file. | Alex |
+| 9.2 | 📝 Draft (2026-10-24) | `9-generated-plans-index/` | Phase 2 — /closeout 168 and pmg candidates, archive LIS 155/161 by hand; concurrent with 9.1. | Alex |
+| 9.3 | 📝 Draft (2026-10-24) | `9-generated-plans-index/` | Phase 3 — migrate four graphs, move index prose to plans/README.md (IRIS gate mode), kalpa-docs render bot + hand-edit note, observe on trunk. | Alex |
 
 ## Completed / Archived
 

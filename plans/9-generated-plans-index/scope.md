@@ -156,8 +156,9 @@ N/A x4 — not a bug fix, no UI.
 - Archive guard against open kalpa-orchestra backlog rows (Q11).
 - Today's deadline: 9.1 and 9.2 run concurrently (Q12, Q15).
 
-## GSTACK REVIEW REPORT
+## Review Record
 
+### CEO review (2026-10-24)
 **Review:** /plan-ceo-review, 2026-10-24 · **Mode:** HOLD SCOPE (Alex: keep it short, finish today) · **Depth:** compressed run, premise + failure modes only; Review Sections 1–10 not walked individually (Alex's instruction overrides the skill's full pass).
 
 | Run | Status | Findings |
@@ -177,5 +178,39 @@ N/A x4 — not a bug fix, no UI.
 - D2 · PR check fails a PR that edits the rendered index; post-push bot covers direct pushes. → 9.3 Task 3.3.
 - D3 · `migrate --branch <ref>` for open branches + channel post before cutover. → 9.1 Task 1.2, 9.3 Task 3.1.
 - D4 · Import hand edits back into records — deferred to ai-skills `plans/TO-DO.md`.
+
+### Eng review (2026-10-24)
+
+**Mode:** FULL_REVIEW, scope accepted as-is with the smaller arrangement (D23). Compressed for the same-day deadline; second-model outside voice skipped.
+
+| # | Section | Finding | Severity | Disposition |
+|---|---|---|---|---|
+| F1 | Architecture | Two close pushes race the render bot; second push rejected, index stale | high | Required for approved behavior: `concurrency` group + render from latest main + fetch-and-retry → 9.3 Task 3.3 |
+| F2 | Architecture | Hand-edit detection by content is ambiguous | high | Rule: pushed range touched a rendered index file in a non-bot commit → 9.3 Task 3.3 |
+| F3 | Architecture | `main` bypass list has `apps: []`; bot cannot push | medium | Human step names the app bypass + org rulesets → 9.3 Task 3.4 |
+| F4 | Architecture | Rendered index still ~160 KB with archived rows; fails the 150 KB guard, costs agent context | medium | D24: archived rows render to `plans/archive/INDEX.md` → 9.1 Task 1.2 |
+| F5 | Code quality | Migration edge rows (duplicate `#`, plan-file / program folders, `_(not created)_`) | medium | `migrate` reports every unplaceable row → 9.1 Task 1.2 |
+| F6 | Code quality | Record count estimate was ~450; measured 229 scope folders | low | Corrected |
+| T1 | Tests | Record, render determinism, migrate idempotency, `--branch`, clobber, bot-mode no-write, claim-scope-number, IRIS gate mode | — | Listed in 9.1 Task 1.2 / 1.3 acceptance |
+| P1 | Performance | Render reads ~229 small files; `check` never calls the gate | — | No issues |
+
+**Decisions (Alex):** D23 smaller arrangement: only freshness-sensitive readers (`next-number`, `validate`, `scan-archive-drift.py`, `verify-archive.sh`, `claim-scope-number.sh`) move to records via `render --stdout`; `context-gather.sh`, `sweep.py` and ensemble readers stay on the rendered file. D24 archived rows split into `plans/archive/INDEX.md`.
+
+**Failure modes:** bot race (F1, handled), hand edit (F2, handled + PR check), clobbered record block (CEO R1, `check` fails loud), stale local reads in bot mode (accepted lag; fresh readers use `render --stdout`). Critical gaps: 0.
+
+**Parallelization:** Lane A 9.1 (ai-skills `scripts/`, skill prose). Lane B 9.2 (kalpa-docs, pmg-docs plans folders, current script). Disjoint modules; launch A + B together, then 9.3 after A merges and B finishes.
+
+## GSTACK REVIEW REPORT
+
+| Review | Trigger | Why | Runs | Status | Findings |
+|--------|---------|-----|------|--------|----------|
+| CEO Review | `/plan-ceo-review` | Scope & strategy | 1 | CLEAR | mode: HOLD_SCOPE, 0 critical gaps (3 repairs, 4 decisions) |
+| Outside Review | — | Independent 2nd opinion | 0 | skipped (same-day deadline) | — |
+| Eng Review | `/plan-eng-review` | Architecture & tests (required) | 1 | issues_open (all mapped to tasks) | 6 issues, 0 critical gaps |
+| Design Review | `/plan-design-review` | UI/UX gaps | 0 | n/a | no UI |
+| DX Review | `/plan-devex-review` | Developer experience gaps | 0 | n/a | internal CLI |
+
+- **OUTSIDE COVERAGE:** skipped for time; no external model reviewed this plan.
+- **VERDICT:** CEO + ENG CLEARED — ready to implement.
 
 NO UNRESOLVED DECISIONS

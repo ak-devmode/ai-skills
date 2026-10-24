@@ -5,7 +5,7 @@
 
 **Schema version:** verify/1
 **Revision:** 1
-**Approved:** pending
+**Approved:** rev 1 — Alex, 2026-10-24
 **Scope:** /Users/alexknecht/Projects/ai-skills/plans/9-generated-plans-index/scope.md
 
 One row per check. `check` is a shell command or the literal `judge`. A literal `|` in a

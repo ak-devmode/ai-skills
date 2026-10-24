@@ -671,8 +671,11 @@ every other machine's claim does:
 ~/Projects/ai-skills/scripts/plans-publish.sh "$PLANS_DIR" -m "scope: [$N] draft — {slug}" \
   -- "$N-{slug}" PLANS-INDEX.md
 ```
-In `bot` mode the script drops `PLANS-INDEX.md` from the commit (the bot renders it);
-the record rides in `$N-{slug}`. Exit 3 (conflict — in an unrendered graph, typically
+In `local` mode add `archive/INDEX.md` to the paths: the render rewrites both files, and
+an archive index left unpublished fails `check` and hands `claim-scope-number.sh` a stale
+read. In `bot` mode the script drops both rendered files (the bot renders them); the
+record rides in `$N-{slug}`. Every later publish after a `plans-index.py` write follows
+the same rule. Exit 3 (conflict — in an unrendered graph, typically
 another machine's row in the same spot) → halt and ask; never hand-merge the index.
 Exit 4 → say the number is not yet reserved, and continue.
 
@@ -774,7 +777,8 @@ Never approve on the user's behalf, and never read "continue" as a yes to rows t
 not seen. Edits they ask for go through `add`, then the plain-English list again. The
 gate blocks every unit until the current revision is approved (`verify-contracts.md` §3.1.1).
 
-**5.10.2 Publish the stubs and the table** the same way as 5.8, naming the scope folder:
+**5.10.2 Publish the stubs and the table** the same way as 5.8, naming the scope folder (plus, in `local` mode, `PLANS-INDEX.md` and `archive/INDEX.md`
+— the stub rows re-rendered them):
 `plans-publish.sh "$PLANS_DIR" -m "scope: [$N] stubs + finish table" -- "$N-{slug}"`.
 
 ---
@@ -827,7 +831,8 @@ path that does not resolve. In a rendered graph (§5.8) the script makes the fol
 itself (`git mv`, to the program's `archive/` for a member) and repoints every row in the
 record; a folder already moved by hand just gets the status write. That commit is one
 publish naming the old folder, the new one and the index (dropped in `bot` mode): `plans-publish.sh "$PLANS_DIR" -m "scope: [{N}] archived" -- "{N}-{slug}"
-"archive/{N}-{slug}" PLANS-INDEX.md` (exit 3 → halt and ask).
+"archive/{N}-{slug}" PLANS-INDEX.md`, plus `archive/INDEX.md` in `local` mode — the
+archived row renders there (exit 3 → halt and ask).
 
 7.3 **Program members:** flip the member's row in `{slug}-brief.md` to Archived and
 point it at the new path. The brief stays the members registry across the lifecycle.

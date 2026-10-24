@@ -361,7 +361,8 @@ D0.1 **Loose-file taxonomy** (mis-archiving a reference doc is a bug):
   suffix; e.g. `manifest-complete-flow.md`) → **NEVER archive**; living reference.
 - **Operational queue / log** (a generated run-list, e.g. a bulk-send queue) →
   archivable once its run is consumed.
-- **Registry** (`PLANS-INDEX.md`, `TO-DO.md`) → never archived; these get edited.
+- **Registry** (`PLANS-INDEX.md`, `TO-DO.md`) → never archived; they stay live. The
+  index changes only through `plans-index.py` (D4.3), never by hand; `TO-DO.md` is edited.
 
 ### D1 — Read the authoritative status
 
@@ -416,7 +417,9 @@ For each ARCHIVE item:
 3. **The index — through the script, never by hand:**
    `~/Projects/ai-skills/scripts/plans-index.py move <plans>/PLANS-INDEX.md --num <N>
    --to archived --folder "archive/<N>-<slug>/" --status "✅ Done (<date>)"` (add
-   `--with-plans` in an unrendered graph to bring the `<N>.<P>` rows). In a rendered graph
+   `--with-plans` in an unrendered graph to bring the `<N>.<P>` rows). First give every
+   `<N>.<P>` row its final Status with one `plans-index.py status --num <N>.<P>` each —
+   the move repoints child rows and never changes their Status. In a rendered graph
    (`plans/README.md` declares `**Index render:**`) the rows live in the scope's own
    `progress.md` record and follow the folder; the index is regenerated, and a hand
    edit there is overwritten, not imported. On kalpa-docs the move refuses while a

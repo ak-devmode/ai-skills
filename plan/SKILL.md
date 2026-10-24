@@ -607,7 +607,7 @@ This bias reflects the structural truth that trunk leads, leaves inherit. Parall
 
 8.5a **Code repo — push after each phase.** The run owns its feature branch, so at a CHECKPOINT or phase boundary run `git push origin <branch>` to back up progress. PRs are created manually — do not open them.
 
-8.5b **Plans repo — publish every write.** Any commit that touches the plans directory (progress per §8.2, the ledger per §8.3, the scope `progress.md` per §8.7/§11.5, the index record per §11.4 — in a rendered graph, the scope's `progress.md`; `bot` mode drops PLANS-INDEX.md from the commit) goes through one call, never a bare `git commit`:
+8.5b **Plans repo — publish every write.** Any commit that touches the plans directory (progress per §8.2, the ledger per §8.3, the scope `progress.md` per §8.7/§11.5, the index record per §11.4 — in a rendered graph, the scope's `progress.md`; `local` mode also re-renders `PLANS-INDEX.md` and `archive/INDEX.md`, so name both; `bot` mode drops them from the commit) goes through one call, never a bare `git commit`:
 ```bash
 ~/Projects/ai-skills/scripts/plans-publish.sh "$PLANS_DIR" -m "plan: [Task X.Y] …" -- <paths this task wrote>
 ```
@@ -818,6 +818,11 @@ match what just happened on disk:
   row; a folder already moved by hand just gets the status write.
 - The moved row's Status reads `✅ Done ({date})` (`--status`). Forensic detail stays in
   `progress.md`.
+- **Before the move, give every child `{N}.{P}` row its final Status** through one
+  `plans-index.py status --num {N}.{P}` each (Done goes through the verification gate,
+  §6.8). `move` repoints child rows — `--with-plans`, or the record following the folder —
+  and never touches their Status, so an archived Done scope would otherwise show Draft
+  children.
 - Still active → leave the row in place and cap its Status cell at ~300
   characters (`plans-index.py status`), appending `… → detail in {folder}progress.md` if
   it overflows.

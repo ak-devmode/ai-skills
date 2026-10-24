@@ -102,6 +102,16 @@ class Writers(Base):
         self.assertLess(text.index(BEGIN), text.index("## 1. Plans"))
         self.assertIn("body", text)
 
+    def test_markers_quoted_in_a_fence_are_not_the_block(self):
+        # 9.1-r1-09: a progress.md documenting the markers in a code fence was parsed as the block
+        quoted = f"```\n{BEGIN}\n| 99 | quoted |\n{END}\n```"
+        self.write("3-alpha/progress.md", f"# Progress\n\n## 1. Notes\n\n{quoted}\n")
+        self.add(3, "3-alpha/")
+        text = self.read("3-alpha/progress.md")
+        self.assertIn(quoted, text)
+        self.assertIn("| 3 | 📝 Scoped |", text)
+        self.assertEqual(load("plans-index.py").read_block(os.path.join(self.plans, "3-alpha", "progress.md"))[0][0], "3")
+
     def test_folder_not_on_disk_goes_loose(self):
         self.add(7, "_(not created)_")
         self.assertIn("| 7 |", self.read("index-loose.md"))

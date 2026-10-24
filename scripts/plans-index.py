@@ -226,13 +226,30 @@ def row_line(cells: list[str]) -> str:
     return "| " + " | ".join(cells) + " |"
 
 
+def unfenced(lines: list[str]) -> list[str]:
+    """Stripped lines with fenced code blanked, indices kept (review 9.1-r1-09): a
+    progress.md quoting the markers in a ``` fence documents them; it holds no block."""
+    out, fence = [], None
+    for line in lines:
+        s = line.strip()
+        if fence:
+            out.append("")
+            fence = None if s.startswith(fence) else fence
+        elif s.startswith(("```", "~~~")):
+            out.append("")
+            fence = s[:3]
+        else:
+            out.append(s)
+    return out
+
+
 def read_block(path: str, tag: str = ""):
     """The block's rows (escaped cells), or None when the file has no block. A begin with
     no end, or an end with no begin, is a clobbered block — refused, never guessed at."""
     if not os.path.isfile(path):
         return None
     with open(path, encoding="utf-8") as fh:
-        lines = [l.strip() for l in fh.read().split("\n")]
+        lines = unfenced(fh.read().split("\n"))
     b, e = marker(False, tag), marker(True, tag)
     if b not in lines:
         if e in lines:
@@ -283,7 +300,7 @@ def write_block(path: str, rows: list[list[str]], tag: str = "", dry_run: bool =
                  "write through `plans-index.py`, never by hand.", ""]
     else:
         lines = [f"# Progress — {os.path.basename(os.path.dirname(path))}", ""]
-    stripped = [l.strip() for l in lines]
+    stripped = unfenced(lines)
     if marker(False, tag) in stripped:
         i = stripped.index(marker(False, tag))
         lines[i:stripped.index(marker(True, tag), i) + 1] = body

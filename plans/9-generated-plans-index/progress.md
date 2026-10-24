@@ -9,8 +9,8 @@
 
 ## Resume Context
 **Scope:** ~/Projects/ai-skills/plans/9-generated-plans-index/scope.md
-**Last action:** CEO + eng reviews cleared; finish table approved rev 1; PR #173 closed (2026-10-24)
-**Next action:** `/concurrency` — lane A 9.1 (ai-skills worktree), lane B 9.2 (kalpa-docs + pmg-docs closeouts)
+**Last action:** /concurrency dispatched 9.1 (pane w14:p18, opus/alex, `feature/9-generated-plans-index`) and 9.2 (pane w14:p19, sonnet/int, kalpa-docs `plan/9.2-closeouts`) in tab "9 lanes"; kalpa-docs PR #183 merged (c7fe5e33) to unblock the 161 archive (2026-10-24)
+**Next action:** on PARTITION-DONE: review pane per lane, then land; then 9.3
 **Open blockers:** bot GitHub App + `main` bypass (9.3 Task 3.4)
 **Key files changed:** None yet
 
@@ -18,6 +18,8 @@
 
 ## Decisions Log
 - (2026-10-24) Records in a script-owned block inside each scope's `progress.md`; membership follows disk; kalpa-docs bot is the sole writer of the rendered index; other graphs render locally. Full list: scope.md §11.
+- (2026-10-24) pmg-docs closeouts dropped from 9.2 (Alex: focus is kalpa; possibly 46 later, not required). The 11 pmg scopes already under `archive/` but still in Active are fixed by the 9.3 migration, no closeout.
+- (2026-10-24) Scope 168's leftover branch is already landed by content (PRs #139, #143); CEO R2 needs no reconcile, branch delete goes in teardown.
 - (2026-10-24) Scope number 9, not the 172 `claim-scope-number.sh` offered — it counted the WellMed branch `docs/171-tooling-todos` in ai-skills. Fix folded into 9.1.
 
 ---

@@ -46,9 +46,12 @@ by `test_entrypoint.py`'s compile check.
 
     claim-scope-number.sh <plans-dir>
       stdout: claimed integer        stderr: provenance across all four sources
+      exit: 0 claimed · 2 usage · 3 records mode and the local records do not render
       Maxes over origin/main (index, archive index, folders), local index (a fresh
       `render --stdout` in records mode), scope folders, and branch names — a branch's
-      number counts only if its tip has that scope folder in this plans dir. Not atomic — nothing short of a server write is — but closes every gap that
+      number counts only if its tip has that scope folder, or a row for it in this plans
+      dir's index / archive index / index-loose.md. Folder sources count directories only.
+      Not atomic — nothing short of a server write is — but closes every gap that
       has bitten. Read the stderr note when local and origin disagree.
 
     plans-index.py validate <index>       exit: 0 conformant · 1 issues found

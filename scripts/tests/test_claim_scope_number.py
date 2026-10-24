@@ -81,6 +81,42 @@ class ClaimScopeNumber(unittest.TestCase):
                    "<!-- plans-index:end active -->\n")
         self.assertEqual(self.claim(), 21)
 
+    def test_records_that_do_not_render_stop_the_claim(self):
+        # 9.1-r1-03: a failed render read as local_max=0 and re-claimed the loose number
+        self.write("plans/README.md", "**Index render:** bot\n")
+        self.write("plans/index-loose.md",
+                   "<!-- plans-index:begin active -->\n| 20 | 📝 PRD | _(not created)_ | d | t |\n")
+        p = run("claim-scope-number.sh", self.plans, env=self.env)
+        self.assertEqual(p.returncode, 3, p.stdout + p.stderr)
+        self.assertEqual(p.stdout, "")
+
+    def test_a_date_prefixed_file_is_not_a_scope(self):
+        # 9.1-r1-04: plans/2026-10-24-notes.md counted as scope 2026
+        self.write("plans/2026-10-24-notes.md", "notes\n")
+        self.git(self.repo, "add", ".")
+        self.git(self.repo, "commit", "-q", "-m", "notes")
+        self.git(self.repo, "push", "-q", "origin", "main")
+        self.git(self.repo, "checkout", "-q", "-b", "docs/2027-more")
+        self.write("plans/2027-10-24-more.md", "more\n")
+        self.git(self.repo, "add", ".")
+        self.git(self.repo, "commit", "-q", "-m", "more")
+        self.git(self.repo, "checkout", "-q", "main")
+        self.assertEqual(self.claim(), 4)
+
+    def test_a_branch_row_without_a_folder_counts(self):
+        # 9.1-r1-05: a branch that registered its number before making the folder
+        self.git(self.repo, "checkout", "-q", "-b", "feature/15-z")
+        self.write("plans/PLANS-INDEX.md", "| # | Status |\n|---|---|\n| 3 | x |\n| 15 | y |\n")
+        self.git(self.repo, "commit", "-q", "-am", "row 15")
+        self.git(self.repo, "checkout", "-q", "main")
+        self.assertEqual(self.claim(), 16)
+        self.git(self.repo, "checkout", "-q", "-b", "feature/16-w")
+        self.write("plans/index-loose.md", "| 16 | 📝 PRD | _(not created)_ | d | t |\n")
+        self.git(self.repo, "add", ".")
+        self.git(self.repo, "commit", "-q", "-m", "loose 16")
+        self.git(self.repo, "checkout", "-q", "main")
+        self.assertEqual(self.claim(), 17)
+
 
 if __name__ == "__main__":
     unittest.main()

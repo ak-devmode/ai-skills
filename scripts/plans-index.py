@@ -1120,9 +1120,11 @@ def move_record(args, plans: str, mode: str) -> int:
         if args.status:
             cells = (cells + [""] * len(CANONICAL))[:len(CANONICAL)]
             cells[1] = esc(args.status)
-        write_block(rec.path, rows, rec.tag, args.dry_run)
+        # Destination first (review 9.1-r1-11): a failure between the writes leaves a
+        # duplicate that check/render name, never a row that is nowhere
         dst = read_block(rec.path, args.to) or []
         write_block(rec.path, dst + [cells], args.to, args.dry_run)
+        write_block(rec.path, rows, rec.tag, args.dry_run)
         print(f"moved loose row {args.num}: {rec.tag} -> {args.to}")
         return after_write(plans, mode, args.dry_run)
     src = rec.folder

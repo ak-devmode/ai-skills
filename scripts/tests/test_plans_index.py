@@ -9,6 +9,7 @@ the kalpa-docs archive guard), with an isolated config so the host's never leaks
 
 import os
 import subprocess
+import sys
 import tempfile
 import unittest
 
@@ -190,6 +191,27 @@ class Writers(Base):
         pi.write_block(path, [["3", "🔄 Active", "3-alpha/", "d", "t"]])
         self.assertIn("| 3 | 🔄 Active |", self.read("3-alpha/progress.md"))
         self.assertEqual(os.stat(path).st_mode & 0o777, 0o640)
+
+    def test_a_failed_loose_move_never_loses_the_row(self):
+        # 9.1-r1-11: active -> archived removed the row before it wrote the destination
+        self.add(7, "_(not created)_")
+        pi = load("plans-index.py")
+        real, calls = pi.write_block, []
+
+        def second_fails(*a, **k):
+            calls.append(a)
+            if len(calls) == 2:
+                raise OSError("disk full")
+            return real(*a, **k)
+        pi.write_block = second_fails
+        argv = sys.argv
+        sys.argv = ["plans-index.py", "move", self.plans, "--num", "7", "--to", "archived"]
+        try:
+            with self.assertRaises(OSError):
+                pi.main()
+        finally:
+            pi.write_block, sys.argv = real, argv
+        self.assertIn("| 7 |", self.read("index-loose.md"))
 
     def test_unknown_render_mode_refused(self):
         self.write("README.md", "**Index render:** botty\n")

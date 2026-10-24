@@ -159,7 +159,7 @@ editing `PLANS-INDEX.md`. Claim the number first with
 scope's `progress.md`, and a hand edit is overwritten. A graph with no index yet starts
 with a `README.md` holding `**Index render:** local`.
 
-Assign the next whole number for the scope. Use sub-numbers for child plans:
+The claimed number is the scope's. Use sub-numbers for child plans:
 
 - Scope `39`
 - Plan `39.1`

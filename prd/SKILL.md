@@ -276,8 +276,9 @@ N=$(~/Projects/ai-skills/scripts/claim-scope-number.sh "$PLANS_DIR")
   --desc "{project} — {one-line description}" --creator "$(git config user.name)"
 ```
 
-A root-level PRD file becomes a loose row (`plans/index-loose.md`); a folder-form
-PRD (`prd-{slug}/prd-{slug}.md`) lands in that folder's record.
+A root-level PRD file (`--folder "\`prd-{slug}.md\`"`, above) becomes a loose row
+(`plans/index-loose.md`). A folder-form PRD lands in that folder's record — pass its
+path instead, `--folder "\`prd-{slug}/prd-{slug}.md\`"`, once the folder exists.
 
 ---
 

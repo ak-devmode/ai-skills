@@ -606,13 +606,19 @@ def branch_rows(plans: str, ref: str, base: str | None) -> list[tuple[str, list[
 
     def at(rev):
         parts = [git_out(top, "show", f"{rev}:{rel}/{n}") for n in ("PLANS-INDEX.md", "archive/INDEX.md")]
-        if parts[0] is None and git_out(top, "rev-parse", "--verify", "-q", rev) is None:
-            raise Refuse(f"unknown revision {rev}")
+        if all(p is None for p in parts):  # review 9.1-r1-10: a wrong path is not "0 changed"
+            if git_out(top, "rev-parse", "--verify", "-q", rev) is None:
+                raise Refuse(f"unknown revision {rev}")
+            raise Refuse(f"{rev} has no {rel}/PLANS-INDEX.md — is {plans} the plans dir that branch edits?")
         return index_rows("\n".join(p for p in parts if p))
 
     before = {row_key(c): c for _, c in at(base)}
-    changed = [(k, c) for k, c in at(ref) if before.get(row_key(c)) != c]
+    now = at(ref)
+    changed = [(k, c) for k, c in now if before.get(row_key(c)) != c]
     print(f"migrate --branch {ref}: {len(changed)} row(s) changed since {base[:9]}")
+    for key in sorted(before.keys() - {row_key(c) for _, c in now}, key=str):
+        print(f"  DELETED row {before[key][0]} on {ref} — not imported; if the delete stands, "
+              f"remove the row from its record block")
     return changed
 
 

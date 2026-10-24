@@ -423,6 +423,27 @@ class Migrate(Base):
         self.assertIn("| 3.1 | ✅ Done |", text)
         self.assertIn("| 3.2 | 🔲 Draft |", text)
 
+    def test_migrate_branch_reports_deletes_and_refuses_a_wrong_path(self):
+        # 9.1-r1-10: a deleted row vanished silently; a wrong plans path read as 0 changed
+        repo = os.path.dirname(self.plans)
+        self.git(repo, "init", "-q", "-b", "main")
+        self.git(repo, "add", ".")
+        self.git(repo, "commit", "-q", "-m", "base")
+        base = self.git(repo, "rev-parse", "HEAD")
+        self.git(repo, "checkout", "-q", "-b", "feature/x")
+        self.write("PLANS-INDEX.md", "\n".join(l for l in self.read("PLANS-INDEX.md").split("\n")
+                                             if not l.startswith("| 5 |")))
+        self.git(repo, "commit", "-q", "-am", "drop 5")
+        self.git(repo, "checkout", "-q", "main")
+        self.ok("migrate")
+        p = self.ok("migrate", "--branch", "feature/x", "--base", base)
+        self.assertIn("DELETED row 5 on feature/x", p.stdout)
+        other = os.path.join(repo, "elsewhere")
+        os.makedirs(other)
+        p = run("plans-index.py", "migrate", other, "--branch", "feature/x", "--base", base, env=self.env)
+        self.assertEqual(p.returncode, 2, p.stdout + p.stderr)
+        self.assertIn("has no elsewhere/PLANS-INDEX.md", p.stdout + p.stderr)
+
 
 class Legacy(Base):
     MODE = None

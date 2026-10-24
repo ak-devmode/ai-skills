@@ -158,13 +158,7 @@ Use ASCII diagrams when they clarify user workflows, operations, or system relat
 
 ## 7. PLANS-INDEX
 
-Append the PRD to `{plans_dir}/PLANS-INDEX.md`. If the project index includes numbered rows, assign the next number consistently with existing entries.
-
-Recommended row format:
-
-```markdown
-| {N} | {date} | prd | prd-{slug}.md | {project} | Draft | {one-line description} |
-```
+Register the PRD through the script, never by editing the index file: claim a number with `~/Projects/ai-skills/scripts/claim-scope-number.sh "$PLANS_DIR"`, then run `~/Projects/ai-skills/scripts/plans-index.py add "$PLANS_DIR/PLANS-INDEX.md" --num "$N" --status "📝 PRD ($(date +%F))" --folder "\`prd-{slug}.md\`" --desc "{project} — {one-line description}"`. In a graph whose `README.md` carries `**Index render:**`, `PLANS-INDEX.md` is generated and a hand edit is lost.
 
 ## 8. Handoff
 

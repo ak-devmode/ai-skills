@@ -1,6 +1,6 @@
 ---
 name: plan
-version: 3.13.0
+version: 3.14.0
 description: |
   Execute tasks from a structured plan document step by step, logging progress and
   stopping at human checkpoints. Plan files follow the naming convention *-PLAN.md
@@ -60,7 +60,7 @@ single avoidable context cost in a session. Grep for what you need:
 
 ```bash
 IDX="$PLANS/PLANS-INDEX.md"
-grep -n '^| *112' "$IDX"                 # one scope + all its phase rows
+grep -n '^| *112' "$IDX" "$PLANS/archive/INDEX.md" 2>/dev/null  # one scope + its phases (archived rows: archive/INDEX.md once rendered)
 grep -n '^## \|^| *# *|' "$IDX"           # table structure only
 grep -nE '^\| *[0-9]+ .*(Ready to execute|In progress)' "$IDX"   # what's live
 ~/Projects/ai-skills/scripts/plans-index.py next-number "$IDX"   # numbering only
@@ -152,8 +152,11 @@ hierarchy.
 Contract in `scripts/README.md`; `--dry-run` first if the slug is short enough to
 over-match.
 
-2.5.6 Update `PLANS-INDEX.md` to reflect the new folder path (change `Folder/File`
-column from the raw filename to `{plan-stem}/`).
+2.5.6 Repoint the plan's index row at the new folder, through the script — never by hand:
+`~/Projects/ai-skills/scripts/plans-index.py move "$PLANS_DIR/PLANS-INDEX.md" --num {N}
+--to active --folder "{plan-stem}/"`. In a rendered graph (`/scope` §5.8) this moves the
+row into the folder's `progress.md` record; otherwise it rewrites the Folder cell in place.
+An unnumbered plan has no row to repoint.
 
 After this step, use the new path inside the folder for all subsequent operations
 (progress file creation, archival, etc.).
@@ -604,7 +607,7 @@ This bias reflects the structural truth that trunk leads, leaves inherit. Parall
 
 8.5a **Code repo — push after each phase.** The run owns its feature branch, so at a CHECKPOINT or phase boundary run `git push origin <branch>` to back up progress. PRs are created manually — do not open them.
 
-8.5b **Plans repo — publish every write.** Any commit that touches the plans directory (progress per §8.2, the ledger per §8.3, the scope `progress.md` per §8.7/§11.5, PLANS-INDEX per §11.4) goes through one call, never a bare `git commit`:
+8.5b **Plans repo — publish every write.** Any commit that touches the plans directory (progress per §8.2, the ledger per §8.3, the scope `progress.md` per §8.7/§11.5, the index record per §11.4 — in a rendered graph, the scope's `progress.md`; `bot` mode drops PLANS-INDEX.md from the commit) goes through one call, never a bare `git commit`:
 ```bash
 ~/Projects/ai-skills/scripts/plans-publish.sh "$PLANS_DIR" -m "plan: [Task X.Y] …" -- <paths this task wrote>
 ```
@@ -745,7 +748,7 @@ prose that a table cannot hold, the file's grep-readability is load-bearing, and
 in the scope folder, and its progress lives as a subsection inside the scope's
 `progress.md` (per §4) — the scope manages archival of the entire folder when
 ALL child plans are complete (via /scope Step 7). Individual child plan
-completion is tracked by status updates only: mark Done in PLANS-INDEX, update
+completion is tracked by status updates only: mark Done via `plans-index.py status`, update
 the parent scope's progress.md Plans table + scope-level Resume Context, mark
 the child plan's subsection Resume Context as "Plan complete — N/N tasks done",
 and extract TODOs. Skip §11.3.1 through §11.3.2 entirely for child plans.
@@ -773,9 +776,11 @@ mv {plan-file} {archive-dir}/
 mv {progress-file} {archive-dir}/
 ```
 
-### 11.4 Update PLANS-INDEX.md
+### 11.4 Update the plans index
 
-**Never append a row by hand — use the script.** Both index tables are five
+**Every index write goes through the script — never a manual edit of `PLANS-INDEX.md`.** In a rendered graph (`plans/README.md`
+declares `**Index render:**`, `/scope` §5.8) the index is generated from per-scope records in
+each `progress.md`, and a hand edit is overwritten, not imported. Every index table is five
 columns, `| # | Status | Folder | Description | Created by |`, and
 `~/Projects/ai-skills/scripts/plans-index.py` is the only thing that should write
 one. It refuses to append against a non-canonical header rather than leaking a
@@ -809,14 +814,17 @@ match what just happened on disk:
   naming both paths). A row whose
   table disagrees with the folder's location is the drift the SessionStart hook
   reports; do not leave it for the hook to find.
-- Compress the moved row: `| {n} | ✅ Done ({date}) | {archive path} | {one
-  sentence} | {creator} |`. Forensic detail stays in `progress.md`.
+  In a rendered graph `move` makes the folder move itself (`git mv`) and repoints every
+  row; a folder already moved by hand just gets the status write.
+- The moved row's Status reads `✅ Done ({date})` (`--status`). Forensic detail stays in
+  `progress.md`.
 - Still active → leave the row in place and cap its Status cell at ~300
-  characters, appending `… → detail in {folder}progress.md` if it overflows.
+  characters (`plans-index.py status`), appending `… → detail in {folder}progress.md` if
+  it overflows.
 
-If the plan has no number, assign the next available whole number — read it from
-`git show origin/main:{plans_dir}/PLANS-INDEX.md`, never the local working tree,
-since concurrent sessions race for scope numbers.
+If the plan has no number, claim one with `~/Projects/ai-skills/scripts/claim-scope-number.sh
+"$PLANS_DIR"` — never by reading the local index, since concurrent sessions race for
+scope numbers.
 
 ### 11.5 Update parent scope (if applicable)
 

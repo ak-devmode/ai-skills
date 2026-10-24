@@ -1,6 +1,6 @@
 ---
 name: scope
-version: 3.12.0
+version: 3.13.0
 description: |
   Task scoping, skill router, and progress tracker. Reads current context (git diff,
   branch, CLAUDE.md, open files), eliminates assumptions via two rounds of open-ended
@@ -627,7 +627,7 @@ with it — one call, never a hand-run `mv`:
 Contract in `scripts/README.md`. After it, nothing for this task is orphaned at the
 `plans/` top level.
 
-### 5.8 Update PLANS-INDEX.md — via the script, never by hand
+### 5.8 Register the scope — via the script, never by hand
 
 ```bash
 ~/Projects/ai-skills/scripts/plans-index.py add "$PLANS_DIR/PLANS-INDEX.md" \
@@ -636,8 +636,16 @@ Contract in `scripts/README.md`. After it, nothing for this task is orphaned at 
   --creator "$(git config user.name)"
 ```
 
+**Where the row lands depends on the graph.** A graph whose `plans/README.md` declares
+`**Index render:** bot | local` keeps each scope's rows in a script-owned block in the
+scope's own `progress.md` (the folder exists — §5.4 made it), and `PLANS-INDEX.md` plus
+`archive/INDEX.md` are rendered from those blocks: by the bot on push (`bot`) or by the
+command itself (`local`). Two sessions scoping at once write two different files. Without
+that line the script still edits `PLANS-INDEX.md` in place. Either way, never write the
+index by hand — in a rendered graph a hand edit is overwritten, not imported.
+
 The script refuses to append against a non-canonical header instead of leaking a
-mismatched row. Canonical shape, both tables:
+mismatched row. Canonical shape, every table:
 
 ```markdown
 | # | Status | Folder | Description | Created by |
@@ -649,9 +657,9 @@ high-level tracker — he reads it from the console to see what has been going o
 the project, so it is the one place worth spending words (`/markdown-style` §11.7.4).
 Say what the scope changes and why, not just its title.
 
-If `PLANS-INDEX.md` doesn't exist, create it with the two canonical tables
-(`## Active Plans` and `## Completed / Archived`, each with the header above) and
-start at 1.
+If the graph has no index yet, start it rendered: write `plans/README.md` with an
+`**Index render:** local` line (the graph's conventions go there too), run the `add`
+above, and start at 1 — the command renders `PLANS-INDEX.md` itself.
 
 > **Why the shape is enforced in code.** An undeclared column once shifted every
 > cell right, so 39 PMG Active rows rendered their description nowhere.
@@ -663,8 +671,10 @@ every other machine's claim does:
 ~/Projects/ai-skills/scripts/plans-publish.sh "$PLANS_DIR" -m "scope: [$N] draft — {slug}" \
   -- "$N-{slug}" PLANS-INDEX.md
 ```
-Exit 3 (conflict, typically another machine's row in the same spot) → halt and ask; never
-hand-merge the index. Exit 4 → say the number is not yet reserved, and continue.
+In `bot` mode the script drops `PLANS-INDEX.md` from the commit (the bot renders it);
+the record rides in `$N-{slug}`. Exit 3 (conflict — in an unrendered graph, typically
+another machine's row in the same spot) → halt and ask; never hand-merge the index.
+Exit 4 → say the number is not yet reserved, and continue.
 
 ### 5.9 Generate plan stubs (phased scopes only)
 
@@ -706,8 +716,8 @@ because you estimate it exceeds a context window; compaction plus intra-phase re
 checkpoints handle that. Split one phase into two files only when the work is *both*
 very large *and* detail-dense, and label the split "same gate, sequential sessions."
 
-Also add a PLANS-INDEX row for each plan stub, via the script (§5.8) — never the old
-seven-column row, which is the leak §5.8 exists to stop:
+Also add an index row for each plan stub, via the script (§5.8) — never the old
+seven-column row, which is the leak §5.8 exists to stop. It lands in the same record:
 ```bash
 ~/Projects/ai-skills/scripts/plans-index.py add "$PLANS_DIR/PLANS-INDEX.md" \
   --num "$N.$P" --status "📝 Draft ($(date +%F))" --folder "\`{N}-{slug}/\`" \
@@ -813,8 +823,10 @@ instead — never the repo-wide archive (ADR-029 §2.3.4). Detect membership by 
 7.2 **The index row moves in the same commit as the folder**, via
 `scripts/plans-index.py move --num {N} --to archived`. Omit `--folder` unless the path
 actually changes — the row's existing path is usually right, and the script refuses a
-path that does not resolve. That commit is one publish naming the old folder, the new one
-and the index: `plans-publish.sh "$PLANS_DIR" -m "scope: [{N}] archived" -- "{N}-{slug}"
+path that does not resolve. In a rendered graph (§5.8) the script makes the folder move
+itself (`git mv`, to the program's `archive/` for a member) and repoints every row in the
+record; a folder already moved by hand just gets the status write. That commit is one
+publish naming the old folder, the new one and the index (dropped in `bot` mode): `plans-publish.sh "$PLANS_DIR" -m "scope: [{N}] archived" -- "{N}-{slug}"
 "archive/{N}-{slug}" PLANS-INDEX.md` (exit 3 → halt and ask).
 
 7.3 **Program members:** flip the member's row in `{slug}-brief.md` to Archived and

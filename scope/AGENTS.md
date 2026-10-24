@@ -152,14 +152,12 @@ Update progress after every significant action. The Resume Context block should 
 
 ## 10. PLANS-INDEX
 
-Update `{plans_dir}/PLANS-INDEX.md`.
-
-If it does not exist, create it with columns:
-
-```markdown
-| # | Date | Type | Folder/File | Project | Status | Description |
-|---|------|------|-------------|---------|--------|-------------|
-```
+Register the scope through `~/Projects/ai-skills/scripts/plans-index.py add`, never by
+editing `PLANS-INDEX.md`. Claim the number first with
+`~/Projects/ai-skills/scripts/claim-scope-number.sh "$PLANS_DIR"`. In a graph whose
+`README.md` carries `**Index render:**`, the index is generated from a block in each
+scope's `progress.md`, and a hand edit is overwritten. A graph with no index yet starts
+with a `README.md` holding `**Index render:** local`.
 
 Assign the next whole number for the scope. Use sub-numbers for child plans:
 
@@ -190,7 +188,7 @@ Do not paste the full scope document into chat.
 When the task is done:
 
 1. Move the scope folder to `{plans_dir}/archive/{N}-{slug}/`.
-2. Mark the scope and child plans done in `PLANS-INDEX.md`.
+2. Mark the scope and child plans done with `plans-index.py move --to archived` (it repoints the rows to the archived folder).
 3. Evaluate whether repo instruction files, README files, or project docs need updates.
 4. Confirm branch, commit, push, and remaining active scopes.
 5. Record non-obvious learnings in the durable memory system when useful.

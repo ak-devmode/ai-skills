@@ -1,6 +1,6 @@
 ---
 name: repo-cleanup
-version: 1.4.0
+version: 1.5.0
 description: |
   Branch hygiene and repo upkeep. Classifies all non-protected branches against the
   trunk(s) using layered signals (PR merge state, ancestry, gone-upstream, patch
@@ -413,14 +413,19 @@ For each ARCHIVE item:
    - Use `git mv` (history preserved as a rename).
 2. **Fix stale `Source:` pointers** in `TO-DO.md`: any line pointing at the pre-move
    path → repoint to the new `archive/…` path (a moved scope leaves danglers).
-3. **PLANS-INDEX.md:** move the item's row(s) (scope + all child phase rows) from
-   the "Active / In Progress" table to "Archived (Complete)". The Archived table has
-   **fewer columns** (no Status/Project) — strip them, fold the outcome ("Done
-   {date}") into the Description, set Location to the `archive/…` path.
-4. **Index-hygiene sub-check:** scan the Active table for rows whose Location is
-   ALREADY `archive/…` (done + physically archived but stranded in Active) → move
-   those to the Archived table too. Then verify: no duplicate row IDs, no empty
-   rows, Active holds only genuinely-live items.
+3. **The index — through the script, never by hand:**
+   `~/Projects/ai-skills/scripts/plans-index.py move <plans>/PLANS-INDEX.md --num <N>
+   --to archived --folder "archive/<N>-<slug>/" --status "✅ Done (<date>)"` (add
+   `--with-plans` in an unrendered graph to bring the `<N>.<P>` rows). In a rendered graph
+   (`plans/README.md` declares `**Index render:**`) the rows live in the scope's own
+   `progress.md` record and follow the folder; the index is regenerated, and a hand
+   edit there is overwritten, not imported. On kalpa-docs the move refuses while a
+   kalpa-orchestra backlog row still reads `scoped(<N>)` — close that row first.
+4. **Index-hygiene sub-check:** `plans-index.py validate <plans>/PLANS-INDEX.md` (and
+   `check <plans>` in a rendered graph). A row whose folder is ALREADY under
+   `archive/` but sits in Active → `plans-index.py move --to archived` for it too.
+   Then verify: no duplicate row IDs, no empty rows, Active holds only genuinely-live
+   items.
 
 ### D5 — Confirmation gate, act, log
 

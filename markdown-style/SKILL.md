@@ -1,6 +1,6 @@
 ---
 name: markdown-style
-version: 1.3.1
+version: 1.4.0
 description: "Use for creating, updating, or revising structured .md documents — strategy docs, PRDs, plans, playbooks, integration specs, or any markdown maintained over time and loaded into future context windows. Trigger on: 'create a plan', 'draft a PRD', 'update the doc', 'write this up as a document', or references to versioned documents. Do NOT use for READMEs, quick notes, or throwaway content."
 allowed-tools:
   - Bash
@@ -579,7 +579,7 @@ Every scope.md includes these sections in this order:
 
 ### 11.7 PLANS-INDEX Conventions
 
-`PLANS-INDEX.md` is long by design and **grepped, not read** (`/plan` §1.1). Five rules
+`PLANS-INDEX.md` is long by design and **grepped, not read** (`/plan` §1.1). Six rules
 keep it well-formed.
 
 11.7.1 **Two tables, one shape.** Active Plans and Completed / Archived both use
@@ -614,6 +614,13 @@ index row is the glance.
 
 > **Why allowed (2026-08-09).** The defect was a *headerless* append, not per-plan rows;
 > `scripts/plans-index.py` now enforces the header.
+
+11.7.6 **Every write goes through `scripts/plans-index.py`, never a hand edit.** In a
+graph whose `plans/README.md` carries `**Index render:** bot|local`, `PLANS-INDEX.md`
+and `archive/INDEX.md` are generated views: each scope's rows live in a
+`<!-- plans-index:begin -->` block in its own `progress.md`, loose rows in
+`plans/index-loose.md`. `add`, `status` and `move` write the records; `render`
+rebuilds the views; `check` fails on a hand edit or a stale render.
 
 ---
 

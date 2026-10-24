@@ -58,9 +58,13 @@ by `test_entrypoint.py`'s compile check.
     plans-index.py status <index> --num --status [--skip-verify R] [--blocking|--advisory] [--dry-run]
     plans-index.py gate-count [<index>...] [--discover]  stdout: `clean gated scopes: N/5`, + REMINDER line at 5 · exit 0
       exit: 0 written · 1 gate BLOCKED (row untouched) or write did not land · 2 usage · 3 gate could not evaluate
-    plans-index.py render  <plans-dir> [--stdout] [--allow-loss]   exit: 0 · 1 a rendered row lost its record · 2 not migrated
-    plans-index.py migrate <plans-dir> [--branch REF [--base REV]] [--dry-run]   exit: 0 (every loose row reported)
-    plans-index.py check   <plans-dir>   exit: 0 render matches records · 1 issues (lost row, stale render, size)
+    plans-index.py render  <plans-dir> [--stdout] [--allow-loss]   exit: 0 · 1 a rendered row lost its record, or non-scope
+      content (other tables, prose) would be dropped, or the index's `**Gate mode:**` line is not in
+      README.md (--allow-loss never covers this one) · 2 not migrated
+    plans-index.py migrate <plans-dir> [--branch REF [--base REV]] [--dry-run]   exit: 0 (every loose row
+      and non-scope section reported; moves `**Gate mode:**` to README.md) · 2 index and README disagree on it
+    plans-index.py check   <plans-dir>   exit: 0 render matches records · 1 issues (lost row, stale render, size,
+      non-scope content, unmoved gate line)
       Records mode: plans/README.md declares `**Index render:** bot | local`. add/status/move
       then write the scope's block in its own progress.md (loose rows: index-loose.md);
       `local` re-renders after each write, `bot` leaves the index to the bot. No line =

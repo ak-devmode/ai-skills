@@ -353,14 +353,15 @@ def render_text(plans: str, recs: list[Rec] | None = None) -> tuple[str, str]:
     return out[0], out[1]
 
 
+def slurp(path: str) -> str:
+    if not os.path.isfile(path):
+        return ""
+    with open(path, encoding="utf-8") as fh:
+        return fh.read()
+
+
 def committed_text(plans: str) -> str:
-    parts = []
-    for name in ("PLANS-INDEX.md", ARCHIVE_INDEX):
-        path = os.path.join(plans, name)
-        if os.path.isfile(path):
-            with open(path, encoding="utf-8") as fh:
-                parts.append(fh.read())
-    return "\n".join(parts)
+    return "\n".join(t for t in (slurp(os.path.join(plans, n)) for n in ("PLANS-INDEX.md", ARCHIVE_INDEX)) if t)
 
 
 def index_rows(text: str) -> list[tuple[str, list[str]]]:
@@ -386,6 +387,43 @@ def lost_msg(cells: list[str]) -> str:
             f"overwritten? Restore it from git (git log -p -- {cell_path(folder) or folder}/progress.md)")
 
 
+def stray(plans: str, fresh: str) -> list[str]:
+    """Review 9.1-r1-01: what a render would drop that is not a scope row — another table
+    (Pending PRDs, Programs), prose, a `**Gate mode:**` line — one entry per section.
+    lost_rows covers scope rows; a title heading is replaced, not lost. A generated file
+    yields nothing: every line it holds is in a fresh render."""
+    keep, out = set(fresh.split("\n")), []
+    for name in ("PLANS-INDEX.md", ARCHIVE_INDEX):
+        path = os.path.join(plans, name)
+        if not os.path.isfile(path):
+            continue
+        with open(path, encoding="utf-8") as fh:
+            lines = fh.read().split("\n")
+        counts, sec = {}, Section("(top)", 0)
+        for line in lines:
+            if line.startswith("#"):
+                sec = Section(line, 0)
+                continue
+            if not line.strip() or line in keep or vl.GATE_MODE_LINE.match(line) or (
+                    sec.kind != "other" and line.strip().startswith("|")):
+                continue
+            label = sec.heading.lstrip("# ").strip()
+            counts[label] = counts.get(label, 0) + 1
+        out += [f"{name} § {label}: {n} line(s) of non-scope content" for label, n in counts.items()]
+    return out
+
+
+def gate_lines(plans: str) -> tuple[str | None, str | None]:
+    """(the index's `**Gate mode:**` value, README.md's) — a render drops the index's line,
+    and verify_lib.gate_mode then falls back to advisory: a blocking graph (IRIS) would
+    stop blocking without a sound. The line must live in README.md first."""
+    readme, vals = os.path.join(plans, "README.md"), []
+    for text in (committed_text(plans), slurp(readme)):
+        m = vl.GATE_MODE_LINE.search(text)
+        vals.append(m.group(1) if m else None)
+    return vals[0], vals[1]
+
+
 def write_text(path: str, text: str) -> bool:
     if os.path.isfile(path):
         with open(path, encoding="utf-8") as fh:
@@ -404,12 +442,23 @@ def do_render(plans: str, allow_loss: bool = False) -> int:
         print(f"plans-index: {plans} has no records but its index has rows — not migrated. "
               f"Run `plans-index.py migrate {plans}` first.", file=sys.stderr)
         return 2
+    index_gate, readme_gate = gate_lines(plans)
+    if index_gate is not None and index_gate != readme_gate:  # --allow-loss never covers this
+        print(f"plans-index: render refused — the index declares **Gate mode:** {index_gate} and "
+              f"plans/README.md {'declares ' + readme_gate if readme_gate else 'does not'}; the render "
+              f"would drop it and the gate would fall back to {vl.GATE_MODE}. Run `plans-index.py "
+              f"migrate {plans}` (it moves the line) or move it to README.md by hand.", file=sys.stderr)
+        return 1
     lost = lost_rows(plans, active + "\n" + archived)
-    if lost and not allow_loss:
+    prose = stray(plans, active + "\n" + archived)
+    if (lost or prose) and not allow_loss:
         for c in lost:
             print(f"plans-index: LOST {lost_msg(c)}", file=sys.stderr)
-        print(f"plans-index: render refused — {len(lost)} row(s) would vanish. Restore the "
-              f"record(s), or pass --allow-loss if the removal is deliberate.", file=sys.stderr)
+        for s in prose:
+            print(f"plans-index: STRAY {s} — the render has no place for it", file=sys.stderr)
+        print(f"plans-index: render refused — {len(lost)} row(s) and {len(prose)} section(s) would "
+              f"vanish. Restore the record(s) / move the content to plans/README.md, or pass "
+              f"--allow-loss if the removal is deliberate.", file=sys.stderr)
         return 1
     changed = [n for n, t in (("PLANS-INDEX.md", active), (ARCHIVE_INDEX, archived))
                if write_text(os.path.join(plans, n), t)]
@@ -446,6 +495,12 @@ def cmd_check(args) -> int:
         return 1
     for c in lost_rows(plans, active + "\n" + archived):
         issues.append(lost_msg(c))
+    issues += [f"{s} — a render drops it; move it to plans/README.md"
+               for s in stray(plans, active + "\n" + archived)]
+    index_gate, readme_gate = gate_lines(plans)
+    if index_gate is not None and index_gate != readme_gate:
+        issues.append(f"the index declares **Gate mode:** {index_gate} and plans/README.md does not "
+                      f"match — a render drops the line; `migrate` moves it")
     for name, fresh in (("PLANS-INDEX.md", active), (ARCHIVE_INDEX, archived)):
         path = os.path.join(plans, name)
         if not os.path.isfile(path):
@@ -561,6 +616,10 @@ def cmd_migrate(args) -> int:
                 e["rel"], e["why"] = None, f"duplicate # {num} ({len(es)} rows)"
 
     report, targets = [], {}
+    if not args.branch:  # 9.1-r1-01: nothing the render drops may go silently
+        report += migrate_gate_line(plans, args.dry_run)
+        report += [f"  DROP   {s} — move it to plans/README.md before render"
+                   for s in stray(plans, "\n".join(render_text(plans)))]
     for e in entries:
         c = e["cells"]
         if e["rel"]:
@@ -600,6 +659,22 @@ def cmd_migrate(args) -> int:
     for line in report:
         print(line)
     return 0
+
+
+def migrate_gate_line(plans: str, dry_run: bool) -> list[str]:
+    """Move the index's `**Gate mode:**` line to plans/README.md, where verify_lib.gate_mode
+    reads it first — the render that follows drops it from the index."""
+    index_gate, readme_gate = gate_lines(plans)
+    if index_gate is None or index_gate == readme_gate:
+        return []
+    if readme_gate is not None:
+        raise Refuse(f"the index declares **Gate mode:** {index_gate} but plans/README.md declares "
+                     f"{readme_gate} — decide which is right and delete the other line")
+    readme = os.path.join(plans, "README.md")
+    text = slurp(readme) or "# Plans\n"
+    if not dry_run:
+        write_text(readme, text.rstrip("\n") + f"\n\n**Gate mode:** {index_gate}\n")
+    return [f"  MOVED  **Gate mode:** {index_gate} -> README.md" + (" (--dry-run: not written)" if dry_run else "")]
 
 
 def find_record(plans: str, num: str):

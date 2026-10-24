@@ -12,7 +12,7 @@ import subprocess
 import tempfile
 import unittest
 
-from _helpers import run
+from _helpers import load, run
 
 BEGIN, END = "<!-- plans-index:begin -->", "<!-- plans-index:end -->"
 HEADER = "| # | Status | Folder | Description | Created by |\n|---|---|---|---|---|\n"
@@ -300,6 +300,44 @@ class Migrate(Base):
         for num in ("3", "3.1", "4", "5", "2"):
             self.assertIn(f"| {num} |", rendered)
         self.assertIn("| 4 |", self.read("archive/INDEX.md"))
+        self.ok("check")
+
+    def test_gate_mode_line_moves_to_readme_and_stays_blocking(self):
+        # 9.1-r1-01: a blocking graph (IRIS) must still block after the render drops the line
+        self.write("PLANS-INDEX.md", self.read("PLANS-INDEX.md")
+                   .replace("## Active Plans", "**Gate mode:** blocking\n\n## Active Plans"))
+        readme = self.read("README.md")
+        self.ok("migrate", "--dry-run")
+        self.assertEqual(readme, self.read("README.md"))
+        p = self.ok("migrate")
+        self.assertIn("MOVED  **Gate mode:** blocking -> README.md", p.stdout)
+        moved = self.read("README.md")
+        self.assertIn("**Gate mode:** blocking", moved)
+        self.write("README.md", readme)  # as if the line had never moved
+        p = self.pi("render", "--allow-loss")
+        self.assertEqual(p.returncode, 1)  # --allow-loss never covers the gate line
+        self.assertIn("Gate mode", p.stderr)
+        self.assertIn("Gate mode", self.pi("check").stdout)
+        self.write("README.md", moved)
+        self.ok("render")
+        self.assertNotIn("Gate mode", self.read("PLANS-INDEX.md"))
+        self.assertEqual(load("verify_lib.py").gate_mode(os.path.join(self.plans, "3-alpha")), "blocking")
+        self.write("README.md", moved.replace("blocking", "advisory"))
+        self.write("PLANS-INDEX.md", "**Gate mode:** blocking\n" + self.read("PLANS-INDEX.md"))
+        self.assertEqual(self.pi("migrate").returncode, 2)  # two answers: a human picks
+
+    def test_other_tables_and_prose_refuse_render(self):
+        self.write("PLANS-INDEX.md", self.read("PLANS-INDEX.md")
+                   + "\n## Pending PRDs\n\n| PRD | Owner |\n|---|---|\n| x | t |\n\nA note.\n")
+        p = self.ok("migrate")
+        self.assertIn("DROP   PLANS-INDEX.md § Pending PRDs: 4 line(s)", p.stdout)
+        before = self.read("PLANS-INDEX.md")
+        p = self.pi("render")
+        self.assertEqual(p.returncode, 1)
+        self.assertIn("STRAY PLANS-INDEX.md § Pending PRDs", p.stderr)
+        self.assertEqual(before, self.read("PLANS-INDEX.md"))
+        self.assertEqual(self.pi("check").returncode, 1)
+        self.ok("render", "--allow-loss")
         self.ok("check")
 
     def test_migrate_twice_changes_nothing(self):

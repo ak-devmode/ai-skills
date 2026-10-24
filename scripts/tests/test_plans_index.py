@@ -285,6 +285,24 @@ class Render(Base):
         self.ok("render", "--allow-loss")
         self.assertNotIn("| 4 |", self.read("PLANS-INDEX.md"))
 
+    def test_a_number_held_twice_fails_check_render_and_status(self):
+        # 9.1-r1-06: check passed (committed == fresh) and status edited only the first row
+        self.add(3, "3-alpha/")
+        self.ok("render")
+        self.write("index-loose.md", "<!-- plans-index:begin active -->\n" + HEADER
+                   + "| 3 | 📝 PRD | _(not created)_ | dup | t |\n<!-- plans-index:end active -->\n")
+        before = self.snapshot()
+        p = self.pi("render", "--allow-loss")
+        self.assertEqual(p.returncode, 1)
+        self.assertIn("DUPLICATE # 3 has 2 rows", p.stderr)
+        self.assertEqual(before, self.snapshot())
+        p = self.pi("check")
+        self.assertEqual(p.returncode, 1)
+        self.assertIn("# 3 has 2 rows", p.stdout)
+        p = self.pi("status", "--num", "3", "--status", "🔄 Active")
+        self.assertEqual(p.returncode, 2)
+        self.assertEqual(before, self.snapshot())
+
     def test_half_a_block_is_refused(self):
         self.add(3, "3-alpha/")
         self.write("3-alpha/progress.md", self.read("3-alpha/progress.md").replace(END, ""))

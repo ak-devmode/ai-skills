@@ -462,6 +462,12 @@ def do_render(plans: str, allow_loss: bool = False) -> int:
         print(f"plans-index: {plans} has no records but its index has rows — not migrated. "
               f"Run `plans-index.py migrate {plans}` first.", file=sys.stderr)
         return 2
+    twice = dupes(recs)
+    if twice:  # --allow-loss is about rows vanishing; a doubled row is the opposite
+        for n, ps in twice.items():
+            print(f"plans-index: DUPLICATE {dupe_msg(plans, n, ps)}", file=sys.stderr)
+        print(f"plans-index: render refused — {len(twice)} number(s) held twice.", file=sys.stderr)
+        return 1
     index_gate, readme_gate = gate_lines(plans)
     if index_gate is not None and index_gate != readme_gate:  # --allow-loss never covers this
         print(f"plans-index: render refused — the index declares **Gate mode:** {index_gate} and "
@@ -509,10 +515,12 @@ def cmd_check(args) -> int:
     plans = plans_of(args.index)
     issues = []
     try:
-        active, archived = render_text(plans)
+        recs = records(plans)
+        active, archived = render_text(plans, recs)
     except Refuse as e:
         print(f"plans-index check: {plans}\n  1 ISSUE(S):\n    1. {e}")
         return 1
+    issues += [dupe_msg(plans, n, ps) for n, ps in dupes(recs).items()]
     for c in lost_rows(plans, active + "\n" + archived):
         issues.append(lost_msg(c))
     issues += [f"{s} — a render drops it; move it to plans/README.md"
@@ -697,9 +705,30 @@ def migrate_gate_line(plans: str, dry_run: bool) -> list[str]:
     return [f"  MOVED  **Gate mode:** {index_gate} -> README.md" + (" (--dry-run: not written)" if dry_run else "")]
 
 
+def dupes(recs: list[Rec]) -> dict[str, list[str]]:
+    """Review 9.1-r1-06: every number held by more than one row — two records, a record and
+    the loose file, or twice in one block — to the files holding it. A render shows both
+    rows and `status` would edit only the first, so neither may proceed."""
+    seen: dict[str, list[str]] = {}
+    for r in recs:
+        for c in r.rows:
+            if numbered(c):
+                seen.setdefault(num_of(c), []).append(r.path)
+    return {n: ps for n, ps in seen.items() if len(ps) > 1}
+
+
+def dupe_msg(plans: str, num: str, paths: list[str]) -> str:
+    return (f"# {num} has {len(paths)} rows ({', '.join(os.path.relpath(p, plans) for p in paths)}) "
+            f"— renumber or delete one; a render would show both and status would edit only the first")
+
+
 def find_record(plans: str, num: str):
-    """(Rec, row index) holding row `num`, or None."""
-    for r in records(plans):
+    """(Rec, row index) holding row `num`, or None. Refuses a number held twice."""
+    recs = records(plans)
+    paths = dupes(recs).get(num)
+    if paths:
+        raise Refuse(dupe_msg(plans, num, paths))
+    for r in recs:
         for i, c in enumerate(r.rows):
             if num_of(c) == num:
                 return r, i

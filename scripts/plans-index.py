@@ -19,6 +19,16 @@ Commands:
     move <index> --num --to {active,archived} [--folder] [--status]
     status <index> --num --status [--skip-verify REASON] [--blocking|--advisory]
     gate-count [<index> ...] [--discover]  clean gated scopes toward the blocking flip
+    render <plans-dir> [--stdout] [--allow-loss]   records -> PLANS-INDEX.md + archive/INDEX.md
+    migrate <plans-dir> [--branch REF [--base REV]] [--dry-run]   old index rows -> records
+    check <plans-dir>                committed render == fresh render; size; headerless rows
+
+Records (scope 9): once plans/README.md declares `**Index render:** bot | local`, add /
+status / move write the scope's rows into the `plans-index:begin/end` block of its own
+progress.md (loose rows: plans/index-loose.md), and PLANS-INDEX.md is rendered output —
+by the bot on push (`bot`) or by the command itself (`local`). Without that line the
+graph is not migrated and every command edits the index in place, as before. `<index>`
+may be the plans dir itself.
 
 Verification gate (templates/verify-contracts.md §5): `status` runs verdict-gate.py
 before writing a Done status on a phase row (`N.P`) whose scope folder has a
@@ -105,9 +115,11 @@ class Section:
         return "other"
 
 
-def parse(path: str):
-    with open(path, encoding="utf-8") as fh:
-        lines = fh.read().split("\n")
+def parse(path: str | None, text: str | None = None):
+    if text is None:
+        with open(path, encoding="utf-8") as fh:
+            text = fh.read()
+    lines = text.split("\n")
 
     sections: list[Section] = []
     cur: Section | None = None
@@ -160,10 +172,453 @@ def slug_row(cell: str) -> bool:
     )
 
 
+# ----------------------------------------------------------------- records
+#
+# Scope 9 (2026-10-24): each scope's rows live in a script-owned block inside its own
+# progress.md, and PLANS-INDEX.md is rendered from those blocks — two sessions writing
+# different scopes touch different files, never the shared index. Table membership
+# follows disk: a record under an `archive/` folder renders as Completed / Archived, so
+# no row is ever "moved" again. A graph opts in with `**Index render:** bot | local` in
+# plans/README.md. Until it does (the cutover, plan 9.3) every command keeps editing the
+# index in place — this code goes live on merge, and a records write against an
+# unmigrated graph would render an index with almost nothing in it.
+
+LOOSE = "index-loose.md"            # rows with no scope folder: loose PRDs, programs, _(not created)_
+ARCHIVE_INDEX = os.path.join("archive", "INDEX.md")   # eng D24: archived rows render apart
+RENDER_LINE = re.compile(r"^\*\*Index render:\*\*[ \t]*(.*?)[ \t]*$", re.M)
+MAX_BYTES = 150_000                 # absorbed from kalpa-docs check-plans-index.py
+ORPHAN = re.compile(r"^\| \d+(\.\d+)? \| \d{4}-\d{2}-\d{2} \| (scope|plan) \|")
+HEADER_LINES = ["| " + " | ".join(CANONICAL) + " |", "|" + "---|" * len(CANONICAL)]
+
+
+class Refuse(Exception):
+    """A state the script will not guess past; main() prints it and exits 2."""
+
+
+def plans_of(index: str) -> str:
+    return os.path.dirname(os.path.abspath(index))
+
+
+def render_mode(plans: str):
+    """`bot`, `local`, or None (not migrated — legacy in-place edits)."""
+    path = os.path.join(plans, "README.md")
+    if not os.path.isfile(path):
+        return None
+    with open(path, encoding="utf-8") as fh:
+        m = RENDER_LINE.search(fh.read())
+    if m is None:
+        return None
+    if m.group(1) not in ("bot", "local"):
+        raise Refuse(f"{path}: **Index render:** is {m.group(1)!r} — expected bot | local")
+    return m.group(1)
+
+
+def marker(end: bool, tag: str = "") -> str:
+    return f"<!-- plans-index:{'end' if end else 'begin'}{' ' + tag if tag else ''} -->"
+
+
+def esc(cell: str) -> str:
+    return cell.replace("|", "\\|").replace("\n", " ").strip()
+
+
+def row_line(cells: list[str]) -> str:
+    return "| " + " | ".join(cells) + " |"
+
+
+def read_block(path: str, tag: str = ""):
+    """The block's rows (escaped cells), or None when the file has no block. A begin with
+    no end, or an end with no begin, is a clobbered block — refused, never guessed at."""
+    if not os.path.isfile(path):
+        return None
+    with open(path, encoding="utf-8") as fh:
+        lines = [l.strip() for l in fh.read().split("\n")]
+    b, e = marker(False, tag), marker(True, tag)
+    if b not in lines:
+        if e in lines:
+            raise Refuse(f"{path}: '{e}' with no '{b}' — the record block was overwritten")
+        return None
+    i = lines.index(b)
+    if e not in lines[i:]:
+        raise Refuse(f"{path}: '{b}' with no '{e}' — the record block was overwritten; "
+                     f"restore it from git (git log -p -- {path})")
+    j = lines.index(e, i)
+    return [split_row(l) for l in lines[i + 1:j]
+            if l.startswith("|") and not is_divider(l) and split_row(l) != CANONICAL]
+
+
+def write_block(path: str, rows: list[list[str]], tag: str = "", dry_run: bool = False) -> None:
+    """Replace the block, or add it: in an existing progress.md before its first `## `
+    section; a missing progress.md gets a minimal one; the loose file a heading per tag."""
+    body = [marker(False, tag), *HEADER_LINES, *(row_line(c) for c in rows), marker(True, tag)]
+    if os.path.isfile(path):
+        with open(path, encoding="utf-8") as fh:
+            lines = fh.read().split("\n")
+    elif tag:
+        lines = ["# Loose index rows", "",
+                 "Rows with no scope folder (loose PRDs, programs, `_(not created)_`). Script-owned:",
+                 "write through `plans-index.py`, never by hand.", ""]
+    else:
+        lines = [f"# Progress — {os.path.basename(os.path.dirname(path))}", ""]
+    stripped = [l.strip() for l in lines]
+    if marker(False, tag) in stripped:
+        i = stripped.index(marker(False, tag))
+        lines[i:stripped.index(marker(True, tag), i) + 1] = body
+    elif tag:
+        lines += ["## " + ("Active Plans" if tag == "active" else "Completed / Archived"), "", *body, ""]
+    else:
+        at = next((k for k, l in enumerate(lines) if k and l.startswith("## ")), len(lines))
+        lines[at:at] = ["## Index record", "",
+                        "Script-owned (`plans-index.py`); PLANS-INDEX.md is rendered from it.", "",
+                        *body, ""]
+    if dry_run:
+        print(f"(--dry-run: {path} not written)", file=sys.stderr)
+        return
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as fh:
+        fh.write("\n".join(lines))
+
+
+class Rec:
+    def __init__(self, path, tag, kind, folder, rows):
+        self.path, self.tag, self.kind, self.folder, self.rows = path, tag, kind, folder, rows
+
+
+def progress_file(folder: str) -> str:
+    """The folder's progress file, whatever its case (kalpa-docs 45 has PROGRESS.md) — on a
+    case-sensitive disk (the bot's runner) a fresh `progress.md` beside it would split the
+    record from the log; on macOS the two names are one file anyway."""
+    if os.path.isdir(folder):
+        for name in sorted(os.listdir(folder)):
+            if name.lower() == "progress.md":
+                return os.path.join(folder, name)
+    return os.path.join(folder, "progress.md")
+
+
+def disk_kind(rel: str) -> str:
+    return "archived" if "archive" in rel.split(os.sep) else "active"
+
+
+def records(plans: str) -> list[Rec]:
+    out = []
+    for d, dirs, files in os.walk(plans):
+        dirs[:] = sorted(x for x in dirs if not x.startswith(".") and x != "node_modules")
+        names = [f for f in files if f.lower() == "progress.md"]
+        if d != plans and names:
+            path = os.path.join(d, sorted(names)[0])
+            rows = read_block(path)
+            if rows is not None:
+                rel = os.path.relpath(d, plans)
+                out.append(Rec(path, "", disk_kind(rel), rel, rows))
+    loose = os.path.join(plans, LOOSE)
+    for tag in ("active", "archived"):
+        rows = read_block(loose, tag)
+        if rows is not None:
+            out.append(Rec(loose, tag, tag, None, rows))
+    return out
+
+
+def num_of(cells: list[str]) -> str:
+    return cells[0].strip().strip("*") if cells else ""
+
+
+def numbered(cells: list[str]) -> bool:
+    return bool(cells) and (scope_num(cells[0]) is not None or sub_num(cells[0]))
+
+
+def sort_key(cells: list[str]):
+    m = re.match(r"^(\d+)(?:\.(\d+))?", num_of(cells))
+    return (0, int(m.group(1)), int(m.group(2) or -1), num_of(cells)) if m else (1, 0, 0, "")
+
+
+def render_text(plans: str, recs: list[Rec] | None = None) -> tuple[str, str]:
+    """(PLANS-INDEX.md, archive/INDEX.md) as text. Deterministic: rows sort by number;
+    un-numbered rows (only ever loose) follow, in the loose file's order."""
+    rows = {"active": [], "archived": []}
+    for r in recs if recs is not None else records(plans):
+        rows[r.kind].extend(r.rows)
+    gen = ("<!-- GENERATED by ai-skills scripts/plans-index.py render. Do not edit: write "
+           "through plans-index.py add / status / move. -->\n"
+           "**Generated file — do not edit by hand.** Each scope's rows live in a script-owned "
+           "block in its own `progress.md`; `plans-index.py add / status / move` write them and "
+           "`render` rebuilds this file. Conventions: `plans/README.md`.")
+    out = []
+    for kind, title, heading, more in (
+            ("active", "Plans Index", "Active Plans",
+             "Completed / archived scopes: `archive/INDEX.md`."),
+            ("archived", "Plans Index — Completed / Archived", "Completed / Archived",
+             "Active scopes: `../PLANS-INDEX.md`. Folder paths are relative to `plans/`.")):
+        body = [row_line(c) for c in sorted(rows[kind], key=sort_key)]
+        out.append("\n".join([f"# {title}", "", gen, more, "", f"## {heading}", "",
+                              *HEADER_LINES, *body, ""]))
+    return out[0], out[1]
+
+
+def committed_text(plans: str) -> str:
+    parts = []
+    for name in ("PLANS-INDEX.md", ARCHIVE_INDEX):
+        path = os.path.join(plans, name)
+        if os.path.isfile(path):
+            with open(path, encoding="utf-8") as fh:
+                parts.append(fh.read())
+    return "\n".join(parts)
+
+
+def index_rows(text: str) -> list[tuple[str, list[str]]]:
+    """(table kind, cells) for every row of the Active / Archived tables in `text`."""
+    _, sections = parse(None, text)
+    return [(s.kind, c) for s in sections if s.kind in ("active", "archived") for _, c in s.rows]
+
+
+def row_key(cells: list[str]):
+    return num_of(cells) if numbered(cells) else tuple(cells)
+
+
+def lost_rows(plans: str, fresh: str) -> list[list[str]]:
+    """CEO R1: rows the committed render shows that a fresh render does not — a record
+    block overwritten by an agent's Write would otherwise drop them without a sound."""
+    new = {row_key(c) for _, c in index_rows(fresh)}
+    return [c for _, c in index_rows(committed_text(plans)) if row_key(c) not in new]
+
+
+def lost_msg(cells: list[str]) -> str:
+    folder = cells[2] if len(cells) > 2 else "?"
+    return (f"row {cells[0]} rendered before but has no record now — was its progress.md block "
+            f"overwritten? Restore it from git (git log -p -- {cell_path(folder) or folder}/progress.md)")
+
+
+def write_text(path: str, text: str) -> bool:
+    if os.path.isfile(path):
+        with open(path, encoding="utf-8") as fh:
+            if fh.read() == text:
+                return False
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as fh:
+        fh.write(text)
+    return True
+
+
+def do_render(plans: str, allow_loss: bool = False) -> int:
+    recs = records(plans)
+    active, archived = render_text(plans, recs)
+    if not recs and index_rows(committed_text(plans)):
+        print(f"plans-index: {plans} has no records but its index has rows — not migrated. "
+              f"Run `plans-index.py migrate {plans}` first.", file=sys.stderr)
+        return 2
+    lost = lost_rows(plans, active + "\n" + archived)
+    if lost and not allow_loss:
+        for c in lost:
+            print(f"plans-index: LOST {lost_msg(c)}", file=sys.stderr)
+        print(f"plans-index: render refused — {len(lost)} row(s) would vanish. Restore the "
+              f"record(s), or pass --allow-loss if the removal is deliberate.", file=sys.stderr)
+        return 1
+    changed = [n for n, t in (("PLANS-INDEX.md", active), (ARCHIVE_INDEX, archived))
+               if write_text(os.path.join(plans, n), t)]
+    print(f"rendered {plans}: {active.count(chr(10) + '| ') - 1} active, "
+          f"{archived.count(chr(10) + '| ') - 1} archived row(s)"
+          + (f" — wrote {', '.join(changed)}" if changed else " — unchanged"))
+    return 0
+
+
+def after_write(plans: str, mode: str, dry_run: bool) -> int:
+    """`local` re-renders now; `bot` leaves PLANS-INDEX.md to the bot — a dirty tracked
+    render in every session would bring the shared-file conflict straight back."""
+    return do_render(plans) if mode == "local" and not dry_run else 0
+
+
+def cmd_render(args) -> int:
+    plans = plans_of(args.index)
+    if args.stdout:  # eng D23: a fresh read after a write, whatever the committed file says
+        active, archived = render_text(plans)
+        sys.stdout.write(active + "\n" + archived)
+        return 0
+    return do_render(plans, args.allow_loss)
+
+
+def cmd_check(args) -> int:
+    """Committed render == fresh render, plus the kalpa-docs guard's size and headerless-row
+    checks. Never calls verdict-gate.py (progress.md rule 5: its memory blowup)."""
+    plans = plans_of(args.index)
+    issues = []
+    try:
+        active, archived = render_text(plans)
+    except Refuse as e:
+        print(f"plans-index check: {plans}\n  1 ISSUE(S):\n    1. {e}")
+        return 1
+    for c in lost_rows(plans, active + "\n" + archived):
+        issues.append(lost_msg(c))
+    for name, fresh in (("PLANS-INDEX.md", active), (ARCHIVE_INDEX, archived)):
+        path = os.path.join(plans, name)
+        if not os.path.isfile(path):
+            issues.append(f"{name} missing — run `plans-index.py render {plans}`")
+            continue
+        with open(path, encoding="utf-8") as fh:
+            text = fh.read()
+        if text != fresh:
+            issues.append(f"{name} differs from a fresh render of the records — re-render "
+                          f"(`plans-index.py render`; in bot mode the bot does it on push). "
+                          f"A hand edit there is overwritten, not imported.")
+        orphans = [i for i, l in enumerate(text.split("\n"), 1) if ORPHAN.match(l)]
+        if orphans:
+            issues.append(f"{name}: {len(orphans)} headerless 7-column row(s) at line(s) "
+                          f"{', '.join(map(str, orphans[:10]))} — they belong in progress.md")
+        if name == "PLANS-INDEX.md" and len(text.encode()) > MAX_BYTES:
+            issues.append(f"{name} is {len(text.encode()):,} bytes (limit {MAX_BYTES:,}) — it "
+                          f"is read into agent context; move detail into progress.md")
+    print(f"plans-index check: {plans}")
+    if issues:
+        print(f"  {len(issues)} ISSUE(S):")
+        for i, msg in enumerate(issues, 1):
+            print(f"    {i}. {msg}")
+        return 1
+    print("  render matches records.")
+    return 0
+
+
+def cell_path(cell: str) -> str:
+    """The path in a Folder cell: a `code` span, a [link](target), or the bare cell."""
+    m = re.search(r"`([^`]+)`", cell) or re.search(r"\]\(([^)]+)\)", cell)
+    return (m.group(1) if m else cell).strip().rstrip("/")
+
+
+def place(plans: str, cell: str):
+    """(record folder relative to plans/, None) or (None, why the row cannot be placed)."""
+    path = cell_path(cell)
+    if not path:
+        return None, "no folder"
+    root = os.path.abspath(plans)
+    full = os.path.normpath(os.path.join(root, path))
+    if not full.startswith(root + os.sep):
+        return None, "folder outside plans/"
+    if os.path.isfile(full) or (full.endswith(".md") and not os.path.isdir(full)):
+        full = os.path.dirname(full)   # a plan-file row belongs to its scope folder, written yet or not
+    if not os.path.isdir(full):
+        return None, "folder not on disk"
+    rel = os.path.relpath(full, root)
+    leaf = os.path.basename(rel)
+    if rel == "." or leaf in ("archive", "pending") or leaf.endswith("-program"):
+        return None, "not a scope folder (program, archive/ or plans root)"
+    return rel, None
+
+
+def git_out(path: str, *args):
+    p = subprocess.run(["git", "-C", path, *args], capture_output=True, text=True)
+    return p.stdout if p.returncode == 0 else None
+
+
+def branch_rows(plans: str, ref: str, base: str | None) -> list[tuple[str, list[str]]]:
+    """CEO D3: the rows an open branch changed in the old index since it forked — so its
+    edits become records instead of a conflict on a file nobody hand-edits any more."""
+    top = (git_out(plans, "rev-parse", "--show-toplevel") or "").strip()
+    if not top:
+        raise Refuse(f"{plans} is not in a git repo — --branch needs one")
+    rel = os.path.relpath(os.path.realpath(plans), os.path.realpath(top))
+    if base is None:
+        trunk = (git_out(top, "symbolic-ref", "--short", "refs/remotes/origin/HEAD") or "origin/main").strip()
+        base = (git_out(top, "merge-base", ref, trunk) or "").strip()
+        if not base:
+            raise Refuse(f"no merge-base between {ref} and {trunk} — pass --base <rev>")
+
+    def at(rev):
+        parts = [git_out(top, "show", f"{rev}:{rel}/{n}") for n in ("PLANS-INDEX.md", "archive/INDEX.md")]
+        if parts[0] is None and git_out(top, "rev-parse", "--verify", "-q", rev) is None:
+            raise Refuse(f"unknown revision {rev}")
+        return index_rows("\n".join(p for p in parts if p))
+
+    before = {row_key(c): c for _, c in at(base)}
+    changed = [(k, c) for k, c in at(ref) if before.get(row_key(c)) != c]
+    print(f"migrate --branch {ref}: {len(changed)} row(s) changed since {base[:9]}")
+    return changed
+
+
+def cmd_migrate(args) -> int:
+    """Old index rows -> records. Idempotent; a record that already holds a different row is
+    kept and reported (importing hand edits is D4, deferred). Prints every row it could not
+    place in a scope record, and every row whose table will change to follow disk."""
+    plans = plans_of(args.index)
+    overwrite = bool(args.branch)
+    old = branch_rows(plans, args.branch, args.base) if args.branch else index_rows(committed_text(plans))
+    entries = []
+    for kind, cells in old:
+        rel, why = place(plans, cells[2] if len(cells) > 2 else "") if numbered(cells) \
+            else (None, "un-numbered row (program or standing doc)")
+        entries.append({"kind": kind, "cells": cells, "rel": rel, "why": why})
+
+    # A repeated '#': one row goes to the scope record — the one already there, else the one
+    # whose table agrees with disk, else the first. The rest stay loose, reported.
+    groups: dict[str, list[dict]] = {}
+    for e in entries:
+        if numbered(e["cells"]) and not overwrite:
+            groups.setdefault(num_of(e["cells"]), []).append(e)
+    for num, es in groups.items():
+        if len(es) < 2:
+            continue
+        def present(e):
+            return e["rel"] and e["cells"] in (read_block(progress_file(os.path.join(plans, e["rel"]))) or [])
+        keep = next((e for e in es if present(e)), None) or \
+            next((e for e in es if e["rel"] and disk_kind(e["rel"]) == e["kind"]), es[0])
+        for e in es:
+            if e is not keep:
+                e["rel"], e["why"] = None, f"duplicate # {num} ({len(es)} rows)"
+
+    report, targets = [], {}
+    for e in entries:
+        c = e["cells"]
+        if e["rel"]:
+            target = (progress_file(os.path.join(plans, e["rel"])), "")
+            if disk_kind(e["rel"]) != e["kind"]:
+                report.append(f"  TABLE  {c[0]}: {e['kind']} -> {disk_kind(e['rel'])} (follows disk: {e['rel']}/)")
+        else:
+            target = (os.path.join(plans, LOOSE), e["kind"])
+            report.append(f"  LOOSE  {c[0][:30] or '(blank)'}: {e['why']} -> {LOOSE}")
+        targets.setdefault(target, []).append(c)
+
+    written = kept = 0
+    for (path, tag), new in targets.items():
+        cur = read_block(path, tag) or []
+        merged, changed = list(cur), False
+        for c in new:
+            key = row_key(c) if not tag or overwrite else tuple(c)
+            hit = next((i for i, m in enumerate(merged)
+                        if (row_key(m) if not tag or overwrite else tuple(m)) == key), None)
+            if hit is None:
+                merged.append(c)
+                changed = True
+            elif merged[hit] != c:
+                if overwrite:
+                    merged[hit], changed = c, True
+                else:
+                    kept += 1
+                    report.append(f"  KEPT   {c[0]}: {os.path.relpath(path, plans)} already holds a "
+                                  f"different row — the record wins")
+        if changed:
+            if not tag:
+                merged.sort(key=sort_key)
+            write_block(path, merged, tag, args.dry_run)
+            written += 1
+    print(f"migrate {plans}: {len(entries)} row(s), {written} record file(s) written, "
+          f"{sum(1 for e in entries if not e['rel'])} loose, {kept} kept")
+    for line in report:
+        print(line)
+    return 0
+
+
+def find_record(plans: str, num: str):
+    """(Rec, row index) holding row `num`, or None."""
+    for r in records(plans):
+        for i, c in enumerate(r.rows):
+            if num_of(c) == num:
+                return r, i
+    return None
+
+
 # ---------------------------------------------------------------- validate
 
 def cmd_validate(args) -> int:
-    lines, sections = parse(args.index)
+    plans = plans_of(args.index)
+    fresh = None
+    if render_mode(plans):  # validate what the records say, not a render that may lag
+        fresh = "\n".join(render_text(plans))
+    lines, sections = parse(args.index, fresh)
     issues: list[str] = []
     notes: list[str] = []
 
@@ -171,7 +626,7 @@ def cmd_validate(args) -> int:
     scope_tables = [s for s in tables if s.kind in ("active", "archived")]
 
     print(f"PLANS-INDEX: {args.index}")
-    size = os.path.getsize(args.index)
+    size = len(fresh.encode()) if fresh is not None else os.path.getsize(args.index)
     print(f"  size: {size:,} bytes (~{size // 4000:,}k tokens if read whole)")
     if size > 20000:
         notes.append(
@@ -321,7 +776,8 @@ def cmd_validate(args) -> int:
 # ------------------------------------------------------------ next-number
 
 def cmd_next_number(args) -> int:
-    _, sections = parse(args.index)
+    plans = plans_of(args.index)
+    _, sections = parse(args.index, "\n".join(render_text(plans)) if render_mode(plans) else None)
     highest = 0
     for s in sections:
         if s.kind not in ("active", "archived"):
@@ -337,6 +793,10 @@ def cmd_next_number(args) -> int:
 # -------------------------------------------------------------------- add
 
 def cmd_add(args) -> int:
+    plans = plans_of(args.index)
+    mode = render_mode(plans)
+    if mode:
+        return add_record(args, plans, mode)
     lines, sections = parse(args.index)
     target = next((s for s in sections if s.kind == "active" and s.header), None)
     if target is None:
@@ -362,6 +822,24 @@ def cmd_add(args) -> int:
     return 0
 
 
+def add_record(args, plans: str, mode: str) -> int:
+    """The row goes to its folder's progress.md block (created when absent), or to the
+    loose file when the folder is not on disk. One scope, one file: a session adding scope
+    12 never touches the file a session adding scope 13 writes."""
+    if find_record(plans, args.num):
+        print(f"plans-index: {args.num} already has a row.", file=sys.stderr)
+        return 2
+    cells = [esc(c) for c in (str(args.num), args.status, args.folder, args.desc, args.creator or "")]
+    build_row(*cells)  # the CELL_SOFT note, nothing else
+    rel, why = place(plans, args.folder)
+    path, tag = (progress_file(os.path.join(plans, rel)), "") if rel else (os.path.join(plans, LOOSE), "active")
+    rows = (read_block(path, tag) or []) + [cells]
+    write_block(path, sorted(rows, key=sort_key) if not tag else rows, tag, args.dry_run)
+    print(row_line(cells))
+    print(f"recorded in {os.path.relpath(path, plans)}" + (f" ({why})" if why else ""), file=sys.stderr)
+    return after_write(plans, mode, args.dry_run)
+
+
 def build_row(num, status, folder, desc, creator) -> str:
     """Escape and flatten cells. Never truncates — see CELL_SOFT."""
     cells = [str(num), status, folder, desc, creator or ""]
@@ -378,7 +856,44 @@ def build_row(num, status, folder, desc, creator) -> str:
 
 # ------------------------------------------------------------------- move
 
+def backlog_guard(plans: str, num: int, force: str | None) -> int:
+    """Refuse to archive a kalpa-docs scope an open kalpa-orchestra backlog row still points
+    at (`scoped(N)` — a done row says `done`). `--force "<reason>"` overrides, out loud."""
+    common = (git_out(plans, "rev-parse", "--path-format=absolute", "--git-common-dir") or "").strip()
+    owner = os.path.dirname(common) if os.path.basename(common) == ".git" else common
+    if os.path.basename(owner) != "kalpa-docs":
+        return 0
+    root = os.path.join(vl.PROJECTS, "wellmed", "kalpa-orchestra", "projects")
+    hits = []
+    for proj in sorted(os.listdir(root)) if os.path.isdir(root) else []:
+        path = os.path.join(root, proj, "BACKLOG.md")
+        if not os.path.isfile(path):
+            continue
+        with open(path, encoding="utf-8") as fh:
+            for i, line in enumerate(fh, 1):
+                cells = split_row(line)
+                if f"scoped({num})" in cells:
+                    hits.append(f"{proj}/BACKLOG.md:{i} {cells[0]}")
+    if not hits:
+        return 0
+    if force:
+        print(f"plans-index: archive guard overridden for scope {num} ({force}); open backlog "
+              f"row(s): {', '.join(hits)}", file=sys.stderr)
+        return 0
+    print(status_msg("BLOCK", f"refusing to archive scope {num} — open backlog row(s) point at it",
+                     f"no kalpa-orchestra backlog row at scoped({num})", ", ".join(hits),
+                     root, "process", f'close the row(s) first, or pass --force "<reason>"'),
+          file=sys.stderr)
+    return 1
+
+
 def cmd_move(args) -> int:
+    plans = plans_of(args.index)
+    if args.to == "archived" and backlog_guard(plans, args.num, args.force):
+        return 1
+    mode = render_mode(plans)
+    if mode:
+        return move_record(args, plans, mode)
     lines, sections = parse(args.index)
     src_kind = "active" if args.to == "archived" else "archived"
     src = next((s for s in sections if s.kind == src_kind and s.header), None)
@@ -396,6 +911,9 @@ def cmd_move(args) -> int:
     already = any(c and scope_num(c[0]) == args.num for _, c in dst.rows)
     if found is None and args.with_plans and already:
         return move_plan_rows(args, lines, src, dst)  # the scope row moved earlier; bring its plans
+    in_place = found is None and already and bool(args.folder)
+    if in_place:  # a repoint, not a move: /plan §2.5 put the plan in a folder
+        found = next((ln, c) for ln, c in dst.rows if c and scope_num(c[0]) == args.num)
     if found is None:
         print(f"plans-index: scope {args.num} not found in the {src_kind} table.",
               file=sys.stderr)
@@ -421,6 +939,12 @@ def cmd_move(args) -> int:
         cells[2] = args.folder
     row = build_row(cells[0], cells[1], cells[2], cells[3], cells[4])
 
+    if in_place:
+        lines[ln] = row
+        write(args.index, lines, args.dry_run)
+        print(f"repointed {args.num} in {args.to}")
+        print(row)
+        return 0
     dst_last = dst.rows[-1][0] if dst.rows else dst.header_line + 1
     del lines[ln]
     insert_at = dst_last + 1 if dst_last < ln else dst_last
@@ -434,6 +958,90 @@ def cmd_move(args) -> int:
         dst = next(s for s in sections if s.kind == args.to and s.header)
         return move_plan_rows(args, lines, src, dst)
     return 0
+
+
+def move_record(args, plans: str, mode: str) -> int:
+    """A move is a folder move plus a status write: membership follows disk, so moving the
+    folder IS moving the rows. Every row in the record (scope + N.P) is repointed; when the
+    folder already sits at the destination (moved by hand or git mv) only the write runs."""
+    hit = find_record(plans, str(args.num))
+    if hit is None:
+        print(f"plans-index: scope {args.num} has no record.", file=sys.stderr)
+        return 2
+    rec, i = hit
+    rel = place(plans, args.folder)[0] if args.folder and rec.folder is None else None
+    if rel and disk_kind(rel) == args.to:  # a loose row whose folder now exists (/plan §2.5)
+        cells = rec.rows.pop(i)
+        cells = (cells + [""] * len(CANONICAL))[:len(CANONICAL)]
+        cells[2] = esc(args.folder)
+        if args.status:
+            cells[1] = esc(args.status)
+        path = progress_file(os.path.join(plans, rel))
+        write_block(path, sorted((read_block(path) or []) + [cells], key=sort_key), "", args.dry_run)
+        write_block(rec.path, rec.rows, rec.tag, args.dry_run)
+        print(f"moved loose row {args.num} into {os.path.relpath(path, plans)}")
+        return after_write(plans, mode, args.dry_run)
+    if rec.folder is None:  # a loose row: its table is the block it sits in
+        rows = rec.rows
+        cells = rows.pop(i)
+        if args.status:
+            cells = (cells + [""] * len(CANONICAL))[:len(CANONICAL)]
+            cells[1] = esc(args.status)
+        write_block(rec.path, rows, rec.tag, args.dry_run)
+        dst = read_block(rec.path, args.to) or []
+        write_block(rec.path, dst + [cells], args.to, args.dry_run)
+        print(f"moved loose row {args.num}: {rec.tag} -> {args.to}")
+        return after_write(plans, mode, args.dry_run)
+    src = rec.folder
+    if args.folder:
+        want = cell_path(args.folder)
+    elif args.to == "archived":
+        parent, leaf = os.path.split(src)
+        want = src if disk_kind(src) == "archived" else os.path.join(parent, "archive", leaf)
+    else:
+        want = os.path.join(*[p for p in src.split(os.sep) if p != "archive"])
+    if disk_kind(want) != args.to:
+        print(f"plans-index: '{want}' is not an {args.to} location (archived = under an archive/ "
+              f"folder).", file=sys.stderr)
+        return 2
+    if os.path.normpath(want) != os.path.normpath(src):
+        dst = os.path.join(plans, want)
+        if os.path.exists(dst):
+            print(f"plans-index: {want} already exists and is not where scope {args.num}'s record "
+                  f"lives ({src}) — refusing to merge folders.", file=sys.stderr)
+            return 2
+        if args.dry_run:
+            print(f"(--dry-run: would move {src} -> {want})", file=sys.stderr)
+        else:
+            os.makedirs(os.path.dirname(dst), exist_ok=True)
+            tracked = git_out(plans, "ls-files", "--", os.path.join(plans, src))
+            if tracked:
+                p = subprocess.run(["git", "-C", plans, "mv", os.path.join(plans, src), dst],
+                                   capture_output=True, text=True)
+                if p.returncode:
+                    print(f"plans-index: git mv failed: {p.stderr.strip()}", file=sys.stderr)
+                    return 2
+            else:
+                os.rename(os.path.join(plans, src), dst)
+    path = progress_file(os.path.join(plans, want)) if not args.dry_run else rec.path
+    # A folder moved by hand (mv, git mv) leaves its rows naming the old path: match the
+    # record's location with and without its archive/ component.
+    olds = list(dict.fromkeys([src, os.path.join(*[p for p in src.split(os.sep) if p != "archive"])]))
+    rows = []
+    for c in rec.rows:
+        c = list(c)
+        if len(c) > 2:
+            p = cell_path(c[2])
+            old = next((o for o in olds if p == o or p.startswith(o + "/")), None)
+            if old is not None and old != want:
+                c[2] = c[2].replace(p, want + p[len(old):], 1)
+        if num_of(c) == str(args.num) and args.status:
+            c = (c + [""] * len(CANONICAL))[:len(CANONICAL)]
+            c[1] = esc(args.status)
+        rows.append(c)
+    write_block(path, rows, "", args.dry_run)
+    print(f"moved scope {args.num}: {src} -> {want}")
+    return after_write(plans, mode, args.dry_run)
 
 
 def move_plan_rows(args, lines, src, dst) -> int:
@@ -481,14 +1089,21 @@ def run_gate(index: str, folder_cell: str, num: str, extra: list[str] | None = N
 
 
 def cmd_status(args) -> int:
-    lines, sections = parse(args.index)
+    plans = plans_of(args.index)
+    mode = render_mode(plans)
     found = None
-    for s in sections:
-        if s.kind not in ("active", "archived"):
-            continue
-        for ln, cells in s.rows:
-            if cells and cells[0].strip().strip("*") == args.num:
-                found = (ln, cells)
+    if mode:
+        hit = find_record(plans, args.num)
+        if hit:
+            found = (hit, hit[0].rows[hit[1]])
+    else:
+        lines, sections = parse(args.index)
+        for s in sections:
+            if s.kind not in ("active", "archived"):
+                continue
+            for ln, cells in s.rows:
+                if cells and cells[0].strip().strip("*") == args.num:
+                    found = (ln, cells)
     if found is None:
         print(f"plans-index: {args.num} has no row in the Active or Archived table.", file=sys.stderr)
         return 2
@@ -534,6 +1149,18 @@ def cmd_status(args) -> int:
                 return 1
             if doc.get("marker"):
                 new = f"{new} {doc['marker']}"
+    if mode:
+        rec, i = ln
+        cells[1] = esc(new)
+        rec.rows[i] = cells
+        write_block(rec.path, rec.rows, rec.tag, args.dry_run)
+        if not args.dry_run and (read_block(rec.path, rec.tag) or [None] * (i + 1))[i] != cells:
+            print(status_msg("ERROR", f"status write for {args.num} did not land", new,
+                             "a different cell on re-read", rec.path, "tooling",
+                             "check nothing else is writing the record, then re-run"), file=sys.stderr)
+            return 1
+        print(row_line(cells))
+        return after_write(plans, mode, args.dry_run)
     cells[1] = new
     lines[ln] = build_row(*cells)
     write(args.index, lines, args.dry_run)
@@ -571,7 +1198,7 @@ def cmd_gate_count(args) -> int:
         if os.path.realpath(index) in seen:
             continue  # an index passed explicitly and found by --discover counts once
         seen.add(os.path.realpath(index))
-        _, sections = parse(index)
+        _, sections = parse(None, committed_text(plans_of(index)))  # + archive/INDEX.md (eng D24)
         root = os.path.dirname(os.path.abspath(index))
         rows = [(s.kind, c) for s in sections if s.kind in ("active", "archived") for _, c in s.rows if len(c) > 2]
         for kind, cells in rows:
@@ -632,6 +1259,7 @@ def main() -> int:
     m.add_argument("--to", choices=["active", "archived"], required=True)
     m.add_argument("--folder"); m.add_argument("--status")
     m.add_argument("--with-plans", action="store_true", help="also move the scope's N.P rows")
+    m.add_argument("--force", metavar="REASON", help="archive despite open kalpa-orchestra backlog rows")
     m.add_argument("--dry-run", action="store_true"); m.set_defaults(fn=cmd_move)
 
     gc = sub.add_parser("gate-count"); gc.add_argument("index", nargs="*")
@@ -646,12 +1274,39 @@ def main() -> int:
     mg.add_argument("--advisory", dest="mode", action="store_const", const="advisory")
     st.add_argument("--dry-run", action="store_true"); st.set_defaults(fn=cmd_status)
 
+    for name, fn, extra in (("render", cmd_render, True), ("migrate", cmd_migrate, False),
+                            ("check", cmd_check, False)):
+        r = sub.add_parser(name)
+        r.add_argument("index", help="the plans dir (or its PLANS-INDEX.md)")
+        r.set_defaults(fn=fn)
+        if name == "render":
+            r.add_argument("--stdout", action="store_true", help="print a fresh render, write nothing")
+            r.add_argument("--allow-loss", action="store_true", help="render even if rows vanish")
+        if name == "migrate":
+            r.add_argument("--branch", metavar="REF", help="convert one open branch's old-index edits")
+            r.add_argument("--base", metavar="REV", help="--branch: the fork point (default: merge-base with origin/HEAD)")
+            r.add_argument("--dry-run", action="store_true")
+
     args = p.parse_args()
+    indexes = []
     for index in (args.index if isinstance(args.index, list) else [args.index]):
-        if not os.path.isfile(index):
+        if os.path.isdir(index):  # a plans dir stands for its index
+            index = os.path.join(index, "PLANS-INDEX.md")
+        indexes.append(index)
+        try:
+            records_mode = render_mode(plans_of(index)) is not None
+        except Refuse as e:
+            print(f"plans-index: {e}", file=sys.stderr)
+            return 2
+        if not os.path.isfile(index) and args.cmd not in ("render", "migrate", "check") and not records_mode:
             print(f"plans-index: no such file: {index}", file=sys.stderr)
             return 2
-    return args.fn(args)
+    args.index = indexes if isinstance(args.index, list) else indexes[0]
+    try:
+        return args.fn(args)
+    except Refuse as e:
+        print(f"plans-index: {e}", file=sys.stderr)
+        return 2
 
 
 if __name__ == "__main__":

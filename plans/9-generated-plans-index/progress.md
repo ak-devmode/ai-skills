@@ -8,8 +8,8 @@ Script-owned (`plans-index.py`); PLANS-INDEX.md is rendered from it.
 | # | Status | Folder | Description | Created by |
 |---|---|---|---|---|
 | 9 | 📝 Draft (2026-10-24) | `9-generated-plans-index/` | Each scope's index row moves into a script-owned block in its own progress.md and PLANS-INDEX.md becomes generated output, so concurrent sessions stop conflicting on one shared file. On kalpa-docs a GitHub Action is the only writer of the rendered index (about 1 min lag) and overwrites hand edits with a note to update ai-skills; pmg-docs, IRIS and ai-skills render locally. Also clears closed work: /closeout on 168 and pmg candidates, 155/161 archived as superseded by 196, and the 52 orphaned phase rows fixed by the migration. | Alex |
-| 9.1 | 📝 Draft (2026-10-24) | `9-generated-plans-index/` | Phase 1 — records in progress.md, render/migrate/check, render mode per graph, backlog archive guard, readers + skill prose moved off the shared file. | Alex |
-| 9.2 | 📝 Draft (2026-10-24) | `9-generated-plans-index/` | Phase 2 — /closeout 168 and pmg candidates, archive LIS 155/161 by hand; concurrent with 9.1. | Alex |
+| 9.1 | ✅ Done (2026-10-24) — PR #17 merged ⚠ verify skipped: cleanup scope (Alex): /review r1 + 16/16 fixed + suite 326 OK stand in for /verify | `9-generated-plans-index/` | Phase 1 — records in progress.md, render/migrate/check, render mode per graph, backlog archive guard, readers + skill prose moved off the shared file. | Alex |
+| 9.2 | ✅ Done (2026-10-24) — 155/161 archived (superseded by 196), 168 closed out; pmg dropped (Alex) ⚠ verify skipped: commit-less archive lane; driver verified on origin/main | `9-generated-plans-index/` | Phase 2 — /closeout 168 and pmg candidates, archive LIS 155/161 by hand; concurrent with 9.1. | Alex |
 | 9.3 | 📝 Draft (2026-10-24) | `9-generated-plans-index/` | Phase 3 — migrate four graphs, move index prose to plans/README.md (IRIS gate mode), kalpa-docs render bot + hand-edit note, observe on trunk. | Alex |
 <!-- plans-index:end -->
 
@@ -23,7 +23,7 @@ Script-owned (`plans-index.py`); PLANS-INDEX.md is rendered from it.
 ## Resume Context
 **Scope:** ~/Projects/ai-skills/plans/9-generated-plans-index/scope.md
 **Last action:** /concurrency dispatched 9.1 (pane w14:p18, opus/alex, `feature/9-generated-plans-index`) and 9.2 (pane w14:p19, sonnet/int, kalpa-docs `plan/9.2-closeouts`) in tab "9 lanes"; kalpa-docs PR #183 merged (c7fe5e33) to unblock the 161 archive (2026-10-24)
-**Next action:** land 9.1 (PR to ai-skills main), then 9.3 cutover; 9.3 needs Alex's GitHub App + bypass
+**Next action:** merge kalpa-iris #52 on green; Alex creates the GitHub App + secrets + bypass → merge kalpa-docs #184 (--admin: its own guard job fails by design on this one PR) → observe bot (Task 3.5) → /closeout
 **Open blockers:** bot GitHub App + `main` bypass (9.3 Task 3.4)
 **Key files changed:** None yet
 
@@ -46,6 +46,8 @@ Script-owned (`plans-index.py`); PLANS-INDEX.md is rendered from it.
 | 2026-10-24 | /plan-eng-review | Done | 6 findings mapped; D23 smaller arrangement, D24 archive index split |
 | 2026-10-24 | 9.2 (lane) | Done | 155/161 archived as superseded by 196, 168 closed out; landed on kalpa-docs main (711631a9) |
 | 2026-10-24 | 168 residual docs (lane) | Done | backbone CLAUDE.md §15 (#643), kalpa-docs api/export.md (ef5eb982) |
+| 2026-10-24 | 9.1 | Landed | ai-skills PR #17 merged 591a32e |
+| 2026-10-24 | 9.3 cutover | Partial | ai-skills live (ef0fce3, local); pmg live (586b2d6, local); IRIS PR kalpa-iris #52 (develop protected; gate mode blocking verified); kalpa-docs draft PR #184 (bot mode; dup rows 48/65 dropped; 164→50 KB) waits on the GitHub App |
 | 2026-10-24 | 9.1 (lane) | Built | 4 commits (7608e10..193a692); /review r1 Claude fallback (codex out of credits): 16 findings, all fixed in 11 commits (fd7267a..5404af5); suite 326 OK (driver rerun). Alex: cleanup scope, no round-2 review |
 
 ---

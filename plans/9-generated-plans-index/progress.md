@@ -9,9 +9,9 @@
 
 ## Resume Context
 **Scope:** ~/Projects/ai-skills/plans/9-generated-plans-index/scope.md
-**Last action:** Scope created (2026-10-24)
-**Next action:** /plan-ceo-review on scope.md, then `/concurrency` for 9.1 + 9.2
-**Open blockers:** finish-conditions table awaiting Alex's approval; bot credential (9.3)
+**Last action:** CEO + eng reviews cleared; finish table approved rev 1; PR #173 closed (2026-10-24)
+**Next action:** `/concurrency` — lane A 9.1 (ai-skills worktree), lane B 9.2 (kalpa-docs + pmg-docs closeouts)
+**Open blockers:** bot GitHub App + `main` bypass (9.3 Task 3.4)
 **Key files changed:** None yet
 
 ---
@@ -27,6 +27,8 @@
 | Date | Skill/Action | Status | Notes |
 |------|--------------|--------|-------|
 | 2026-10-24 | /scope | Done | Scope created — generated index, kalpa-docs bot, closeouts + LIS archive, cutover |
+| 2026-10-24 | /plan-ceo-review | Done | HOLD SCOPE; 3 repairs, D1–D4 decided (D4 → TO-DO); PR #173 closed by Alex |
+| 2026-10-24 | /plan-eng-review | Done | 6 findings mapped; D23 smaller arrangement, D24 archive index split |
 
 ---
 
@@ -34,7 +36,7 @@
 
 | Step | Status | Notes |
 |------|--------|-------|
-| Approve finish-conditions table | [ ] Pending | /scope §5.10.1 |
+| Approve finish-conditions table | [x] Done | rev 1, Alex, 2026-10-24 |
 | Bot push credential + `main` bypass on kalpa-docs | [ ] Pending | 9.3 gate A |
 
 ---

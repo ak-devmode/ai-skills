@@ -488,3 +488,8 @@ Source: WellMed scope 158.3 reviews 158.3-r21-02, r23-01, r23-02 (kalpa-docs pla
 Touches: review/scripts/review.py (dispose) · scripts/verify_lib.py · review/SKILL.md §5.1 (the [CASCADE] stop)
 
 - [ ] **A `[CASCADE]` stop has no way to record its outcome.** §5.1 says stop and bring the user a reframe; when the user takes it, the cascading fix is reverted and its findings move to a TO-DO, but `dispose --deferred` refuses any finding before round 4 of its lineage, `--accepted` is for process nits, and a stale `--fixed` points at a reverted commit. 158.3 had to record three such findings as `--rejected` with a reason saying they were not wrong (Alex's call). Add `--reframed "<TO-DO item>" --by <user>`: allowed at any round when the finding's file carries a `[CASCADE]`, it needs an open item carrying the ID like `--deferred`, the gate treats it like a deferral, and `/verify` never audits it as a rejection. Also have `dispose` warn when a `--fixed` SHA has since been reverted on HEAD.
+
+## Generated PLANS-INDEX — deferred at CEO review (2026-10-24)
+Source: plans/9-generated-plans-index/scope.md (GSTACK REVIEW REPORT, D4)
+Touches: scripts/plans-index.py · kalpa-docs .github/workflows/plans-index-render.yml
+- [ ] **Render bot imports hand edits instead of overwriting them.** When a push edits the rendered PLANS-INDEX.md, write the changed cells back into that scope's `progress.md` record, then re-render, so no edit is lost. Deferred (Alex): the PR check (9.3) catches most hand edits before merge. Medium effort.

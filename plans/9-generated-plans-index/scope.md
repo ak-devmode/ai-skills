@@ -155,3 +155,27 @@ N/A x4 — not a bug fix, no UI.
 - Index prose leaves the index; IRIS's gate-mode line and member list must move, not drop, or IRIS's gate silently turns advisory (Q10).
 - Archive guard against open kalpa-orchestra backlog rows (Q11).
 - Today's deadline: 9.1 and 9.2 run concurrently (Q12, Q15).
+
+## GSTACK REVIEW REPORT
+
+**Review:** /plan-ceo-review, 2026-10-24 · **Mode:** HOLD SCOPE (Alex: keep it short, finish today) · **Depth:** compressed run, premise + failure modes only; Review Sections 1–10 not walked individually (Alex's instruction overrides the skill's full pass).
+
+| Run | Status | Findings |
+|---|---|---|
+| Premise challenge (0A) | PASS | kalpa-docs index: 84 commits in 7 days by 8 authors (busiest day 22), 42 conflict/rebase/renumber commits in 30 days. The pain is real and the fix targets it directly. |
+| Existing-code leverage (0B) | PASS | Single writer `plans-index.py` already exists; PR guard `plans-index-guard.yml` exists. Extend, don't rebuild. |
+| Hold-scope hardening | 3 in-scope repairs | see below |
+| Decisions | 4 pending | see below |
+
+**In-scope repairs (needed to meet the scope's own acceptance, no question):**
+- R1 · `render`/`check` fail loud when a row that rendered before has lost its record (an agent `Write` over `progress.md` can clobber the block). Silent row loss is the failure mode this design would otherwise add. → 9.1 Task 1.2.
+- R2 · Scope 168 has an unmerged branch, `origin/plan/168-financial-document-templates` (+13 commits). Its closeout lands or reconciles that branch first. → 9.2 Task 2.1.
+- R3 · Teammates mostly reach `main` through PRs (9 open: #164 #166 #171 #173 #178 #179 #181 #182 #183), so the PR path needs the hand-edit check, not just the post-push bot. → 9.3 Task 3.3.
+
+**Decisions (Alex, 2026-10-24):**
+- D1 · PR #173 closed as superseded by this scope; Oktonius told why. → done at review.
+- D2 · PR check fails a PR that edits the rendered index; post-push bot covers direct pushes. → 9.3 Task 3.3.
+- D3 · `migrate --branch <ref>` for open branches + channel post before cutover. → 9.1 Task 1.2, 9.3 Task 3.1.
+- D4 · Import hand edits back into records — deferred to ai-skills `plans/TO-DO.md`.
+
+NO UNRESOLVED DECISIONS

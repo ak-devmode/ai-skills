@@ -63,7 +63,8 @@ by `test_entrypoint.py`'s compile check.
       exit: 0 written · 1 gate BLOCKED (row untouched) or write did not land · 2 usage · 3 gate could not evaluate
     plans-index.py render  <plans-dir> [--stdout] [--allow-loss]   exit: 0 · 1 a rendered row lost its record, or non-scope
       content (other tables, prose) would be dropped, or the index's `**Gate mode:**` line is not in
-      README.md, or a number is held by two rows (--allow-loss covers neither) · 2 not migrated
+      README.md, or a number is held by two rows (--allow-loss covers neither) · 2 not migrated.
+      `--stdout` is a read: exit 0, with each lost row named on stderr
     plans-index.py migrate <plans-dir> [--branch REF [--base REV]] [--dry-run]   exit: 0 (every loose row
       and non-scope section reported; moves `**Gate mode:**` to README.md) · 2 index and README disagree on it
     plans-index.py check   <plans-dir>   exit: 0 render matches records · 1 issues (lost row, stale render, size,

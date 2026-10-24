@@ -212,6 +212,17 @@ class Readers(Base):
         self.assertEqual(p.returncode, 1)
         self.assertIn("NO INDEX ROW", p.stdout)
 
+    def test_verify_archive_names_a_clobbered_record(self):
+        # 9.1-r1-13: a record block overwritten after the render read as a plain NO INDEX ROW
+        self.add(3, "3-alpha/")
+        self.ok("move", "--num", "3", "--to", "archived", "--status", "\u2705 Done")
+        self.ok("render")
+        self.write("archive/3-alpha/progress.md", "# Progress\n")  # an agent's Write
+        p = run("closeout/scripts/verify-archive.sh", self.plans, "3", env=self.env)
+        self.assertEqual(p.returncode, 1)
+        self.assertIn("NO INDEX ROW", p.stdout)
+        self.assertIn("LOST row 3", p.stderr)
+
     def test_scan_archive_drift_counts_record_rows_once(self):
         self.write("3-alpha/progress.md",
                    "# Progress\n\n## 1. Plans\n\n| # | Plan | Status |\n|---|---|---|\n"

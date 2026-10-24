@@ -504,6 +504,9 @@ def cmd_render(args) -> int:
     plans = plans_of(args.index)
     if args.stdout:  # eng D23: a fresh read after a write, whatever the committed file says
         active, archived = render_text(plans)
+        # Review 9.1-r1-13: still a read (exit 0), but a reader that misses a row hears why
+        for c in lost_rows(plans, active + "\n" + archived):
+            print(f"plans-index: LOST {lost_msg(c)}", file=sys.stderr)
         sys.stdout.write(active + "\n" + archived)
         return 0
     return do_render(plans, args.allow_loss)

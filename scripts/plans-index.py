@@ -54,6 +54,7 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
 
 CANONICAL = ["#", "Status", "Folder", "Description", "Created by"]
 
@@ -246,6 +247,29 @@ def read_block(path: str, tag: str = ""):
             if l.startswith("|") and not is_divider(l) and split_row(l) != CANONICAL]
 
 
+def atomic_write(path: str, text: str) -> None:
+    """Write a sibling temp file, then os.replace it over `path` (review 9.1-r1-02): a crash
+    mid-write leaves the old file whole, never a truncated progress.md — the record and the
+    scope's whole log in one. Keeps the file's mode; a new file gets the umask's."""
+    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+    try:
+        mode = os.stat(path).st_mode & 0o7777
+    except FileNotFoundError:
+        umask = os.umask(0)
+        os.umask(umask)
+        mode = 0o666 & ~umask
+    fd, tmp = tempfile.mkstemp(dir=os.path.dirname(path) or ".", prefix=".plans-index-")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            fh.write(text)
+        os.chmod(tmp, mode)
+        os.replace(tmp, path)
+    except BaseException:
+        if os.path.exists(tmp):
+            os.unlink(tmp)
+        raise
+
+
 def write_block(path: str, rows: list[list[str]], tag: str = "", dry_run: bool = False) -> None:
     """Replace the block, or add it: in an existing progress.md before its first `## `
     section; a missing progress.md gets a minimal one; the loose file a heading per tag."""
@@ -273,9 +297,7 @@ def write_block(path: str, rows: list[list[str]], tag: str = "", dry_run: bool =
     if dry_run:
         print(f"(--dry-run: {path} not written)", file=sys.stderr)
         return
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, "w", encoding="utf-8") as fh:
-        fh.write("\n".join(lines))
+    atomic_write(path, "\n".join(lines))
 
 
 class Rec:
@@ -429,9 +451,7 @@ def write_text(path: str, text: str) -> bool:
         with open(path, encoding="utf-8") as fh:
             if fh.read() == text:
                 return False
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, "w", encoding="utf-8") as fh:
-        fh.write(text)
+    atomic_write(path, text)
     return True
 
 
@@ -1311,8 +1331,7 @@ def write(path: str, lines: list[str], dry_run: bool) -> None:
     if dry_run:
         print("(--dry-run: not written)", file=sys.stderr)
         return
-    with open(path, "w", encoding="utf-8") as fh:
-        fh.write("\n".join(lines))
+    atomic_write(path, "\n".join(lines))
 
 
 def main() -> int:

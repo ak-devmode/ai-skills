@@ -168,6 +168,29 @@ class Writers(Base):
         self.ok("render")
         self.assertIn("| 4 |", self.read("PLANS-INDEX.md"))
 
+    def test_a_failed_write_leaves_the_progress_file_whole(self):
+        # 9.1-r1-02: an in-place 'w' write truncates progress.md before it writes
+        self.add(3, "3-alpha/")
+        path = os.path.join(self.plans, "3-alpha", "progress.md")
+        os.chmod(path, 0o640)
+        before = self.read("3-alpha/progress.md")
+        pi = load("plans-index.py")
+        real = pi.os.replace
+
+        def boom(src, dst):
+            raise OSError("disk full")
+        pi.os.replace = boom
+        try:
+            with self.assertRaises(OSError):
+                pi.write_block(path, [["3", "🔄 Active", "3-alpha/", "d", "t"]])
+        finally:
+            pi.os.replace = real
+        self.assertEqual(before, self.read("3-alpha/progress.md"))
+        self.assertEqual(os.listdir(os.path.dirname(path)), ["progress.md"])  # no temp left
+        pi.write_block(path, [["3", "🔄 Active", "3-alpha/", "d", "t"]])
+        self.assertIn("| 3 | 🔄 Active |", self.read("3-alpha/progress.md"))
+        self.assertEqual(os.stat(path).st_mode & 0o777, 0o640)
+
     def test_unknown_render_mode_refused(self):
         self.write("README.md", "**Index render:** botty\n")
         p = self.pi("add", "--num", "3", "--status", "x", "--folder", "3-alpha/", "--desc", "d")

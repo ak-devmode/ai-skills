@@ -41,7 +41,9 @@ done
 [ $# -gt 0 ] || die 2 "no paths given — name the files this run wrote (never -A)"
 
 repo="$(git -C "$dir" rev-parse --show-toplevel 2>/dev/null)" || die 2 "not a git repo: $dir"
-abs_dir="$(cd "$dir" && pwd)"
+# Physical paths on both sides (9.1-r1-12): a symlinked plans dir or a `./x` spelling
+# must still match the bot-mode skip, and git rejects a path outside the toplevel it reports.
+abs_dir="$(cd "$dir" && pwd -P)"
 # Bot render mode (scope 9): PLANS-INDEX.md and archive/INDEX.md are the bot's output.
 # A session committing its local render would race every other session's render of the
 # same file — the shared-file conflict records exist to remove. Drop them, out loud.
@@ -50,6 +52,7 @@ grep -qE '^\*\*Index render:\*\*[[:space:]]*bot[[:space:]]*$' "$dir/README.md" 2
 paths=()
 for p in "$@"; do
   case "$p" in /*) ;; *) p="$abs_dir/$p" ;; esac
+  if parent="$(cd "$(dirname "$p")" 2>/dev/null && pwd -P)"; then p="$parent/$(basename "$p")"; fi
   if [ -n "$bot" ] && { [ "$p" = "$abs_dir/PLANS-INDEX.md" ] || [ "$p" = "$abs_dir/archive/INDEX.md" ]; }; then
     echo "plans-publish: skipping ${p#"$abs_dir"/} — bot render mode; the bot renders it on push" >&2
     continue

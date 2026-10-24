@@ -121,6 +121,20 @@ class PlansPublish(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertIn("nothing to publish", r.stderr)
 
+    def test_bot_render_skip_sees_through_symlinks_and_spellings(self):
+        # 9.1-r1-12: a symlinked plans dir or `./x` spelling missed the skip and committed it
+        self.b_pushes("plans/README.md", "**Index render:** bot\n")
+        self.git(self.a, "pull", "-q", "--rebase", "origin", "main")
+        link = os.path.join(os.path.dirname(self.a), "plans-link")
+        os.symlink(os.path.join(self.a, "plans"), link)
+        self.write(self.a, "plans/progress.md", "line one\nline two\ntask 1.1 done\n")
+        self.write(self.a, "plans/PLANS-INDEX.md", "a local render\n")
+        self.write(self.a, "plans/archive/INDEX.md", "a local archive render\n")
+        r = run("plans-publish.sh", link, "-m", "plan: x", "--", "progress.md",
+                os.path.join(self.a, "plans", "PLANS-INDEX.md"), "./archive/INDEX.md", env=self.env)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(self.git(self.a, "show", "--name-only", "--format=", "HEAD"), "plans/progress.md")
+
     def test_d_feature_branch_commits_only(self):
         self.git(self.a, "checkout", "-q", "-b", "feature/x")
         before = self.origin_main()

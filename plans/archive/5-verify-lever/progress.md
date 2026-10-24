@@ -1,5 +1,18 @@
 # Progress: `/verify` + the verification lever
 
+## Index record
+
+Script-owned (`plans-index.py`); PLANS-INDEX.md is rendered from it.
+
+<!-- plans-index:begin -->
+| # | Status | Folder | Description | Created by |
+|---|---|---|---|---|
+| 5 | ✅ Done (2026-09-29) ⚠ verify failed scripts-tests-green, names-resolve, contracts-generate-clean, gate-semantics-tested, scope-deliverables, no-overbuild, review:ai-skills, p2-tests-green, p2-names-resolve, p2-skills-lint, p2-codex-failure-modes, p2-review-log, p2-fixtures, p2-scope-deliverables, p2-no-overbuild, p2-rejections-justified, p3-scope-deliverables, p3-rejections-justified | archive/5-verify-lever/ | **/verify + the verification lever.** Builds /verify, an independent judge from the opposing model family (codex, fresh context) that does its own work from disk, git and runtime, checks that a scope was built as specified and follows the /plan-eng-review test plan, and reports an evidence rung per check rather than a score. Moves /review onto the same codex voice with recorded dispositions for every finding, and targets local maxima: over-built abstractions and names/contracts/paths assumed instead of looked up (a script resolves them). Wires both into /scope, /plan and /closeout so every commit-producing phase is reviewed and verified, with older scopes self-healing; env specifics and the feature map live in the private product test-suite, which becomes its own kalpa-docs program. | Alex |
+| 5.1 | ✅ Done (2026-09-26) — Phase 1 approved at gate A ⚠ verify advisory: 4 blocked (scripts-tests-green, names-resolve, gate-semantics-tested, scope-deliverables) | archive/5-verify-lever/ | Phase 1 — Contracts + deterministic scripts — finish table, verdict + disposition JSONL, feature-map and adapter contracts, resolve-identifiers.py, verify-run.py, verdict-gate.py + plans-index status/validate enforcement. Gate A. | Alex |
+| 5.2 | ✅ Done (2026-09-29) — Phase 2 approved at gate A; own review r1–r3 fixed ⚠ verify advisory: 2 blocked (p2-fixtures, p2-scope-deliverables) | archive/5-verify-lever/ | Phase 2 — /verify skill + /review on codex — dogfood on 5.1 (class B). The class-A trial moved to kalpa-docs test-suite T2 (Alex, 2026-09-29). Gate A. | Alex |
+| 5.3 | ✅ Done (2026-09-29) — Phase 3 wired, rolled out; announced by Alex ⚠ verify advisory: 2 blocked (p3-scope-deliverables, p3-rejections-justified) | archive/5-verify-lever/ | Phase 3 — Wiring into /scope, /plan (self-heal), /closeout; ledger-template fix; team rollout. Gate A. | Alex |
+<!-- plans-index:end -->
+
 ## Operating Contract (pinned — survives compaction; re-read on every resume)
 1. Scope↔code mismatch = STOP, investigate in-context, report before proceeding.
 2. Re-validate each phase's surface against live code before entering it; raise gaps in

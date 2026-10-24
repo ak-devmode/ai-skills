@@ -1,5 +1,15 @@
 # Progress — /concurrency
 
+## Index record
+
+Script-owned (`plans-index.py`); PLANS-INDEX.md is rendered from it.
+
+<!-- plans-index:begin -->
+| # | Status | Folder | Description | Created by |
+|---|---|---|---|---|
+| 3 | ✅ Done (2026-09-23) — 6.5 met by 2 weeks of production dogfooding (91, 128, 57.3, 137.2); ledger-less closeout | archive/3-concurrency/ | **/concurrency — herdr-backed multi-agent dispatch.** Partitions a scope into a dependency DAG from repo ground truth, dispatches the ready frontier to named herdr panes (worktree per lane, opus/codex/glm seats, cap 5 per tab), supervises by agent state + gate bus. Residuals → TO-DO.md. | Alex Knecht |
+<!-- plans-index:end -->
+
 ## 2026-08-23
 - Scope created (session: herdr evaluation → build decision with Alex).
 - Pre-scope ground truth established and recorded in scope.md §2: herdr

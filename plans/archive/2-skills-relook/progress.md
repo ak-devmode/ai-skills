@@ -1,5 +1,15 @@
 # skills-relook — Progress
 
+## Index record
+
+Script-owned (`plans-index.py`); PLANS-INDEX.md is rendered from it.
+
+<!-- plans-index:begin -->
+| # | Status | Folder | Description | Created by |
+|---|---|---|---|---|
+| 2 | ✅ Done (2026-09-25) | `archive/2-skills-relook/` | Re-look at all eight core planning skills through the lens of what the current model does natively. Diagnosis was accretion, not model-era mismatch: 3–18% deletion rate across the core, so superseded text survived beside its replacement. Phase 1 audit classified every numbered section; Phase 2 extracted the three deterministic steps that had lost data (scope-number race, index-row leak, plans-dir duplication); Phase 3 fixed eight defects and wired the scripts in. Also fixed the harness layer: kalpa/ was a container dir so 4 of 6 Kalpa skills never registered and `/review` resolved to gstack's. **Revisited 2026-09-23 → closed 2026-09-25 on Opus 5.5:** built the accretion linter (`scripts/lint-skill.py` — growth-from-git, cross-skill-duplicate, memory-citation checks; size demoted to advisory, no splitting to hit a count), moved the fleet to Opus 5.5, fixed contradictions/dead refs/harness-owned text across the core skills, and replaced eight prose procedures with read-back-verified scripts. Fleet lint 13 ISSUE → 0. Kept separate from scope 5 (verify-lever). | Alex Knecht |
+<!-- plans-index:end -->
+
 ## Operating Contract (pinned — re-read on resume)
 1. Execution posture: risk-on within `ai-skills`; work on `feature/skills-relook-opus5`, never commit to `main`.
 2. Model: execution runs in a **fresh Opus 5.5 context** (target seat). This scope was authored under 4.8.

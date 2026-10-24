@@ -1,5 +1,15 @@
 # Progress: Herdr Agent Workflow — one-flow dispatch, agent naming, worktree lifecycle
 
+## Index record
+
+Script-owned (`plans-index.py`); PLANS-INDEX.md is rendered from it.
+
+<!-- plans-index:begin -->
+| # | Status | Folder | Description | Created by |
+|---|---|---|---|---|
+| 4 | ✅ Done (2026-08-30) | `archive/4-herdr-agent-workflow/` | Codifies Alex's herdr agent workflow across the planning skills. Phase 1 collapses /concurrency's clunky dry-run→--dispatch two-step into one inline flow (evaluate-and-bail if parallelism isn't worth it, single [y/N] to proceed), names workers by lane, and amends scope #3. Phase 2 adds the model-B worktree lifecycle — /scope records primary repo+branch, /plan (in a herdr pane) names its agent 'driver' and creates+binds an isolated worktree, /closeout prunes it — plus a CLAUDE.md rule routing execution-parallelism to visible herdr panes. Leaves seams for a friend's bars/diff tool. | Alex |
+<!-- plans-index:end -->
+
 ## Operating Contract (pinned — survives compaction; re-read on every resume)
 1. Scope↔skill mismatch = STOP, investigate in-context, report before proceeding.
 2. Re-validate each skill's current text against disk before editing it; scope #3 (`concurrency/`) is being amended, so read its live state first — raise gaps in batched blocks.

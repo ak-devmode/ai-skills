@@ -1,5 +1,15 @@
 # Progress: Visible research lanes — /research pane mode
 
+## Index record
+
+Script-owned (`plans-index.py`); PLANS-INDEX.md is rendered from it.
+
+<!-- plans-index:begin -->
+| # | Status | Folder | Description | Created by |
+|---|---|---|---|---|
+| 6 | ✅ Done (2026-09-26) | `archive/6-research-lanes/` | /research pane mode — one visible Sonnet lane per angle in a fresh herdr tab plus an independent verify lane, now the default; live run and interrupt test passed 2026-09-26. | Alex |
+<!-- plans-index:end -->
+
 ## Operating Contract (pinned — survives compaction; re-read on every resume)
 1. Scope↔code mismatch = STOP, investigate in-context, report before proceeding.
 2. Never edit `research/workflows/deep-research-lean.js` in this scope — pull and

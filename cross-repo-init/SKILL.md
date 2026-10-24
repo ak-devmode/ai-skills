@@ -362,9 +362,10 @@ If a substantial pre-existing architecture document is present (e.g.,
 4. Move the predecessor to
    `archive/<original-name>-v<version-or-date>.md` via `git mv` (preserves
    history).
-5. Update cross-doc references (README.md, plans/PLANS-INDEX.md,
-   repo-governance.md, etc.) to point at the new ARCHITECTURE.md
-   (canonical) and the archive path (historical).
+5. Update cross-doc references (README.md, repo-governance.md, etc.) to
+   point at the new ARCHITECTURE.md (canonical) and the archive path
+   (historical). Not `plans/PLANS-INDEX.md`: it changes only through
+   `plans-index.py`, and its rows are history, not live pointers.
 6. Mention this transformation prominently in the new ARCHITECTURE.md
    preamble.
 

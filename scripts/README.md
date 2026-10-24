@@ -46,7 +46,11 @@ by `test_entrypoint.py`'s compile check.
 
     claim-scope-number.sh <plans-dir>
       stdout: claimed integer        stderr: provenance across all four sources
-      Maxes over origin/main index, local index, scope folders, and branch names.
+      exit: 0 claimed · 2 usage · 3 records mode and the local records do not render
+      Maxes over origin/main (index, archive index, folders), local index (a fresh
+      `render --stdout` in records mode), scope folders, and branch names — a branch's
+      number counts only if its tip has that scope folder, or a row for it in this plans
+      dir's index / archive index / index-loose.md. Folder sources count directories only.
       Not atomic — nothing short of a server write is — but closes every gap that
       has bitten. Read the stderr note when local and origin disagree.
 
@@ -57,11 +61,25 @@ by `test_entrypoint.py`'s compile check.
     plans-index.py status <index> --num --status [--skip-verify R] [--blocking|--advisory] [--dry-run]
     plans-index.py gate-count [<index>...] [--discover]  stdout: `clean gated scopes: N/5`, + REMINDER line at 5 · exit 0
       exit: 0 written · 1 gate BLOCKED (row untouched) or write did not land · 2 usage · 3 gate could not evaluate
+    plans-index.py render  <plans-dir> [--stdout] [--allow-loss]   exit: 0 · 1 a rendered row lost its record, or non-scope
+      content (other tables, prose) would be dropped, or the index's `**Gate mode:**` line is not in
+      README.md, or a number is held by two rows (--allow-loss covers neither) · 2 not migrated.
+      `--stdout` is a read: exit 0, with each lost row named on stderr
+    plans-index.py migrate <plans-dir> [--branch REF [--base REV]] [--dry-run]   exit: 0 (every loose row
+      and non-scope section reported; moves `**Gate mode:**` to README.md) · 2 index and README disagree on it
+    plans-index.py check   <plans-dir>   exit: 0 render matches records · 1 issues (lost row, stale render, size,
+      non-scope content, unmoved gate line, a number held twice)
+      Records mode: plans/README.md declares `**Index render:** bot | local`. add/status/move
+      then write the scope's block in its own progress.md (loose rows: index-loose.md);
+      `local` re-renders after each write, `bot` leaves the index to the bot. No line =
+      the index is edited in place. A number held by two rows refuses add/status/move (exit 2). `move --to archived` on kalpa-docs refuses while a
+      kalpa-orchestra BACKLOG row reads scoped(N) (`--force REASON`).
 
     plans-publish.sh <plans-dir> -m <msg> -- <path>...
       Commits ONLY the named paths; on the repo's trunk also rebases onto origin (only if
       origin moved), pushes, retries a rejected push once, reads back with merge-base.
       Off trunk: commit only. A shared code trunk (ai-skills `main`) publishes too.
+      Bot render mode: PLANS-INDEX.md and archive/INDEX.md are dropped from the paths.
       exit: 0 published / committed off trunk · 2 usage · 3 HALT — conflict or stash not
             re-applied (commit kept, nothing pushed), or repo busy / add / commit failed
             (nothing committed) · 4 not pushed (offline, auth, rejected, origin/HEAD unset)

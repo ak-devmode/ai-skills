@@ -303,7 +303,7 @@ Any block is a failure whatever the mode: the scope cannot report HEALED, it sti
 archives, and its index row carries the printed `⚠ verify failed <check_ids>` marker.
 
 5.4.2 **Per-graph override** — a `**Gate mode:** blocking` (or `advisory`) line in a graph's
-`PLANS-INDEX.md` sets the default for every scope under it; an explicit `--blocking` /
+`plans/README.md` (once its index is rendered — scope 9) or `PLANS-INDEX.md` sets the default for every scope under it; an explicit `--blocking` /
 `--advisory` flag still wins. kalpa-iris runs blocking from its first scope (Alex,
 2026-09-29): its code is not read by a human, so an advisory gate there is a report
 nobody reads.

@@ -32,6 +32,18 @@ if [ ! -d "$PLANS_DIR" ]; then
 fi
 
 INDEX="$PLANS_DIR/PLANS-INDEX.md"
+# Records mode (scope 9): the committed render lags the records until the bot runs, and
+# archived rows live in archive/INDEX.md — so check a fresh render of both instead.
+if grep -qE '^\*\*Index render:\*\*' "$PLANS_DIR/README.md" 2>/dev/null; then
+  fresh="$(mktemp)"; trap 'rm -f "$fresh"' EXIT
+  # `..` resolves physically, so this finds ai-skills/scripts through the skills symlink too
+  if python3 "$(dirname "$0")/../../scripts/plans-index.py" render --stdout "$PLANS_DIR" > "$fresh"; then
+    INDEX="$fresh"
+  else
+    echo "verify-archive: plans-index.py render --stdout failed for $PLANS_DIR" >&2
+    exit 1
+  fi
+fi
 fail=0
 note() { printf '  %s\n' "$1"; }
 

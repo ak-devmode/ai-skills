@@ -323,6 +323,18 @@ class TestGate(Fixture):
         self.assertIn("BLOCKED", p.stdout)
         self.assertEqual(self.gate("--advisory").returncode, 0)  # an explicit flag still wins
 
+    def test_readme_gate_mode_line_wins_once_the_index_is_generated(self):
+        # kalpa-iris: graph prose moves to plans/README.md when PLANS-INDEX.md is rendered (scope 9)
+        self.set_table([row("bad", "exit 1")])
+        self.ledger()
+        self.verify()
+        with open(os.path.join(os.path.dirname(self.index), "README.md"), "w") as fh:
+            fh.write("# Plans\n\n**Index render:** bot\n**Gate mode:** blocking\n")
+        p = self.gate()
+        self.assertEqual(p.returncode, 1, p.stdout)
+        os.remove(self.index)  # records mode: a not-yet-rendered index still resolves the mode
+        self.assertEqual(self.gate().returncode, 1)
+
     def test_unapproved_table_blocks_and_legacy_table_is_exempt(self):
         self.ledger()
         self.verify("codex gpt-test", [self.v("ok", "pass")])

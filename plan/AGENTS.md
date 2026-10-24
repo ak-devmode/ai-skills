@@ -102,7 +102,7 @@ When every task is `DONE` or `SKIPPED`:
 
 1. Extract deferred TODOs from skipped tasks, issue notes, `TODO`, and `FIXME` mentions.
 2. Append those items to the project `TO-DO.md`.
-3. Update `PLANS-INDEX.md` to mark the plan done.
+3. Mark the plan done with `~/Projects/ai-skills/scripts/plans-index.py status "$PLANS_DIR/PLANS-INDEX.md" --num {N.P} --status "✅ Done ($(date +%F))"` — never by editing the index file.
 4. If this is a child plan, update the parent scope progress and leave the plan in the scope folder.
 5. If this is a standalone plan, archive the plan folder under `{plans_dir}/archive/{plan-stem}/`.
 6. Report the completion summary and pending sibling plans, if any.

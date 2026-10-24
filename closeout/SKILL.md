@@ -1,6 +1,6 @@
 ---
 name: closeout
-version: 1.6.0
+version: 1.7.0
 description: |
   Local repo self-heal after a /plan run. Consumes closeout-prep.md and leaves the
   repo healthier than /plan found it: re-runs tests, spot-checks pattern references,
@@ -110,7 +110,7 @@ active** — that is the bug this mode exists to prevent. When no ledger is foun
    (ARCHITECTURE), Step 8 (trio sync), Step 10 (memory), and **Step 11 (archive) —
    which is mandatory and never skipped, see §13.0**.
 5. Record the absence in the archived `progress.md` so the gap is visible later, and
-   note it in the scope's PLANS-INDEX row.
+   note it in the scope's index row (`plans-index.py status`).
 
 A ledger-less run is a **degraded** closeout, not a failed one. Say "HEALED
 (ledger-less)" in the summary header — never plain "HEALED", which would overstate
@@ -626,9 +626,10 @@ Completion & Archive) and follow that procedure verbatim:
 - §11.2 Append to TO-DO.md
 - §11.3 Archive the plan (child plans stay in scope folder; standalone plans
   move to `archive/`)
-- §11.4 Update PLANS-INDEX.md — **move the scope's row from Active Plans to
-  Completed / Archived in the same commit as the folder move**, compressed to one
-  line (per-plan `{N}.{P}` rows are fine — `/markdown-style` §11.7.5). This is the step that keeps the index from
+- §11.4 Update the plans index — **`plans-index.py move --to archived` in the same
+  commit as the folder move**, never a hand edit (in a rendered graph the move makes the
+  folder move and the index is regenerated from the records; per-plan `{N}.{P}` rows
+  are fine — `/markdown-style` §11.7.5). This is the step that keeps the index from
   accumulating stale Active rows (37 of 61 on 2026-08-07) and headerless
   fragments; see `/markdown-style` §11.7.
 - §11.5 Update parent scope (if applicable)

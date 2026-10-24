@@ -26,7 +26,8 @@ JUDGE_LINE = re.compile(r"^(codex|claude-fallback|claude-lean|none) \S.*$")     
 GATE_MODE = "advisory"
 BLOCKING_AFTER = 5
 # §5.4.2: a graph can run blocking ahead of the fleet flip with a `**Gate mode:** blocking`
-# line in its PLANS-INDEX.md (kalpa-iris, 2026-09-29 — code nobody reads needs a gate that stops).
+# line in its plans/README.md or PLANS-INDEX.md (kalpa-iris, 2026-09-29 — code nobody reads
+# needs a gate that stops).
 GATE_MODE_LINE = re.compile(r"^\*\*Gate mode:\*\*[ \t]*(.*?)[ \t]*$", re.M)
 # Finish-table `repo` cells are paths under this root (§3.2). Tests point it elsewhere.
 PROJECTS = os.environ.get("VERIFY_PROJECTS", os.path.expanduser("~/Projects"))
@@ -82,24 +83,34 @@ def repo_root(projects, repo, scope=None):
 
 
 def gate_mode(scope_dir):
-    """The mode the gate runs in for this scope: the nearest PLANS-INDEX.md's
-    `**Gate mode:**` line, else GATE_MODE. Walks up at most three levels, which covers
-    plans/{N}/, plans/archive/{N}/ and plans/{program}/archive/{N}/."""
+    """The mode the gate runs in for this scope: the nearest plans dir's `**Gate mode:**`
+    line — in plans/README.md (where graph prose lives once the index is generated, scope
+    9), else in PLANS-INDEX.md — else GATE_MODE. Walks up at most three levels, which covers
+    plans/{N}/, plans/archive/{N}/ and plans/{program}/archive/{N}/. A plans dir is one with
+    a PLANS-INDEX.md or a README.md declaring `**Index render:**`."""
     d = os.path.realpath(scope_dir)
     for _ in range(3):
         d = os.path.dirname(d)
-        index = os.path.join(d, "PLANS-INDEX.md")
-        if os.path.isfile(index):
-            with open(index, encoding="utf-8") as fh:
-                m = GATE_MODE_LINE.search(fh.read())
+        texts = {}
+        for name in ("README.md", "PLANS-INDEX.md"):
+            path = os.path.join(d, name)
+            if os.path.isfile(path):
+                with open(path, encoding="utf-8") as fh:
+                    texts[path] = fh.read()
+        readme = texts.get(os.path.join(d, "README.md"), "")
+        if os.path.join(d, "PLANS-INDEX.md") not in texts and "**Index render:**" not in readme:
+            continue
+        for path, text in texts.items():
+            m = GATE_MODE_LINE.search(text)
             if m is None:
-                return GATE_MODE
+                continue
             if m.group(1) not in ("blocking", "advisory"):
                 # a typo must never quietly downgrade a blocking graph (review adhoc-02)
                 raise ContractError(message(
-                    "ERROR", "the index declares an unknown gate mode", "**Gate mode:** blocking | advisory",
-                    repr(m.group(1)), index, "code", "fix the **Gate mode:** line", f"{CONTRACT} §5.4.2"))
+                    "ERROR", "the plans dir declares an unknown gate mode", "**Gate mode:** blocking | advisory",
+                    repr(m.group(1)), path, "code", "fix the **Gate mode:** line", f"{CONTRACT} §5.4.2"))
             return m.group(1)
+        return GATE_MODE
     return GATE_MODE
 
 

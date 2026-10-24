@@ -1,6 +1,6 @@
 ---
 name: prd
-version: 1.1.0
+version: 1.2.0
 description: |
   Product Requirements Document generator. Translates a business need, user problem,
   or feature request into a structured PRD through iterative assumption reduction and
@@ -263,13 +263,22 @@ This section has high retrospective value — it explains why we chose this path
 | 1.0 | {date} | {author} | Initial draft |
 ```
 
-### 3.4 Update PLANS-INDEX.md
+### 3.4 Register the PRD in the plans index
 
-Append to `{plans_dir}/PLANS-INDEX.md`:
+Never edit `PLANS-INDEX.md` directly — in a graph with `**Index render:**` in its
+`README.md` the file is a generated view and a hand edit is overwritten. Claim a
+number, then register through the script:
 
-```markdown
-| {date} | prd | prd-{slug}.md | {project} | Draft | {one-line description} |
+```bash
+N=$(~/Projects/ai-skills/scripts/claim-scope-number.sh "$PLANS_DIR")
+~/Projects/ai-skills/scripts/plans-index.py add "$PLANS_DIR/PLANS-INDEX.md" \
+  --num "$N" --status "📝 PRD ($(date +%F))" --folder "\`prd-{slug}.md\`" \
+  --desc "{project} — {one-line description}" --creator "$(git config user.name)"
 ```
+
+A root-level PRD file (`--folder "\`prd-{slug}.md\`"`, above) becomes a loose row
+(`plans/index-loose.md`). A folder-form PRD lands in that folder's record — pass its
+path instead, `--folder "\`prd-{slug}/prd-{slug}.md\`"`, once the folder exists.
 
 ---
 

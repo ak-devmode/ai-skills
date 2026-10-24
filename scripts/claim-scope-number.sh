@@ -30,26 +30,40 @@ rel=""
 # scopes; a leading-anchored match on "| N " or "N-slug/" avoids catching them.
 nums() { grep -oE '^\|[[:space:]]*[0-9]+[[:space:]]*\|' 2>/dev/null | grep -oE '[0-9]+' || true; }
 
+# Scope folder numbers among `ls-tree --name-only` paths (one per line).
+tree_nums() { grep -oE "(^|/)[0-9]+-[^/]*$" | sed -E 's#^/##; s#-.*##' || true; }
+
 max=0
 note() { [ "$2" -gt "$max" ] && { max="$2"; src="$1"; }; return 0; }
 src="(none)"
 
-# 1. origin/main's index — catches numbers other sessions pushed.
+# Records mode (scope 9: plans/README.md declares `**Index render:**`): the committed
+# PLANS-INDEX.md can lag the records until the bot renders, so the local read is a fresh
+# render, and archived rows live in archive/INDEX.md.
+records=""
+grep -qE '^\*\*Index render:\*\*' "$plans/README.md" 2>/dev/null && records=1
+
+# 1. origin/main — its index, archive index and scope folders: numbers other sessions pushed.
 remote_max=0
 if [ -n "$repo" ] && [ -n "$rel" ]; then
   git -C "$repo" fetch --quiet origin main 2>/dev/null || true
-  remote_max=$(git -C "$repo" show "origin/main:$rel/PLANS-INDEX.md" 2>/dev/null \
-                 | nums | sort -n | tail -1 || true)
+  remote_max=$( { git -C "$repo" show "origin/main:$rel/PLANS-INDEX.md" 2>/dev/null | nums
+                  git -C "$repo" show "origin/main:$rel/archive/INDEX.md" 2>/dev/null | nums
+                  git -C "$repo" ls-tree --name-only origin/main -- "$rel/" "$rel/archive/" 2>/dev/null | tree_nums
+                } | sort -n | tail -1 || true)
   remote_max="${remote_max:-0}"
 fi
 note "origin/main index" "$remote_max"
 
 # 2. Local index — catches numbers claimed locally but unpushed.
 local_max=0
-if [ -f "$plans/PLANS-INDEX.md" ]; then
+if [ -n "$records" ]; then
+  local_max=$(python3 "$(dirname "$0")/plans-index.py" render --stdout "$plans" 2>/dev/null \
+                | nums | sort -n | tail -1 || true)
+elif [ -f "$plans/PLANS-INDEX.md" ]; then
   local_max=$(nums < "$plans/PLANS-INDEX.md" | sort -n | tail -1 || true)
-  local_max="${local_max:-0}"
 fi
+local_max="${local_max:-0}"
 note "local index" "$local_max"
 
 # 3. Folders on disk — catches a scope folder created before its index row
@@ -65,14 +79,23 @@ note "scope folders" "$folder_max"
 
 # 4. Branch names across all remotes — catches a number claimed in a branch
 #    whose index row has not landed. Matches scope-NNN / scope/NNN / NNN-slug.
+#    A number counts only when that branch's tip has the scope folder in THIS plans
+#    dir: ai-skills' `docs/171-tooling-todos` was kalpa-docs scope 171's tooling
+#    branch, and claimed 172 for ai-skills scope 9. A repo hosts more than one graph's
+#    branch names; only the folder says whose number it is.
 branch_max=0
-if [ -n "$repo" ]; then
-  while read -r n; do
+if [ -n "$repo" ] && [ -n "$rel" ]; then
+  while read -r ref n; do
     case "$n" in ''|*[!0-9]*) continue ;; esac
-    [ "$n" -gt "$branch_max" ] && branch_max="$n"
+    [ "$n" -gt "$branch_max" ] || continue
+    git -C "$repo" ls-tree --name-only "$ref" -- "$rel/" "$rel/archive/" 2>/dev/null \
+      | tree_nums | grep -qx "$n" && branch_max="$n"
   done <<EOF
 $(git -C "$repo" for-each-ref --format='%(refname:short)' refs/heads refs/remotes 2>/dev/null \
-    | grep -oE '(scope[-/]|/)[0-9]+' | grep -oE '[0-9]+' || true)
+    | while read -r ref; do
+        printf '%s\n' "$ref" | grep -oE '(scope[-/]|/)[0-9]+' | grep -oE '[0-9]+' \
+          | sed "s#^#$ref #" || true
+      done)
 EOF
 fi
 note "branch names" "$branch_max"

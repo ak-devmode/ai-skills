@@ -41,10 +41,22 @@ done
 [ $# -gt 0 ] || die 2 "no paths given — name the files this run wrote (never -A)"
 
 repo="$(git -C "$dir" rev-parse --show-toplevel 2>/dev/null)" || die 2 "not a git repo: $dir"
+abs_dir="$(cd "$dir" && pwd)"
+# Bot render mode (scope 9): PLANS-INDEX.md and archive/INDEX.md are the bot's output.
+# A session committing its local render would race every other session's render of the
+# same file — the shared-file conflict records exist to remove. Drop them, out loud.
+bot=""
+grep -qE '^\*\*Index render:\*\*[[:space:]]*bot[[:space:]]*$' "$dir/README.md" 2>/dev/null && bot=1
 paths=()
 for p in "$@"; do
-  case "$p" in /*) paths+=("$p") ;; *) paths+=("$(cd "$dir" && pwd)/$p") ;; esac
+  case "$p" in /*) ;; *) p="$abs_dir/$p" ;; esac
+  if [ -n "$bot" ] && { [ "$p" = "$abs_dir/PLANS-INDEX.md" ] || [ "$p" = "$abs_dir/archive/INDEX.md" ]; }; then
+    echo "plans-publish: skipping ${p#"$abs_dir"/} — bot render mode; the bot renders it on push" >&2
+    continue
+  fi
+  paths+=("$p")
 done
+[ ${#paths[@]} -gt 0 ] || { echo "plans-publish: nothing to publish — every path was a rendered index" >&2; exit 0; }
 
 g() { git -C "$repo" "$@"; }
 

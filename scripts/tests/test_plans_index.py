@@ -175,6 +175,34 @@ class Writers(Base):
         self.assertIn("expected bot | local", p.stderr)
 
 
+class Readers(Base):
+    """Freshness-sensitive readers see the records before the bot renders (eng D23)."""
+
+    def test_verify_archive_reads_a_fresh_render(self):
+        self.add(3, "3-alpha/")
+        self.add("3.1", "3-alpha/3.1-x-PLAN.md")
+        self.ok("move", "--num", "3", "--to", "archived", "--status", "✅ Done")
+        self.assertFalse(self.exists("PLANS-INDEX.md"))  # bot mode: nothing rendered yet
+        p = run("closeout/scripts/verify-archive.sh", self.plans, "3", env=self.env)
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        p = run("closeout/scripts/verify-archive.sh", self.plans, "4", env=self.env)
+        self.assertEqual(p.returncode, 1)
+        self.assertIn("NO INDEX ROW", p.stdout)
+
+    def test_scan_archive_drift_counts_record_rows_once(self):
+        self.write("3-alpha/progress.md",
+                   "# Progress\n\n## 1. Plans\n\n| # | Plan | Status |\n|---|---|---|\n"
+                   "| 3.1 | a | Done |\n| 3.2 | b | Done |\n")
+        self.add(3, "3-alpha/")
+        self.add("3.1", "3-alpha/a.md", status="✅ Done")
+        self.add("3.2", "3-alpha/b.md", status="✅ Done", desc="was pending review")
+        p = run("closeout/scripts/scan-archive-drift.py", self.plans, env=self.env)
+        self.assertIn("2/2 plans Done", p.stdout)
+        self.ok("status", "--num", "3.2", "--status", "🔄 In progress")
+        p = run("closeout/scripts/scan-archive-drift.py", self.plans, env=self.env)
+        self.assertNotIn("scope 3", p.stdout)  # the record is current; the hand table is stale
+
+
 class LocalMode(Base):
     MODE = "local"
 

@@ -59,6 +59,7 @@ import re
 import sys
 
 # A Plans-table row: | 99.1 | <file> | <phase> | **Done (2026-07-23)** | notes |
+# or an index-record row: | 99.1 | ✅ Done | <folder> | <description> | <creator> |
 ROW = re.compile(r"^\|\s*(\d+)\.(\d+[a-z]?)\s*\|(.*)$", re.IGNORECASE)
 
 # Done markers, and the words that mean "not done" even when "done" appears nearby
@@ -100,9 +101,17 @@ def plans_table_verdict(progress_path):
     except OSError:
         return (0, 0)
 
-    rows = 0
-    done = 0
+    # Scope 9: the index record block (`plans-index:begin/end`) holds the scope's N.P rows
+    # with a real Status cell. Use it when it has phase rows — judging the Status cell
+    # only, not a description that says "pending" — else the hand Plans table, never both
+    # (each phase would count twice).
+    block, hand, inside = [], [], False
     for line in lines:
+        s = line.strip()
+        if s.startswith("<!-- plans-index:begin"):
+            inside = True
+        elif s.startswith("<!-- plans-index:end"):
+            inside = False
         m = ROW.match(line)
         if not m:
             continue
@@ -110,10 +119,11 @@ def plans_table_verdict(progress_path):
         # Skip the table's own separator/header artifacts.
         if set(rest.strip()) <= set("-| "):
             continue
-        rows += 1
-        if DONE.search(rest) and not NOT_DONE.search(rest):
-            done += 1
-    return (rows, done)
+        (block if inside else hand).append(rest.split("|")[0] if inside else rest)
+
+    rows = block or hand
+    done = sum(1 for r in rows if DONE.search(r) and not NOT_DONE.search(r))
+    return (len(rows), done)
 
 
 def scan(plans_dir):

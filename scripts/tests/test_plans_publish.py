@@ -106,6 +106,21 @@ class PlansPublish(unittest.TestCase):
         self.assertEqual(self.git(self.a, "log", "-1", "--format=%s"), "plan: [Task 1.1] test")
         self.assertEqual(self.git(self.a, "status", "--porcelain"), "")
 
+    def test_bot_render_mode_never_stages_the_index(self):
+        self.b_pushes("plans/README.md", "**Index render:** bot\n")
+        self.git(self.a, "pull", "-q", "--rebase", "origin", "main")
+        self.write(self.a, "plans/progress.md", "line one\nline two\ntask 1.1 done\n")
+        self.write(self.a, "plans/PLANS-INDEX.md", "a local render\n")
+        r = self.publish("progress.md", "PLANS-INDEX.md")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("skipping PLANS-INDEX.md", r.stderr)
+        self.assertTrue(self.on_origin(self.a))
+        self.assertEqual(self.git(self.a, "show", "--name-only", "--format=", "HEAD"), "plans/progress.md")
+        self.assertIn("PLANS-INDEX.md", self.git(self.a, "status", "--porcelain"))
+        r = self.publish("PLANS-INDEX.md")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("nothing to publish", r.stderr)
+
     def test_d_feature_branch_commits_only(self):
         self.git(self.a, "checkout", "-q", "-b", "feature/x")
         before = self.origin_main()

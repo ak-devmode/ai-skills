@@ -26,7 +26,7 @@ Script-owned (`plans-index.py`); PLANS-INDEX.md is rendered from it.
 ## Resume Context
 **Scope:** ~/Projects/ai-skills/plans/10-decision-queue-harness/scope.md
 **Last action:** /plan-ceo-review done (HOLD SCOPE, 2026-10-25) — phase 2 rewritten, hardening folded into 10.1, finish table rev 2
-**Next action:** Alex approves finish table rev 2; /plan-eng-review; then /plan 10.1 and a concurrent 10.2 lane
+**Next action:** /plan-eng-review; then /plan 10.1 and a concurrent 10.2 lane
 **Open blockers:** dev-workbench uncommitted config changes (scope §2 drift); codex out of credits on both accounts until later today
 **Key files changed:** None yet
 
@@ -61,7 +61,7 @@ Script-owned (`plans-index.py`); PLANS-INDEX.md is rendered from it.
 | Resolve dev-workbench uncommitted settings.json / codex config.toml | [ ] Pending | before 10.1 touches dev-workbench |
 | Approve the `decision_queue` table creates (scope §7) | [x] Done | Alex, 2026-10-25 |
 | Approve finish-conditions.md | [x] Done | rev 1, Alex, 2026-10-25 |
-| Approve finish-conditions.md rev 2 | [ ] Pending | CEO review changes (5 rows replaced) |
+| Approve finish-conditions.md rev 2 | [x] Done | Alex, 2026-10-25 |
 
 ---
 

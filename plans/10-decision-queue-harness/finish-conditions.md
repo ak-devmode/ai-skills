@@ -5,7 +5,7 @@
 
 **Schema version:** verify/1
 **Revision:** 2
-**Approved:** pending
+**Approved:** rev 2 — Alex, 2026-10-25
 **Scope:** /Users/alexknecht/Projects/ai-skills/plans/10-decision-queue-harness/scope.md
 
 One row per check. `check` is a shell command or the literal `judge`. A literal `|` in a

@@ -43,6 +43,7 @@ Script-owned (`plans-index.py`); PLANS-INDEX.md is rendered from it.
 
 | Date | Skill/Action | Status | Notes |
 |------|--------------|--------|-------|
+| 2026-10-25 | finish table + table creates | Approved | rev 1; packets/events/views creates approved |
 | 2026-10-25 | /scope | Done | Scope created — decision queue v1 today, then review re-pointing, driver merges, UI template + scorecard in parallel |
 
 ---
@@ -52,8 +53,8 @@ Script-owned (`plans-index.py`); PLANS-INDEX.md is rendered from it.
 | Step | Status | Notes |
 |------|--------|-------|
 | Resolve dev-workbench uncommitted settings.json / codex config.toml | [ ] Pending | before 10.1 touches dev-workbench |
-| Approve the `decision_queue` table creates (scope §7) | [ ] Pending | at handoff |
-| Approve finish-conditions.md | [ ] Pending | scope §5.10.1 |
+| Approve the `decision_queue` table creates (scope §7) | [x] Done | Alex, 2026-10-25 |
+| Approve finish-conditions.md | [x] Done | rev 1, Alex, 2026-10-25 |
 
 ---
 

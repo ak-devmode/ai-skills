@@ -25,8 +25,8 @@ Script-owned (`plans-index.py`); PLANS-INDEX.md is rendered from it.
 
 ## Resume Context
 **Scope:** ~/Projects/ai-skills/plans/10-decision-queue-harness/scope.md
-**Last action:** Scope created (2026-10-25)
-**Next action:** /plan-ceo-review on scope.md, then /plan 10.1
+**Last action:** /plan-ceo-review done (HOLD SCOPE, 2026-10-25) — phase 2 rewritten, hardening folded into 10.1, finish table rev 2
+**Next action:** Alex approves finish table rev 2; /plan-eng-review; then /plan 10.1 and a concurrent 10.2 lane
 **Open blockers:** dev-workbench uncommitted config changes (scope §2 drift); codex out of credits on both accounts until later today
 **Key files changed:** None yet
 
@@ -36,6 +36,11 @@ Script-owned (`plans-index.py`); PLANS-INDEX.md is rendered from it.
 - (2026-10-25) Frame, doors, homelab queue, paste-back return path, structured packets,
   data-model template first, diminishing-returns review exit, driver merges, and the teammate
   seam: all from the scoping rounds, recorded in scope.md §11.
+- (2026-10-25) CEO review: baseline round counts were per unit, not per lineage (corrected,
+  baseline §3.1). Phase 2 exit rule dropped; replaced by round-1-uncapped findings budget,
+  per-round reframe prompt judged by a fresh agent, three review cases to the queue, round-1
+  effort trial. Harness errors never stop work (dead queue → `Blocked` in pane). Driver merges
+  include degraded reviews (flagged) and `--admin`. Details: scope.md §4 and the review report.
 
 ---
 
@@ -43,6 +48,7 @@ Script-owned (`plans-index.py`); PLANS-INDEX.md is rendered from it.
 
 | Date | Skill/Action | Status | Notes |
 |------|--------------|--------|-------|
+| 2026-10-25 | /plan-ceo-review | Done | HOLD SCOPE; outside voice = in-host Claude; finish table rev 2 pending approval |
 | 2026-10-25 | finish table + table creates | Approved | rev 1; packets/events/views creates approved |
 | 2026-10-25 | /scope | Done | Scope created — decision queue v1 today, then review re-pointing, driver merges, UI template + scorecard in parallel |
 
@@ -55,6 +61,7 @@ Script-owned (`plans-index.py`); PLANS-INDEX.md is rendered from it.
 | Resolve dev-workbench uncommitted settings.json / codex config.toml | [ ] Pending | before 10.1 touches dev-workbench |
 | Approve the `decision_queue` table creates (scope §7) | [x] Done | Alex, 2026-10-25 |
 | Approve finish-conditions.md | [x] Done | rev 1, Alex, 2026-10-25 |
+| Approve finish-conditions.md rev 2 | [ ] Pending | CEO review changes (5 rows replaced) |
 
 ---
 
@@ -63,12 +70,12 @@ Script-owned (`plans-index.py`); PLANS-INDEX.md is rendered from it.
 | # | Plan File | Phase | Status | Notes |
 |---|-----------|-------|--------|-------|
 | 10.1 | 10.1-decision-queue-harness-PLAN.md | Phase 1 — Decision queue v1 | Draft | gate D then A |
-| 10.2 | 10.2-decision-queue-harness-PLAN.md | Phase 2 — Review/verify re-pointed | Draft | gate C, concurrent |
-| 10.3 | 10.3-decision-queue-harness-PLAN.md | Phase 3 — Driver merges | Draft | gate D, concurrent |
-| 10.4 | 10.4-decision-queue-harness-PLAN.md | Phase 4 — UI template, scorecard, herdr | Draft | gate A |
+| 10.2 | 10.2-decision-queue-harness-PLAN.md | Phase 2 — Review/verify re-pointed | Draft | gate C, concurrent with 10.1 |
+| 10.3 | 10.3-decision-queue-harness-PLAN.md | Phase 3 — Driver merges | Draft | gate D, after 10.1 packet tooling |
+| 10.4 | 10.4-decision-queue-harness-PLAN.md | Phase 4 — UI template, scorecard, herdr | Draft | gate A, after 10.1 packet tooling |
 
 ---
 
 ## Artifacts
 - `artifacts/baseline-2026-10-25.md` — 21-day both-host baseline
-- `artifacts/mining/` — mine.py, mine2.py, reviews.py
+- `artifacts/mining/` — mine.py, mine2.py, reviews.py, lineage.py (per-lineage rounds; supersedes reviews.py's round counts)

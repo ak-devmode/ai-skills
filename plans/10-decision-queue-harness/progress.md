@@ -25,9 +25,9 @@ Script-owned (`plans-index.py`); PLANS-INDEX.md is rendered from it.
 
 ## Resume Context
 **Scope:** ~/Projects/ai-skills/plans/10-decision-queue-harness/scope.md
-**Last action:** /plan-ceo-review done (HOLD SCOPE, 2026-10-25) — phase 2 rewritten, hardening folded into 10.1, finish table rev 2
-**Next action:** /plan-eng-review; then /plan 10.1 and a concurrent 10.2 lane
-**Open blockers:** dev-workbench uncommitted config changes (scope §2 drift); codex out of credits on both accounts until later today
+**Last action:** /plan-eng-review done (2026-10-26) — 46 issues mapped to T1–T12, finish table rev 3 approved; record `artifacts/eng-review-2026-10-25.md`
+**Next action:** /plan 10.1 and a concurrent 10.2 lane (lanes A packet/door, B queue service, C review changes)
+**Open blockers:** dev-workbench uncommitted config changes (scope §2 drift); decision 74 (effort bump beyond round 1) open
 **Key files changed:** None yet
 
 ---
@@ -41,6 +41,12 @@ Script-owned (`plans-index.py`); PLANS-INDEX.md is rendered from it.
   per-round reframe prompt judged by a fresh agent, three review cases to the queue, round-1
   effort trial. Harness errors never stop work (dead queue → `Blocked` in pane). Driver merges
   include degraded reviews (flagged) and `--admin`. Details: scope.md §4 and the review report.
+- (2026-10-26) Eng review: queue on 127.0.0.1 behind `tailscale serve` (HTTPS MagicDNS URL kept);
+  one packet path via lane outboxes, drivers POST; rules-version stamp on review records for
+  cutover; lineage fix lands first; no should-fix cap at any round (later-round findings are
+  mostly defects in fixes, baseline §3.2–3.3); round-aware review prompt with `reopens`; fix
+  discipline (fail closed by default unless reasoned) with a chain stop. Declined: splitting
+  large round-1 reviews (codex credits).
 
 ---
 
@@ -48,6 +54,7 @@ Script-owned (`plans-index.py`); PLANS-INDEX.md is rendered from it.
 
 | Date | Skill/Action | Status | Notes |
 |------|--------------|--------|-------|
+| 2026-10-26 | /plan-eng-review | Done | outside voice codex-int; 46 issues, 0 critical gaps; finish table rev 3 approved; gstack pulled to 1.91.226 |
 | 2026-10-25 | /plan-ceo-review | Done | HOLD SCOPE; outside voice = in-host Claude; finish table rev 2 pending approval |
 | 2026-10-25 | finish table + table creates | Approved | rev 1; packets/events/views creates approved |
 | 2026-10-25 | /scope | Done | Scope created — decision queue v1 today, then review re-pointing, driver merges, UI template + scorecard in parallel |
@@ -62,6 +69,8 @@ Script-owned (`plans-index.py`); PLANS-INDEX.md is rendered from it.
 | Approve the `decision_queue` table creates (scope §7) | [x] Done | Alex, 2026-10-25 |
 | Approve finish-conditions.md | [x] Done | rev 1, Alex, 2026-10-25 |
 | Approve finish-conditions.md rev 2 | [x] Done | Alex, 2026-10-25 |
+| Enable tailnet HTTPS certs; `tailscale set --operator=alexk` on homelab | [x] Done | Alex, 2026-10-26 |
+| Approve finish-conditions.md rev 3 | [x] Done | Alex, 2026-10-26 |
 
 ---
 
@@ -78,4 +87,5 @@ Script-owned (`plans-index.py`); PLANS-INDEX.md is rendered from it.
 
 ## Artifacts
 - `artifacts/baseline-2026-10-25.md` — 21-day both-host baseline
-- `artifacts/mining/` — mine.py, mine2.py, reviews.py, lineage.py (per-lineage rounds; supersedes reviews.py's round counts)
+- `artifacts/mining/` — mine.py, mine2.py, reviews.py, lineage.py (per-lineage rounds; supersedes reviews.py's round counts), infix.py (where later-round findings land), fixpairs.py (why fixes draw findings)
+- `artifacts/eng-review-2026-10-25.md` — eng review record, decisions 62–74

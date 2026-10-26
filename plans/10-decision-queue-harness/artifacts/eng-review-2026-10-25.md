@@ -125,18 +125,19 @@ CODE PATHS                                         USER FLOWS
   |-- no should-fix cap; round-aware prompt fill  [GAP]
   |-- note accepted at any round passes gate      [GAP]
   |-- --reframed cites replacing commit           [GAP]
+  |-- `reopens` chain of two -> chain stop, reframe [GAP]
   |-- REGRESSION: blocking never accepted/deferred [★★★ test_review.py]
   |-- REGRESSION: should-fix deferral refused <= r3 [★★★ test_review.py]
   |-- reframe prompt + judge decisions            [GAP][->EVAL] replay baseline lineages (p2-exit-rule-replay)
 [+] verify_lib.effort_for round-1 bump            [GAP]
 
-COVERAGE: 2/30 paths tested (new code) | GAPS: 28 (1 E2E, 1 eval)
+COVERAGE: 2/31 paths tested (new code) | GAPS: 29 (1 E2E, 1 eval)
 ```
 
 Regression contract (existing behaviour, no question needed): blocking findings still can't be
 accepted or deferred; should-fix deferral stays refused through round 3; every existing
 `test_review.py` / `test_verdict_gate.py` case stays green. Intended changes: notes acceptable at
-any round; reviewer report cap from round 2; `--reframed`.
+any round; no should-fix cap at any round; round-aware prompt with `reopens`; fix-discipline chain stop; `--reframed`.
 
 ## 5. Performance
 
@@ -162,7 +163,7 @@ plus their re-reviews. Alex's round-1 decision stands.
 | reply paste | wrong pane / stale | check-reply refuses | refusal in pane |
 | door.py | parse error | one-way | lane parks |
 | judge | codex out of credits | claude-fallback, then `none` | DEGRADED header |
-| cutover | session mid-review | Decision 65 | — |
+| cutover | session mid-review | rules-version stamp (65) | old lineage finishes on old rules |
 
 No silent critical gaps once the folded fixes land.
 
@@ -182,7 +183,7 @@ Conflict flag: A and C both add files under `scripts/tests/`; new files only, no
 
 - [ ] **T1 (P1, CC ~10 min)** queue — bind 127.0.0.1, expose via `tailscale serve` (adopted 62)
 - [ ] **T2 (P1, CC ~20 min)** review — lineage fix first; budget waits on it (2.2)
-- [ ] **T3 (P1, CC ~20 min)** review — reviewer report cap from round 2 + priority order (dropped 64: round-aware prompt instead)
+- [ ] **T3 (P1, CC ~20 min)** review — no should-fix cap; round-aware prompt (round + prior findings/dispositions), `reopens` field, round 1 every defect + class-level fixes (64 dropped, 69)
 - [ ] **T4 (P1, CC ~15 min)** door — `.one-way-doors` self-protection, base-revision policy (2.7)
 - [ ] **T5 (P1, CC ~15 min)** review — `--reframed` cites replacing commit; replacement reviewed as new lineage (3.4)
 - [ ] **T6 (P2, CC ~15 min)** packet — reply carries packet id; check-reply rejects closed/stale/other (3.6)
@@ -190,7 +191,8 @@ Conflict flag: A and C both add files under `scripts/tests/`; new files only, no
 - [ ] **T8 (P2, CC ~10 min)** judge — reuse `codex-exec.py`; feed scope §11 + Decisions Log + prior rejected reframes (3.1, 3.5, 3.7)
 - [ ] **T9 (P2, CC ~5 min)** queue — user-owned 0600 creds; confirm backup coverage; bounded page; 3 s POST timeout (2.5, 2.6, 5.2)
 - [ ] **T10 (P2, CC ~10 min)** cutover — rules-version stamp on review records (65)
-- [ ] **T11 (P3)** scope §2 drift text corrected (2.4)
+- [ ] **T11 (P3)** scope §2 drift text corrected (2.4) — done in scope.md
+- [ ] **T12 (P1, CC ~20 min)** review — fix discipline in SKILL.md §5 + `reopens` chain stop in review.py (72)
 
 ## 10. Decisions
 
@@ -198,3 +200,26 @@ Conflict flag: A and C both add files under `scripts/tests/`; new files only, no
 - 63 uniform outbox — **adopted** (Alex 2026-10-26)
 - 64 reviewer report cap N — **dropped**: no should-fix cap; round-aware prompt instead (Alex 2026-10-26)
 - 65 cutover rule — **adopted**: rules-version stamp on review records (Alex 2026-10-26)
+- 67 kill the original analysis run — done
+- 68 no should-fix cap at any round — **adopted** (supersedes 64)
+- 69 round-aware review prompt (round + prior findings/dispositions; `reopens`; round 1 every defect, class-level fixes) — **adopted**
+- 70 sample later-round findings — done, baseline §3.3
+- 71 prettier queue URL — **declined**, keep the MagicDNS name
+- 72 fix discipline (class + siblings; fail closed by default unless a stated reason; regression test fails with fix reverted; tests before re-review; `reopens` chain of two stops patching) — **adopted**
+- 73 split large round-1 reviews into several codex passes — **declined** (codex credits; effort beats splitting)
+- 74 effort bump beyond round 1 — open
+
+## 11. Session 2 evidence (2026-10-26)
+
+- Later rounds review the fixes: 81% of codex's later reviews are fix-only ranges and 80% of
+  their findings sit on the fix's own lines (baseline §3.2, `mining/infix.py`).
+- Fix code draws ~4× the findings per changed line of round 1 (0.53 vs 0.13 per 100 lines);
+  of 40 sampled: 23 new defects in the fix's own code, 14 original defects not fully fixed,
+  3 tests that pass with the bug restored (baseline §3.3, `mining/fixpairs.py`).
+- gstack 1.91.226 pulled: its `/review` now re-reviews only fix commits with a final full pass
+  (ours already does fix-only ranges; final full pass not adopted). Its engine now rates
+  CRITICAL / INFORMATIONAL only, so the Claude fallback maps INFORMATIONAL to should-fix and
+  process-only to note (folded into T3).
+- `lineage.py` called `review_round()` per review, re-running `rounds()` each time (quadratic in
+  git calls); fixed to one call per unit. The 10.4 scorecard inherits the fix.
+

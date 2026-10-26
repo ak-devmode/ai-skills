@@ -119,6 +119,13 @@ what the loop fixes and when it reframes. The existing round-3 and repeated-file
   carries a structured `reopens: <finding id>` when it is the original defect not fully fixed
   (codex already writes `NOT FIXED <id>` in free text). Round 1 reports every defect, not a top
   few, and each `fix` names the class to fix, not only the example.
+- **Fix discipline (eng review, Alex 2026-10-26).** Fix code draws ~4× the findings per line of
+  the original change (baseline §3.3), so the rules bind whoever applies fixes: name the defect
+  class and search for siblings before fixing the example; every new check or guard states what
+  it does when its own input fails, failing closed by default unless a stated reason makes
+  fail-open the better behaviour; a regression test must fail with the fix reverted (revert,
+  re-run, restore); run the affected tests before re-review; a finding that `reopens` one that
+  already reopened another is a chain, and the loop stops patching and takes the reframe prompt.
 - **Reframe prompt, every round from round 1.** The reviewer states whether a simpler design
   would remove several findings. A reframe is accepted only if it (i) meets the core
   objective from the plan and (ii) simplifies, naming what it deletes. A rejected reframe
@@ -325,27 +332,28 @@ No existing tables — every row below is a create.
 ## GSTACK REVIEW REPORT
 
 | Review | Trigger | Why | Runs | Status | Findings |
-|---|---|---|---|---|---|
-| CEO Review | `/plan-ceo-review` | Scope & strategy | 1 | DONE (HOLD SCOPE) | outside voice: 1 critical, 8 high, 9 medium, 4 low; 18 decisions (42–59) |
-| Outside voice | in-host Claude Plan agent | Independent challenge | 1 | DONE (codex unavailable, out of credits) | baseline miscount confirmed in code; gate close-out gap confirmed |
-| Eng Review | `/plan-eng-review` | Architecture & tests | 0 | — | — |
+|--------|---------|-----|------|--------|----------|
+| CEO Review | `/plan-ceo-review` | Scope & strategy | 1 | CLEAR (HOLD SCOPE) | mode: HOLD_SCOPE, 0 critical gaps; 18 decisions (42–59) |
+| Outside Review | codex `gpt-6.1-sol` (integrations account), eng review | Independent 2nd opinion | 1 | completed | 9 findings, all verified and folded or decided (CEO review's outside pass was an in-host Claude agent: codex unavailable) |
+| Eng Review | `/plan-eng-review` | Architecture & tests (required) | 1 | ISSUES OPEN (mapped to tasks) | 46 issues, 0 critical gaps |
 | Design Review | `/plan-design-review` | UI/UX gaps | 0 | optional | — |
+| DX Review | `/plan-devex-review` | Developer experience gaps | 0 | — | — |
 
-- **Baseline corrected:** rounds were counted per unit; the gate counts per lineage. 13% of
-  reviews are at lineage round ≥4 (not 64%); `local-maxima` flags are a fallback-reviewer habit
-  (120/178 vs codex 11/398). Baseline §3.1, `mining/lineage.py`.
-- **Phase 2 rewritten:** exit rule dropped (miscount, no gate close-out path, would flood the
-  queue); replaced by a findings budget (round 1 uncapped), a per-round reframe prompt judged by
-  a fresh agent, three review cases to the queue, and a round-1 effort trial.
-- **Phase 1 hardened:** non-blocking queue failure, packets posted under the driver, door.py fails
-  closed, sanitized rendering, `/api/stats`, `PARKED` marker, idempotent ids, worktree cutover.
-- **Phase 3:** merge condition adds the gate verdict; degraded reviews merge flagged; `--admin`
-  allowed under the same conditions.
-- **Sequencing:** 10.3 and 10.4 follow 10.1's packet tooling; 10.2 runs concurrent with 10.1.
-- **Not adopted:** reply polling (paste-back chosen), queue API auth (tailnet-only), floor for
-  SSM/prod actions (permissions + prod hook cover them).
-- Finish table rev 2 awaits Alex's approval.
+- **OUTSIDE COVERAGE:** eng review: codex `gpt-6.1-sol` via `codex-int`, completed, 9 findings
+  (over-cap close-out, reframe replacement unreviewed, judge lacks decision records, reply not
+  bound to packet id, root-only creds vs user units, `.one-way-doors` self-authorization,
+  repeated-finding identity, cutover under live sessions, round-1 cost). CEO review: codex
+  unavailable (out of credits), in-host Claude agent instead.
+- **CROSS-MODEL:** codex and the native pass agreed on the over-cap close-out gap and the
+  cutover risk; codex alone raised reply binding, creds ownership and door self-authorization;
+  the native pass alone raised the tailnet bind / secure-context problem and the live lineage bug.
+- **Eng review outcome:** queue on 127.0.0.1 behind `tailscale serve` (finish table rev 3,
+  approved); one packet path through lane outboxes; rules-version stamp for cutover; lineage
+  fix lands before any round-keyed rule; no should-fix cap at any round; round-aware review
+  prompt with `reopens`; fix discipline with a chain stop. Evidence: later-round findings are
+  mostly defects in the fixes (baseline §3.2–3.3). Record: `artifacts/eng-review-2026-10-25.md`.
 
-**VERDICT:** CEO CLEARED (HOLD SCOPE) — eng review required next.
+**VERDICT:** CEO CLEARED; ENG ISSUES OPEN as mapped work (T1–T12, 0 critical gaps) — ready for /plan 10.1 and a concurrent 10.2 lane.
 
-NO UNRESOLVED DECISIONS
+**UNRESOLVED DECISIONS:**
+- 74: should the review effort bump extend beyond round 1 (later fix rounds are small and cheap), or stay a round-1 trial?

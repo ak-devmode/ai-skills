@@ -48,6 +48,7 @@ fail loudly. Bump version when changing field shapes.
      One line per file with terse intent. Workspace-relative paths. -->
 
 - ai-skills (lane A, `concurrency/10-packet`): schema `schemas/packet.schema.json` · code `scripts/packet.py`, `scripts/door.py`, `scripts/schema_check.py` · config `scripts/one-way-doors.defaults` · test `scripts/tests/test_packet.py`, `test_door.py`, `test_packet_schema.py`, `fixtures/packets/` · doc `scripts/README.md`
+- dev-workbench (lane B, `concurrency/10-queue`): code `queue/` (service, templates, migrations) · test `queue/tests/test_queue.py` · config `config/systemd/decision-queue.service`, `install.sh`, `queue/pyproject.toml`, `queue/uv.lock` · doc `queue/README.md`, `queue/docs/*.png`
 
 ---
 

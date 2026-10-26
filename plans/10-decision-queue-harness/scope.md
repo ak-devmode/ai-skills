@@ -140,9 +140,11 @@ what the loop fixes and when it reframes. The existing round-3 and repeated-file
   rounds with no qualifying reframe; (3) a rejected reframe the reviewer proposes again.
   Everything else proceeds.
 - **Fallback `local-maxima` flags are advisory**: logged, never a stop or a packet.
-- **Round-1 effort bump, as a measured trial**: one tier above `verify_lib.effort_for` on a
-  lineage's first review. Kept if blocking findings move to round 1 without more codex
-  credit-outs (the fallback reviewer is the noisy one).
+- **Effort bump on every round, as a measured trial**: one tier above `verify_lib.effort_for`
+  on every review (eng review, Alex 2026-10-26: fix ranges average ~350 lines, so the bump is
+  cheap there, and fix code is where defects concentrate). The scorecard compares round 1 and
+  fix rounds separately. Kept per bucket if findings move earlier (fewer fix rounds per lineage)
+  without more codex credit-outs (the fallback reviewer is the noisy one).
 - **Lineage fix lands first** (P1 TO-DO, folded in). `review_lineage` still continues a lane's
   lineage into its next unit (`share = base == phead`), so new code is counted as round 4 or 5;
   every round-keyed rule here would misfire until it is fixed.
@@ -325,6 +327,7 @@ No existing tables — every row below is a create.
   on the Claude fallback.
 - Harness errors never stop Alex: a dead queue prints `Blocked` in the pane and work continues.
 - Driver merges include degraded reviews (flagged) and `--admin` under the same conditions.
+- Effort (eng review): one tier up on every review round as a trial; scorecard compares round 1 vs fix rounds.
 - Queue address (eng review): 127.0.0.1 behind `tailscale serve`, HTTPS on the MagicDNS name.
 - One packet path (eng review): every lane writes an outbox and prints `PACKET <id>`; drivers POST.
 - Cutover (eng review): review records stamp a rules version; old lineages finish on old rules.
@@ -355,5 +358,4 @@ No existing tables — every row below is a create.
 
 **VERDICT:** CEO CLEARED; ENG ISSUES OPEN as mapped work (T1–T12, 0 critical gaps) — ready for /plan 10.1 and a concurrent 10.2 lane.
 
-**UNRESOLVED DECISIONS:**
-- 74: should the review effort bump extend beyond round 1 (later fix rounds are small and cheap), or stay a round-1 trial?
+NO UNRESOLVED DECISIONS

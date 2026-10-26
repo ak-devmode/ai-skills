@@ -129,7 +129,7 @@ CODE PATHS                                         USER FLOWS
   |-- REGRESSION: blocking never accepted/deferred [★★★ test_review.py]
   |-- REGRESSION: should-fix deferral refused <= r3 [★★★ test_review.py]
   |-- reframe prompt + judge decisions            [GAP][->EVAL] replay baseline lineages (p2-exit-rule-replay)
-[+] verify_lib.effort_for round-1 bump            [GAP]
+[+] verify_lib.effort_for bump, every round      [GAP]
 
 COVERAGE: 2/31 paths tested (new code) | GAPS: 29 (1 E2E, 1 eval)
 ```
@@ -207,7 +207,7 @@ Conflict flag: A and C both add files under `scripts/tests/`; new files only, no
 - 71 prettier queue URL — **declined**, keep the MagicDNS name
 - 72 fix discipline (class + siblings; fail closed by default unless a stated reason; regression test fails with fix reverted; tests before re-review; `reopens` chain of two stops patching) — **adopted**
 - 73 split large round-1 reviews into several codex passes — **declined** (codex credits; effort beats splitting)
-- 74 effort bump beyond round 1 — open
+- 74 effort bump on every round, compared by bucket — **adopted** (Alex 2026-10-26)
 
 ## 11. Session 2 evidence (2026-10-26)
 

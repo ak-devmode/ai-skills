@@ -54,6 +54,28 @@ by `test_entrypoint.py`'s compile check.
       Not atomic — nothing short of a server write is — but closes every gap that
       has bitten. Read the stderr note when local and origin disagree.
 
+    packet.py new --door {one-way|two-way|info} [--type data-model|generic] --title --unit --option LABEL...
+              [--recommended N] [--body|--body-file|--payload-file] [--blocks] [--continues-on]
+              [--range BASE..HEAD] [--id ID] [--driver]
+    packet.py close|touch ID · stale ID [--force] · event --kind K [--body] [--packet-id ID]
+    packet.py check-reply (--reply TEXT|--file F|-) [--lane M/W/A] · flush [--driver]   (all: --outbox DIR…)
+      stdout: `PACKET <id>` + the card · exit: 0 ok (a blocked POST is ok) · 1 refused / error · 2 usage
+      Every packet lands in `<worktree>/.decision-queue/outbox/` (self-ignoring); only a driver
+      (`--driver` or $HERDR_AGENT_NAME=driver) POSTs, and only with $DECISION_QUEUE_URL set (hard 3 s
+      deadline, redirects refused, /packets and /events, idempotent on id; "sent" is a `<id>.sent` marker). A dead queue prints a `Blocked` note and exits 0;
+      `flush` re-sends. check-reply refuses a missing/other-lane tag, an unknown, closed, stale or
+      other lane's packet, two different tags, unreadable state, and a one-way packet whose HEAD moved. `--range` runs door.py and a
+      floor hit promotes the door. Lane identity: machine/workspace/agent from herdr env, else
+      machine/repo-hash/session id ($CLAUDE_CODE_SESSION_ID); with none, check-reply needs --lane. Schema: schemas/packet.schema.json, checked by schema_check.py.
+
+    door.py classify --repo PATH --range BASE..HEAD [--claim one-way|two-way|info] [--defaults FILE]
+      stdout: JSON {door, paths[{path,pattern,change}], reason} · exit: 0 classified · 2 usage
+      Floor = scripts/one-way-doors.defaults + the repo's `.one-way-doors` read at the BASE
+      revision. Every touched path counts (renames and deletes both sides); an edit to
+      `.one-way-doors` is one-way. Promote-only: a `two-way` claim never lowers a hit (an `info` claim with no hit is kept). Fails
+      closed: bad range, unresolved ref, git error, unreadable defaults/base file = one-way.
+      Callers treat a non-zero exit as one-way.
+
     plans-index.py validate <index>       exit: 0 conformant · 1 issues found
     plans-index.py next-number <index>    stdout: highest whole scope number + 1
     plans-index.py add  <index> --num --status --folder --desc [--creator] [--dry-run]

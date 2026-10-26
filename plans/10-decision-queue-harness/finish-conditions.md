@@ -4,8 +4,8 @@
 # Finish conditions — 10-decision-queue-harness
 
 **Schema version:** verify/1
-**Revision:** 2
-**Approved:** rev 2 — Alex, 2026-10-25
+**Revision:** 3
+**Approved:** pending
 **Scope:** /Users/alexknecht/Projects/ai-skills/plans/10-decision-queue-harness/scope.md
 
 One row per check. `check` is a shell command or the literal `judge`. A literal `|` in a
@@ -34,7 +34,7 @@ Alex's reason.
 | p4-rejections-justified | Every /review rejection recorded for 10.4 is right | 10.4 | B | judge | ai-skills | . | - | - | 2 | no | judge reason |
 | p1-unit-suite | ai-skills script suite passes, including new tests for packet.py (dead queue prints Blocked and exits 0, idempotent retry, wrong lane tag refused) and door.py (floor forces one-way, promote-only, renames/deletions count, fails closed) | 10.1 | B | `python3 -m unittest discover scripts/tests` | ai-skills | . | - | 600 | 4 | no | runner record |
 | p1-queue-tests | Queue service test suite passes | 10.1 | B | ``uv run --directory queue pytest -q`` | dev-workbench | . | - | 600 | 4 | no | runner record |
-| p1-queue-live-both-machines | The homelab queue is reachable over the tailnet and /api/stats shows real (non-test) packets from both the MBA and homelab | 10.1 | B | `curl -fsS "$DECISION_QUEUE_URL/api/stats" \| python3 -c "import json,sys; m=[x for x in json.load(sys.stdin).get('machines',[]) if not x.startswith('test')]; sys.exit(0 if any('homelab' in x for x in m) and any('homelab' not in x for x in m) else 1)"` | ai-skills | . | DECISION_QUEUE_URL=http://100.87.171.87:8787 | 60 | 5 | no | runner record |
+| p1-queue-live-both-machines | The homelab queue is reachable over HTTPS on the tailnet (tailscale serve) and /api/stats shows real (non-test) packets from both the MBA and homelab | 10.1 | B | `curl -fsS "$DECISION_QUEUE_URL/api/stats" \| python3 -c "import json,sys; m=[x for x in json.load(sys.stdin).get('machines',[]) if not x.startswith('test')]; sys.exit(0 if any('homelab' in x for x in m) and any('homelab' not in x for x in m) else 1)"` | ai-skills | . | DECISION_QUEUE_URL=https://homelab2026.taild4682e.ts.net | 60 | 5 | no | runner record |
 | p1-reply-roundtrip | A real packet was answered by a pasted reply and closed by its own lane | 10.1 | B | judge | ai-skills | . | - | - | 2 | no | judge reason |
 | p1-seam-unchanged | With no DECISION_QUEUE_URL, /plan and /concurrency behave exactly as before (inline numbered questions) | 10.1 | B | judge | ai-skills | . | - | - | 2 | no | judge reason |
 | p2-unit-suite | ai-skills suite passes with findings-budget, reframe-judge, --reframed, round-1 effort and review-packet tests | 10.2 | B | `python3 -m unittest discover scripts/tests` | ai-skills | . | - | 600 | 4 | no | runner record |
@@ -51,3 +51,4 @@ Alex's reason.
 |---|---|---|---|
 | 1 | 2026-10-25 | Created | Alex |
 | 2 | 2026-10-25 | CEO review: queue-down non-blocking + door fail-closed tests; live row gets env + /api/stats; phase 2 exit rule replaced by findings budget + reframe judge; scorecard counts per lineage | CEO review |
+| 3 | 2026-10-26 | queue URL moves to tailscale serve HTTPS (eng review, Alex 2026-10-26) | Claude (eng review) |

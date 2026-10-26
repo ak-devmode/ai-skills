@@ -26,8 +26,10 @@ done, or a decision in Alex's queue** — and gives that queue a browser surface
 | gstack | pattern source (`/browse`) | — | — | — | — | READ-ONLY | upstream-tracking, never edited |
 
 **Drift flagged in Step 0.5:** dev-workbench has uncommitted `config/claude-code/settings.json`
-and `config/codex/config.toml` changes, matching the open ai-skills TO-DO to land
-`AI_SKILLS_REVIEW_MODE=full` on its `origin/main`. Resolve before 10.1 touches that repo.
+and `config/codex/config.toml` changes. Corrected in eng review: they are Alex's "Webhost Service
+Ops" allow rule plus a sensitive-targets carve-out, and codex-written trust entries and a model
+nux counter — not `AI_SKILLS_REVIEW_MODE`. 10.1 adds the queue URL to the same `settings.json`,
+so commit Alex's rule first.
 **Snapshot taken:** 2026-10-25
 
 ## 3. ADR Alignment
@@ -41,13 +43,16 @@ No ADR matches — ai-skills has no ADRs, and the scope touches no WellMed/PMG a
 - **Packet** — one structured JSON object per decision: machine, workspace, agent, repo,
   branch, head sha, scope/unit, door (`one-way` / `two-way` / `info`), type, title, options with
   a recommendation, what it blocks, what the lane continues on, a type-specific payload, and a
-  prefilled reply that opens with a lane tag `[lane <machine>/<workspace>/<agent>]`.
+  prefilled reply that opens with a lane tag `[lane <machine>/<workspace>/<agent> <packet-id>]`.
 - **`scripts/packet.py`** (ai-skills) — `new` validates and writes to a local outbox, then POSTs
   when `DECISION_QUEUE_URL` is set; `close` (the lane closes its own packet when Alex's pasted
   reply arrives); `stale` (head moved past the packet's sha); `event` (ticker: done / merged);
-  `check-reply` (refuses a reply whose lane tag isn't this lane's).
+  `check-reply` (refuses a reply whose lane tag isn't this lane's, or whose packet is closed,
+  stale or another lane's).
 - **Queue service** (dev-workbench `queue/`) — Python + uv, PostgreSQL already on homelab, a
-  systemd unit installed by `install.sh`, bound to the tailnet. One newest-first page with three
+  systemd user unit installed by `install.sh`, bound to 127.0.0.1:8787 and published by
+  `tailscale serve` as HTTPS on homelab's MagicDNS name (a user unit cannot wait for the
+  tailnet address at boot, and the copy button needs a secure context). One newest-first page with three
   densities: rich packet (one-way), compact card (two-way, vetoable until seen), ticker (done /
   merged) grouped by "since you last looked". Each card has its own URL, a header naming
   machine / workspace / agent, and an editable prefilled reply with a copy button.
@@ -58,7 +63,8 @@ No ADR matches — ai-skills has no ADRs, and the scope touches no WellMed/PMG a
   continues with a compact card carrying a reversal-cost signal (commits stacked since).
   `scripts/door.py` classifies by a per-repo `.one-way-doors` file plus ai-skills defaults
   (migrations, protos/OpenAPI, ADRs, infra TF, SSM/env, prod). An agent may promote a door to
-  one-way, never demote one.
+  one-way, never demote one. Editing `.one-way-doors` is itself one-way, judged against the
+  file at the base revision, so a change cannot authorize its own removal.
 - **Skill wiring** — `/plan` drivers and `/concurrency` lanes emit packets at one-way doors
   (`GATE-BLOCKED` becomes a packet). Any session may emit one. Seam: with no
   `DECISION_QUEUE_URL`, skills behave exactly as today (inline numbered questions).
@@ -69,9 +75,10 @@ No ADR matches — ai-skills has no ADRs, and the scope touches no WellMed/PMG a
   packet goes to the outbox and the driver prints it in the pane with a `Blocked` note, then
   carries on with two-way work; the outbox flushes when the queue returns. A one-way door
   still stops, since that is a decision, not a harness error.
-- **Packets post under the driver.** Codex panes have no queue env and no network, and review
-  panes are read-only, so both hand packets to their driver, which posts them; the reply goes
-  to the driver's pane.
+- **Packets post under the driver, one path for every lane.** Every lane (Claude, codex,
+  review) writes its packet to an outbox in its worktree and prints `PACKET <id>`; only drivers
+  POST, from their wait loop. Codex panes have no queue env or network and review panes are
+  read-only, so one path serves all. The reply goes to the driver's pane.
 - **door.py fails closed** (unparseable input = one-way) and counts renames and deletions of
   floor paths as hits.
 - **Rendering is sanitized** (packets never inject HTML); a card that fails to render falls
@@ -83,11 +90,13 @@ No ADR matches — ai-skills has no ADRs, and the scope touches no WellMed/PMG a
   idempotent.
 - `PARKED` joins the `/concurrency` §7.2 marker set so a driver's wait loop sees it.
 - Lane identity outside herdr: machine + cwd + session id.
-- DB credentials in a local root-only file on homelab, not SSM; the unit starts after
-  tailscaled.
+- DB credentials in a user-owned 0600 file on homelab, not SSM (the unit runs as the user).
+  `tailscale serve` needs a one-time operator grant by hand; confirm `homelab-db-backup.timer`
+  covers the new database. The page is bounded and `packet.py` POSTs with a 3 s timeout.
 - **Build order today:** packet.py + service + compact card first, the data-model template
   second. ai-skills changes are built in a worktree and cut over to main in one step, then
-  homelab pulls, so in-flight gates don't change mid-run. dev-workbench merges its feature
+  homelab pulls. Review records stamp a rules version, so a lineage started before the cutover
+  finishes under the old rules while sessions keep running. dev-workbench merges its feature
   branch to main before `install.sh` runs on homelab.
 
 ### 4.2 Phase 2 — Review re-pointed at decisions · gate C, concurrent with 10.1 (B)
@@ -109,7 +118,9 @@ what the loop fixes and when it reframes. The existing round-3 and repeated-file
   gets a one-line reason on the ticker.
 - **Fresh judge.** A reframe is judged by a fresh agent that sees only the objective, the
   findings and the proposal, never by the driver whose design it is. The same role flags a
-  finding that re-opens a decision Alex already made (121 of 264 rejections cited one).
+  finding that re-opens a decision Alex already made (121 of 264 rejections cited one), so it
+  also reads scope §11, the Decisions Log and the lineage's earlier rejected reframes. It runs
+  through `scripts/codex-exec.py`, as `verify/scripts/judge.py` does.
 - **What reaches Alex from review**, as packets: (1) an accepted reframe that overturns a
   recorded decision or touches a one-way door; (2) a blocking finding that survived two
   rounds with no qualifying reframe; (3) a rejected reframe the reviewer proposes again.
@@ -118,9 +129,11 @@ what the loop fixes and when it reframes. The existing round-3 and repeated-file
 - **Round-1 effort bump, as a measured trial**: one tier above `verify_lib.effort_for` on a
   lineage's first review. Kept if blocking findings move to round 1 without more codex
   credit-outs (the fallback reviewer is the noisy one).
+- **Lineage fix lands first** (P1 TO-DO, folded in). `review_lineage` still continues a lane's
+  lineage into its next unit (`share = base == phead`), so new code is counted as round 4 or 5;
+  every round-keyed rule here would misfire until it is fixed.
 - `--reframed` disposition (TO-DO, folded in) records the outcome of an accepted reframe or a
-  `[CASCADE]`; lineage fix (P1 TO-DO, folded in) — re-check against `review.py rounds()`
-  first, which already counts per lineage.
+  `[CASCADE]`. It cites the replacing commit, and the replacement is reviewed as a new lineage.
 - `/verify` run-cap STOP emits a packet instead of an inline question.
 - Applies in lean and full modes, so teammates get the loop changes; packets publish only where
   the queue URL is configured.
@@ -158,11 +171,11 @@ what the loop fixes and when it reframes. The existing round-3 and repeated-file
   (drivers, lanes)                      (drivers, lanes)
        |                                      |
    packet.py new ----+              +---- packet.py new
-   (outbox file      |  tailnet     |     (outbox file
-    always)          v  HTTP POST   v      always)
+   (outbox file      |  driver      |     (outbox file
+    always)          v  HTTPS POST  v      always)
                  +------------------------+
                  | queue service (python) |---- PostgreSQL (homelab, localhost)
-                 | homelab, tailnet bind  |
+                 | 127.0.0.1 + ts serve   |
                  +-----------+------------+
                              |
                     browser, any tailnet device
@@ -298,6 +311,9 @@ No existing tables — every row below is a create.
   on the Claude fallback.
 - Harness errors never stop Alex: a dead queue prints `Blocked` in the pane and work continues.
 - Driver merges include degraded reviews (flagged) and `--admin` under the same conditions.
+- Queue address (eng review): 127.0.0.1 behind `tailscale serve`, HTTPS on the MagicDNS name.
+- One packet path (eng review): every lane writes an outbox and prints `PACKET <id>`; drivers POST.
+- Cutover (eng review): review records stamp a rules version; old lineages finish on old rules.
 
 ## GSTACK REVIEW REPORT
 

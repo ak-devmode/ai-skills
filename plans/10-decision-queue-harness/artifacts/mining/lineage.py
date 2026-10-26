@@ -23,7 +23,7 @@ for (scope,unit),(f,_) in best.items():
     try:
         with contextlib.redirect_stderr(io.StringIO()):
             revs,lin=rv.rounds(recs,unit)
-            for e in revs: rid2[e['id']]=rv.review_round(recs,unit,e['id'])
+            for e in revs: rid2[e['id']]=(e['repo'],lin[e['id']][1])  # one rounds() call; review_round() per id re-runs it
     except Exception as e:
         fails+=1; continue
     revmeta={r['review_id']:r for r in recs if r.get('record')=='review'}

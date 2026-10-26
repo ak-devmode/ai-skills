@@ -18,17 +18,24 @@ Usage:
   review.py prepare --repo PATH --range BASE..HEAD [--kalpa-only | --engine-only] [--lean] [--out-dir DIR]
                     --lean: inline the capped diff + this project's rules into one bundle (plan 7)
   review.py record  --repo PATH --range BASE..HEAD --reviewer LINE --input FILE
-                    [--scope DIR --unit N.P] [--passes TEXT] [--mode LINE]
+                    [--scope DIR --unit N.P] [--passes TEXT] [--mode LINE] [--effort TIER]
   review.py dispose --scope DIR --unit N.P --finding ID (--fixed SHA [--off-anchor REASON] | --rejected REASON |
                     --deferred TODO | --accepted REASON) [--by NAME]
                     --accepted: a non-blocking process nit, noted and never re-reviewed (SKILL.md §5.1)
   review.py dispose ... --fixed SHA --fixed-in REPO_PATH     (the fix lives in another repo)
+  review.py dispose ... --reframed WHAT --commit SHA --by judge|user   (an accepted reframe or [CASCADE] replaced
+                    the code: any round, any severity; the replacing commit is reviewed as a new lineage)
   review.py accept  --scope DIR --unit N.P --by NAME     (the outcomes accepted — the user, or the standing policy, §6.4)
   review.py misfiled --scope DIR --unit N.P              (rejections that say "fixed/resolved <sha>" → dispose lines)
+  review.py reframe-prepare --scope DIR --unit N.P --review ID [--objective TEXT] [--out-dir DIR]
+                    the fresh judge's prompt for review ID's reframe (SKILL.md §5.2); run it through codex-exec.py
+  review.py reframe-record  --scope DIR --unit N.P --review ID --judge LINE [--input FILE]
+                    the judge's answer: an accept stands only with the objective met and a named deletion
 Output: prepare prints `prompt:`, `schema:`, `passes:`, `range:`, `effort:` (+ an `uncovered:` count
         with --lean; record recomputes that list for a claude-lean reviewer); record prints the report path (or the
-        report, with no scope); dispose prints the disposition.
-Exit:   0 ok · 1 disposition refused · 2 usage · 3 could not evaluate (empty range, malformed answer)
+        report, with no scope); dispose prints the disposition; reframe-prepare prints `prompt:`, `schema:`,
+        `effort:`; reframe-record prints a `[REFRAME]` verdict line and a `[DECISION]` line per re-opened decision.
+Exit:   0 ok · 1 disposition refused · 2 usage · 3 could not evaluate (empty range, malformed answer, no objective)
 """
 
 import argparse
@@ -54,6 +61,9 @@ import verify_lib as vl  # noqa: E402
 PROMPT = os.path.join(SKILL, "prompts", "review.md")
 LEAN_PROMPT = os.path.join(SKILL, "prompts", "review-lean.md")
 SCHEMA = os.path.join(SKILL, "schemas", "review-output.schema.json")
+REFRAME_PROMPT = os.path.join(SKILL, "prompts", "reframe-judge.md")
+REFRAME_SCHEMA = os.path.join(SKILL, "schemas", "reframe-judge.schema.json")
+JUDGE_PY = os.path.join(os.path.dirname(SKILL), "verify", "scripts", "judge.py")
 DOMAIN = os.path.join(SKILL, "rules", "domain.md")
 LENSES = os.path.join(SKILL, "rules", "lenses.md")
 ENGINE = os.path.expanduser("~/.claude/skills/gstack/review/checklist.md")
@@ -227,18 +237,16 @@ def prepare_lean(a, n, proj, out_dir):
     passes.append(f"lean: {inlined} of {total} file(s) inlined")
     with open(LEAN_PROMPT, encoding="utf-8") as fh:
         text = fh.read()
-    # DIFF goes last: a diff may itself contain `{{…}}`, and nothing after it is substituted
     fill = {"REPO": os.path.realpath(a.repo), "PROJECT": proj, "RANGE": a.range, "COMMITS": str(n), "LOG": log,
             "SECTIONS": "\n\n".join(sections),
-            "NOT_COVERED": "\n".join(f"- {u}" for u in uncovered) or "- (nothing — the whole range is inlined)"}
-    for k, v in fill.items():
-        text = text.replace("{{" + k + "}}", v)
-    text = text.replace("{{DIFF}}", diff).rstrip() + "\n\n## Output" + output_spec
+            "NOT_COVERED": "\n".join(f"- {u}" for u in uncovered) or "- (nothing — the whole range is inlined)",
+            "ROUND": a.round_text, "PREVIOUS": a.previous, "DIFF": diff}
+    text = fill_template(text, fill).rstrip() + "\n\n## Output" + output_spec
     bundle = os.path.join(out_dir, "review-lean-bundle.md")
     with open(bundle, "w", encoding="utf-8") as fh:
         fh.write(text)
     print(f"prompt: {bundle}\nschema: {SCHEMA}\npasses: {' · '.join(passes)}\nrange: {a.range}\n"
-          f"effort: n/a (lean — one Sonnet pass)\nuncovered: {len(uncovered)} item(s) — record recomputes them")
+          f"effort: n/a (lean — one Sonnet pass)\nround: {a.round}\nuncovered: {len(uncovered)} item(s) — record recomputes them")
     return vl.EXIT_PASS
 
 
@@ -310,6 +318,85 @@ def run_checks(repo, rng, skip=False):
     return intro + "\n\n" + "\n".join(blocks), "checks: " + " · ".join(marks)
 
 
+ROUND_ONE = ("Round 1 of this review lineage: new code. Report every defect you find, not a top few — "
+             "this is the round where fixing is cheapest. Each `fix` names the class of defect to fix and "
+             "where its siblings are, not only the example. `reopens` is null.")
+ROUND_FIX = ("Round {n} of this review lineage: a re-review after fixes. The earlier findings and their "
+             "dispositions are below.\n"
+             "- For each `fixed` one, check the fix resolved it. If the original defect is still there, or "
+             "comes back on the fix's own lines, report it with `reopens` set to that finding's ID.\n"
+             "- Do not raise a `rejected` finding again unless you have new evidence, and name that "
+             "evidence in `text`.\n"
+             "- Fix code is where defects concentrate: read each fix's own lines as closely as the "
+             "original change.\n"
+             "- From round 2 a note gets at most one batch fix and no re-review: report notes, but never "
+             "hold the verdict on one.")
+
+
+def disposition_line(d):
+    """One finding's latest disposition, for the round-aware prompt."""
+    if d is None:
+        return "undisposed"
+    kind, sha, why = d.get("disposition"), (d.get("sha") or "")[:10], d.get("reason")
+    return f"{kind}" + (f" {sha}" if sha else "") + (f" — {why}" if why else "")
+
+
+def lineage_of(recs, unit, review_id, rng, key, continues=None):
+    """(root, round, rules version, lineage map) that review `review_id` over `rng` has, or will have once
+    `record` writes it: a probe `review` record stamped with today's rules stands in for it, so
+    prepare's count and record's agree, and a new lineage is rooted under the current rules."""
+    base, _, head = rng.partition("..")
+    probe = {"record": "review", "review_id": review_id, "range": {key: rng}, "shas": {"base": base, "head": head},
+             "rules_version": vl.RULES_VERSION}
+    if continues:
+        probe["continues"] = continues
+    recs = [r for r in recs if not (r.get("record") == "review" and r.get("review_id") == review_id)] + [probe]
+    _, lin = rounds(recs, unit)
+    root, rnd = lin[review_id]
+    return root, rnd, vl.lineage_rules(recs, lin)[review_id], lin
+
+
+def round_context(a, key):
+    """((round, ROUND text, PREVIOUS text, rules), None) or (None, error code): the lineage round the
+    review `prepare` sets up will have, and the findings it re-reads — every finding of the
+    previous round, and every rejection from earlier rounds — with their latest dispositions.
+    Without --scope/--unit it cannot know the lineage: it says so and gives round 1, the prompt
+    that asks for the most (review/SKILL.md §5.1)."""
+    if not (a.scope and a.unit):
+        print("(no --scope/--unit: the lineage round is unknown — round 1's prompt)", file=sys.stderr)
+        return (1, ROUND_ONE, "- (none — prepare ran without --scope/--unit)", vl.RULES_VERSION), None
+    recs = vl.read_jsonl(os.path.join(a.scope, "artifacts", f"review-{a.unit}.jsonl"))
+    code = check_continues(a, recs, key)
+    if code is not None:
+        return None, code
+    taken = [int(m.group(1)) for r in recs for m in [re.match(rf"^{re.escape(a.unit)}-r(\d+)$",
+                                                               str(r.get("review_id", "")))] if m]
+    me = f"{a.unit}-r{max(taken, default=0) + 1}"
+    root, rnd, rules, lin = lineage_of(recs, a.unit, me, a.range, key, getattr(a, "continues", None))
+    if rnd < 2:
+        return (rnd, ROUND_ONE, "- (none — new code)", rules), None
+    latest = {}
+    for r in recs:
+        if r.get("record") == "disposition":
+            latest[r.get("finding_id")] = r
+    lines = []
+    for f in recs:
+        if f.get("record") != "finding" or lin.get(f.get("review_id"), ("", 0))[0] != root:
+            continue
+        d = latest.get(f.get("finding_id"))
+        if lin[f["review_id"]][1] == rnd - 1 or (d or {}).get("disposition") == "rejected":
+            text = " ".join(str(f.get("text", "")).split())
+            lines.append(f"- `{f['finding_id']}` [{f.get('severity')}] `{f.get('file')}:{f.get('line')}` — {text} "
+                         f"→ **{disposition_line(d)}**")
+    return (rnd, ROUND_FIX.format(n=rnd), "\n".join(lines) or "- (the previous round had no findings)", rules), None
+
+
+def fill_template(text, fill):
+    """Substitute `{{KEY}}` placeholders in ONE pass: a value (a diff, a check's output, a
+    finding's text) may itself contain `{{…}}`, and must never be substituted again."""
+    return re.sub(r"\{\{([A-Z_]+)\}\}", lambda m: fill.get(m.group(1), m.group(0)), text)
+
+
 def cmd_prepare(a):
     n, code = count_range(a.repo, a.range)
     if code is not None:
@@ -318,6 +405,10 @@ def cmd_prepare(a):
     if code is not None:
         return code
     proj = project(a.repo)
+    ctx, code = round_context(a, repo_key(main_worktree(a.repo)))
+    if code is not None:
+        return code
+    a.round, a.round_text, a.previous, a.rules = ctx
     if a.lean:
         out_dir = a.out_dir or tempfile.mkdtemp(prefix="review-")
         os.makedirs(out_dir, exist_ok=True)
@@ -349,19 +440,17 @@ def cmd_prepare(a):
     passes.append("lenses ✓")
     checks, checks_line = run_checks(a.repo, a.range, skip=a.no_checks)
     fill = {"REPO": os.path.realpath(a.repo), "PROJECT": proj, "RANGE": a.range, "COMMITS": str(n),
-            "RULES": "\n".join(rules), "CHECKS": checks}
+            "RULES": "\n".join(rules), "CHECKS": checks, "ROUND": a.round_text, "PREVIOUS": a.previous}
     with open(PROMPT, encoding="utf-8") as fh:
-        text = fh.read()
-    for k, v in fill.items():
-        text = text.replace("{{" + k + "}}", v)
+        text = fill_template(fh.read(), fill)
     out_dir = a.out_dir or tempfile.mkdtemp(prefix="review-")
     os.makedirs(out_dir, exist_ok=True)
     prompt = os.path.join(out_dir, "review-prompt.md")
     with open(prompt, "w", encoding="utf-8") as fh:
         fh.write(text)
-    effort, why = vl.effort_for([vl.diff_stat(a.repo, a.range)])
+    effort, _, why = vl.review_effort([vl.diff_stat(a.repo, a.range)], a.rules)
     print(f"prompt: {prompt}\nschema: {SCHEMA}\npasses: {' · '.join(passes)}\nrange: {a.range}\n"
-          f"effort: {effort} ({why})\n{checks_line}")
+          f"effort: {effort} ({why})\nround: {a.round}\n{checks_line}")
     return vl.EXIT_PASS
 
 
@@ -392,7 +481,17 @@ def cap_scaffolding(doc):
             f["target"] = "shipped"
 
 
+FINDING_ID = re.compile(r"^\S+-r\d+-\d+$")  # `<unit>-r<n>-<nn>` (build)
+
+
 def validate(doc):
+    # `reopens` is required-or-null for codex's strict schema; the Claude fallback and answers
+    # written before it may omit it, which means null — not a malformed answer
+    if isinstance(doc, dict) and isinstance(doc.get("findings"), list):
+        doc.setdefault("reframe", None)   # likewise: no reframe stated is none proposed
+        for f in doc["findings"]:
+            if isinstance(f, dict):
+                f.setdefault("reopens", None)
     with open(SCHEMA, encoding="utf-8") as fh:
         problems = vl.schema_problems(doc, json.load(fh))
     if problems:
@@ -406,6 +505,16 @@ def validate(doc):
             problems.append(f"finding {i} category {f.get('category')!r}")
         if not str(f.get("text", "")).strip():
             problems.append(f"finding {i} has no text")
+        if f.get("reopens") is not None and not FINDING_ID.match(f["reopens"]):
+            problems.append(f"finding {i} reopens {f['reopens']!r}, not a finding ID")
+    rf = doc["reframe"]
+    if rf is not None:
+        if not rf["proposal"].strip() or not rf["deletes"].strip():
+            problems.append("reframe needs its proposal and what it deletes (null when there is none)")
+        for x in rf["removes"]:
+            m = re.match(r"^#(\d+)$", x)
+            if not (FINDING_ID.match(x) or m and 1 <= int(m.group(1)) <= len(doc["findings"])):
+                problems.append(f"reframe removes {x!r}: neither `#<n>` of this answer's findings nor a finding ID")
     if doc["verdict"] not in ("SHIP", "SHIP AFTER BLOCKING", "DO NOT SHIP"):
         problems.append(f"verdict {doc['verdict']!r}")
     return problems
@@ -421,12 +530,18 @@ def render(doc, findings, header):
             tag = f"{f['category']}{' ' + f['group'] if f.get('group') else ''}" + (
                 " · scaffolding, capped from blocking" if f.get("capped") else
                 " · scaffolding" if f.get("target") == "scaffolding" else "")
+            tag += f" · reopens {f['reopens']}" if f.get("reopens") else ""
+            tag += " · advisory (fallback reviewer)" if f.get("advisory") else ""
             lines.append(f"- **{f['finding_id']}** `{f['file']}:{f['line']}` ({tag}) — {f['text']}"
                          + (f" → {f['fix']}" if f.get("fix") else ""))
         lines.append("")
     lines += ["## Checked and clear", "", ", ".join(doc["checked_clear"]) or "—", "",
               "## Not applicable", "", ", ".join(doc["not_applicable"]) or "—", "",
-              f"**Verdict:** {doc['verdict']}", "", "## What this review did not cover", ""]
+              f"**Verdict:** {doc['verdict']}", "", "## Reframe", ""]
+    rf = doc.get("reframe")
+    lines += [f"{rf['proposal']}", "", f"Deletes: {rf['deletes']} · removes: {', '.join(rf['removes']) or '—'}"
+              ] if rf else ["None proposed — the reviewer saw no simpler design that removes several findings."]
+    lines += ["", "## What this review did not cover", ""]
     lines += [f"- {c}" for c in doc["cannot_do"]] or ["- (reviewer listed nothing)"]
     return lines
 
@@ -482,6 +597,26 @@ def cmd_record(a):
         taken = [int(m.group(1)) for r in vl.read_jsonl(log)
                  for m in [re.match(rf"^{re.escape(a.unit)}-r(\d+)$", str(r.get("review_id", "")))] if m]
         review_id = f"{a.unit}-r{max(taken, default=0) + 1}"
+        code = check_continues(a, vl.read_jsonl(log), key)
+        if code is not None:
+            return code
+        unlink_reopens(ordered, vl.read_jsonl(log), a.unit, doc.get("reframe"))
+        # the effort trial's evidence (scope 10 §4.2): the lineage round, and the tier codex ran
+        # at — `--effort`, the one codex-exec was given, never a recomputed one: prepare without
+        # --scope/--unit assumes rules 2, so a recomputed tier can disagree with the run (review
+        # 10.2-r1-03). Not passed → stamped null with a warning, never a guess. A non-codex
+        # reviewer ran at no codex tier, so none is stamped.
+        _, rnd, rules, _ = lineage_of(vl.read_jsonl(log), a.unit, review_id, a.range, key, getattr(a, "continues", None))
+        effort, base, _ = vl.review_effort([vl.diff_stat(a.repo, a.range)], rules)
+        codex = a.reviewer.startswith("codex ")
+        if codex and a.effort is None:
+            print(vl.message("WARN", "no --effort: the tier codex ran at is not stamped",
+                             "`--effort <the tier passed to codex-exec.py>`", "none", "record", "tooling",
+                             "the review is recorded with `effort: null` — out of the effort trial's scorecard",
+                             DOCS), file=sys.stderr)
+        elif codex and a.effort != effort:
+            print(f"(--effort {a.effort}: this lineage's rules give {effort} — stamped as run)", file=sys.stderr)
+        a.stamp = {"round": rnd, "effort": a.effort if codex else None, "effort_base": base if codex else None}
         records, findings, report = build(a, doc, ordered, key, n, review_id)
         vl.append_verified(log, records)
         out = os.path.join(art, f"review-{review_id}.md")
@@ -491,9 +626,54 @@ def cmd_record(a):
     repo, rnd = review_round(recs, a.unit, review_id)
     print(f"review {review_id}: {len(findings)} finding(s) logged -> {log}\nreport: {out}\nverdict: {doc['verdict']}\n"
           f"round: {rnd} of {repo} in {a.unit} (this review's lineage)")
-    for line in convergence(recs, a.unit) + cascades(recs, review_id, a.repo, key, a.range.split("..")[1]):
+    notes = sum(f["severity"] == "note" for f in findings)
+    if notes and budgeted(recs, a.unit, review_id)[1]:
+        print(f"[BUDGET] round {rnd}: {notes} note(s) — at most one batch fix, never re-reviewed; or "
+              "`dispose --accepted \"<why it stands>\"` (review/SKILL.md §5.1)")
+    for line in convergence(recs, a.unit) + cascades(recs, review_id, a.repo, key, a.range.split("..")[1]) \
+            + chains(recs, a.unit, review_id):
         print(line)
+    if doc.get("reframe"):
+        print(f"[REFRAME] {review_id} proposes a simpler design that removes {len(doc['reframe']['removes'])} "
+              f"finding(s): judge it before fixing them — `review.py reframe-prepare --scope {a.scope} --unit "
+              f"{a.unit} --review {review_id}` (review/SKILL.md §5.2)")
     return vl.EXIT_PASS
+
+
+def check_continues(a, recs, key):
+    """None, or a §10 error code when `--continues` names no earlier review of this repo in the
+    unit: a typo would otherwise restart the count silently, which is what it exists to stop."""
+    if not getattr(a, "continues", None):
+        return None
+    e = next((e for e in reviews_of(recs, a.unit) if e["id"] == a.continues), None)
+    if e is None or canonical(e["repo"]) != canonical(key):
+        return err(f"`--continues {a.continues}` is not an earlier {key} review of {a.unit}",
+                   f"a review_id of {key} in the unit's log", e["repo"] if e else "none", "--continues",
+                   f"grep '\"record\": \"review\"' {os.path.join(a.scope, 'artifacts', f'review-{a.unit}.jsonl')}",
+                   code=vl.EXIT_USAGE)
+    return None
+
+
+def unlink_reopens(findings, recs, unit, reframe=None):
+    """Drop a `reopens` that names no earlier finding of `unit`, with a WARN. Its input failing
+    (a typo, another unit's ID) fails open on purpose: the finding itself still gates; only the
+    chain link is lost, and refusing the record would throw away a whole paid review over a
+    cross-reference (review/SKILL.md §5.1)."""
+    known = {r.get("finding_id") for r in recs if r.get("record") == "finding"}
+    for f in findings:
+        if f.get("reopens") and f["reopens"] not in known:
+            print(vl.message("WARN", f"finding `reopens {f['reopens']}`: no such finding in {unit} — link dropped",
+                             f"a finding ID of an earlier {unit} review", f["reopens"], f"{f['file']}:{f['line']}",
+                             "tooling", "the finding is recorded; the reopen chain cannot see it", DOCS),
+                  file=sys.stderr)
+            f["reopens"] = None
+    if reframe:   # the same for an earlier finding a reframe says it removes
+        gone = [x for x in reframe["removes"] if not x.startswith("#") and x not in known]
+        if gone:
+            print(vl.message("WARN", f"reframe removes {', '.join(gone)}: no such finding in {unit} — dropped",
+                             f"finding IDs of earlier {unit} reviews", ", ".join(gone), "reframe.removes",
+                             "tooling", "the reframe is recorded without them", DOCS), file=sys.stderr)
+            reframe["removes"] = [x for x in reframe["removes"] if x not in gone]
 
 
 def lean_uncovered(a):
@@ -544,7 +724,15 @@ def rounds(recs, unit):
     (verify_lib.review_lineage). IDs stay `<unit>-r<n>` across every repo and lineage."""
     revs = reviews_of(recs, unit)
     return revs, vl.review_lineage([(e["id"], e["repo"], e["base"], e["head"]) for e in revs],
-                                   lambda key: os.path.join(vl.PROJECTS, key))
+                                   lambda key: os.path.join(vl.PROJECTS, key), *vl.lineage_links(recs))
+
+
+def budgeted(recs, unit, review_id):
+    """(round, True when `review_id`'s notes are under the §5.1 findings budget): round 2+ of a
+    lineage rooted under rules 2+ (decision 65 — an older lineage keeps the old rule)."""
+    _, lin = rounds(recs, unit)
+    root, rnd = lin.get(review_id, ("", 0))
+    return rnd, rnd >= 2 and vl.lineage_rules(recs, lin).get(review_id, 1) >= 2
 
 
 def review_round(recs, unit, review_id):
@@ -597,6 +785,27 @@ def convergence(recs, unit):
     return out
 
 
+def chains(recs, unit, review_id):
+    """SKILL.md §5 fix discipline: a [CHAIN] line for each finding of `review_id` that reopens a
+    finding which itself reopened another — two fixes of one defect have failed, so the loop
+    stops patching and takes the reframe prompt. Lineages rooted before rules 2 keep the old
+    rules (decision 65). A link to an ID not in the log ends the walk (record already dropped it)."""
+    if not budgeted(recs, unit, review_id)[1]:
+        return []
+    link = {r.get("finding_id"): r.get("reopens") for r in recs if r.get("record") == "finding"}
+    out = []
+    for r in recs:
+        if r.get("record") != "finding" or r.get("review_id") != review_id or not r.get("reopens"):
+            continue
+        walk = [r["finding_id"]]
+        while link.get(walk[-1]) and link[walk[-1]] not in walk:
+            walk.append(link[walk[-1]])
+        if len(walk) >= 3:
+            out.append(f"[CHAIN] {' reopens '.join(walk)}: the fix failed twice — stop patching and take the "
+                       "reframe prompt (review/SKILL.md §5.2) before another fix")
+    return out
+
+
 def cascades(recs, review_id, repo, key, head):
     """SKILL.md §5.1 edge-case cascade: [CASCADE] lines for each finding of `review_id` on a line
     that, at the review's head, an earlier finding's fix commit in this unit last changed (git
@@ -646,12 +855,24 @@ def foreign(file, repo):
 def build(a, doc, ordered, key, n, review_id):
     """(records, findings, report) for one review: a `review` record, then its findings."""
     ts = now()
-    findings = [dict(f, finding_id=f"{review_id}-{i:02d}") for i, f in enumerate(ordered, 1)]
+    # a fallback's `local-maxima` flag is advisory (SKILL.md §5.2): logged and disposed, never a
+    # stop or a packet — 120 of them in 178 fallback reviews (scope 10 baseline)
+    advisory = not a.reviewer.startswith("codex ")
+    findings = [dict(f, finding_id=f"{review_id}-{i:02d}",
+                     advisory=advisory and f["category"] == "local-maxima") for i, f in enumerate(ordered, 1)]
+    rf = doc.get("reframe")
+    if rf:
+        # `#<n>` is the reviewer's n-th finding; it names the ID that finding was just given
+        assigned = {id(f): g["finding_id"] for f, g in zip(ordered, findings)}
+        rf["removes"] = [assigned[id(doc["findings"][int(x[1:]) - 1])] if x.startswith("#") else x
+                         for x in rf["removes"]]
     records = [{"schema": vl.SCHEMA, "ts": ts, "record": "finding", "review_id": review_id,
                 "finding_id": f["finding_id"], "reviewer": a.reviewer, "range": {key: a.range},
                 "file": f["file"], "line": f["line"], "category": f["category"], "group": f.get("group", ""),
                 "severity": f["severity"], "text": f["text"], "fix": f.get("fix", ""),
-                "target": f.get("target", "shipped"), "capped": bool(f.get("capped"))} for f in findings]
+                "target": f.get("target", "shipped"), "capped": bool(f.get("capped")),
+                **({"reopens": f["reopens"]} if f.get("reopens") else {}),
+                **({"advisory": True} if f["advisory"] else {})} for f in findings]
     lean = (f" (lean: single Sonnet pass over one bundle, no specialists, diff capped at {LEAN_CAP:,} lines)"
             if a.reviewer.startswith("claude-lean ") else "")
     degraded = [] if a.reviewer.startswith("codex ") else [
@@ -661,14 +882,21 @@ def build(a, doc, ordered, key, n, review_id):
               f"**Review:** `{review_id}` · **Reviewer:** {a.reviewer} · **Passes:** {a.passes or 'unrecorded'}"] \
         + ([f"**{a.mode}**"] if a.mode else []) + degraded + [f"**Findings:** {len(findings)} — every ID needs a disposition: "
                       f"`review.py dispose --scope <scope> --unit {a.unit or '<unit>'} --finding <ID> "
-                      "(--fixed <sha> | --rejected \"<reason>\" | --deferred \"<TO-DO>\" | --accepted \"<process nit>\")`"]
+                      "(--fixed <sha> | --rejected \"<reason>\" | --deferred \"<TO-DO>\" | --accepted \"<process nit>\" "
+                      "| --reframed \"<what changed>\" --commit <sha> --by judge|user)`"]
     report = "\n".join(render(doc, findings, header)) + "\n"
     # record only accepts the immutable range, so it is the commits the reviewer saw
     # (review 5.2-r2-01, -r3-01).
     shas = dict(zip(("base", "head"), a.range.split("..")))
     review = {"schema": vl.SCHEMA, "ts": ts, "record": "review", "review_id": review_id, "reviewer": a.reviewer,
               "range": {key: a.range}, "shas": shas, "passes": a.passes or "", "findings": len(findings),
-              "verdict": doc["verdict"], "mode": a.mode or ""}
+              "verdict": doc["verdict"], "mode": a.mode or "", "rules_version": vl.RULES_VERSION,
+              **getattr(a, "stamp", {})}
+    if getattr(a, "continues", None):
+        review["continues"] = a.continues
+    if rf:
+        records.append({"schema": vl.SCHEMA, "ts": ts, "record": "reframe", "review_id": review_id,
+                        "proposal": rf["proposal"], "removes": rf["removes"], "deletes": rf["deletes"]})
     return [review] + records, findings, report
 
 
@@ -709,11 +937,13 @@ def _accept(a, log):
     if not a.by.strip():
         return err("accept needs --by", "the person accepting", "empty", "--by", "--by \"<name>\"",
                    code=vl.EXIT_USAGE)
-    counts = {k: sum(1 for f in findings if latest[f] == k) for k in ("fixed", "rejected", "deferred", "accepted")}
+    counts = {k: sum(1 for f in findings if latest[f] == k)
+              for k in ("fixed", "rejected", "deferred", "accepted", "reframed")}
     vl.append_verified(log, [{"schema": vl.SCHEMA, "ts": now(), "record": "acceptance", "by": a.by.strip(),
                               "findings": len(findings), **counts}])
     print(f"{a.unit}: outcomes accepted by {a.by.strip()} — {len(findings)} findings ({counts['fixed']} fixed, "
-          f"{counts['rejected']} rejected, {counts['deferred']} deferred, {counts['accepted']} accepted as process nits)")
+          f"{counts['rejected']} rejected, {counts['deferred']} deferred, {counts['reframed']} reframed, "
+          f"{counts['accepted']} accepted as process nits)")
     # the unit's closing summary shows rejections, and accepted nits apart from them (SKILL.md §5.1)
     reasons = {r["finding_id"]: r.get("reason") for r in recs if r.get("record") == "disposition"}
     for kind, title in (("rejected", "rejected"), ("accepted", "accepted (process nit)")):
@@ -743,9 +973,17 @@ def _dispose(a, log):
     if a.off_anchor is not None and not a.fixed:
         return err("`--off-anchor` qualifies a fix", "`--fixed <sha> --off-anchor \"<how>\"`", "no --fixed",
                    a.finding, "drop --off-anchor, or pass the fixing commit", code=vl.EXIT_USAGE)
-    if a.fixed_in is not None and not a.fixed:
+    if a.fixed_in is not None and not (a.fixed or a.reframed is not None):
         return err("`--fixed-in` qualifies a fix", "`--fixed <sha> --fixed-in <repo path>`", "no --fixed",
                    a.finding, "drop --fixed-in, or pass the fixing commit", code=vl.EXIT_USAGE)
+    if (a.commit is not None) != (a.reframed is not None):
+        return err("`--reframed` and `--commit` go together", "`--reframed \"<what changed>\" --commit <sha> "
+                   "--by judge|user`", "one of them", a.finding, "pass both: the reframe and the commit that "
+                   "replaced the code", code=vl.EXIT_USAGE)
+    if a.reframed is not None:
+        fix, code = reframe_check(a, f, recs)
+        if code is not None:
+            return code
     if a.fixed:
         path, key = fix_repo(f, a.fixed_in)
         if path is None:
@@ -756,6 +994,19 @@ def _dispose(a, log):
         fix, code = fix_check(f, a.fixed, path, key, recs)
         if code is not None:
             return code
+        reverted = reverts_of(path, fix["sha"])
+        if reverted:
+            print(vl.message("WARN", f"`fixed {a.fixed}` has been reverted on HEAD by {reverted[:10]}",
+                             "a fix that is still in the code", f"revert {reverted[:10]}", a.finding, "code",
+                             "if a reframe replaced it, record `--reframed \"<what changed>\" --commit <sha> --by "
+                             "judge|user` instead", DOCS), file=sys.stderr)
+        batch = note_batches(recs, a.unit, f, fix["sha"])
+        if batch:
+            print(vl.message("WARN", f"a second batch fix for {f.get('review_id')}'s notes",
+                             "one batch fix for a fix round's notes (review/SKILL.md §5.1)",
+                             f"already fixed in {', '.join(s[:10] for s in batch)}", a.finding, "code",
+                             "fold note fixes into one commit; `--accepted \"<why it stands>\"` the rest", DOCS),
+                  file=sys.stderr)
         if fix["predates"]:
             return err(f"`fixed {a.fixed}` predates the finding: {fix['predates']}",
                        f"a commit made after review {f.get('review_id')} raised {a.finding}", fix["sha"],
@@ -816,15 +1067,83 @@ def _dispose(a, log):
         rc, name, _ = git(a.scope, "config", "user.name")
         by = f"{name or 'unknown'} / Claude"
     kind = "fixed" if a.fixed else "deferred" if a.deferred is not None else \
-        "accepted" if a.accepted is not None else "rejected"
-    reason = {"fixed": a.off_anchor, "deferred": a.deferred, "accepted": a.accepted, "rejected": a.rejected}[kind]
+        "accepted" if a.accepted is not None else "reframed" if a.reframed is not None else "rejected"
+    reason = {"fixed": a.off_anchor, "deferred": a.deferred, "accepted": a.accepted, "rejected": a.rejected,
+              "reframed": a.reframed}[kind]
     rec = {"schema": vl.SCHEMA, "ts": now(), "record": "disposition", "finding_id": a.finding,
            "disposition": kind, "sha": fix.get("sha"), "reason": reason, "by": by}
     if fix:
-        rec.update(repo=fix["repo"], via=fix["via"])
+        rec.update(repo=fix["repo"], via=fix["via"], **({"call": fix["call"]} if "call" in fix else {}))
     vl.append_verified(log, [rec])
-    print(f"{a.finding}: {kind} {rec['sha'] or reason}" + (f" in {fix['repo']} (via {fix['via']})" if fix else ""))
+    print(f"{a.finding}: {kind} {rec['sha'] or reason}" + (f" in {fix['repo']} (via {fix['via']})" if fix else "")
+          + (" — the user's call, not the judge's" if fix.get("call") == "user" else ""))
     return vl.EXIT_PASS
+
+
+def note_batches(recs, unit, f, sha):
+    """The other commits already recorded as fixes for notes of `f`'s review, when `f` is a note
+    under the findings budget and `sha` is not one of them: a WARN, never a refusal — refusing a
+    correct fix pushes it toward being misrecorded, and the gate never re-reviews these notes."""
+    if f.get("severity") != "note" or not budgeted(recs, unit, f.get("review_id"))[1]:
+        return []
+    notes = {r.get("finding_id") for r in recs if r.get("record") == "finding"
+             and r.get("review_id") == f.get("review_id") and r.get("severity") == "note"}
+    latest = {}
+    for r in recs:
+        if r.get("record") == "disposition" and r.get("finding_id") in notes - {f.get("finding_id")}:
+            latest[r["finding_id"]] = r
+    shas = {d["sha"] for d in latest.values() if d.get("disposition") == "fixed" and d.get("sha")}
+    return [] if sha in shas else sorted(shas)
+
+
+
+def reframe_check(a, f, recs):
+    """({sha, repo, via}, None) or (None, a §10 error code) for `--reframed`: an accepted reframe
+    (the fresh judge's, or the user's at a [CASCADE] stop) replaced the code the finding was on
+    (TO-DO 158.3: three such findings had to be recorded `rejected`). Any round, any severity —
+    nothing is left unfixed unreviewed, because the gate wants the replacing commit inside a later
+    review's range, a new lineage. The commit must exist and come after the finding's review."""
+    if not a.reframed.strip():
+        return None, err("`reframed` needs what changed", "the reframe that replaced the code", "empty",
+                         a.finding, "--reframed \"<what changed>\"", cause="code", code=vl.EXIT_FAIL)
+    who = vl.REFRAMED_BY.match(a.by or "")
+    if not who:
+        return None, err("`reframed` needs who accepted the reframe", "`--by judge` (the fresh judge, §5.2) or "
+                         "`--by user` (the user's call)", repr(a.by), a.finding, "--by judge|user",
+                         code=vl.EXIT_USAGE)
+    if who.group(1) == "judge":
+        # the judge's accept is read from the log, never taken on the driver's word (10.2-r1-01)
+        why = vl.judge_took(recs, a.finding, rounds(recs, a.unit)[1])
+        if why:
+            return None, err(f"`reframed --by judge`: {why}", "an `accepted` reframe-verdict, without "
+                             "`overturns`, on a reframe in the finding's lineage that removes it", "none",
+                             a.finding, "run the fresh judge (`reframe-prepare` / `reframe-record`, §5.2); an "
+                             "accept that overturns a decision, or a reframe taken at a stop, is `--by user`",
+                             cause="code", code=vl.EXIT_FAIL)
+    path, key = fix_repo(f, a.fixed_in)
+    if path is None:
+        return None, err(f"`--fixed-in {a.fixed_in}` is not a git repository under {vl.PROJECTS}",
+                         "the path of the repo holding the replacing commit", key, "--fixed-in",
+                         "pass a checkout or worktree path", cause="code", code=vl.EXIT_USAGE)
+    rc, full, e = git(path, "rev-parse", "--verify", "--quiet", f"{a.commit}^{{commit}}")
+    if rc != 0 or not full:
+        return None, err(f"`{a.commit}` is not a commit in {key}", "the commit that replaced the code",
+                         (e or "unknown revision")[:200], path, f"git -C {path} log --oneline -5",
+                         cause="code", code=vl.EXIT_FAIL)
+    why = predates(f, full, path, recs)
+    if why:
+        return None, err(f"`reframed --commit {a.commit}` predates the finding: {why}",
+                         f"a commit made after review {f.get('review_id')} raised {a.finding}", full,
+                         a.finding, "commit the reframe first, then record it", cause="code", code=vl.EXIT_FAIL)
+    return {"sha": full, "repo": key, "via": "reframe", "call": who.group(1)}, None
+
+
+def reverts_of(path, sha):
+    """The commit on HEAD whose message says it reverts `sha` (git revert's own line), or None.
+    Only that line: a hand revert that says nothing is not detectable here, and a warning that
+    guessed would teach the reader to ignore it."""
+    rc, out, _ = git(path, "log", "--format=%H", "-F", f"--grep=This reverts commit {sha}", "HEAD")
+    return out.split()[0] if rc == 0 and out.strip() else None
 
 
 def fix_repo(f, fixed_in):
@@ -1008,6 +1327,149 @@ def candidate_repos(f):
     return [(p, k) for p, k in out if os.path.isdir(p)]
 
 
+# ---------- reframe judge (SKILL.md §5.2) ---------------------------------------------
+
+def verify_judge():
+    """verify/scripts/judge.py as a module — its section reader and progress-file lookup are
+    the ones /verify's judge uses; one owner (CLAUDE.md §3.5)."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("verify_judge", JUDGE_PY)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def reframe_of(recs, review_id):
+    """The latest `reframe` record of `review_id`, or None."""
+    return next((r for r in reversed(recs) if r.get("record") == "reframe" and r.get("review_id") == review_id),
+                None)
+
+
+def judged_reframes(recs, unit, review_id, verdict):
+    """[(review_id, proposal, reason)] of the reframes in `review_id`'s lineage, other than its
+    own, whose latest judge verdict is `verdict`."""
+    _, lin = rounds(recs, unit)
+    root = lin.get(review_id, (review_id, 0))[0]
+    last = {}
+    for r in recs:
+        if r.get("record") == "reframe-verdict":
+            last[r.get("review_id")] = r
+    return [(rid, (reframe_of(recs, rid) or {}).get("proposal", "?"), v.get("reason", ""))
+            for rid, v in last.items() if rid != review_id and v.get("verdict") == verdict
+            and lin.get(rid, (rid, 0))[0] == root]
+
+
+def cmd_reframe_prepare(a):
+    log = os.path.join(a.scope, "artifacts", f"review-{a.unit}.jsonl")
+    recs = vl.read_jsonl(log)
+    rf = reframe_of(recs, a.review)
+    if rf is None:
+        return err(f"review {a.review} proposed no reframe", "a review whose answer carried `reframe`",
+                   "none", log, f"grep '\"record\": \"reframe\"' {log}", code=vl.EXIT_USAGE)
+    jm = verify_judge()
+    scope_md = os.path.join(a.scope, "scope.md")
+    text = open(scope_md, encoding="utf-8").read() if os.path.isfile(scope_md) else ""
+    # the objective decides condition (i); a judge without it can only guess, so no objective
+    # is exit 3, never a prompt with a hole in it
+    objective = (a.objective or "").strip() or "\n\n".join(jm.md_sections(text, lambda h: h.startswith("## 1.")))
+    if not objective.strip():
+        return err("no objective for the judge", "`--objective \"<the plan's core objective>\"`, or a scope.md "
+                   "with a `## 1.` section", "neither", a.scope, "pass --objective from the plan",
+                   cause="code", code=vl.EXIT_EVAL)
+    decisions = "\n\n".join(jm.md_sections(text, lambda h: h.startswith("## 11."))) or "(no scope.md §11)"
+    prog = jm.progress_file(a.scope)
+    dlog = "\n\n".join(jm.md_sections(open(prog, encoding="utf-8").read(), lambda h: "decisions log" in h.lower())
+                       ) if prog else ""
+    found = {r.get("finding_id"): r for r in recs if r.get("record") == "finding"}
+    line = lambda f: (f"- `{f['finding_id']}` [{f.get('severity')}] `{f.get('file')}:{f.get('line')}` — "
+                      + " ".join(str(f.get("text", "")).split()))
+    rejected = judged_reframes(recs, a.unit, a.review, "rejected")
+    fill = {"OBJECTIVE": objective.strip(), "REVIEW": a.review, "PROPOSAL": rf["proposal"], "CLAIM": rf["deletes"],
+            "REMOVES": "\n".join(line(found[x]) for x in rf["removes"] if x in found) or "- (none named)",
+            "FINDINGS": "\n".join(line(f) for f in found.values() if f.get("review_id") == a.review) or "- (none)",
+            "DECISIONS": decisions, "DECISIONS_LOG": dlog or "(no Decisions Log)",
+            "REJECTED": "\n".join(f"- {rid}: {prop} — rejected: {why}" for rid, prop, why in rejected) or "- (none)"}
+    with open(REFRAME_PROMPT, encoding="utf-8") as fh:
+        prompt_text = fill_template(fh.read(), fill)
+    out_dir = a.out_dir or tempfile.mkdtemp(prefix="reframe-")
+    os.makedirs(out_dir, exist_ok=True)
+    prompt = os.path.join(out_dir, f"reframe-{a.review}.md")
+    with open(prompt, "w", encoding="utf-8") as fh:
+        fh.write(prompt_text)
+    print(f"prompt: {prompt}\nschema: {REFRAME_SCHEMA}\neffort: high (a design judged against recorded decisions)")
+    return vl.EXIT_PASS
+
+
+def cmd_reframe_record(a):
+    if not vl.JUDGE_LINE.match(a.judge):
+        return err("judge line is malformed", "`codex <model>` / `claude-fallback <reason>` / `none <reason>`",
+                   a.judge, "--judge", "pass the line codex-exec.py printed", code=vl.EXIT_USAGE)
+    log = os.path.join(a.scope, "artifacts", f"review-{a.unit}.jsonl")
+    with log_lock(log):
+        recs = vl.read_jsonl(log)
+        if reframe_of(recs, a.review) is None:
+            return err(f"review {a.review} proposed no reframe", "a review whose answer carried `reframe`", "none",
+                       log, f"grep '\"record\": \"reframe\"' {log}", code=vl.EXIT_USAGE)
+        rec = {"schema": vl.SCHEMA, "ts": now(), "record": "reframe-verdict", "review_id": a.review,
+               "judge": a.judge, "deletes": "", "overturns": None, "reopened_decisions": []}
+        if a.judge.startswith("none "):
+            # no judge ran: the reframe is not taken — never accepted by default
+            rec.update(verdict="not-judged", reason=a.judge[5:].strip())
+        else:
+            if not a.input:
+                return err("a judge's answer needs --input", "the JSON the judge wrote", "none", "--input",
+                           "pass the answer file", code=vl.EXIT_USAGE)
+            try:
+                with open(a.input, encoding="utf-8") as fh:
+                    doc = json.load(fh)
+                with open(REFRAME_SCHEMA, encoding="utf-8") as fh:
+                    problems = vl.schema_problems(doc, json.load(fh))
+            except (OSError, ValueError) as exc:
+                doc, problems = None, [str(exc)]
+            reason = " ".join(str(doc.get("reason", "")).split()) if not problems else ""
+            if not problems and not reason:
+                problems = ["`reason` is empty — a verdict needs its one-line reason"]
+            if problems:
+                return err("reframe judge answer is malformed — nothing recorded", "the JSON "
+                           "review/schemas/reframe-judge.schema.json describes", "; ".join(problems[:4]), a.input,
+                           "re-run the judge")
+            verdict = "accepted" if doc["verdict"] == "accept" else "rejected"
+            # the judge can only downgrade: an accept stands only on both conditions and a named
+            # deletion (scope 10 §4.2) — "simpler" with nothing deleted is a rejection
+            missing = [w for w, ok in (("the objective is not met", doc["meets_objective"]),
+                                       ("it does not simplify", doc["simplifies"]),
+                                       ("it names nothing it deletes", doc["deletes"].strip())) if not ok]
+            if verdict == "accepted" and missing:
+                verdict, reason = "rejected", f"{'; '.join(missing)} — {reason}"
+            known = {r.get("finding_id") for r in recs if r.get("record") == "finding"}
+            flags = [d for d in doc["reopened_decisions"] if d["finding"] in known and d["decision"].strip()]
+            if len(flags) < len(doc["reopened_decisions"]):
+                print(vl.message("WARN", "judge flagged a decision on an unknown finding, or with no decision named — "
+                                 "dropped", f"finding IDs of {a.unit} and the decision each re-opens",
+                                 str([d for d in doc["reopened_decisions"] if d not in flags])[:200], a.input,
+                                 "tooling", "the verdict is recorded without them", DOCS), file=sys.stderr)
+            rec.update(verdict=verdict, reason=reason, deletes=doc["deletes"].strip(),
+                       overturns=(doc["overturns"] or "").strip() or None, reopened_decisions=flags)
+        vl.append_verified(log, [rec])
+    rf = reframe_of(recs, a.review)
+    if rec["verdict"] == "accepted" and rec["overturns"]:
+        # scope 10 §4.2: overturning a recorded decision is the user's call — accepted, not taken
+        print(f"[REFRAME] {a.review} accepted by {a.judge}, but it overturns a recorded decision "
+              f"({rec['overturns']}): bring it to the user before building it (review/SKILL.md §5.2)")
+    elif rec["verdict"] == "accepted":
+        print(f"[REFRAME] {a.review} accepted by {a.judge} — deletes {rec['deletes']}: build it, then record each "
+              f"finding it replaced ({', '.join(rf['removes']) or 'none named'}) with `dispose --reframed "
+              "\"<what changed>\" --commit <sha> --by judge` (review/SKILL.md §5.2)")
+    elif rec["verdict"] == "rejected":
+        print(f"[REFRAME] {a.review} rejected: {rec['reason']}")
+    else:
+        print(f"[REFRAME] {a.review} not judged ({rec['reason']}): not taken — fix the findings, or bring the "
+              "reframe to the user (review/SKILL.md §5.2)")
+    for d in rec["reopened_decisions"]:
+        print(f"[DECISION] {d['finding']} re-opens a recorded decision: {d['decision']}")
+    return vl.EXIT_PASS
+
+
 def main(argv):
     ap = argparse.ArgumentParser(description="/review plumbing (prepare | record | dispose).")
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -1020,6 +1482,9 @@ def main(argv):
     p.add_argument("--out-dir")
     p.add_argument("--lean", action="store_true", help="write one self-contained bundle for a single Sonnet pass")
     p.add_argument("--no-checks", action="store_true", help="do not run the repo's .review-checks")
+    p.add_argument("--scope", help="with --unit: fill the lineage round and the earlier findings into the prompt")
+    p.add_argument("--unit")
+    p.add_argument("--continues", metavar="REVIEW_ID", help="as record's --continues; pass the same to both")
     r = sub.add_parser("record")
     for opt in ("--repo", "--range", "--reviewer", "--input"):
         r.add_argument(opt, required=True)
@@ -1027,6 +1492,10 @@ def main(argv):
     r.add_argument("--unit")
     r.add_argument("--passes")
     r.add_argument("--mode", help="review-mode.py's line, shown in the report header")
+    r.add_argument("--effort", choices=vl.EFFORT_LEVELS, help="the --effort codex-exec.py ran at (a codex "
+                   "reviewer): stamped on the review record for the effort trial")
+    r.add_argument("--continues", metavar="REVIEW_ID", help="this review re-reads the fixes of that review: "
+                   "continue its lineage's round count (when no `fixed` disposition ties the range to it)")
     d = sub.add_parser("dispose")
     d.add_argument("--scope", required=True)
     d.add_argument("--unit", required=True)
@@ -1036,6 +1505,9 @@ def main(argv):
     x.add_argument("--rejected", metavar="REASON")
     x.add_argument("--deferred", metavar="TODO", help="non-blocking only: the TO-DO item that carries it")
     x.add_argument("--accepted", metavar="REASON", help="non-blocking only: a process nit, noted and never re-reviewed")
+    x.add_argument("--reframed", metavar="WHAT", help="an accepted reframe replaced the code: any round; needs "
+                   "--commit and --by judge|user; the replacing commit is reviewed as a new lineage")
+    d.add_argument("--commit", metavar="SHA", help="with --reframed: the commit that replaced the code")
     d.add_argument("--fixed-in", metavar="REPO_PATH", help="with --fixed: the repo holding the fix, when it is "
                    "not the finding's own (a fix at the source, or in a docs repo)")
     d.add_argument("--off-anchor", metavar="REASON",
@@ -1044,6 +1516,18 @@ def main(argv):
     mf = sub.add_parser("misfiled")
     mf.add_argument("--scope", required=True)
     mf.add_argument("--unit", required=True)
+    rp = sub.add_parser("reframe-prepare")
+    rp.add_argument("--scope", required=True)
+    rp.add_argument("--unit", required=True)
+    rp.add_argument("--review", required=True)
+    rp.add_argument("--objective", help="the plan's core objective; default: scope.md's `## 1.` section")
+    rp.add_argument("--out-dir")
+    rr = sub.add_parser("reframe-record")
+    rr.add_argument("--scope", required=True)
+    rr.add_argument("--unit", required=True)
+    rr.add_argument("--review", required=True)
+    rr.add_argument("--judge", required=True)
+    rr.add_argument("--input")
     c = sub.add_parser("accept")
     c.add_argument("--scope", required=True)
     c.add_argument("--unit", required=True)
@@ -1052,12 +1536,13 @@ def main(argv):
         a = ap.parse_args(argv)
     except SystemExit as exc:
         return vl.EXIT_USAGE if exc.code else vl.EXIT_PASS
-    if a.cmd == "record" and bool(a.scope) != bool(a.unit):
-        return err("--scope and --unit go together", "both or neither", "one of them", "record",
+    if a.cmd in ("record", "prepare") and bool(a.scope) != bool(a.unit):
+        return err("--scope and --unit go together", "both or neither", "one of them", a.cmd,
                    "pass both to log findings for dispositions", code=vl.EXIT_USAGE)
     try:
         return {"prepare": cmd_prepare, "record": cmd_record, "dispose": cmd_dispose, "accept": cmd_accept,
-                "misfiled": cmd_misfiled}[a.cmd](a)
+                "misfiled": cmd_misfiled, "reframe-prepare": cmd_reframe_prepare,
+                "reframe-record": cmd_reframe_record}[a.cmd](a)
     except vl.ContractError as exc:
         print(exc.msg, file=sys.stderr)
         return vl.EXIT_EVAL

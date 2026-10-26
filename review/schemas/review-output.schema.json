@@ -3,14 +3,14 @@
   "title": "/review gate output",
   "type": "object",
   "additionalProperties": false,
-  "required": ["findings", "checked_clear", "not_applicable", "cannot_do", "verdict"],
+  "required": ["findings", "checked_clear", "not_applicable", "cannot_do", "verdict", "reframe"],
   "properties": {
     "findings": {
       "type": "array",
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["file", "line", "severity", "category", "group", "text", "fix", "target"],
+        "required": ["file", "line", "severity", "category", "group", "text", "fix", "target", "reopens"],
         "properties": {
           "file": {"type": "string"},
           "line": {"type": "integer"},
@@ -20,13 +20,24 @@
           "group": {"type": "string"},
           "text": {"type": "string"},
           "fix": {"type": "string"},
-          "target": {"type": "string", "enum": ["shipped", "scaffolding"]}
+          "target": {"type": "string", "enum": ["shipped", "scaffolding"]},
+          "reopens": {"type": ["string", "null"]}
         }
       }
     },
     "checked_clear": {"type": "array", "items": {"type": "string"}},
     "not_applicable": {"type": "array", "items": {"type": "string"}},
     "cannot_do": {"type": "array", "items": {"type": "string"}},
-    "verdict": {"type": "string", "enum": ["SHIP", "SHIP AFTER BLOCKING", "DO NOT SHIP"]}
+    "verdict": {"type": "string", "enum": ["SHIP", "SHIP AFTER BLOCKING", "DO NOT SHIP"]},
+    "reframe": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": ["proposal", "removes", "deletes"],
+      "properties": {
+        "proposal": {"type": "string"},
+        "removes": {"type": "array", "items": {"type": "string"}},
+        "deletes": {"type": "string"}
+      }
+    }
   }
 }

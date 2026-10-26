@@ -997,10 +997,10 @@ class TestReview(unittest.TestCase):
         git(self.repo, "checkout", "-q", "main")
         return rng
 
-    def record_range(self, rng, **over):
+    def record_range(self, rng, extra=(), **over):
         return run(REVIEW, "record", "--repo", self.repo, "--range", rng, "--reviewer", "codex gpt-test",
                    "--input", self.answer(**over), "--scope", self.scope, "--unit", "9.1", "--passes", "p",
-                   env=self.env)
+                   *extra, env=self.env)
 
     def test_rounds_count_per_review_lineage(self):
         # two lanes' disjoint ranges in one repo each start at round 1; a fix re-review continues
@@ -1012,9 +1012,41 @@ class TestReview(unittest.TestCase):
             self.assertIn(f"round: {rnd} of ", p.stdout)
         git(self.repo, "checkout", "-q", "lane-1")
         head = git(self.repo, "rev-parse", "HEAD")
-        self.commit(self.repo, "one.txt")
+        fix = self.commit(self.repo, "a.sh")
+        self.assertEqual(self.dispose("9.1-r1-01", "--fixed", fix).returncode, 0)
         p = self.record_range(f"{head}..{git(self.repo, 'rev-parse', 'HEAD')}")
         self.assertIn("review 9.1-r3:", p.stdout)
+        self.assertIn("round: 2 of ", p.stdout)
+
+    def test_the_next_unit_at_a_reviews_head_starts_round_one(self):
+        # TO-DO P1 (WellMed 171.2-r15, 171.3-r5): u2 starts at u1's fix range's head, so
+        # `base == head` alone counted new code as round 3+; only a fix re-review continues
+        base = git(self.repo, "rev-parse", "HEAD")
+        u1 = self.commit(self.repo, "a.sh")
+        self.assertIn("round: 1 of ", self.record_range(f"{base}..{u1}").stdout)
+        fix = self.commit(self.repo, "a.sh")
+        self.assertEqual(self.dispose("9.1-r1-01", "--fixed", fix).returncode, 0)
+        p = self.record_range(f"{u1}..{fix}")
+        self.assertIn("round: 2 of ", p.stdout)   # the fix re-review: previous + 1
+        u2 = self.commit(self.repo, "u2.txt")
+        p = self.record_range(f"{fix}..{u2}")
+        self.assertIn("review 9.1-r3:", p.stdout)
+        self.assertIn("round: 1 of ", p.stdout)   # new code at a review's head
+        # the gate counts the same lineages (it reads the same log)
+        gate_lin = subprocess.run([sys.executable, "-c", "import json,sys; sys.path.insert(0, sys.argv[1]); "
+                                   "from _helpers import load; rr = load('review/scripts/review.py'); "
+                                   "recs = rr.vl.read_jsonl(sys.argv[2]); print(json.dumps(rr.rounds(recs, '9.1')[1]))",
+                                   os.path.dirname(os.path.abspath(__file__)), self.log],
+                                  env=self.env, capture_output=True, text=True, check=True).stdout
+        self.assertEqual(json.loads(gate_lin), {"9.1-r1": ["9.1-r1", 1], "9.1-r2": ["9.1-r1", 2],
+                                                "9.1-r3": ["9.1-r3", 1]})
+        # --continues names the parent outright, and refuses a review that is not this repo's
+        u3 = self.commit(self.repo, "u3.txt")
+        p = self.record_range(f"{u2}..{u3}", extra=("--continues", "9.1-r9"))
+        self.assertEqual(p.returncode, 2, p.stdout)
+        self.assertIn("is not an earlier wellmed/svc review", p.stderr)
+        p = self.record_range(f"{u2}..{u3}", extra=("--continues", "9.1-r3"))
+        self.assertEqual(p.returncode, 0, p.stderr)
         self.assertIn("round: 2 of ", p.stdout)
 
     def test_an_undecidable_lineage_fails_closed(self):
@@ -1026,14 +1058,96 @@ class TestReview(unittest.TestCase):
         gone = os.path.join(self.tmp.name, "gone")
         revs = [("9.1-r1", "svc", "a1", "b1"), ("9.1-r2", "svc", "b1", "c1"), ("9.1-r3", "other", "x", "y"),
                 ("9.1-r4", "svc", "d1", "e1")]
+        want = {"9.1-r1": ("9.1-r1", 1), "9.1-r2": ("9.1-r1", 2), "9.1-r3": ("9.1-r3", 1), "9.1-r4": ("9.1-r1", 3)}
+        for stamped in (set(), {"9.1-r1", "9.1-r2", "9.1-r4"}):
+            with self.subTest(stamped=stamped):
+                err = io.StringIO()
+                with contextlib.redirect_stderr(err):
+                    lin = vl.review_lineage(revs, lambda key: gone, {"9.1-r1": {"f1"}}, None, stamped)
+                self.assertEqual(lin, want)
+                # r2 starts at r1's head: unstamped, it continues without git; stamped, git cannot
+                # say whether it holds r1's fix, so it continues r1 itself — never the repo's
+                # highest round, which could be another lineage (review 10.2-r1-02)
+                self.assertEqual("[WARN] lineage of 9.1-r2" in err.getvalue(), bool(stamped))
+                self.assertIn("[WARN] lineage of 9.1-r4", err.getvalue())
+                self.assertIn("continuing 9.1-r2 (round 2)", err.getvalue())
+        # with no fix to look for, a stamped head-is-base start is new code, decided without git;
+        # an unstamped one keeps the old continuation (decision 65 for the lineage rule)
+        for stamped, r2 in (({"9.1-r1", "9.1-r2"}, ("9.1-r2", 1)), (set(), ("9.1-r1", 2))):
+            err = io.StringIO()
+            with contextlib.redirect_stderr(err):
+                lin = vl.review_lineage(revs[:2], lambda key: gone, None, None, stamped)
+            self.assertEqual(lin, {"9.1-r1": ("9.1-r1", 1), "9.1-r2": r2})
+            self.assertEqual(err.getvalue(), "")
+
+    def test_the_rule_follows_the_parent_lineage_root_stamp(self):
+        # review 10.2-r2-01 (decision 65): an unstamped lineage finishes under the old rules, so a
+        # stamped r3 starting at r2's head continues as round 3 (the round-3 STOP) with no fixed
+        # disposition; the child's own stamp never switches the rule. Git-unsure warns on stderr.
+        import contextlib
+        import io
+        vl = load("verify_lib.py")
+        gone = os.path.join(self.tmp.name, "gone")
+        revs = [("9.1-r1", "svc", "a1", "b1"), ("9.1-r2", "svc", "b1", "c1"), ("9.1-r3", "svc", "c1", "d1")]
+        for stamped, r3 in ((frozenset({"9.1-r3"}), ("9.1-r1", 3)), (frozenset({"9.1-r1", "9.1-r3"}), ("9.1-r2", 2))):
+            with self.subTest(stamped=sorted(stamped)):
+                err = io.StringIO()
+                with contextlib.redirect_stderr(err):
+                    lin = vl.review_lineage(revs, lambda key: gone, None, None, set(stamped))
+                self.assertEqual(lin["9.1-r3"], r3)
+        # root stamped + a fix to look for + git cannot tell: continue the parent, say so
         err = io.StringIO()
         with contextlib.redirect_stderr(err):
-            lin = vl.review_lineage(revs, lambda key: gone)
-        self.assertEqual(lin, {"9.1-r1": ("9.1-r1", 1), "9.1-r2": ("9.1-r1", 2), "9.1-r3": ("9.1-r3", 1),
-                               "9.1-r4": ("9.1-r1", 3)})
-        self.assertIn("[WARN] lineage of 9.1-r4", err.getvalue())
-        self.assertIn("continuing 9.1-r2 (round 2)", err.getvalue())
-        self.assertNotIn("lineage of 9.1-r2", err.getvalue())   # an exact head-is-base match needs no git
+            lin = vl.review_lineage(revs[:2], lambda key: gone, {"9.1-r1": {"f1"}}, None, {"9.1-r1", "9.1-r2"})
+        self.assertEqual(lin["9.1-r2"], ("9.1-r1", 2))
+        self.assertIn("[WARN] lineage of 9.1-r2: git cannot tell whether it holds a fix of 9.1-r1", err.getvalue())
+
+    def test_pruned_history_never_merges_a_lineage_into_another(self):
+        # review 10.2-r1-02 (149.2-r36 went round 2 -> 8): git cannot read a fix re-review's range;
+        # joining the repo's highest round merged lane B's r5 into lane A's capped lineage
+        import contextlib
+        import io
+        from unittest import mock
+        vl = load("verify_lib.py")
+        revs = [("9.1-r1", "svc", "a0", "a1"), ("9.1-r2", "svc", "a1", "a2"), ("9.1-r3", "svc", "a2", "a3"),
+                ("9.1-r4", "svc", "b0", "b1"), ("9.1-r5", "svc", "b1", "b2")]
+        fixes = {"9.1-r1": {"a2"}, "9.1-r2": {"a3"}, "9.1-r4": {"b2"}}
+        with mock.patch.object(vl, "_range_holds", lambda *a: None), \
+                mock.patch.object(vl, "_ranges_share", lambda *a: False), contextlib.redirect_stderr(io.StringIO()):
+            lin = vl.review_lineage(revs, lambda key: key, fixes, None, {r[0] for r in revs})
+        self.assertEqual(lin["9.1-r3"], ("9.1-r1", 3))
+        self.assertEqual(lin["9.1-r5"], ("9.1-r4", 2))
+
+    def test_a_pre_cutover_round_cap_stop_still_stands(self):
+        # review 10.2-r1-02, kalpa-docs 194.1's shape: an unstamped log where r2 and r3 each start
+        # at the previous head with no `fixed` disposition. Recorded under the old rule they are
+        # rounds 2 and 3, so r3's blocking fix is stopped by the `accept`; the lineage rule is
+        # versioned, so the closed unit's stop stands. The same log stamped rules 2 blocks.
+        gate = load("verdict-gate.py")
+        work = git(self.repo, "rev-parse", "HEAD")
+        h1, h2, h3 = (self.commit(self.repo, f"f{i}.txt") for i in (1, 2, 3))
+        fx = self.commit(self.repo, "a.sh")
+        key = "wellmed/svc"
+
+        def log(stamp):
+            recs = []
+            for n, (b, h) in enumerate(((work, h1), (h1, h2), (h2, h3)), 1):
+                rid, rng = f"9.1-r{n}", f"{b}..{h}"
+                recs += [dict({"record": "review", "review_id": rid, "reviewer": "codex gpt-test",
+                               "range": {key: rng}, "shas": {"base": b, "head": h}, "findings": 1,
+                               "verdict": "SHIP AFTER BLOCKING"}, **stamp),
+                         {"record": "finding", "review_id": rid, "finding_id": f"{rid}-01", "range": {key: rng},
+                          "file": "a.sh", "line": 2, "category": "c", "severity": "blocking", "text": "t"}]
+                recs.append({"record": "disposition", "finding_id": f"{rid}-01", "by": "t",
+                             **({"disposition": "fixed", "sha": fx, "repo": key, "via": "anchor"} if n == 3 else
+                                {"disposition": "rejected", "reason": "not a defect"})})
+            recs.append({"record": "acceptance", "by": "Alex"})
+            with open(self.log, "w") as fh:
+                fh.write("".join(json.dumps(r) + "\n" for r in recs))
+            return [b[0] for b in gate.review_presence_blocks(self.log, {}, self.projects)]
+
+        self.assertNotIn("rereview:9.1-r3-01", log({}))
+        self.assertIn("rereview:9.1-r3-01", log({"rules_version": 2}))   # new code each time: round 1
 
     def test_accepted_is_a_process_nit_never_a_rejection(self):
         self.record()
@@ -1060,6 +1174,89 @@ class TestReview(unittest.TestCase):
         self.assertIn("accepted (process nit): 9.1-r1-03 — comment drift, noted", p.stdout)
         self.assertIn("rejected: 9.1-r1-02 — the filter is in the repo layer", p.stdout)
 
+    def test_reframed_records_an_accepted_reframe_at_any_round(self):
+        # TO-DO 158.3: a [CASCADE] reframe had no outcome but `rejected`; scope 10 §4.2
+        gate, vr = load("verdict-gate.py"), load("verify-run.py")
+        head = git(self.repo, "rev-parse", "HEAD")
+        self.record()
+        old = git(self.repo, "rev-parse", "HEAD")
+        new = self.commit(self.repo, "a.sh")   # the replacing design
+        how = lambda *extra: run(REVIEW, "dispose", "--scope", self.scope, "--unit", "9.1", "--finding",
+                                 "9.1-r1-01", *extra, env=self.env)
+        cases = [(("--reframed", "one call site, no retry",), 2, "go together"),
+                 (("--reframed", "x", "--commit", new, "--by", "Alex"), 2, "--by judge|user"),
+                 (("--reframed", " ", "--commit", new, "--by", "user"), 1, "needs what changed"),
+                 (("--reframed", "x", "--commit", head, "--by", "user"), 1, "predates the finding"),
+                 (("--reframed", "x", "--commit", "nosuch", "--by", "user"), 1, "is not a commit")]
+        for extra, code, needle in cases:
+            with self.subTest(extra=extra):
+                p = how(*extra)
+                self.assertEqual(p.returncode, code, p.stdout + p.stderr)
+                self.assertIn(needle, p.stderr)
+        # round 1, on a blocking finding: recorded, counted, never audited as a rejection — the
+        # user's call here (the judge's is checked against the log: test_by_judge_is_read_from_the_log)
+        p = how("--reframed", "one call site, no retry", "--commit", new, "--by", "user")
+        self.assertEqual(p.returncode, 0, p.stderr)
+        self.assertIn("9.1-r1-01: reframed", p.stdout)
+        self.assertIn("the user's call", p.stdout)
+        self.assertEqual(self.records("disposition")[-1]["call"], "user")
+        self.assertNotIn("9.1-r1-01", str(gate.coverage_blocks(self.log)[0]))
+        self.assertEqual(vr.rejections(self.scope, "9.1"), 0)
+        # the gate wants the replacing commit reviewed — a new lineage, round 1
+        blocks = lambda: [b for b in gate.review_presence_blocks(self.log, {}, self.projects)
+                          if b[0] == "rereview:9.1-r1-01"]
+        self.assertIn("a reframe's replacing commit was never reviewed", str(blocks()))
+        p = self.record_range(f"{old}..{new}")
+        self.assertIn("round: 1 of ", p.stdout)
+        self.assertEqual(blocks(), [])
+        # a hand-written record without who accepted it blocks
+        with open(self.log, "a") as fh:
+            fh.write(json.dumps({"record": "disposition", "finding_id": "9.1-r1-03", "disposition": "reframed",
+                                 "sha": new, "reason": "x", "by": "t"}) + "\n")
+        self.assertIn("9.1-r1-03", str(gate.coverage_blocks(self.log)[0]))
+
+    def test_dispose_warns_when_the_fix_was_reverted(self):
+        self.record()
+        fix = self.commit(self.repo, "a.sh")
+        git(self.repo, "revert", "--no-edit", fix)
+        p = self.dispose("9.1-r1-01", "--fixed", fix)
+        self.assertEqual(p.returncode, 0, p.stderr)
+        self.assertIn(f"`fixed {fix}` has been reverted on HEAD", p.stderr)
+        other = self.commit(self.repo, "a.sh")
+        p = self.dispose("9.1-r1-01", "--fixed", other)
+        self.assertNotIn("reverted", p.stderr)
+
+    def test_rules_version_follows_the_lineage_root(self):
+        # decision 65: sessions mid-review see new scripts at cutover; a lineage finishes under
+        # the rules its root was recorded with. The versioned rule here: from round 2 (rules 2),
+        # a note's off-anchor fix is never re-reviewed; at round 1, or under rules 1, it is.
+        gate = load("verdict-gate.py")
+        note = [{"file": "a.sh", "line": 2, "severity": "note", "category": "dirty-comment", "group": "",
+                 "text": "t", "fix": "", "target": "shipped"}]
+        for _ in range(2):
+            self.assertEqual(self.record(findings=note).returncode, 0)
+        reviews = [r for r in map(json.loads, open(self.log)) if r["record"] == "review"]
+        self.assertEqual([r["rules_version"] for r in reviews], [2, 2])
+        for fid in ("9.1-r1-01", "9.1-r2-01"):
+            fix = self.commit(self.repo, "other.txt")
+            self.assertEqual(self.dispose(fid, "--fixed", fix, "--off-anchor", "moved").returncode, 0)
+        wanted = lambda: sorted(b[0] for b in gate.review_presence_blocks(self.log, {}, self.projects)
+                                if b[0].startswith("rereview:"))
+        self.assertEqual(wanted(), ["rereview:9.1-r1-01"])   # round 1 still re-reviewed
+        # the same log with the root recorded before the cutover: r2 (stamped 2) keeps rules 1
+        recs = [json.loads(x) for x in open(self.log)]
+        for r in recs:
+            if r.get("record") == "review" and r["review_id"] == "9.1-r1":
+                del r["rules_version"]
+        with open(self.log, "w") as fh:
+            fh.write("".join(json.dumps(r) + "\n" for r in recs))
+        self.assertEqual(wanted(), ["rereview:9.1-r1-01", "rereview:9.1-r2-01"])
+        vl = load("verify_lib.py")
+        lin = {"9.1-r1": ("9.1-r1", 1), "9.1-r2": ("9.1-r1", 2), "9.1-r3": ("9.1-r3", 1)}
+        stamped = [{"record": "review", "review_id": "9.1-r2", "rules_version": 2},
+                   {"record": "review", "review_id": "9.1-r3", "rules_version": "2"}]
+        self.assertEqual(vl.lineage_rules(stamped, lin), {"9.1-r1": 1, "9.1-r2": 1, "9.1-r3": 1})
+
     def test_cascade_when_a_new_finding_lands_on_a_fix(self):
         mk = lambda line: [{"file": "a.sh", "line": line, "severity": "should-fix", "category": "fail-open",
                             "group": "", "text": "t", "fix": "f", "target": "shipped"}]
@@ -1074,6 +1271,391 @@ class TestReview(unittest.TestCase):
         self.assertIn("[CASCADE] a.sh — 9.1-r3-01 (line 3)", p.stdout)
         self.assertIn("to fix 9.1-r1-01", p.stdout)
 
+
+    # ---- findings budget + round-aware prompt (scope 10 §4.2, plan 10.2 Task 2.1)
+    def finding(self, sev, text, file="a.sh", **over):
+        return dict({"file": file, "line": 2, "severity": sev, "category": "engine", "group": "", "text": text,
+                     "fix": "f"}, **over)
+
+    def test_no_should_fix_cap_at_any_round_and_notes_accepted_at_round_one(self):
+        gate = load("verdict-gate.py")
+        base = git(self.repo, "rev-parse", "HEAD")
+        u1 = self.commit(self.repo, "a.sh")
+        many = [self.finding("should-fix", f"s{i}") for i in range(12)]
+        p = self.record_range(f"{base}..{u1}", findings=many + [self.finding("note", "wording")])
+        self.assertEqual(p.returncode, 0, p.stderr)
+        self.assertEqual(len(self.findings()), 13)
+        self.assertNotIn("[BUDGET]", p.stdout)   # round 1 is uncapped and unbudgeted
+        # a note may be accepted at round 1, and the gate takes it
+        self.assertEqual(self.dispose("9.1-r1-13", "--accepted", "wording only").returncode, 0)
+        self.assertNotIn("9.1-r1-13", str(gate.coverage_blocks(self.log)[0]))
+        fix = self.commit(self.repo, "a.sh")
+        for i in range(1, 13):
+            self.assertEqual(self.dispose(f"9.1-r1-{i:02d}", "--fixed", fix).returncode, 0)
+        p = self.record_range(f"{u1}..{fix}", findings=many + [self.finding("note", "n1"), self.finding("note", "n2")])
+        self.assertEqual(p.returncode, 0, p.stderr)
+        self.assertIn("round: 2 of ", p.stdout)
+        mine = [f for f in self.findings() if f["review_id"] == "9.1-r2"]
+        self.assertEqual(sum(f["severity"] == "should-fix" for f in mine), 12)   # every one logged
+        self.assertFalse(any(f["capped"] for f in mine))
+        self.assertIn("[BUDGET] round 2: 2 note(s)", p.stdout)
+
+    def test_fix_round_notes_get_one_batch_fix_and_no_rereview(self):
+        gate = load("verdict-gate.py")
+        base = git(self.repo, "rev-parse", "HEAD")
+        u1 = self.commit(self.repo, "a.sh")
+        self.record_range(f"{base}..{u1}")
+        fix = self.commit(self.repo, "a.sh")
+        self.assertEqual(self.dispose("9.1-r1-01", "--fixed", fix).returncode, 0)
+        p = self.record_range(f"{u1}..{fix}", findings=[self.finding("should-fix", "s"), self.finding("note", "n1"),
+                                                        self.finding("note", "n2")])
+        self.assertIn("round: 2 of ", p.stdout)
+        other = self.commit(self.repo, "doc.md")
+        for fid in ("9.1-r2-01", "9.1-r2-02"):
+            p = self.dispose(fid, "--fixed", other, "--off-anchor", "the doc said it")
+            self.assertEqual(p.returncode, 0, p.stderr)
+            self.assertNotIn("second batch fix", p.stderr)
+        # a second batch for the same round's notes: recorded, with a WARN
+        again = self.commit(self.repo, "a.sh")
+        p = self.dispose("9.1-r2-03", "--fixed", again)
+        self.assertEqual(p.returncode, 0, p.stderr)
+        self.assertIn("a second batch fix for 9.1-r2's notes", p.stderr)
+        # the off-anchor should-fix wants a re-review; the off-anchor note never does
+        ids = [b[0] for b in gate.review_presence_blocks(self.log, {}, self.projects)]
+        self.assertIn("rereview:9.1-r2-01", ids)
+        self.assertNotIn("rereview:9.1-r2-02", ids)
+
+    def test_a_fix_rounds_prompt_carries_the_earlier_findings_and_dispositions(self):
+        base = git(self.repo, "rev-parse", "HEAD")
+        u1 = self.commit(self.repo, "a.sh")
+        prep = lambda rng, *extra: run(REVIEW, "prepare", "--repo", self.repo, "--range", rng, "--no-checks",
+                                       "--scope", self.scope, "--unit", "9.1", "--out-dir",
+                                       os.path.join(self.tmp.name, "p"), *extra, env=self.env)
+        p = prep(f"{base}..{u1}")
+        self.assertEqual(p.returncode, 0, p.stderr)
+        self.assertIn("round: 1", p.stdout)
+        prompt = read(p.stdout.split("prompt: ")[1].split()[0])
+        self.assertIn("Report every defect you find, not a top few", prompt)
+        self.assertIn("names the class of defect", prompt)
+        self.record_range(f"{base}..{u1}", findings=[
+            self.finding("blocking", "swallowed {{DIFF}} failure"), self.finding("should-fix", "tenant", "b.go"),
+            self.finding("note", "wording")])
+        fix = self.commit(self.repo, "a.sh")
+        self.dispose("9.1-r1-01", "--fixed", fix)
+        self.dispose("9.1-r1-02", "--rejected", "the filter is in the repo layer")
+        for flags in ((), ("--lean",)):
+            with self.subTest(flags=flags):
+                p = prep(f"{u1}..{fix}", *flags)
+                self.assertEqual(p.returncode, 0, p.stderr)
+                self.assertIn("round: 2", p.stdout)
+                prompt = read(p.stdout.split("prompt: ")[1].split()[0])
+                self.assertIn("Round 2 of this review lineage", prompt)
+                self.assertIn("Do not raise a `rejected` finding again unless you have new evidence", prompt)
+                self.assertIn(f"`9.1-r1-01` [blocking] `a.sh:2` — swallowed {{{{DIFF}}}} failure → **fixed "
+                              f"{fix[:10]}**", prompt)   # a finding's own `{{…}}` is never substituted
+                self.assertIn("`9.1-r1-02` [should-fix] `b.go:2` — tenant → **rejected — the filter is in the "
+                              "repo layer**", prompt)
+                self.assertIn("`9.1-r1-03` [note] `a.sh:2` — wording → **undisposed**", prompt)
+                self.assertIn("`reopens`", prompt)
+                self.assertNotRegex(prompt, r"\{\{(ROUND|PREVIOUS|DIFF|LOG|RULES|CHECKS)\}\}(?! failure)")
+        # a bad --continues is refused here as in record
+        p = prep(f"{u1}..{fix}", "--continues", "9.1-r9")
+        self.assertEqual(p.returncode, 2, p.stdout)
+
+    def test_a_finding_that_reopens_records_the_link(self):
+        base = git(self.repo, "rev-parse", "HEAD")
+        u1 = self.commit(self.repo, "a.sh")
+        self.record_range(f"{base}..{u1}")
+        fix = self.commit(self.repo, "a.sh")
+        self.dispose("9.1-r1-01", "--fixed", fix)
+        p = self.record_range(f"{u1}..{fix}", findings=[
+            self.finding("blocking", "still swallowed", reopens="9.1-r1-01"),
+            self.finding("should-fix", "typo link", reopens="9.1-r7-01"),
+            self.finding("note", "no link", reopens=None)])
+        self.assertEqual(p.returncode, 0, p.stderr)
+        mine = {f["finding_id"]: f for f in self.findings() if f["review_id"] == "9.1-r2"}
+        self.assertEqual(mine["9.1-r2-01"]["reopens"], "9.1-r1-01")
+        self.assertNotIn("reopens", mine["9.1-r2-02"])   # an unknown ID: kept, link dropped, WARN
+        self.assertIn("reopens 9.1-r7-01`: no such finding in 9.1 — link dropped", p.stderr)
+        self.assertNotIn("reopens", mine["9.1-r2-03"])
+        self.assertIn("reopens 9.1-r1-01", read(os.path.join(self.scope, "artifacts", "review-9.1-r2.md")))
+        # a value that is not a finding ID is a malformed answer — nothing recorded
+        p = self.record_range(f"{u1}..{fix}", findings=[self.finding("note", "x", reopens="see above")])
+        self.assertEqual(p.returncode, 3, p.stdout)
+        self.assertIn("not a finding ID", p.stderr)
+
+    def test_a_reopens_chain_of_two_stops_patching(self):
+        # scope 10 §4.2 fix discipline: the second failed fix of one defect takes the reframe prompt
+        base = git(self.repo, "rev-parse", "HEAD")
+        head = self.commit(self.repo, "a.sh")
+        self.record_range(f"{base}..{head}")
+        for rnd, parent in ((2, "9.1-r1-01"), (3, "9.1-r2-01")):
+            fix = self.commit(self.repo, "a.sh")
+            self.assertEqual(self.dispose(parent, "--fixed", fix).returncode, 0)
+            p = self.record_range(f"{head}..{fix}", findings=[self.finding("blocking", "still", reopens=parent)])
+            self.assertIn(f"round: {rnd} of ", p.stdout)
+            head = fix
+        self.assertNotIn("[CHAIN]", p.stdout.split("9.1-r3")[0])
+        self.assertIn("[CHAIN] 9.1-r3-01 reopens 9.1-r2-01 reopens 9.1-r1-01: the fix failed twice — stop "
+                      "patching and take the reframe prompt", p.stdout)
+        # a lineage rooted under the old rules keeps them (decision 65)
+        with open(self.log) as fh:
+            recs = [json.loads(x) for x in fh]
+        for r in recs:
+            if r.get("review_id") == "9.1-r1" and r["record"] == "review":
+                r["rules_version"] = 1
+        with open(self.log, "w") as fh:
+            fh.writelines(json.dumps(r) + "\n" for r in recs)
+        out = subprocess.run([sys.executable, "-c", "import sys; sys.path.insert(0, sys.argv[1]); "
+                              "from _helpers import load; rr = load('review/scripts/review.py'); "
+                              "print(rr.chains(rr.vl.read_jsonl(sys.argv[2]), '9.1', '9.1-r3'))",
+                              os.path.dirname(os.path.abspath(__file__)), self.log],
+                             env=self.env, capture_output=True, text=True, check=True).stdout
+        self.assertEqual(out.strip(), "[]")
+
+    # ---- reframe prompt + fresh judge (scope 10 §4.2, plan 10.2 Task 2.2) — the codex call is stubbed:
+    # each test writes the judge's answer file and passes the judge line codex-exec.py would print
+    REFRAME = {"proposal": "replace the per-line scanner with one allowlist table", "removes": ["#1", "#2"],
+               "deletes": "the scanner module"}
+
+    def judged(self, rid, verdict="accept", judge="codex gpt-test", **over):
+        doc = dict({"verdict": verdict, "meets_objective": True, "simplifies": True, "deletes": "scanner.sh",
+                    "reason": "one table replaces two patched heuristics", "overturns": None,
+                    "reopened_decisions": []}, **over)
+        path = os.path.join(self.tmp.name, f"judge-{rid}.json")
+        with open(path, "w") as fh:
+            json.dump(doc, fh)
+        return run(REVIEW, "reframe-record", "--scope", self.scope, "--unit", "9.1", "--review", rid,
+                   "--judge", judge, "--input", path, env=self.env)
+
+    def records(self, kind):
+        with open(self.log) as fh:
+            return [r for r in map(json.loads, fh) if r["record"] == kind]
+
+    def verdicts(self):
+        return self.records("reframe-verdict")
+
+    def test_a_reframe_is_recorded_and_its_judge_reads_the_decisions(self):
+        with open(os.path.join(self.scope, "scope.md"), "w") as fh:
+            fh.write("# S\n\n## 1. Context\n\nOBJ: every fix lands reviewed.\n\n## 11. Key Decisions Captured\n\n"
+                     "- D7: one writer for the log.\n\n## 12. Other\n\nnot this\n")
+        with open(os.path.join(self.scope, "progress.md"), "w") as fh:
+            fh.write("# P\n\n## Decisions Log\n\n- 2026-10-01: JSONL stays.\n\n## Plan 9.1\n\nnot this\n")
+        p = self.record(reframe=self.REFRAME)
+        self.assertEqual(p.returncode, 0, p.stderr)
+        self.assertIn("[REFRAME] 9.1-r1 proposes a simpler design that removes 2 finding(s)", p.stdout)
+        rf = self.records("reframe")
+        # `#n` is the nth finding of the answer: the note (#1) and the blocking one (#2), IDs by severity
+        self.assertEqual(rf[0]["removes"], ["9.1-r1-03", "9.1-r1-01"])
+        self.assertEqual(self.judged("9.1-r1", "reject", reason="it moves the scanner").returncode, 0)
+        p = self.record(reframe=dict(self.REFRAME, removes=["9.1-r1-01", "9.1-r0-09"]))  # same range: round 2
+        self.assertIn("round: 2 of", p.stdout)
+        self.assertIn("9.1-r0-09", p.stderr)   # an unknown earlier ID is dropped, with a warning
+        self.assertEqual(self.records("reframe")[1]["removes"],
+                         ["9.1-r1-01"])
+        out = os.path.join(self.tmp.name, "rf")
+        p = run(REVIEW, "reframe-prepare", "--scope", self.scope, "--unit", "9.1", "--review", "9.1-r2",
+                "--out-dir", out, env=self.env)
+        self.assertEqual(p.returncode, 0, p.stderr)
+        self.assertIn("reframe-judge.schema.json", p.stdout)
+        prompt = read(p.stdout.split("prompt: ")[1].split()[0])
+        for want in ("OBJ: every fix lands reviewed.", "D7: one writer for the log.", "2026-10-01: JSONL stays.",
+                     "9.1-r1: replace the per-line scanner with one allowlist table — rejected: it moves the scanner",
+                     "`9.1-r1-01`", "`9.1-r2-01`"):
+            self.assertIn(want, prompt)
+        self.assertNotIn("not this", prompt)
+        self.assertNotRegex(prompt, r"\{\{[A-Z_]+\}\}")
+        # a review's own rejection is never listed as an earlier one
+        p = run(REVIEW, "reframe-prepare", "--scope", self.scope, "--unit", "9.1", "--review", "9.1-r1",
+                "--out-dir", out, env=self.env)
+        own = read(p.stdout.split("prompt: ")[1].split()[0])
+        self.assertIn("## Reframes this lineage already rejected\n\n- (none)", own)
+        # no objective anywhere: exit 3, never a prompt with a hole
+        os.remove(os.path.join(self.scope, "scope.md"))
+        p = run(REVIEW, "reframe-prepare", "--scope", self.scope, "--unit", "9.1", "--review", "9.1-r2",
+                "--out-dir", out, env=self.env)
+        self.assertEqual(p.returncode, 3, p.stderr)
+        p = run(REVIEW, "reframe-prepare", "--scope", self.scope, "--unit", "9.1", "--review", "9.1-r2",
+                "--objective", "OBJ2", "--out-dir", out, env=self.env)
+        self.assertEqual(p.returncode, 0, p.stderr)
+        # a review without a reframe has nothing to judge
+        self.record()
+        p = run(REVIEW, "reframe-prepare", "--scope", self.scope, "--unit", "9.1", "--review", "9.1-r3",
+                "--objective", "O", "--out-dir", out, env=self.env)
+        self.assertEqual(p.returncode, 2, p.stderr)
+
+    def test_the_judge_accepts_only_a_reframe_that_meets_the_objective_and_deletes_something(self):
+        self.record(reframe=self.REFRAME)
+        # acceptance: one that deletes nothing is rejected with a reason
+        p = self.judged("9.1-r1", deletes="  ")
+        self.assertEqual(p.returncode, 0, p.stderr)
+        v = self.verdicts()[-1]
+        self.assertEqual((v["verdict"], v["deletes"]), ("rejected", ""))
+        self.assertTrue(v["reason"].startswith("it names nothing it deletes — "), v["reason"])
+        self.assertIn("[REFRAME] 9.1-r1 rejected: it names nothing it deletes", p.stdout)
+        p = self.judged("9.1-r1", meets_objective=False)
+        self.assertTrue(self.verdicts()[-1]["reason"].startswith("the objective is not met — "))
+        # acceptance: one that meets the objective and deletes a module is accepted
+        p = self.judged("9.1-r1", deletes="the scanner module (scanner.sh)",
+                        reopened_decisions=[{"finding": "9.1-r1-02", "decision": "D7: tenant filter in the repo"},
+                                            {"finding": "9.1-r9-01", "decision": "D1"}])
+        self.assertEqual(p.returncode, 0, p.stderr)
+        v = self.verdicts()[-1]
+        self.assertEqual((v["verdict"], v["deletes"], v["judge"]), ("accepted", "the scanner module (scanner.sh)",
+                                                                    "codex gpt-test"))
+        self.assertIn("dispose --reframed", p.stdout)
+        self.assertIn("9.1-r1-03, 9.1-r1-01", p.stdout)
+        self.assertIn("[DECISION] 9.1-r1-02 re-opens a recorded decision: D7: tenant filter in the repo", p.stdout)
+        self.assertEqual(len(v["reopened_decisions"]), 1)     # the unknown finding was dropped
+        self.assertIn("9.1-r9-01", p.stderr)
+        # accepted, but it overturns a decision: the user's call before anything is built
+        p = self.judged("9.1-r1", overturns="D7: one writer")
+        self.assertEqual(self.verdicts()[-1]["overturns"], "D7: one writer")
+        self.assertIn("bring it to the user before building it", p.stdout)
+        self.assertNotIn("dispose --reframed", p.stdout)
+        # no judge ran: not taken, never accepted by default
+        p = run(REVIEW, "reframe-record", "--scope", self.scope, "--unit", "9.1", "--review", "9.1-r1",
+                "--judge", "none codex out of credits", env=self.env)
+        self.assertEqual(p.returncode, 0, p.stderr)
+        self.assertEqual(self.verdicts()[-1]["verdict"], "not-judged")
+        # a malformed answer or an empty reason records nothing: exit 3
+        n = len(self.verdicts())
+        for over in ({"reason": "  "}, {"meets_objective": "yes"}, {"verdict": "maybe"}):
+            self.assertEqual(self.judged("9.1-r1", **over).returncode, 3, over)
+        self.assertEqual(self.judged("9.1-r1", judge="gpt").returncode, 2)
+        self.assertEqual(len(self.verdicts()), n)
+
+    def test_by_judge_is_read_from_the_log(self):
+        # review 10.2-r1-01: `--by judge` was the driver's word, so any finding, blocking included,
+        # could be cleared as reframed without a judge ever running. dispose and the gate both read
+        # the judge's verdict from the log; an accept that overturns a decision is the user's call.
+        gate = load("verdict-gate.py")
+        self.record(reframe=self.REFRAME)   # removes 9.1-r1-03 (note) and 9.1-r1-01 (blocking)
+        new = self.commit(self.repo, "a.sh")
+        how = lambda fid, by: run(REVIEW, "dispose", "--scope", self.scope, "--unit", "9.1", "--finding", fid,
+                                  "--reframed", "one table", "--commit", new, "--by", by, env=self.env)
+        steps = [(None, "9.1-r1-01", "judge did not accept the reframe of 9.1-r1 (latest verdict: none)"),
+                 (dict(verdict="reject", reason="it moves the scanner"), "9.1-r1-01",
+                  "(latest verdict: rejected)"),
+                 (dict(overturns="D7: one writer"), "9.1-r1-01", "overturns a recorded decision (D7: one writer)"),
+                 (dict(), "9.1-r1-02", "no reframe in 9.1-r1-02's review lineage removes it")]
+        for verdict, fid, needle in steps:
+            with self.subTest(verdict=verdict, fid=fid):
+                if verdict is not None:
+                    self.assertEqual(self.judged("9.1-r1", **verdict).returncode, 0)
+                p = how(fid, "judge")
+                self.assertEqual(p.returncode, 1, p.stdout + p.stderr)
+                self.assertIn(needle, p.stderr)
+        self.assertEqual(self.records("disposition"), [])
+        # the judge's clean accept (the latest verdict) backs it; the user's call needs no verdict
+        self.assertEqual(how("9.1-r1-01", "judge codex gpt-test").returncode, 0)
+        self.assertEqual(self.records("disposition")[-1]["call"], "judge")
+        self.assertEqual(how("9.1-r1-02", "user").returncode, 0)
+        # the gate reads the same log: a hand-written `--by judge` the judge never took blocks
+        with open(self.log, "a") as fh:
+            fh.write(json.dumps({"record": "disposition", "finding_id": "9.1-r1-03", "disposition": "reframed",
+                                 "sha": new, "reason": "x", "by": "judge"}) + "\n")
+        ids = lambda: [b[0] for b in gate.review_presence_blocks(self.log, {}, self.projects)
+                       if b[0].startswith("reframe:")]
+        self.assertEqual(ids(), [])   # 9.1-r1-03 is in the accepted reframe's `removes`
+        self.assertEqual(self.judged("9.1-r1", overturns="D7").returncode, 0)   # now the latest verdict
+        self.assertEqual(ids(), ["reframe:9.1-r1-01", "reframe:9.1-r1-03"])   # 9.1-r1-02 is `--by user`
+        # a reframe in another lineage never backs it (fail closed), nor does an unknown review
+        vl = load("verify_lib.py")
+        recs = self.records("finding") + self.records("reframe") + \
+            [{"record": "reframe-verdict", "review_id": "9.1-r1", "verdict": "accepted", "overturns": None}]
+        self.assertIsNone(vl.judge_took(recs, "9.1-r1-01", {"9.1-r1": ("9.1-r1", 1)}))
+        other = [dict(r, review_id="9.1-r0") if r["record"] != "finding" else r for r in recs]
+        self.assertIn("no reframe", vl.judge_took(other, "9.1-r1-01", {"9.1-r1": ("9.1-r1", 1),
+                                                                      "9.1-r0": ("9.1-r0", 1)}))
+        self.assertIn("has no lineage", vl.judge_took(recs, "9.1-r1-01", {}))
+
+    def test_a_malformed_reframe_is_exit_3(self):
+        for rf in ({"proposal": "", "removes": ["#1"], "deletes": "x"}, {"proposal": "p", "removes": ["#9"],
+                   "deletes": "x"}, {"proposal": "p", "removes": ["bogus"], "deletes": "x"},
+                   {"proposal": "p", "removes": [], "deletes": " "}):
+            self.assertEqual(self.record(reframe=rf).returncode, 3, rf)
+        self.assertFalse(os.path.exists(self.log) and self.findings())
+
+    def test_a_fallback_local_maxima_finding_is_advisory(self):
+        lm = [self.finding("should-fix", "patched heuristic again", category="local-maxima"),
+              self.finding("should-fix", "swallowed error", category="silent-failure")]
+        p = self.record(reviewer="claude-fallback codex out of credits", findings=lm)
+        self.assertEqual(p.returncode, 0, p.stderr)
+        self.assertEqual([f.get("advisory") for f in self.findings()], [True, None])
+        self.record(findings=lm)   # the same flag from codex is a real finding
+        self.assertEqual([f.get("advisory") for f in self.findings()][2:], [None, None])
+
+    def test_schema_types_outside_the_subset_fail_closed(self):
+        vl = load("review/scripts/review.py").vl
+        self.assertEqual(vl.schema_problems(True, {"type": "boolean"}), [])
+        self.assertTrue(vl.schema_problems(1, {"type": "boolean"}))
+        self.assertTrue(vl.schema_problems(1.5, {"type": "number"}))
+        self.assertTrue(vl.schema_problems("x", {"type": ["string", "integer", "null"]}))
+        self.assertEqual(vl.schema_problems(None, {"type": ["object", "null"]}), [])
+
+
+    # ---- effort trial (scope 10 §4.2, plan 10.2 Task 2.4)
+    def prepare_range(self, rng):
+        p = run(REVIEW, "prepare", "--repo", self.repo, "--range", rng, "--scope", self.scope, "--unit", "9.1",
+                "--out-dir", os.path.join(self.tmp.name, "prep"), "--no-checks", env=self.env)
+        self.assertEqual(p.returncode, 0, p.stderr)
+        return p.stdout
+
+    def test_the_effort_trial_bumps_round_one_and_fix_rounds_and_stamps_the_record(self):
+        base = git(self.repo, "rev-parse", "HEAD")
+        head = self.commit(self.repo, "a.sh")
+        out = self.prepare_range(f"{base}..{head}")
+        self.assertIn("round: 1\n", out)
+        self.assertIn("effort: medium (1 file(s), 1 changed line(s); effort trial: low → medium)", out)
+        self.record_range(f"{base}..{head}", ("--effort", "medium"), findings=[self.finding("blocking", "b")])
+        fix = self.commit(self.repo, "a.sh")
+        self.assertEqual(self.dispose("9.1-r1-01", "--fixed", fix).returncode, 0)
+        out = self.prepare_range(f"{head}..{fix}")
+        self.assertIn("round: 2\n", out)
+        self.assertIn("effort trial: low → medium", out)
+        self.record_range(f"{head}..{fix}", ("--effort", "medium"), findings=[])
+        stamps = [(r["round"], r["effort"], r["effort_base"]) for r in self.records("review")]
+        self.assertEqual(stamps, [(1, "medium", "low"), (2, "medium", "low")])
+        # a lineage rooted before the cutover keeps its own effort (decision 65)
+        with open(self.log) as fh:
+            recs = [json.loads(x) for x in fh]
+        recs[0]["rules_version"] = 1
+        with open(self.log, "w") as fh:
+            fh.writelines(json.dumps(r) + "\n" for r in recs)
+        fix2 = self.commit(self.repo, "a.sh")
+        self.assertEqual(self.dispose("9.1-r1-01", "--fixed", fix2).returncode, 0)
+        out = self.prepare_range(f"{fix}..{fix2}")
+        self.assertIn("round: 3\n", out)
+        self.assertIn("effort: low (1 file(s), 1 changed line(s))\n", out)
+        # a non-codex reviewer ran at no codex tier
+        p = run(REVIEW, "record", "--repo", self.repo, "--range", f"{fix}..{fix2}", "--reviewer",
+                "claude-fallback codex out", "--input", self.answer(findings=[]), "--scope", self.scope,
+                "--unit", "9.1", "--passes", "p", env=self.env)
+        self.assertEqual(p.returncode, 0, p.stderr)
+        last = self.records("review")[-1]
+        self.assertEqual((last["round"], last["effort"], last["effort_base"]), (3, None, None))
+        # review 10.2-r1-03: the stamp is the tier codex ran at, never a recomputed one (a prepare
+        # without --scope/--unit assumes rules 2); not passed, it is null with a warning
+        p = self.record_range(f"{fix}..{fix2}", ("--effort", "high"), findings=[])
+        self.assertIn("--effort high: this lineage's rules give low — stamped as run", p.stderr)
+        self.assertEqual(self.records("review")[-1]["effort"], "high")
+        p = self.record_range(f"{fix}..{fix2}", findings=[])
+        self.assertIn("no --effort: the tier codex ran at is not stamped", p.stderr)
+        self.assertEqual((self.records("review")[-1]["effort"], self.records("review")[-1]["effort_base"]),
+                         (None, "low"))
+
+    def test_effort_trial_tiers_and_flag(self):
+        vl = load("review/scripts/review.py").vl
+        self.assertEqual(vl.review_effort([(30, 5000)], 2)[:2], ("xhigh", "high"))
+        self.assertEqual(vl.review_effort([(1, 100)], 2)[:2], ("high", "medium"))
+        self.assertEqual(vl.review_effort([], 2)[:2], ("high", "medium"))
+        self.assertEqual(vl.review_effort([(1, 1)], 1)[:2], ("low", "low"))
+        vl.EFFORT_TRIAL = False   # verify_lib is a shared module: restore it for the other tests
+        try:
+            self.assertEqual(vl.review_effort([(1, 1)], 2), ("low", "low", "1 file(s), 1 changed line(s)"))
+        finally:
+            vl.EFFORT_TRIAL = True
 
 if __name__ == "__main__":
     unittest.main()

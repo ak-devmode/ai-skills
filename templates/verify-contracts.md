@@ -339,8 +339,12 @@ Every record carries `record`: `review`, `finding` or `disposition`.
 6.0 **`review`** records — one per `record` call, written even when there are no findings:
 `schema` · `ts` · `review_id` · `reviewer` (judge line, §4.6) · `range` · `shas`
 (`{base, head}`, the range resolved to commits at record time) · `passes` · `findings`
-(count) · `verdict`. `review.py` allocates the `review_id` and appends under an
-exclusive lock on the log, so concurrent or clean reviews never share an ID.
+(count) · `verdict` · `mode` · `rules_version` (`verify_lib.RULES_VERSION`; absent = 1) ·
+`continues` (optional, `record --continues`). `review.py` allocates the `review_id` and appends
+under an exclusive lock on the log, so concurrent or clean reviews never share an ID.
+**A lineage runs under its root's `rules_version`** (scope 10, decision 65): skills symlink into
+the live checkout, so a session mid-review sees new scripts at cutover, and the gate and `record`
+apply the rules the lineage started with. An unstamped or malformed root is version 1.
 
 6.1 **`finding`** records keep the reviewer's raw output: `schema` · `ts` · `review_id`
 (`<unit>-r<n>`) · `finding_id` (`<review_id>-<nn>`, stable for that review) · `reviewer`

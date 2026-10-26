@@ -1148,6 +1148,37 @@ class TestReview(unittest.TestCase):
         p = self.dispose("9.1-r1-01", "--fixed", other)
         self.assertNotIn("reverted", p.stderr)
 
+    def test_rules_version_follows_the_lineage_root(self):
+        # decision 65: sessions mid-review see new scripts at cutover; a lineage finishes under
+        # the rules its root was recorded with. The versioned rule here: from round 2 (rules 2),
+        # a note's off-anchor fix is never re-reviewed; at round 1, or under rules 1, it is.
+        gate = load("verdict-gate.py")
+        note = [{"file": "a.sh", "line": 2, "severity": "note", "category": "dirty-comment", "group": "",
+                 "text": "t", "fix": "", "target": "shipped"}]
+        for _ in range(2):
+            self.assertEqual(self.record(findings=note).returncode, 0)
+        reviews = [r for r in map(json.loads, open(self.log)) if r["record"] == "review"]
+        self.assertEqual([r["rules_version"] for r in reviews], [2, 2])
+        for fid in ("9.1-r1-01", "9.1-r2-01"):
+            fix = self.commit(self.repo, "other.txt")
+            self.assertEqual(self.dispose(fid, "--fixed", fix, "--off-anchor", "moved").returncode, 0)
+        wanted = lambda: sorted(b[0] for b in gate.review_presence_blocks(self.log, {}, self.projects)
+                                if b[0].startswith("rereview:"))
+        self.assertEqual(wanted(), ["rereview:9.1-r1-01"])   # round 1 still re-reviewed
+        # the same log with the root recorded before the cutover: r2 (stamped 2) keeps rules 1
+        recs = [json.loads(x) for x in open(self.log)]
+        for r in recs:
+            if r.get("record") == "review" and r["review_id"] == "9.1-r1":
+                del r["rules_version"]
+        with open(self.log, "w") as fh:
+            fh.write("".join(json.dumps(r) + "\n" for r in recs))
+        self.assertEqual(wanted(), ["rereview:9.1-r1-01", "rereview:9.1-r2-01"])
+        vl = load("verify_lib.py")
+        lin = {"9.1-r1": ("9.1-r1", 1), "9.1-r2": ("9.1-r1", 2), "9.1-r3": ("9.1-r3", 1)}
+        stamped = [{"record": "review", "review_id": "9.1-r2", "rules_version": 2},
+                   {"record": "review", "review_id": "9.1-r3", "rules_version": "2"}]
+        self.assertEqual(vl.lineage_rules(stamped, lin), {"9.1-r1": 1, "9.1-r2": 1, "9.1-r3": 1})
+
     def test_cascade_when_a_new_finding_lands_on_a_fix(self):
         mk = lambda line: [{"file": "a.sh", "line": line, "severity": "should-fix", "category": "fail-open",
                             "group": "", "text": "t", "fix": "f", "target": "shipped"}]

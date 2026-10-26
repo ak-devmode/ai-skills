@@ -495,6 +495,23 @@ def review_lineage(reviews, path_of, fixes=None, continues=None):
     return out
 
 
+# review/SKILL.md §5.1 rules a review lineage runs under, stamped on every `review` record (scope 10,
+# decision 65). Skills symlink into the live checkout, so sessions mid-review see new scripts at
+# cutover: a lineage finishes under the version its root was recorded with. 1 = before scope 10
+# (no stamp); 2 = scope 10's findings budget (notes from round 2 log, at most one batch fix, never
+# re-reviewed), `reopens` chain stop, and effort trial.
+RULES_VERSION = 2
+
+
+def lineage_rules(recs, lineage):
+    """{review_id: rules version of its lineage's root} — `lineage` from review_lineage, `recs`
+    the review log. A root without a stamp is version 1; a stamp that is not an int is version
+    1 too (the older, stricter rules), never the newer ones by default."""
+    stamp = {r.get("review_id"): r.get("rules_version") for r in recs if r.get("record") == "review"}
+    v = lambda rid: stamp.get(rid) if isinstance(stamp.get(rid), int) else 1
+    return {rid: v(root) for rid, (root, _) in lineage.items()}
+
+
 def accepted_nits(recs):
     """[(finding, disposition)] for every finding in review-log records `recs` whose latest
     disposition is `accepted` — a process nit (review/SKILL.md §5.1). The gate lists them apart

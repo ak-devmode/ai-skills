@@ -286,7 +286,10 @@ them. Starting at a review's head alone is not enough: a lane's next unit starts
 (WellMed 171.2 counted new code as round 4–5). `record --continues <review id>` names the
 parent outright when no disposition ties the range to it. Anything else starts at round 1
 (when git cannot tell, the repo's highest round continues, with a `[WARN]`). A repo is its
-primary checkout, worktrees included.
+primary checkout, worktrees included. **A lineage keeps the rules it started under:** every
+`review` record carries `rules_version`, and the rules here that changed in scope 10 (the
+findings budget, the `reopens` chain stop, the effort trial) apply only to lineages whose root
+was recorded at version 2 or later (`verify-contracts.md` §6.0).
 
 **Round cap.** Past round 3 of a lineage (only on the user's "another round"), only
 `blocking` findings are fixed in the loop. `should-fix` and `note` go to the project's

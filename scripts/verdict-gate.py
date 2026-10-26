@@ -335,6 +335,14 @@ def review_presence_blocks(review_log, base, projects, scope=None, unit=None):
     lineage = vl.review_lineage(
         [(r.get("review_id"), canon(next(iter(r.get("range") or {}), "")), (r.get("shas") or {}).get("base"),
           (r.get("shas") or {}).get("head")) for r in ordered], root, *vl.lineage_links(recs))
+    rules = vl.lineage_rules(recs, lineage)
+
+    def budgeted_note(f):
+        """review/SKILL.md §5.1 findings budget (rules 2+): a note from round 2 of its lineage is
+        logged with at most one batch fix and never re-reviewed. A lineage rooted before the
+        cutover keeps the old rule (decision 65); an unknown round is not round 2+."""
+        rid = f.get("review_id")
+        return f.get("severity") == "note" and rules.get(rid, 1) >= 2 and (lineage.get(rid) or ("", 0))[1] >= 2
 
     def capped(review_id):
         """The finding's review lineage has reached ROUND_CAP rounds."""
@@ -384,7 +392,8 @@ def review_presence_blocks(review_log, base, projects, scope=None, unit=None):
         # the old lineage's round-cap stop never stands in for that review
         why = "a reframe's replacing commit" if reframed else \
             "a blocking finding's fix" if f.get("severity") == "blocking" else \
-            "an off-anchor fix" if d.get("via") == "off-anchor" and f.get("target") != "scaffolding" else None
+            "an off-anchor fix" if d.get("via") == "off-anchor" and f.get("target") != "scaffolding" \
+            and not budgeted_note(f) else None
         if why is None:
             continue
         # a fix recorded in another repo (`dispose --fixed-in`) is re-reviewed THERE, by a review

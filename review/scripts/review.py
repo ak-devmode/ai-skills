@@ -688,7 +688,7 @@ def build(a, doc, ordered, key, n, review_id):
     shas = dict(zip(("base", "head"), a.range.split("..")))
     review = {"schema": vl.SCHEMA, "ts": ts, "record": "review", "review_id": review_id, "reviewer": a.reviewer,
               "range": {key: a.range}, "shas": shas, "passes": a.passes or "", "findings": len(findings),
-              "verdict": doc["verdict"], "mode": a.mode or ""}
+              "verdict": doc["verdict"], "mode": a.mode or "", "rules_version": vl.RULES_VERSION}
     if getattr(a, "continues", None):
         review["continues"] = a.continues
     return [review] + records, findings, report

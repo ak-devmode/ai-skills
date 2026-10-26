@@ -112,6 +112,13 @@ def repo_key(repo):
     return os.path.basename(os.path.realpath(repo)) if rel.startswith("..") else rel
 
 
+def repo_top(repo):
+    """The checkout `repo` names, as an absolute path — the worktree itself, never its primary
+    checkout: a packet lands in the outbox of the tree that was reviewed (review 10.2-r3-02)."""
+    code, top, _ = git(repo, "rev-parse", "--show-toplevel")
+    return os.path.realpath(top if code == 0 and top else repo)
+
+
 def main_worktree(repo):
     """The primary checkout behind `repo` — a herdr worktree under ~/.herdr/worktrees/ sits
     outside ~/Projects, so its own path cannot say which project it belongs to."""
@@ -703,14 +710,14 @@ def reviews_of(recs, unit):
         if not m or r.get("record") not in ("review", "finding"):
             continue
         e = by.setdefault(int(m.group(1)), {"id": r["review_id"], "repo": None, "files": set(), "base": None,
-                                            "head": None, "verdict": None})
+                                            "head": None, "verdict": None, "path": None})
         key, rng = next(iter((r.get("range") or {}).items()), (None, ""))
         e["repo"] = e["repo"] or canonical(key)
         if not e["head"]:
             sh, (b, _, h) = r.get("shas") or {}, str(rng).partition("..")
             e["base"], e["head"] = sh.get("base") or b or None, sh.get("head") or h or None
         if r.get("record") == "review":
-            e["verdict"] = r.get("verdict")
+            e["verdict"], e["path"] = r.get("verdict"), r.get("repo_path")
         else:
             e["files"].add(r.get("file"))
     return [by[n] for n in sorted(by)]
@@ -895,7 +902,7 @@ def build(a, doc, ordered, key, n, review_id):
     review = {"schema": vl.SCHEMA, "ts": ts, "record": "review", "review_id": review_id, "reviewer": a.reviewer,
               "range": {key: a.range}, "shas": shas, "passes": a.passes or "", "findings": len(findings),
               "verdict": doc["verdict"], "mode": a.mode or "", "rules_version": vl.RULES_VERSION,
-              **getattr(a, "stamp", {})}
+              "repo_path": repo_top(a.repo), **getattr(a, "stamp", {})}
     if getattr(a, "continues", None):
         review["continues"] = a.continues
     if rf:
@@ -1371,13 +1378,17 @@ def judged_reframes(recs, unit, review_id, verdict):
 # (review, case), so re-running a step re-sends instead of duplicating.
 
 def review_repo_path(recs, unit, review_id):
-    """(path, base, head) of the repo review `review_id` read, under the projects root; path is None
-    when it is not there (the packet then has no outbox to land in — warned by the caller)."""
+    """(path, base, head) of the checkout review `review_id` read: the `repo_path` its `review`
+    record stamped (the worktree, not its primary checkout — review 10.2-r3-02). path is None
+    when the record has none (a review logged before the stamp) or the tree is gone. Never
+    rebuilt from the repo key under the projects root: that is the primary checkout (main's
+    branch and head, not the lane's), and a repo outside ~/Projects keys by basename, which can
+    name an unrelated repo. A None fails closed where it decides (reframe_door: one-way) and
+    warns where it only emits (packet_for: the inline question stands)."""
     e = next((x for x in reviews_of(recs, unit) if x["id"] == review_id), None)
-    if not e or not e["repo"]:
-        return None, None, None
-    path = os.path.join(vl.PROJECTS, e["repo"])
-    return (path if os.path.isdir(path) else None), e["base"], e["head"]
+    if not e or not e["path"]:
+        return None, (e or {}).get("base"), (e or {}).get("head")
+    return (e["path"] if os.path.isdir(e["path"]) else None), e["base"], e["head"]
 
 
 def lineage_ids(recs, unit, review_id):
@@ -1392,11 +1403,12 @@ def packet_for(recs, unit, review_id, case, title, options, body, door="one-way"
     None. A review whose repo is not under the projects root cannot land a packet: warn, inline stays."""
     path, base, head = review_repo_path(recs, unit, review_id)
     if path is None:
-        print(f"review.py: warning: no repo for {review_id} under {vl.PROJECTS}: no packet written ({case}); "
-              "ask the question inline", file=sys.stderr)
+        print(f"review.py: warning: the checkout {review_id} reviewed is unknown or gone: no packet written "
+              f"({case}); ask the question inline", file=sys.stderr)
         return None
     lin = " → ".join(lineage_ids(recs, unit, review_id)) or review_id
-    body = f"{body}\n\nLineage: {lin}"
+    range_ = range_ or (f"{base}..{head}" if base and head else None)
+    body = f"{body}\n\nLineage: {lin}" + (f"\nReviewed range: {range_}" if range_ else "")
     return packet_emit.emit(path, unit, title, options, body, door=door, range_=range_,
                             pid=packet_emit.stable_id("rv", unit, review_id, case))
 

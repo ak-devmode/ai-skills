@@ -97,6 +97,25 @@ class TestReviewPackets(unittest.TestCase):
         self.assertIn("swallows the curl failure", doc["payload"]["body"])
         self.assertIn("9.1-r1 → 9.1-r2 → 9.1-r3", doc["payload"]["body"])
 
+    def test_a_packet_lands_in_the_reviewed_worktree_not_the_primary_checkout(self):
+        # review 10.2-r3-02: a herdr lane reviews a linked worktree outside ~/Projects; its packet
+        # belongs in that tree's outbox, on the lane's branch and head, never the primary checkout's
+        self.run_env()
+        wt = os.path.join(self.tmp.name, "lane")
+        tr.git(self.repo, "worktree", "add", "-q", "-b", "lane", wt)
+        with open(os.path.join(wt, "a.sh"), "a") as fh:
+            fh.write("curl y || true\n")
+        tr.git(wt, "commit", "-q", "-am", "lane work")
+        for _ in range(3):
+            p = self.record(repo=wt)
+            self.assertEqual(p.returncode, 0, p.stderr)
+        self.assertRegex(p.stdout, r"PACKET pk-rv-9-1-9-1-r3-stuck")
+        self.assertEqual(self.packets(), [])
+        (doc,) = self.packets(wt)
+        self.assertValid(doc)
+        self.assertEqual((doc["branch"], doc["head_sha"]), ("lane", tr.git(wt, "rev-parse", "HEAD")))
+        self.assertIn(f"Reviewed range: {self.rng(wt)}", doc["payload"]["body"])
+
     def test_case2_a_qualifying_reframe_in_the_lineage_means_no_packet(self):
         self.run_env()
         self.record(reframe=self.REFRAME)

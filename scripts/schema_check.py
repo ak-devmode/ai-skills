@@ -50,6 +50,17 @@ def _resolve(root, ref):
     return node
 
 
+def _ecma_end(pattern):
+    """Python's `$` also matches before a trailing newline; ECMA-262 (what the queue's JSON
+    Schema validator uses) does not. Translate a trailing unescaped `$` to `\\Z` so
+    'abcdef1\\n' fails here exactly as it fails there (10.1-r1-14)."""
+    body = pattern[:-1]
+    slashes = len(body) - len(body.rstrip("\\"))
+    if pattern.endswith("$") and slashes % 2 == 0:
+        return body + "\\Z"
+    return pattern
+
+
 def _valid(value, schema, root):
     return not _errors(value, schema, root, "")
 
@@ -60,6 +71,9 @@ def _errors(value, schema, root, path):
     if unknown:
         raise SchemaError(f"unsupported keyword(s) at {path or '/'}: {sorted(unknown)}")
     here = path or "/"
+    if "additionalProperties" in schema and schema["additionalProperties"] is not False:
+        # only `false` is implemented; true or a sub-schema would be silently ignored (10.1-r1-15)
+        raise SchemaError(f"unsupported additionalProperties value at {here}: only false")
     if "$ref" in schema:
         errs += _errors(value, _resolve(root, schema["$ref"]), root, path)
     if "type" in schema:
@@ -73,7 +87,7 @@ def _errors(value, schema, root, path):
     if isinstance(value, str):
         if "minLength" in schema and len(value) < schema["minLength"]:
             errs.append(f"{here}: shorter than {schema['minLength']}")
-        if "pattern" in schema and not re.search(schema["pattern"], value):
+        if "pattern" in schema and not re.search(_ecma_end(schema["pattern"]), value):
             errs.append(f"{here}: does not match {schema['pattern']}")
     if isinstance(value, (int, float)) and not isinstance(value, bool):
         if "minimum" in schema and value < schema["minimum"]:

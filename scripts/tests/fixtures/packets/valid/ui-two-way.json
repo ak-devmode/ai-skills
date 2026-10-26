@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "created_at": "2026-10-26T09:00:00Z",
+  "machine": "mba",
+  "workspace": "ai-skills-10",
+  "agent": "packet",
+  "repo": "ai-skills",
+  "branch": "concurrency/10-packet",
+  "head_sha": "14954fc",
+  "unit": "10/1.2",
+  "blocks": "",
+  "continues_on": "door.py tests",
+  "id": "ui0two-way001",
+  "door": "two-way",
+  "type": "ui",
+  "title": "Pick a card layout",
+  "reversal_cost": {
+    "commits_stacked": 2,
+    "as_of": "2026-10-26T09:05:00Z"
+  },
+  "options": [
+    {
+      "id": "a",
+      "label": "Stdlib subset validator",
+      "recommended": true
+    },
+    {
+      "id": "b",
+      "label": "Vendor jsonschema",
+      "recommended": false
+    }
+  ],
+  "payload": {
+    "body": "Reserved type; payload not constrained until 10.4."
+  },
+  "reply": "[lane mba/ai-skills-10/packet ui0two-way001] Option a."
+}

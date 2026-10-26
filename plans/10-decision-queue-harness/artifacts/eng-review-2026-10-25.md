@@ -73,7 +73,7 @@ Folded.
 before round 4 (`review.py` dispose, `rnd <= ROUND_CAP`), and a real defect can't honestly be
 rejected or accepted. Fix: cap what the reviewer *reports*, not what gets fixed: from round 2 it
 returns all blocking, at most N should-fix in priority order, and notes. Nothing over-cap exists
-to dispose. → **Decision 64.**
+to dispose. → **Decision 64: superseded — no cap at all** (Alex 2026-10-26; later-round findings are mostly defects in fixes, baseline §3.2–3.3). The close-out gap goes with the cap.
 
 3.3 [P2] (8/10) **Notes.** Disposed `accepted` at any round (gate change), fix optional in the
 same commit, no re-review. Folded under answer 54.
@@ -122,7 +122,7 @@ CODE PATHS                                         USER FLOWS
   |-- broken card -> plain-text fallback [GAP]
 [+] review.py / verdict-gate.py (changed)
   |-- lineage: u2 after u1 fix -> r1; fix re-review -> +1 [GAP] (TO-DO test)
-  |-- round 1 uncapped; r2 report cap enforced   [GAP]
+  |-- no should-fix cap; round-aware prompt fill  [GAP]
   |-- note accepted at any round passes gate      [GAP]
   |-- --reframed cites replacing commit           [GAP]
   |-- REGRESSION: blocking never accepted/deferred [★★★ test_review.py]
@@ -182,7 +182,7 @@ Conflict flag: A and C both add files under `scripts/tests/`; new files only, no
 
 - [ ] **T1 (P1, CC ~10 min)** queue — bind 127.0.0.1, expose via `tailscale serve` (adopted 62)
 - [ ] **T2 (P1, CC ~20 min)** review — lineage fix first; budget waits on it (2.2)
-- [ ] **T3 (P1, CC ~20 min)** review — reviewer report cap from round 2 + priority order (pending 64)
+- [ ] **T3 (P1, CC ~20 min)** review — reviewer report cap from round 2 + priority order (dropped 64: round-aware prompt instead)
 - [ ] **T4 (P1, CC ~15 min)** door — `.one-way-doors` self-protection, base-revision policy (2.7)
 - [ ] **T5 (P1, CC ~15 min)** review — `--reframed` cites replacing commit; replacement reviewed as new lineage (3.4)
 - [ ] **T6 (P2, CC ~15 min)** packet — reply carries packet id; check-reply rejects closed/stale/other (3.6)
@@ -196,5 +196,5 @@ Conflict flag: A and C both add files under `scripts/tests/`; new files only, no
 
 - 62 tailscale serve — **adopted** (Alex 2026-10-26). Probe: tailnet has no HTTPS certs (`CertDomains` empty) and homelab has no operator set, so two one-time human steps; finish table rev 3 (URL `https://homelab2026.taild4682e.ts.net`) pending re-approval
 - 63 uniform outbox — **adopted** (Alex 2026-10-26)
-- 64 reviewer report cap N — pending
+- 64 reviewer report cap N — **dropped**: no should-fix cap; round-aware prompt instead (Alex 2026-10-26)
 - 65 cutover rule — **adopted**: rules-version stamp on review records (Alex 2026-10-26)

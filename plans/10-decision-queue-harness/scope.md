@@ -109,9 +109,16 @@ what the loop fixes and when it reframes. The existing round-3 and repeated-file
 `review.py convergence()` stay as they are, inline.
 
 - **Findings budget.** Round 1 is uncapped: fix every finding that makes sense; that is where
-  the meat is and where tokens are spent. From round 2, blocking findings are always fixed,
-  should-fix findings are capped at the reviewer's top few, and notes are logged with at most
-  one batch fix and no re-review. Gate change: notes may be `accepted` at any round.
+  the meat is and where tokens are spent. From round 2, blocking and should-fix findings are
+  fixed, with no cap (eng review: later-round findings are mostly defects in the fixes
+  themselves, baseline §3.2–3.3, so a cap would drop real defects), and notes are logged with
+  at most one batch fix and no re-review. Gate change: notes may be `accepted` at any round.
+- **Round-aware review prompt (eng review).** The prompt gets the lineage round and the
+  previous round's findings with their dispositions: it checks each fix resolved its finding
+  and does not re-raise a rejection without new evidence. A finding on a fix's own lines
+  carries a structured `reopens: <finding id>` when it is the original defect not fully fixed
+  (codex already writes `NOT FIXED <id>` in free text). Round 1 reports every defect, not a top
+  few, and each `fix` names the class to fix, not only the example.
 - **Reframe prompt, every round from round 1.** The reviewer states whether a simpler design
   would remove several findings. A reframe is accepted only if it (i) meets the core
   objective from the plan and (ii) simplifies, naming what it deletes. A rejected reframe
@@ -297,8 +304,8 @@ No existing tables — every row below is a create.
   the tag and closes its own packet.
 - Packets are structured; the service renders them. Agents don't author free-form HTML.
 - Data-model is the first rich template; both diagram styles get tried in live use.
-- Review: round 1 uncapped; from round 2 a findings budget (blocking always, should-fix
-  capped, notes logged); a reframe prompt every round judged by a fresh agent on objective +
+- Review: round 1 uncapped; from round 2 blocking and should-fix fixed without a cap, notes
+  logged (eng review dropped the should-fix cap); a round-aware prompt; a reframe prompt every round judged by a fresh agent on objective +
   simplification; three cases reach Alex. Supersedes the draft's diminishing-returns exit
   rule (CEO review).
 - The driver merges (develop for code, main for kalpa-docs and pmg-docs); never lanes, never

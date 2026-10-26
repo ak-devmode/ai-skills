@@ -326,7 +326,7 @@ def review_presence_blocks(review_log, base, projects, scope=None, unit=None):
     ordered = sorted(reviews, key=lambda r: round_no(r.get("review_id")))
     lineage = vl.review_lineage(
         [(r.get("review_id"), canon(next(iter(r.get("range") or {}), "")), (r.get("shas") or {}).get("base"),
-          (r.get("shas") or {}).get("head")) for r in ordered], root)
+          (r.get("shas") or {}).get("head")) for r in ordered], root, *vl.lineage_links(recs))
 
     def capped(review_id):
         """The finding's review lineage has reached ROUND_CAP rounds."""

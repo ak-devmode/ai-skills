@@ -427,23 +427,61 @@ def _ranges_share(path, a, b):
     return int(out[0]) > 0 if out and out[0].isdigit() else None
 
 
-def review_lineage(reviews, path_of):
+def _range_holds(path, base, head, shas, cache):
+    """Does base..head contain one of `shas` (full or abbreviated)? None when git cannot tell."""
+    import subprocess
+    if (path, base, head) not in cache:
+        out = subprocess.run(["git", "-C", path, "rev-list", f"{base}..{head}"], capture_output=True, text=True)
+        cache[(path, base, head)] = out.stdout.split() if out.returncode == 0 else None
+    commits = cache[(path, base, head)]
+    if commits is None:
+        return None
+    return any(c.startswith(s) for c in commits for s in shas if s)
+
+
+def lineage_links(recs):
+    """({review_id: {fix shas}}, {review_id: continued review_id}) from review-log records: the
+    commits named by a `fixed` disposition of each review's findings, and each review record's
+    explicit `continues` (review.py --continues). review_lineage's inputs."""
+    of = {r.get("finding_id"): r.get("review_id") for r in recs if r.get("record") == "finding"}
+    fixes, continues = {}, {}
+    for r in recs:
+        if r.get("record") == "disposition" and r.get("disposition") == "fixed" and r.get("sha") \
+                and of.get(r.get("finding_id")):
+            fixes.setdefault(of[r["finding_id"]], set()).add(r["sha"])
+        elif r.get("record") == "review" and r.get("continues"):
+            continues[r.get("review_id")] = r["continues"]
+    return fixes, continues
+
+
+def review_lineage(reviews, path_of, fixes=None, continues=None):
     """{review_id: (root review_id, round)} for `reviews`, [(review_id, repo, base, head)] in
     review order (repo a canonical key; `path_of(repo)` is where git reads it). Rounds follow
     the code, not the repo (WellMed 171.2: two lanes in one repo hit the round cap on a first
-    review of new code). A review continues an earlier review of the same repo whose head is
-    its base (a fix re-review) or whose range shares a commit with its own — the highest-round
-    one when several do; anything else starts a lineage at round 1. When git cannot tell, it
-    fails closed: the review continues the repo's highest round in the unit, with a warning on
-    stderr — a silent round 1 would disable the round-3 STOP."""
-    out, seen = {}, []
+    review of new code). A review continues an earlier review of the same repo when its range
+    shares a commit with it (the same code, read again), or when it starts at that review's head
+    AND contains a commit a `fixed` disposition named for a finding of that review's lineage
+    (`fixes`, {review_id: {sha}} — a fix re-review) — the highest-round one when several do.
+    Starting at a head alone is not enough: a lane's next unit starts there too, and was counted
+    round 4–5 (WellMed 171.2-r15, 171.3-r5). `continues` ({review_id: earlier review_id}, from
+    `--continues`) names the parent outright. Anything else starts a lineage at round 1. When git
+    cannot tell, it fails closed: the review continues the repo's highest round in the unit,
+    with a warning on stderr — a silent round 1 would disable the round-3 STOP."""
+    fixes, continues = fixes or {}, continues or {}
+    out, seen, cache = {}, [], {}
     for rid, repo, base, head in reviews:
         parent, unsure = None, False
-        for prid, prepo, pbase, phead in reversed(seen):
+        if continues.get(rid) in out:
+            parent = continues[rid]
+        for prid, prepo, pbase, phead in reversed(seen if parent is None else []):
             if prepo != repo or not (base and head and pbase and phead):
                 continue
-            share = base == phead or (base, head) == (pbase, phead) or \
-                _ranges_share(path_of(repo), (base, head), (pbase, phead))
+            if base == phead:
+                shas = set().union(*(fixes.get(x, ()) for x, (rt, _) in out.items() if rt == out[prid][0]))
+                share = bool(shas) and _range_holds(path_of(repo), base, head, shas, cache)
+            else:
+                share = (base, head) == (pbase, phead) or \
+                    _ranges_share(path_of(repo), (base, head), (pbase, phead))
             unsure = unsure or share is None
             if share:
                 parent = prid if parent is None or out[prid][1] > out[parent][1] else parent

@@ -482,6 +482,9 @@ def cmd_record(a):
         taken = [int(m.group(1)) for r in vl.read_jsonl(log)
                  for m in [re.match(rf"^{re.escape(a.unit)}-r(\d+)$", str(r.get("review_id", "")))] if m]
         review_id = f"{a.unit}-r{max(taken, default=0) + 1}"
+        code = check_continues(a, vl.read_jsonl(log), key)
+        if code is not None:
+            return code
         records, findings, report = build(a, doc, ordered, key, n, review_id)
         vl.append_verified(log, records)
         out = os.path.join(art, f"review-{review_id}.md")
@@ -494,6 +497,20 @@ def cmd_record(a):
     for line in convergence(recs, a.unit) + cascades(recs, review_id, a.repo, key, a.range.split("..")[1]):
         print(line)
     return vl.EXIT_PASS
+
+
+def check_continues(a, recs, key):
+    """None, or a §10 error code when `--continues` names no earlier review of this repo in the
+    unit: a typo would otherwise restart the count silently, which is what it exists to stop."""
+    if not getattr(a, "continues", None):
+        return None
+    e = next((e for e in reviews_of(recs, a.unit) if e["id"] == a.continues), None)
+    if e is None or canonical(e["repo"]) != canonical(key):
+        return err(f"`--continues {a.continues}` is not an earlier {key} review of {a.unit}",
+                   f"a review_id of {key} in the unit's log", e["repo"] if e else "none", "--continues",
+                   f"grep '\"record\": \"review\"' {os.path.join(a.scope, 'artifacts', f'review-{a.unit}.jsonl')}",
+                   code=vl.EXIT_USAGE)
+    return None
 
 
 def lean_uncovered(a):
@@ -544,7 +561,7 @@ def rounds(recs, unit):
     (verify_lib.review_lineage). IDs stay `<unit>-r<n>` across every repo and lineage."""
     revs = reviews_of(recs, unit)
     return revs, vl.review_lineage([(e["id"], e["repo"], e["base"], e["head"]) for e in revs],
-                                   lambda key: os.path.join(vl.PROJECTS, key))
+                                   lambda key: os.path.join(vl.PROJECTS, key), *vl.lineage_links(recs))
 
 
 def review_round(recs, unit, review_id):
@@ -669,6 +686,8 @@ def build(a, doc, ordered, key, n, review_id):
     review = {"schema": vl.SCHEMA, "ts": ts, "record": "review", "review_id": review_id, "reviewer": a.reviewer,
               "range": {key: a.range}, "shas": shas, "passes": a.passes or "", "findings": len(findings),
               "verdict": doc["verdict"], "mode": a.mode or ""}
+    if getattr(a, "continues", None):
+        review["continues"] = a.continues
     return [review] + records, findings, report
 
 
@@ -1027,6 +1046,8 @@ def main(argv):
     r.add_argument("--unit")
     r.add_argument("--passes")
     r.add_argument("--mode", help="review-mode.py's line, shown in the report header")
+    r.add_argument("--continues", metavar="REVIEW_ID", help="this review re-reads the fixes of that review: "
+                   "continue its lineage's round count (when no `fixed` disposition ties the range to it)")
     d = sub.add_parser("dispose")
     d.add_argument("--scope", required=True)
     d.add_argument("--unit", required=True)

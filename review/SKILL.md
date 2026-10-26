@@ -269,10 +269,14 @@ loops run without a per-round check-in (Alex's standing approval):
 
 **Rounds count per review lineage, not per repo.** IDs number every review of the unit
 (`<unit>-r<n>`); `record` prints `round: <k> of <repo>` for this review's lineage. A review
-whose range starts at an earlier review's head (a fix re-review), or shares a commit with
-one, continues that review's count; a range over code no earlier review covered starts at
-round 1 (when git cannot tell, the repo's highest round continues, with a `[WARN]`). A repo is
-its primary checkout, worktrees included.
+whose range shares a commit with an earlier one continues that review's count, and so does a
+fix re-review: a range starting at an earlier review's head that contains a commit a `fixed`
+disposition named for a finding of that lineage — so dispose the fixes before re-reviewing
+them. Starting at a review's head alone is not enough: a lane's next unit starts there too
+(WellMed 171.2 counted new code as round 4–5). `record --continues <review id>` names the
+parent outright when no disposition ties the range to it. Anything else starts at round 1
+(when git cannot tell, the repo's highest round continues, with a `[WARN]`). A repo is its
+primary checkout, worktrees included.
 
 **Round cap.** Past round 3 of a lineage (only on the user's "another round"), only
 `blocking` findings are fixed in the loop. `should-fix` and `note` go to the project's

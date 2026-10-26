@@ -997,10 +997,10 @@ class TestReview(unittest.TestCase):
         git(self.repo, "checkout", "-q", "main")
         return rng
 
-    def record_range(self, rng, **over):
+    def record_range(self, rng, extra=(), **over):
         return run(REVIEW, "record", "--repo", self.repo, "--range", rng, "--reviewer", "codex gpt-test",
                    "--input", self.answer(**over), "--scope", self.scope, "--unit", "9.1", "--passes", "p",
-                   env=self.env)
+                   *extra, env=self.env)
 
     def test_rounds_count_per_review_lineage(self):
         # two lanes' disjoint ranges in one repo each start at round 1; a fix re-review continues
@@ -1012,9 +1012,41 @@ class TestReview(unittest.TestCase):
             self.assertIn(f"round: {rnd} of ", p.stdout)
         git(self.repo, "checkout", "-q", "lane-1")
         head = git(self.repo, "rev-parse", "HEAD")
-        self.commit(self.repo, "one.txt")
+        fix = self.commit(self.repo, "a.sh")
+        self.assertEqual(self.dispose("9.1-r1-01", "--fixed", fix).returncode, 0)
         p = self.record_range(f"{head}..{git(self.repo, 'rev-parse', 'HEAD')}")
         self.assertIn("review 9.1-r3:", p.stdout)
+        self.assertIn("round: 2 of ", p.stdout)
+
+    def test_the_next_unit_at_a_reviews_head_starts_round_one(self):
+        # TO-DO P1 (WellMed 171.2-r15, 171.3-r5): u2 starts at u1's fix range's head, so
+        # `base == head` alone counted new code as round 3+; only a fix re-review continues
+        base = git(self.repo, "rev-parse", "HEAD")
+        u1 = self.commit(self.repo, "a.sh")
+        self.assertIn("round: 1 of ", self.record_range(f"{base}..{u1}").stdout)
+        fix = self.commit(self.repo, "a.sh")
+        self.assertEqual(self.dispose("9.1-r1-01", "--fixed", fix).returncode, 0)
+        p = self.record_range(f"{u1}..{fix}")
+        self.assertIn("round: 2 of ", p.stdout)   # the fix re-review: previous + 1
+        u2 = self.commit(self.repo, "u2.txt")
+        p = self.record_range(f"{fix}..{u2}")
+        self.assertIn("review 9.1-r3:", p.stdout)
+        self.assertIn("round: 1 of ", p.stdout)   # new code at a review's head
+        # the gate counts the same lineages (it reads the same log)
+        gate_lin = subprocess.run([sys.executable, "-c", "import json,sys; sys.path.insert(0, sys.argv[1]); "
+                                   "from _helpers import load; rr = load('review/scripts/review.py'); "
+                                   "recs = rr.vl.read_jsonl(sys.argv[2]); print(json.dumps(rr.rounds(recs, '9.1')[1]))",
+                                   os.path.dirname(os.path.abspath(__file__)), self.log],
+                                  env=self.env, capture_output=True, text=True, check=True).stdout
+        self.assertEqual(json.loads(gate_lin), {"9.1-r1": ["9.1-r1", 1], "9.1-r2": ["9.1-r1", 2],
+                                                "9.1-r3": ["9.1-r3", 1]})
+        # --continues names the parent outright, and refuses a review that is not this repo's
+        u3 = self.commit(self.repo, "u3.txt")
+        p = self.record_range(f"{u2}..{u3}", extra=("--continues", "9.1-r9"))
+        self.assertEqual(p.returncode, 2, p.stdout)
+        self.assertIn("is not an earlier wellmed/svc review", p.stderr)
+        p = self.record_range(f"{u2}..{u3}", extra=("--continues", "9.1-r3"))
+        self.assertEqual(p.returncode, 0, p.stderr)
         self.assertIn("round: 2 of ", p.stdout)
 
     def test_an_undecidable_lineage_fails_closed(self):
@@ -1028,12 +1060,19 @@ class TestReview(unittest.TestCase):
                 ("9.1-r4", "svc", "d1", "e1")]
         err = io.StringIO()
         with contextlib.redirect_stderr(err):
-            lin = vl.review_lineage(revs, lambda key: gone)
+            lin = vl.review_lineage(revs, lambda key: gone, {"9.1-r1": {"f1"}})
         self.assertEqual(lin, {"9.1-r1": ("9.1-r1", 1), "9.1-r2": ("9.1-r1", 2), "9.1-r3": ("9.1-r3", 1),
                                "9.1-r4": ("9.1-r1", 3)})
+        # r2 starts at r1's head and r1 has a fix: git cannot say whether r2 holds it
+        self.assertIn("[WARN] lineage of 9.1-r2", err.getvalue())
         self.assertIn("[WARN] lineage of 9.1-r4", err.getvalue())
         self.assertIn("continuing 9.1-r2 (round 2)", err.getvalue())
-        self.assertNotIn("lineage of 9.1-r2", err.getvalue())   # an exact head-is-base match needs no git
+        # with no fix to look for, a head-is-base start is new code, decided without git
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            lin = vl.review_lineage(revs[:2], lambda key: gone)
+        self.assertEqual(lin, {"9.1-r1": ("9.1-r1", 1), "9.1-r2": ("9.1-r2", 1)})
+        self.assertEqual(err.getvalue(), "")
 
     def test_accepted_is_a_process_nit_never_a_rejection(self):
         self.record()

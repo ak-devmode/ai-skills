@@ -23,6 +23,8 @@ Usage:
                     --deferred TODO | --accepted REASON) [--by NAME]
                     --accepted: a non-blocking process nit, noted and never re-reviewed (SKILL.md §5.1)
   review.py dispose ... --fixed SHA --fixed-in REPO_PATH     (the fix lives in another repo)
+  review.py dispose ... --reframed WHAT --commit SHA --by judge|user   (an accepted reframe or [CASCADE] replaced
+                    the code: any round, any severity; the replacing commit is reviewed as a new lineage)
   review.py accept  --scope DIR --unit N.P --by NAME     (the outcomes accepted — the user, or the standing policy, §6.4)
   review.py misfiled --scope DIR --unit N.P              (rejections that say "fixed/resolved <sha>" → dispose lines)
 Output: prepare prints `prompt:`, `schema:`, `passes:`, `range:`, `effort:` (+ an `uncovered:` count
@@ -678,7 +680,8 @@ def build(a, doc, ordered, key, n, review_id):
               f"**Review:** `{review_id}` · **Reviewer:** {a.reviewer} · **Passes:** {a.passes or 'unrecorded'}"] \
         + ([f"**{a.mode}**"] if a.mode else []) + degraded + [f"**Findings:** {len(findings)} — every ID needs a disposition: "
                       f"`review.py dispose --scope <scope> --unit {a.unit or '<unit>'} --finding <ID> "
-                      "(--fixed <sha> | --rejected \"<reason>\" | --deferred \"<TO-DO>\" | --accepted \"<process nit>\")`"]
+                      "(--fixed <sha> | --rejected \"<reason>\" | --deferred \"<TO-DO>\" | --accepted \"<process nit>\" "
+                      "| --reframed \"<what changed>\" --commit <sha> --by judge|user)`"]
     report = "\n".join(render(doc, findings, header)) + "\n"
     # record only accepts the immutable range, so it is the commits the reviewer saw
     # (review 5.2-r2-01, -r3-01).
@@ -728,11 +731,13 @@ def _accept(a, log):
     if not a.by.strip():
         return err("accept needs --by", "the person accepting", "empty", "--by", "--by \"<name>\"",
                    code=vl.EXIT_USAGE)
-    counts = {k: sum(1 for f in findings if latest[f] == k) for k in ("fixed", "rejected", "deferred", "accepted")}
+    counts = {k: sum(1 for f in findings if latest[f] == k)
+              for k in ("fixed", "rejected", "deferred", "accepted", "reframed")}
     vl.append_verified(log, [{"schema": vl.SCHEMA, "ts": now(), "record": "acceptance", "by": a.by.strip(),
                               "findings": len(findings), **counts}])
     print(f"{a.unit}: outcomes accepted by {a.by.strip()} — {len(findings)} findings ({counts['fixed']} fixed, "
-          f"{counts['rejected']} rejected, {counts['deferred']} deferred, {counts['accepted']} accepted as process nits)")
+          f"{counts['rejected']} rejected, {counts['deferred']} deferred, {counts['reframed']} reframed, "
+          f"{counts['accepted']} accepted as process nits)")
     # the unit's closing summary shows rejections, and accepted nits apart from them (SKILL.md §5.1)
     reasons = {r["finding_id"]: r.get("reason") for r in recs if r.get("record") == "disposition"}
     for kind, title in (("rejected", "rejected"), ("accepted", "accepted (process nit)")):
@@ -762,9 +767,17 @@ def _dispose(a, log):
     if a.off_anchor is not None and not a.fixed:
         return err("`--off-anchor` qualifies a fix", "`--fixed <sha> --off-anchor \"<how>\"`", "no --fixed",
                    a.finding, "drop --off-anchor, or pass the fixing commit", code=vl.EXIT_USAGE)
-    if a.fixed_in is not None and not a.fixed:
+    if a.fixed_in is not None and not (a.fixed or a.reframed is not None):
         return err("`--fixed-in` qualifies a fix", "`--fixed <sha> --fixed-in <repo path>`", "no --fixed",
                    a.finding, "drop --fixed-in, or pass the fixing commit", code=vl.EXIT_USAGE)
+    if (a.commit is not None) != (a.reframed is not None):
+        return err("`--reframed` and `--commit` go together", "`--reframed \"<what changed>\" --commit <sha> "
+                   "--by judge|user`", "one of them", a.finding, "pass both: the reframe and the commit that "
+                   "replaced the code", code=vl.EXIT_USAGE)
+    if a.reframed is not None:
+        fix, code = reframe_check(a, f, recs)
+        if code is not None:
+            return code
     if a.fixed:
         path, key = fix_repo(f, a.fixed_in)
         if path is None:
@@ -775,6 +788,12 @@ def _dispose(a, log):
         fix, code = fix_check(f, a.fixed, path, key, recs)
         if code is not None:
             return code
+        reverted = reverts_of(path, fix["sha"])
+        if reverted:
+            print(vl.message("WARN", f"`fixed {a.fixed}` has been reverted on HEAD by {reverted[:10]}",
+                             "a fix that is still in the code", f"revert {reverted[:10]}", a.finding, "code",
+                             "if a reframe replaced it, record `--reframed \"<what changed>\" --commit <sha> --by "
+                             "judge|user` instead", DOCS), file=sys.stderr)
         if fix["predates"]:
             return err(f"`fixed {a.fixed}` predates the finding: {fix['predates']}",
                        f"a commit made after review {f.get('review_id')} raised {a.finding}", fix["sha"],
@@ -835,8 +854,9 @@ def _dispose(a, log):
         rc, name, _ = git(a.scope, "config", "user.name")
         by = f"{name or 'unknown'} / Claude"
     kind = "fixed" if a.fixed else "deferred" if a.deferred is not None else \
-        "accepted" if a.accepted is not None else "rejected"
-    reason = {"fixed": a.off_anchor, "deferred": a.deferred, "accepted": a.accepted, "rejected": a.rejected}[kind]
+        "accepted" if a.accepted is not None else "reframed" if a.reframed is not None else "rejected"
+    reason = {"fixed": a.off_anchor, "deferred": a.deferred, "accepted": a.accepted, "rejected": a.rejected,
+              "reframed": a.reframed}[kind]
     rec = {"schema": vl.SCHEMA, "ts": now(), "record": "disposition", "finding_id": a.finding,
            "disposition": kind, "sha": fix.get("sha"), "reason": reason, "by": by}
     if fix:
@@ -844,6 +864,48 @@ def _dispose(a, log):
     vl.append_verified(log, [rec])
     print(f"{a.finding}: {kind} {rec['sha'] or reason}" + (f" in {fix['repo']} (via {fix['via']})" if fix else ""))
     return vl.EXIT_PASS
+
+
+REFRAMED_BY = re.compile(r"^(judge|user)\b")
+
+
+def reframe_check(a, f, recs):
+    """({sha, repo, via}, None) or (None, a §10 error code) for `--reframed`: an accepted reframe
+    (the fresh judge's, or the user's at a [CASCADE] stop) replaced the code the finding was on
+    (TO-DO 158.3: three such findings had to be recorded `rejected`). Any round, any severity —
+    nothing is left unfixed unreviewed, because the gate wants the replacing commit inside a later
+    review's range, a new lineage. The commit must exist and come after the finding's review."""
+    if not a.reframed.strip():
+        return None, err("`reframed` needs what changed", "the reframe that replaced the code", "empty",
+                         a.finding, "--reframed \"<what changed>\"", cause="code", code=vl.EXIT_FAIL)
+    if not REFRAMED_BY.match(a.by or ""):
+        return None, err("`reframed` needs who accepted the reframe", "`--by judge` (the fresh judge, §5.2) or "
+                         "`--by user` (the user's call)", repr(a.by), a.finding, "--by judge|user",
+                         code=vl.EXIT_USAGE)
+    path, key = fix_repo(f, a.fixed_in)
+    if path is None:
+        return None, err(f"`--fixed-in {a.fixed_in}` is not a git repository under {vl.PROJECTS}",
+                         "the path of the repo holding the replacing commit", key, "--fixed-in",
+                         "pass a checkout or worktree path", cause="code", code=vl.EXIT_USAGE)
+    rc, full, e = git(path, "rev-parse", "--verify", "--quiet", f"{a.commit}^{{commit}}")
+    if rc != 0 or not full:
+        return None, err(f"`{a.commit}` is not a commit in {key}", "the commit that replaced the code",
+                         (e or "unknown revision")[:200], path, f"git -C {path} log --oneline -5",
+                         cause="code", code=vl.EXIT_FAIL)
+    why = predates(f, full, path, recs)
+    if why:
+        return None, err(f"`reframed --commit {a.commit}` predates the finding: {why}",
+                         f"a commit made after review {f.get('review_id')} raised {a.finding}", full,
+                         a.finding, "commit the reframe first, then record it", cause="code", code=vl.EXIT_FAIL)
+    return {"sha": full, "repo": key, "via": "reframe"}, None
+
+
+def reverts_of(path, sha):
+    """The commit on HEAD whose message says it reverts `sha` (git revert's own line), or None.
+    Only that line: a hand revert that says nothing is not detectable here, and a warning that
+    guessed would teach the reader to ignore it."""
+    rc, out, _ = git(path, "log", "--format=%H", "-F", f"--grep=This reverts commit {sha}", "HEAD")
+    return out.split()[0] if rc == 0 and out.strip() else None
 
 
 def fix_repo(f, fixed_in):
@@ -1057,6 +1119,9 @@ def main(argv):
     x.add_argument("--rejected", metavar="REASON")
     x.add_argument("--deferred", metavar="TODO", help="non-blocking only: the TO-DO item that carries it")
     x.add_argument("--accepted", metavar="REASON", help="non-blocking only: a process nit, noted and never re-reviewed")
+    x.add_argument("--reframed", metavar="WHAT", help="an accepted reframe replaced the code: any round; needs "
+                   "--commit and --by judge|user; the replacing commit is reviewed as a new lineage")
+    d.add_argument("--commit", metavar="SHA", help="with --reframed: the commit that replaced the code")
     d.add_argument("--fixed-in", metavar="REPO_PATH", help="with --fixed: the repo holding the fix, when it is "
                    "not the finding's own (a fix at the source, or in a docs repo)")
     d.add_argument("--off-anchor", metavar="REASON",

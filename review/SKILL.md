@@ -195,6 +195,7 @@ $RV dispose --scope $SCOPE --unit $UNIT --finding <ID> --fixed <sha>          # 
 $RV dispose --scope $SCOPE --unit $UNIT --finding <ID> --fixed <sha> --fixed-in <repo path>   # fixed in another repo
 $RV dispose --scope $SCOPE --unit $UNIT --finding <ID> --rejected "<why the finding is wrong>"
 $RV dispose --scope $SCOPE --unit $UNIT --finding <ID> --accepted "<the process nit, noted>"   # non-blocking only, §5.1
+$RV dispose --scope $SCOPE --unit $UNIT --finding <ID> --reframed "<what changed>" --commit <sha> --by judge|user   # §5.1
 ```
 
 **A fix in another repo** — at the source the finding traces to, or a hand-back file in a
@@ -266,6 +267,15 @@ loops run without a per-round check-in (Alex's standing approval):
    finding's fix commit in the unit last changed. That is a local maximum: a better way to
    think about the original solution exists. Stop fixing and bring the user a proposed
    reframe. You may propose a reframe at any time, cascade or not.
+
+**A reframe that is taken** — accepted by the fresh judge (`--by judge`) or by the user at
+a stop (`--by user`) — is recorded on each finding it replaced: `dispose --reframed "<what
+changed>" --commit <the replacing commit>`, at any round and any severity. Never `--rejected`
+(the finding was not wrong) and never a stale `--fixed` (a reverted fix: `dispose` warns when
+a `--fixed` commit has been reverted on HEAD). The gate counts it like a deferral, `/verify`
+never audits it as a rejection, and the gate wants the replacing commit inside a later
+review's range: review it as its own range (old head..replacing commit), which starts a new
+lineage at round 1.
 
 **Rounds count per review lineage, not per repo.** IDs number every review of the unit
 (`<unit>-r<n>`); `record` prints `round: <k> of <repo>` for this review's lineage. A review

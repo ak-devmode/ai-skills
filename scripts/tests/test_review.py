@@ -1099,6 +1099,55 @@ class TestReview(unittest.TestCase):
         self.assertIn("accepted (process nit): 9.1-r1-03 — comment drift, noted", p.stdout)
         self.assertIn("rejected: 9.1-r1-02 — the filter is in the repo layer", p.stdout)
 
+    def test_reframed_records_an_accepted_reframe_at_any_round(self):
+        # TO-DO 158.3: a [CASCADE] reframe had no outcome but `rejected`; scope 10 §4.2
+        gate, vr = load("verdict-gate.py"), load("verify-run.py")
+        head = git(self.repo, "rev-parse", "HEAD")
+        self.record()
+        old = git(self.repo, "rev-parse", "HEAD")
+        new = self.commit(self.repo, "a.sh")   # the replacing design
+        how = lambda *extra: run(REVIEW, "dispose", "--scope", self.scope, "--unit", "9.1", "--finding",
+                                 "9.1-r1-01", *extra, env=self.env)
+        cases = [(("--reframed", "one call site, no retry",), 2, "go together"),
+                 (("--reframed", "x", "--commit", new, "--by", "Alex"), 2, "--by judge|user"),
+                 (("--reframed", " ", "--commit", new, "--by", "user"), 1, "needs what changed"),
+                 (("--reframed", "x", "--commit", head, "--by", "user"), 1, "predates the finding"),
+                 (("--reframed", "x", "--commit", "nosuch", "--by", "user"), 1, "is not a commit")]
+        for extra, code, needle in cases:
+            with self.subTest(extra=extra):
+                p = how(*extra)
+                self.assertEqual(p.returncode, code, p.stdout + p.stderr)
+                self.assertIn(needle, p.stderr)
+        # round 1, on a blocking finding: recorded, counted, never audited as a rejection
+        p = how("--reframed", "one call site, no retry", "--commit", new, "--by", "judge")
+        self.assertEqual(p.returncode, 0, p.stderr)
+        self.assertIn("9.1-r1-01: reframed", p.stdout)
+        self.assertNotIn("9.1-r1-01", str(gate.coverage_blocks(self.log)[0]))
+        self.assertEqual(vr.rejections(self.scope, "9.1"), 0)
+        # the gate wants the replacing commit reviewed — a new lineage, round 1
+        blocks = lambda: [b for b in gate.review_presence_blocks(self.log, {}, self.projects)
+                          if b[0] == "rereview:9.1-r1-01"]
+        self.assertIn("a reframe's replacing commit was never reviewed", str(blocks()))
+        p = self.record_range(f"{old}..{new}")
+        self.assertIn("round: 1 of ", p.stdout)
+        self.assertEqual(blocks(), [])
+        # a hand-written record without who accepted it blocks
+        with open(self.log, "a") as fh:
+            fh.write(json.dumps({"record": "disposition", "finding_id": "9.1-r1-03", "disposition": "reframed",
+                                 "sha": new, "reason": "x", "by": "t"}) + "\n")
+        self.assertIn("9.1-r1-03", str(gate.coverage_blocks(self.log)[0]))
+
+    def test_dispose_warns_when_the_fix_was_reverted(self):
+        self.record()
+        fix = self.commit(self.repo, "a.sh")
+        git(self.repo, "revert", "--no-edit", fix)
+        p = self.dispose("9.1-r1-01", "--fixed", fix)
+        self.assertEqual(p.returncode, 0, p.stderr)
+        self.assertIn(f"`fixed {fix}` has been reverted on HEAD", p.stderr)
+        other = self.commit(self.repo, "a.sh")
+        p = self.dispose("9.1-r1-01", "--fixed", other)
+        self.assertNotIn("reverted", p.stderr)
+
     def test_cascade_when_a_new_finding_lands_on_a_fix(self):
         mk = lambda line: [{"file": "a.sh", "line": line, "severity": "should-fix", "category": "fail-open",
                             "group": "", "text": "t", "fix": "f", "target": "shipped"}]

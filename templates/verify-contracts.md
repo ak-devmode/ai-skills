@@ -350,19 +350,22 @@ exclusive lock on the log, so concurrent or clean reviews never share an ID.
 `text` · `fix`. IDs are assigned in severity order.
 
 6.2 **`disposition`** records: `schema` · `ts` · `finding_id` · `disposition`
-(`fixed | rejected | deferred | accepted`) · `sha` (required for `fixed`, the full SHA) · `repo` (`fixed`
-only: the repo key holding `sha` — the finding's own, or `dispose --fixed-in`'s) · `via` (`fixed` only:
+(`fixed | rejected | deferred | accepted | reframed`) · `sha` (required for `fixed` and `reframed`, the full
+SHA) · `repo` (`fixed` and `reframed`: the repo key holding `sha` — the finding's own, or `dispose
+--fixed-in`'s) · `via` (`reframe` for `reframed`; for `fixed`:
 `anchor` — the commit changes the finding's file in the finding's own repo · `off-anchor` —
 anything else (a test-only fix, another file, another repo), and `reason` says how it fixes
 the finding) ·
-`reason` (required for `rejected` and for a `fixed` via `off-anchor`; for `deferred`, a note; the link is the finding ID, which must lead an open `- [ ]` item line in the project's `TO-DO.md` as `[review <id>]` followed by the work left, and the gate rechecks that item still exists, open or closed into `archive/TO-DO-archive.md` — never on a `blocking` finding or before round 4 *of the finding's review lineage*, `review/SKILL.md` §5.1; for `accepted`, the process nit — required, never on a `blocking` finding) ·
-`by`.
+`reason` (required for `rejected` and for a `fixed` via `off-anchor`; for `deferred`, a note; the link is the finding ID, which must lead an open `- [ ]` item line in the project's `TO-DO.md` as `[review <id>]` followed by the work left, and the gate rechecks that item still exists, open or closed into `archive/TO-DO-archive.md` — never on a `blocking` finding or before round 4 *of the finding's review lineage*, `review/SKILL.md` §5.1; for `accepted`, the process nit — required, never on a `blocking` finding; for `reframed`, what changed — required) ·
+`by` (for `reframed`, `judge` or `user` leads it: who accepted the reframe).
 
 6.2.1 **Rounds count per review lineage** (WellMed scope 171, 2026-10-18), not per repo and not by the
 unit-wide `r<n>`. A review continues an earlier review of the same repo (its primary checkout,
-worktrees included) when its base is that review's head (a fix re-review), its range is the same,
-or the two ranges share a commit; it takes the highest such round plus one. A range over code no
-earlier review covered starts at round 1. When git cannot tell whether two ranges share a commit,
+worktrees included) when its range is the same or the two ranges share a commit, or when its base
+is that review's head and its range contains a commit a `fixed` disposition named for a finding of
+that review's lineage (a fix re-review — a base at the head alone is a lane's next unit, WellMed
+171.2), or when its `review` record's `continues` names it (`record --continues`); it takes the
+highest such round plus one. A range over code no earlier review covered starts at round 1. When git cannot tell whether two ranges share a commit,
 it fails closed: the review continues the repo's highest round in the unit, with a `[WARN]` line.
 `verify_lib.review_lineage` is the one implementation.
 
@@ -371,6 +374,12 @@ doc wording — noted, never given another round. It counts as dispositioned (§
 wants it re-reviewed (§5.2.1), and it is not a rejection: `rejections-justified` never audits it —
 the `/verify` judge spot-checks it instead, one line inside the same run (§4.4.1).
 The gate report and `review.py accept` list accepted nits apart from rejections.
+
+6.2.3 **`reframed`** — an accepted reframe (the fresh judge's, or the user's at a `[CASCADE]` stop)
+replaced the code the finding was on. Any round, any severity; `sha` is the replacing commit,
+made after the finding's review. Counted like a deferral (§6.3), never audited as a rejection,
+and its commit is wanted inside a later review's range (§5.2.1) — a new lineage, which the old
+lineage's round-cap acceptance never stands in for.
 
 6.3 **Coverage rule.** Every `finding_id` has at least one disposition; the latest one
 decides — so a re-disposition supersedes an earlier one (`review.py misfiled` lists the
@@ -382,7 +391,7 @@ dismissed, nothing silently dropped. A re-review mints a new `review_id`; the ol
 stay.
 
 6.4 **`acceptance`** records — the record of review outcomes: `schema` · `ts` ·
-`by` · `findings` · `fixed` · `rejected` · `deferred` · `accepted`. Written by `review.py accept --by
+`by` · `findings` · `fixed` · `rejected` · `deferred` · `accepted` · `reframed`. Written by `review.py accept --by
 <name>` — by the session under the standing policy on a SHIP (`--by "<owner> (standing policy)"`),
 by the user's answer at a stop (`review/SKILL.md` §5.1) — refused while any finding lacks a disposition. Under a table
 with an `**Approved:**` line (§3.1.1), the gate blocks (`review-acceptance`) when a

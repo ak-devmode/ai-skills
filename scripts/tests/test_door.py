@@ -74,9 +74,13 @@ class TestFloor(DoorBase):
                 self.assertEqual(r["paths"][0]["pattern"], pattern)
 
     def test_case_insensitive_match(self):
-        write(self.repo, "DB/Migrations/002.sql")
+        # ADRS/ has no lowercase twin in the repo, so core.ignorecase cannot fold the path
+        # before door.py sees it: the match has to come from IGNORECASE (10.1-r1-16)
+        write(self.repo, "ADRS/0007-x.md")
         self.commit("case")
-        self.assertEqual(self.classify()["door"], "one-way")
+        r = self.classify()
+        self.assertEqual(r["door"], "one-way")
+        self.assertEqual(r["paths"][0]["path"], "ADRS/0007-x.md")
 
 
 class TestPromoteOnly(DoorBase):
@@ -153,11 +157,63 @@ class TestRepoFile(DoorBase):
         self.assertIn("src/billing/", pats)  # judged against the BASE file
 
     def test_negation_line_is_ignored(self):
-        write(self.repo, ".one-way-doors", "!db/migrations/\n")
-        self.commit("neg")
-        write(self.repo, "db/migrations/003.sql")
-        self.commit("m")
+        # src/billing/ is floored ONLY by the repo file, so a regression that honoured the
+        # `!` line would turn this two-way (10.1-r1-08)
+        write(self.repo, ".one-way-doors", "src/billing/\n!src/billing/\n")
+        self.commit("floor")
+        write(self.repo, "src/billing/charge.py")
+        self.commit("billing")
+        r = self.classify()
+        self.assertEqual((r["door"], r["paths"][0]["pattern"]), ("one-way", "src/billing/"))
+
+
+class TestGlobClass(DoorBase):
+    """glob compiler siblings: newline names (04), negated class (13), bad class (fail closed)."""
+
+    def floor(self, line):
+        write(self.repo, ".one-way-doors", line + "\n")
+        self.commit("floor")
+
+    def test_newline_in_path_still_matches(self):
+        self.floor("")  # defaults floor covers migrations/
+        write(self.repo, "db/migrations/a\nb.sql")
+        self.commit("nl")
+        r = self.classify("HEAD~1..HEAD")
+        self.assertEqual(r["door"], "one-way", r)
+
+    def test_newline_in_name_under_repo_dir_rule(self):
+        self.floor("src/billing/")
+        write(self.repo, "src/billing/a\nb.py")
+        self.commit("nl")
         self.assertEqual(self.classify()["door"], "one-way")
+
+    def test_negated_bracket_class(self):
+        self.floor("src/[!x]ule.py")
+        write(self.repo, "src/mule.py")
+        self.commit("m")
+        self.assertEqual(self.classify()["door"], "one-way")  # 'm' is not 'x'
+        write(self.repo, "src/xule.py")
+        self.commit("x")
+        self.assertEqual(self.classify()["door"], "two-way")  # 'x' is excluded
+
+    def test_uncompilable_floor_line_fails_closed(self):
+        self.floor("src/[z-a]x")
+        write(self.repo, "docs/notes.md", "changed\n")
+        self.commit("e")
+        r = self.classify()
+        self.assertEqual(r["door"], "one-way")
+        self.assertIn("fail-closed", r["reason"])
+
+
+class TestSubmodule(DoorBase):
+    def test_gitlink_bump_counts_even_when_ignored(self):
+        git(self.repo, "config", "diff.ignoreSubmodules", "all")
+        for sha, msg in (("1" * 40, "gl1"), ("2" * 40, "gl2")):
+            git(self.repo, "update-index", "--add", "--cacheinfo", f"160000,{sha},db/migrations/sub")
+            git(self.repo, "commit", "-q", "-m", msg)
+        r = self.classify()
+        self.assertEqual(r["door"], "one-way", r)
+        self.assertEqual(r["paths"][0]["path"], "db/migrations/sub")
 
 
 class TestFailClosed(DoorBase):

@@ -13,7 +13,8 @@ lower a floor hit. Fails closed: an unparseable range, a ref that does not resol
 git error, an unreadable defaults file, an unreadable base `.one-way-doors`, or an
 invalid claim all return one-way with the reason — a wrong "two-way" is the only
 costly error, a wrong "one-way" costs one human glance. Matching is case-insensitive
-(macOS volumes are), `!` negation lines are ignored for the same reason.
+(macOS volumes are), `!` negation lines are ignored for the same reason; a name containing
+a newline still matches (DOTALL); an uncompilable floor line fails closed.
 
     door.py classify --repo PATH --range BASE..HEAD [--claim one-way|two-way|info]
                      [--defaults FILE]
@@ -55,19 +56,27 @@ def glob_to_regex(pat):
             out.append("[^/]"); i += 1
         elif c == "[" and "]" in pat[i + 2:]:
             j = pat.index("]", i + 2)
-            out.append("[" + pat[i + 1:j].replace("\\", "\\\\") + "]"); i = j + 1
+            cls = pat[i + 1:j].replace("\\", "\\\\")
+            if cls[:1] in ("!", "^"):  # gitignore negation -> regex negation (10.1-r1-13)
+                cls = "^/" + cls[1:]
+            out.append("[" + cls + "]"); i = j + 1
         else:
             out.append(re.escape(c)); i += 1
     body = "".join(out)
     head = "^" if anchored else "^(?:.*/)?"
-    tail = "/.*$" if dir_only else "(?:/.*)?$"
-    return re.compile(head + body + tail, re.IGNORECASE)
+    tail = r"/.*\Z" if dir_only else r"(?:/.*)?\Z"
+    # DOTALL: a newline in a path name must not end a `.*` early and slip past the floor
+    # (10.1-r1-04); \Z, not $, so the end of the path is the end of the string.
+    return re.compile(head + body + tail, re.IGNORECASE | re.DOTALL)
 
 
 def compile_rules(text):
     rules = []
     for line in text.splitlines():
-        rx = glob_to_regex(line)
+        try:
+            rx = glob_to_regex(line)
+        except re.error as e:  # an uncompilable floor line must not crash into a non-answer
+            raise Failed(f"floor line {line.strip()!r} does not compile: {e}")
         if rx:
             rules.append((line.strip(), rx))
     return rules
@@ -106,7 +115,10 @@ def resolve(repo, ref):
 
 def touched(repo, base, head):
     """[(change, path)] for every path the range touches; renames yield both sides."""
-    p = git(repo, "diff", "--name-status", "--no-renames", "--no-ext-diff", "-z", base, head, "--")
+    # --ignore-submodules=none: a submodule pointer bump at a floor path must still count
+    # (10.1-r1-12); the flag beats diff.ignoreSubmodules and .gitmodules ignore=all.
+    p = git(repo, "-c", "diff.ignoreSubmodules=none", "diff", "--ignore-submodules=none",
+            "--name-status", "--no-renames", "--no-ext-diff", "-z", base, head, "--")
     if p.returncode != 0:
         raise Failed(f"git diff failed: {p.stderr.strip()[:200]}")
     parts = p.stdout.split("\0")

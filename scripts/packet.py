@@ -25,6 +25,10 @@ Failure stances (each is fail-closed unless it says otherwise):
     channel; stopping Alex's two-way work for a harness error is worse than a late card.
     The POST has a hard 3 s wall-clock deadline (a worker thread, not just a socket
     timeout) and refuses redirects: a 3xx is a failure, never a send
+  * queue verdicts per item: 409 (id reused with different content) -> `<id>.conflict`, 4xx
+    refusal -> `<id>.rejected`, each printed once and never retried (flush lists them);
+    404 on an event (packet not on the queue yet) -> kept unsent, retried next flush;
+    5xx / network -> Blocked as above. All exit 0 (a harness error never stops the caller)
   * flush: an unreadable item is reported and skipped, the rest of the outbox still goes
   * stale: git cannot be read -> exit 1 without marking. Fail-open on purpose: marking
     stale discards a pending decision
@@ -71,6 +75,8 @@ def post_timeout():
         return 3.0
     return v if v > 0 else 3.0
 SKIP = "Skipped: "
+HELD = "Held: "
+NOT_SENT = (SKIP, HELD, "Conflict: ", "Rejected: ")  # per-item outcomes: report, never stop the flush
 TAG_RE = re.compile(r"\[lane ([^/\]\[\n]+)/([^/\]\[\n]+)/([^/\]\[\n]+) ([A-Za-z0-9_-]{8,64})\]")
 
 
@@ -195,7 +201,11 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
 
 
 def post(path, doc):
-    """(ok, note). 200/201/204 and 409 (already stored: idempotent) count as sent.
+    """(kind, note); kind is ok | conflict | missing | rejected | blocked.
+    200/201/204 are ok (a 200 `duplicate` is the queue confirming an identical retry);
+    409 = the queue holds DIFFERENT content for this id (conflict, never sent);
+    404 = an event whose packet the queue lacks (missing: keep, retry after the packet);
+    any other 4xx = refused (rejected); 5xx, 3xx, network, timeout = blocked (retry).
     Hard post_timeout() wall clock: DNS and slow-drip servers defeat a per-socket timeout."""
     req = urllib.request.Request(queue_url() + path, data=json.dumps(doc).encode(),
                                  headers={"Content-Type": "application/json"}, method="POST")
@@ -206,16 +216,17 @@ def post(path, doc):
     def work():
         try:
             with opener.open(req, timeout=timeout) as r:
-                box.append((r.status in (200, 201, 204), f"HTTP {r.status}"))
+                box.append(("ok" if r.status in (200, 201, 204) else "blocked", f"HTTP {r.status}"))
         except urllib.error.HTTPError as e:
-            box.append((e.code == 409, f"HTTP {e.code}"))
+            kind = {409: "conflict", 404: "missing"}.get(e.code, "rejected" if 400 <= e.code < 500 else "blocked")
+            box.append((kind, f"HTTP {e.code}"))
         except (urllib.error.URLError, OSError, ValueError, http.client.HTTPException) as e:
-            box.append((False, str(getattr(e, "reason", e))))
+            box.append(("blocked", str(getattr(e, "reason", e))))
 
     t = threading.Thread(target=work, daemon=True)
     t.start()
     t.join(timeout)
-    return box[0] if box and not t.is_alive() else (False, f"timed out after {timeout:g}s")
+    return box[0] if box and not t.is_alive() else ("blocked", f"timed out after {timeout:g}s")
 
 
 def new_id(prefix):
@@ -245,6 +256,14 @@ def is_sent(d, pid):
     return sent_marker(d, pid).exists()
 
 
+def _refusal(d, stem, kind, note, what):
+    """Write <stem>.conflict / <stem>.rejected so the item is never retried forever."""
+    (d / f"{stem}.{kind}").write_text(note + "\n")
+    if kind == "conflict":
+        return f"Conflict: {what} id was reused with different content ({note}); not sent, marked {stem}.conflict"
+    return f"Rejected: queue refused {what} ({note}); not sent, marked {stem}.rejected"
+
+
 def try_send(args, d, ev=None, pid=None):
     """POST a stored item if this caller may. Returns a human note ('' when not attempted).
     "sent" lives in a marker file, never in the state file: a concurrent close/stale must not
@@ -252,18 +271,26 @@ def try_send(args, d, ev=None, pid=None):
     if not (queue_url() and is_driver(args)):
         return ""
     if ev is not None:
-        ok, note = post("/events", ev)
-        if ok:
+        kind, note = post("/events", ev)
+        if kind == "ok":
             (d / f"evt-{ev['id']}.sent").write_text(note + "\n")
-        return "" if ok else f"Blocked: queue unreachable ({note}); event kept in outbox, `packet.py flush` re-sends"
+            return ""
+        if kind in ("conflict", "rejected"):
+            return _refusal(d, f"evt-{ev['id']}", kind, note, f"event {ev['id']}")
+        if kind == "missing":
+            return f"{HELD}event {ev['id']} kept: its packet is not on the queue yet ({note}); `packet.py flush` retries after the packet"
+        return f"Blocked: queue unreachable ({note}); event kept in outbox, `packet.py flush` re-sends"
     try:
         doc = read_json(d / f"{pid}.json")
     except (OSError, ValueError) as e:
         return f"{SKIP}packet {pid} unreadable ({e}); not sent"
-    ok, note = post("/packets", doc)
-    if ok:
+    kind, note = post("/packets", doc)
+    if kind == "ok":
         sent_marker(d, pid).write_text(note + "\n")
-    return "" if ok else f"Blocked: queue unreachable ({note}); packet kept in outbox, `packet.py flush` re-sends"
+        return ""
+    if kind in ("conflict", "rejected", "missing"):
+        return _refusal(d, pid, "conflict" if kind == "conflict" else "rejected", note, f"packet {pid}")
+    return f"Blocked: queue unreachable ({note}); packet kept in outbox, `packet.py flush` re-sends"
 
 
 def show(doc, extra=""):
@@ -504,8 +531,12 @@ def cmd_flush(args):
             pid = f.name[: -len(".state.json")]
             if is_sent(d, pid):
                 continue
+            marked = next((k for k in ("conflict", "rejected") if (d / f"{pid}.{k}").exists()), "")
+            if marked:
+                skipped.append(f"{SKIP}packet {pid} is marked .{marked}; not retried")
+                continue
             note = try_send(args, d, pid=pid)
-            if note.startswith(SKIP):  # one bad item never strands the rest of the outbox
+            if note.startswith(NOT_SENT):  # one bad item never strands the rest of the outbox
                 skipped.append(note)
                 continue
             if note:
@@ -517,12 +548,19 @@ def cmd_flush(args):
         for f in sorted(d.glob("evt-*.json")):
             if f.with_suffix(".sent").exists():
                 continue
+            marked = next((k for k in ("conflict", "rejected") if f.with_suffix("." + k).exists()), "")
+            if marked:
+                skipped.append(f"{SKIP}{f.name} is marked .{marked}; not retried")
+                continue
             try:
                 ev = read_json(f)
             except (OSError, ValueError) as e:
                 skipped.append(f"{SKIP}{f.name} unreadable ({e}); not sent")
                 continue
             note = try_send(args, d, ev=ev)
+            if note.startswith(NOT_SENT):
+                skipped.append(note)
+                continue
             if note:
                 blocked = note
                 break

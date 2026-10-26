@@ -33,10 +33,13 @@ def load(path):
 
 
 class Stub:
-    """Local queue: records (path, body); fail=True answers 500; seen ids answer 409."""
+    """Local queue: records (path, body); fail=True answers 500; a seen id answers 200 when the
+    body is identical and 409 when it differs; an event for an unknown packet answers 404;
+    `force` (a status code) overrides everything."""
 
     def __init__(self):
-        self.posts, self.fail, self.redirect, self.delay, ids = [], False, False, 0, set()
+        self.posts, self.fail, self.redirect, self.delay, ids = [], False, False, 0, {}
+        self.force = None
         outer = self
 
         class H(BaseHTTPRequestHandler):
@@ -50,12 +53,16 @@ class Stub:
                     self.send_response(302)
                     self.send_header("Location", outer.url + "/elsewhere"); self.end_headers()
                     return
-                if outer.fail:
+                if outer.force:
+                    code = outer.force
+                elif outer.fail:
                     code = 500
                 elif body["id"] in ids:
-                    code = 409
+                    code = 200 if ids[body["id"]] == body else 409
+                elif self.path == "/events" and body.get("packet_id") and body["packet_id"] not in ids:
+                    code = 404
                 else:
-                    ids.add(body["id"]); code = 201
+                    ids[body["id"]] = body; code = 201
                     outer.posts.append((self.path, body))
                 self.send_response(code); self.end_headers()
 
@@ -184,9 +191,66 @@ class TestQueue(PacketBase):
         # retrying `new --id` for the same id re-sends but the queue still holds one row
         out = self.new("--driver", "--id", pid, env=env)[1]
         self.assertEqual(len(s.posts), 1)
-        # the 409 from the second POST counts as sent: no Blocked note, still marked sent
+        # the 200 duplicate from the second POST counts as sent: no Blocked note, still marked sent
         self.assertNotIn("Blocked", out)
         self.assertTrue(self.sent(pid))
+
+    def _marker(self, name):
+        return os.path.exists(os.path.join(self.outbox(), name))
+
+    def test_409_is_a_conflict_not_a_send(self):  # driver finding: 409 used to count as sent
+        s = Stub(); self.addCleanup(s.stop)
+        env = {"DECISION_QUEUE_URL": s.url}
+        pid, _ = self.new("--driver", env=env)
+        path = os.path.join(self.outbox(), f"{pid}.json")
+        doc = load(path); doc["title"] = "changed"; put(path, json.dumps(doc))
+        os.remove(os.path.join(self.outbox(), f"{pid}.sent"))
+        p = self.pk("new", "--driver", "--id", pid, "--door", "two-way", "--title", "Other",
+                    "--unit", "10/1.2", "--option", "a", "--option", "b", "--body", "x", env=env)
+        self.assertEqual(p.returncode, 0, p.stderr)
+        self.assertIn("Conflict:", p.stdout)
+        self.assertFalse(self.sent(pid))
+        self.assertTrue(self._marker(f"{pid}.conflict"))
+        out = self.pk("flush", "--driver", env=env).stdout
+        self.assertIn("FLUSHED 0 packets", out)
+        self.assertIn(".conflict", out)
+        self.assertEqual(len(s.posts), 1)  # flush did not retry the conflicted id
+
+    def test_400_is_rejected_once_never_retried(self):
+        s = Stub(); self.addCleanup(s.stop); s.force = 400
+        env = {"DECISION_QUEUE_URL": s.url}
+        pid, out = self.new("--driver", env=env)
+        self.assertIn("Rejected:", out)
+        self.assertIn("HTTP 400", out)
+        self.assertNotIn("Blocked", out)
+        self.assertFalse(self.sent(pid))
+        self.assertTrue(self._marker(f"{pid}.rejected"))
+        s.force = None
+        out = self.pk("flush", "--driver", env=env).stdout
+        self.assertIn("FLUSHED 0 packets", out)
+        self.assertIn(".rejected", out)
+        self.assertEqual(s.posts, [])
+
+    def test_5xx_stays_blocked_and_retries(self):
+        s = Stub(); self.addCleanup(s.stop); s.force = 503
+        env = {"DECISION_QUEUE_URL": s.url}
+        pid, out = self.new("--driver", env=env)
+        self.assertIn("Blocked", out)
+        self.assertFalse(self._marker(f"{pid}.rejected") or self._marker(f"{pid}.conflict"))
+
+    def test_event_404_is_kept_and_sent_after_the_packet(self):
+        s = Stub(); self.addCleanup(s.stop)
+        env = {"DECISION_QUEUE_URL": s.url}
+        pid, _ = self.new()  # lane outbox only: the packet is not on the queue
+        p = self.pk("event", "--driver", "--kind", "done", "--body", "hi", "--packet-id", pid, env=env)
+        self.assertEqual(p.returncode, 0, p.stderr)
+        self.assertIn("not on the queue yet", p.stdout + p.stderr)
+        evs = [f for f in os.listdir(self.outbox()) if f.startswith("evt-") and f.endswith(".json")]
+        self.assertEqual(len(evs), 1)
+        self.assertFalse(any(f.endswith((".conflict", ".rejected", ".sent")) for f in os.listdir(self.outbox()) if f.startswith("evt-")))
+        out = self.pk("flush", "--driver", env=env).stdout  # packets go first, then the event
+        self.assertIn("FLUSHED 1 packets, 1 events", out)
+        self.assertEqual([p_ for p_, _ in s.posts], ["/packets", "/events"])
 
     def test_driver_flushes_a_lane_outbox(self):
         s = Stub(); self.addCleanup(s.stop)

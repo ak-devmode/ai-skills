@@ -64,6 +64,14 @@ class TestReviewPackets(unittest.TestCase):
 
     def test_case1_an_accepted_reframe_touching_a_one_way_door(self):
         self.run_env()
+        self.door_reframe()
+        p = self.judged("9.1-r1")   # accepted, overturns nothing: the floor hit alone makes it Alex's
+        self.assertHeld(p)
+        (doc,) = self.packets()
+        self.assertValid(doc)
+        self.assertIn("migrations/001.sql", doc["payload"]["body"])
+
+    def door_reframe(self):
         os.makedirs(os.path.join(self.repo, "migrations"))
         with open(os.path.join(self.repo, "migrations", "001.sql"), "w") as fh:
             fh.write("select 1;\n")
@@ -72,11 +80,47 @@ class TestReviewPackets(unittest.TestCase):
         door = {"file": "migrations/001.sql", "line": 1, "severity": "blocking", "category": "domain",
                 "group": "3.5", "text": "bad migration", "fix": "redo"}
         self.assertEqual(self.record(findings=[door], reframe=dict(self.REFRAME, removes=["#1"])).returncode, 0)
-        p = self.judged("9.1-r1")   # accepted, overturns nothing: the floor hit alone makes it Alex's
+
+    def assertHeld(self, p):
         self.assertEqual(p.returncode, 0, p.stderr)
-        (doc,) = self.packets()
-        self.assertValid(doc)
-        self.assertIn("migrations/001.sql", doc["payload"]["body"])
+        self.assertIn("do not build until answered", p.stdout)
+        self.assertNotIn("build it, then record", p.stdout)
+        self.assertNotIn("dispose --reframed", p.stdout)
+
+    def test_case1_the_hold_prints_even_when_the_packet_cannot_be_written(self):
+        # review 10.2-r3-01: the door decision is made before any output; an emission failure
+        # loses the packet, never the hold — stdout must not say "build it"
+        self.run_env()
+        self.door_reframe()
+        with open(os.path.join(self.repo, ".decision-queue"), "w") as fh:
+            fh.write("in the way\n")
+        p = self.judged("9.1-r1")
+        self.assertHeld(p)
+        self.assertIn("touches migrations/001.sql", p.stdout)
+        self.assertIn("packet not written", p.stderr)
+        self.assertNotIn("PACKET pk-", p.stdout)
+        self.assertEqual(self.records("reframe-verdict")[-1]["user_call"], "touches migrations/001.sql")
+
+    def test_case1_an_unclassifiable_door_is_the_users_call(self):
+        # no stamped checkout to classify (a review logged before repo_path): one-way, held
+        self.run_env()
+        self.record(reframe=self.REFRAME)
+        with open(self.log) as fh:
+            recs = [json.loads(x) for x in fh]
+        with open(self.log, "w") as fh:
+            for r in recs:
+                r.pop("repo_path", None)
+                fh.write(json.dumps(r) + "\n")
+        p = self.judged("9.1-r1")
+        self.assertHeld(p)
+        self.assertIn("door unknown", p.stdout)
+        # door.py raising is one-way too, never "build it"
+        rv = load("review/scripts/review.py")
+
+        def boom(*_):
+            raise RuntimeError("git exploded")
+        rv.reframe_door = boom
+        self.assertIn("door.py failed: git exploded", rv.user_call([], "9.1", "9.1-r1", {"overturns": None}))
 
     def test_case1_an_accepted_reframe_on_two_way_code_is_no_packet(self):
         self.run_env()

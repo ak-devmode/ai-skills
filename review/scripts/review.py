@@ -1126,10 +1126,11 @@ def reframe_check(a, f, recs):
         # the judge's accept is read from the log, never taken on the driver's word (10.2-r1-01)
         why = vl.judge_took(recs, a.finding, rounds(recs, a.unit)[1])
         if why:
-            return None, err(f"`reframed --by judge`: {why}", "an `accepted` reframe-verdict, without "
-                             "`overturns`, on a reframe in the finding's lineage that removes it", "none",
+            return None, err(f"`reframed --by judge`: {why}", "an `accepted` reframe-verdict that is the "
+                             "judge's (no `overturns`, no `user_call`), on a reframe in the finding's lineage that removes it", "none",
                              a.finding, "run the fresh judge (`reframe-prepare` / `reframe-record`, §5.2); an "
-                             "accept that overturns a decision, or a reframe taken at a stop, is `--by user`",
+                             "accept that overturns a decision or touches a one-way door, or a reframe taken at a stop, "
+                             "is `--by user`",
                              cause="code", code=vl.EXIT_FAIL)
     path, key = fix_repo(f, a.fixed_in)
     if path is None:
@@ -1458,13 +1459,26 @@ def reframe_options(review_id, extra):
             "Hold: Alex decides after reading the lineage"]
 
 
-def packet_overturn(recs, unit, review_id, verdict):
-    """Case 1: an accepted reframe that overturns a recorded decision, or touches a one-way door."""
+def user_call(recs, unit, review_id, verdict):
+    """None when an accepted reframe is the judge's to take, else why it is the user's call: it
+    overturns a recorded decision, or touches a one-way door. Decided before anything is printed,
+    logged on the verdict as `user_call`, and read by every consumer (the stdout line, the packet,
+    `dispose --by judge` via verify_lib.judge_took, case 2's qualifying reframe) — never computed
+    inside the emission, where a failed packet lost it (review 10.2-r3-01). Fails closed: door.py
+    raising, or no repo/range to classify, is one-way — a wrong hold costs the user one glance, a
+    wrong "build it" builds through a door nobody looked at."""
+    if verdict.get("overturns"):
+        return f"overturns a recorded decision: {verdict['overturns']}"
+    try:
+        door, note = reframe_door(recs, unit, review_id)
+    except Exception as exc:  # noqa: BLE001 — any classification failure is one-way
+        return f"door unknown (door.py failed: {' '.join(str(exc).split())[:160]}): treated as one-way"
+    return note if door == "one-way" else None
+
+
+def packet_overturn(recs, unit, review_id, verdict, note):
+    """Case 1: an accepted reframe that is the user's call (`note`, from user_call)."""
     rf = reframe_of(recs, review_id) or {}
-    why = verdict.get("overturns")
-    door, note = ("one-way", f"overturns a recorded decision: {why}") if why else reframe_door(recs, unit, review_id)
-    if not why and door != "one-way":
-        return None
     body = (f"The fresh judge accepted review {review_id}'s reframe, but it needs Alex ({note}).\n\n"
             f"Proposal: {rf.get('proposal', '?')}\nDeletes: {verdict.get('deletes') or rf.get('deletes', '?')}\n"
             f"Would replace findings: {', '.join(rf.get('removes') or []) or 'none named'}\n"
@@ -1497,7 +1511,7 @@ def packet_stuck(recs, unit, review_id):
     _, rnd = review_round(recs, unit, review_id)
     ids = lineage_ids(recs, unit, review_id)
     if any(r.get("record") == "reframe-verdict" and r.get("verdict") == "accepted" and not r.get("overturns")
-           and r.get("review_id") in ids for r in recs):
+           and "user_call" in r and not r["user_call"] and r.get("review_id") in ids for r in recs):
         return None
     link = {r.get("finding_id"): r.get("reopens") for r in recs if r.get("record") == "finding"}
     blocking = [r for r in recs if r.get("record") == "finding" and r.get("review_id") == review_id
@@ -1625,12 +1639,16 @@ def cmd_reframe_record(a):
                                  "tooling", "the verdict is recorded without them", DOCS), file=sys.stderr)
             rec.update(verdict=verdict, reason=reason, deletes=doc["deletes"].strip(),
                        overturns=(doc["overturns"] or "").strip() or None, reopened_decisions=flags)
+            if verdict == "accepted":
+                rec["user_call"] = user_call(recs, a.unit, a.review, rec)
         vl.append_verified(log, [rec])
     rf = reframe_of(recs, a.review)
-    if rec["verdict"] == "accepted" and rec["overturns"]:
-        # scope 10 §4.2: overturning a recorded decision is the user's call — accepted, not taken
-        print(f"[REFRAME] {a.review} accepted by {a.judge}, but it overturns a recorded decision "
-              f"({rec['overturns']}): bring it to the user before building it (review/SKILL.md §5.2)")
+    if rec["verdict"] == "accepted" and rec["user_call"]:
+        # scope 10 §4.2: overturning a recorded decision or touching a one-way door is the user's
+        # call — accepted, not taken. The hold prints whatever happens to the packet below.
+        print(f"[REFRAME] {a.review} accepted by {a.judge}, but it is the user's call ({rec['user_call']}): "
+              "bring it to the user before building it — do not build until answered: the packet, or the "
+              "inline question (review/SKILL.md §5.2)")
     elif rec["verdict"] == "accepted":
         print(f"[REFRAME] {a.review} accepted by {a.judge} — deletes {rec['deletes']}: build it, then record each "
               f"finding it replaced ({', '.join(rf['removes']) or 'none named'}) with `dispose --reframed "
@@ -1642,12 +1660,10 @@ def cmd_reframe_record(a):
               "reframe to the user (review/SKILL.md §5.2)")
     for d in rec["reopened_decisions"]:
         print(f"[DECISION] {d['finding']} re-opens a recorded decision: {d['decision']}")
-    if rec["verdict"] == "accepted":
-        # case 1 (never stops the caller: a failed emission warns and the inline question stands)
+    if rec["verdict"] == "accepted" and rec["user_call"]:
+        # case 1 (never stops the caller: a failed emission warns; the hold above already stands)
         try:
-            if packet_overturn(vl.read_jsonl(log), a.unit, a.review, rec):
-                print(f"[REFRAME] {a.review}: this reframe needs Alex (overturns a decision or touches a one-way "
-                      "door) — do not build it until the packet is answered")
+            packet_overturn(vl.read_jsonl(log), a.unit, a.review, rec, rec["user_call"])
         except Exception as exc:  # noqa: BLE001 — harness errors never stop the review
             print(f"review.py: warning: packet not written ({exc}); ask the question inline", file=sys.stderr)
     return vl.EXIT_PASS

@@ -563,12 +563,25 @@ def accepted_nits(recs):
 REFRAMED_BY = re.compile(r"^(judge|user)\b")
 
 
+def judge_may_take(v):
+    """True when an accepted reframe-verdict is the judge's to take: no `overturns`, and a
+    `user_call` (review.py's door/overturn decision, review 10.2-r3-01) that is present and empty.
+    Fails closed: a verdict with no `user_call` key was never classified, so it is the user's."""
+    return not v.get("overturns") and "user_call" in v and not v["user_call"]
+
+
+def user_call_of(v):
+    if v.get("overturns"):
+        return f"overturns a recorded decision: {v['overturns']}"
+    return v.get("user_call") or "no door classification on the verdict: treated as the user's call"
+
+
 def judge_took(recs, finding_id, lineage):
     """None when a `reframed --by judge` of `finding_id` is backed by the log, else why not.
     Backed = a review in the finding's lineage (`lineage` from review_lineage) proposed a reframe
     whose `removes` names the finding, and that review's latest `reframe-verdict` is `accepted`
-    with no `overturns` — an accept that overturns a recorded decision is the user's call
-    (`--by user`), never the judge's. Review 10.2-r1-01: `--by judge` was the driver's word, so a
+    and the judge's to take (judge_may_take) — an accept that overturns a recorded decision or
+    touches a one-way door is the user's call (`--by user`), never the judge's. Review 10.2-r1-01: `--by judge` was the driver's word, so a
     driver could clear any finding, blocking included, without a judge ever running. Fails
     closed: a finding whose review has no lineage (unknown, or a log without review records)
     has nothing to back it."""
@@ -587,11 +600,11 @@ def judge_took(recs, finding_id, lineage):
     if not mine:
         return f"no reframe in {finding_id}'s review lineage removes it"
     took = [rid for rid in mine if (verdict.get(rid) or {}).get("verdict") == "accepted"]
-    if any(not verdict[rid].get("overturns") for rid in took):
+    if any(judge_may_take(verdict[rid]) for rid in took):
         return None
     if took:
-        return (f"the judge's accept of {', '.join(took)} overturns a recorded decision "
-                f"({'; '.join(verdict[rid]['overturns'] for rid in took)}): that is the user's call")
+        return (f"the judge's accept of {', '.join(took)} is the user's call "
+                f"({'; '.join(user_call_of(verdict[rid]) for rid in took)})")
     return (f"the judge did not accept the reframe of {', '.join(mine)} (latest verdict: "
             f"{', '.join((verdict.get(rid) or {}).get('verdict') or 'none' for rid in mine)})")
 

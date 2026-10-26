@@ -376,7 +376,7 @@ def review_presence_blocks(review_log, base, projects, scope=None, unit=None):
             # record, or one from before the check, never clears a finding on the driver's
             # word (review 10.2-r1-01); `--by user` is the user's call and stands as recorded
             blocks.append((f"reframe:{f['finding_id']}", "a `reframed --by judge` the judge never took",
-                           "an `accepted` reframe-verdict, without `overturns`, on a reframe in the "
+                           "an `accepted` reframe-verdict that is the judge's (no `overturns`, no `user_call`), on a reframe in the "
                            "finding's lineage that removes it", why_not, f"{review_log} · {f['finding_id']}",
                            "code"))
         # the reviewed code is never its own fix: the commit that introduced a finding touches

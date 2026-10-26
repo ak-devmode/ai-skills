@@ -408,8 +408,11 @@ A packet that cannot be written only warns on stderr — the review never stops 
 
 1. **An accepted reframe that overturns a recorded decision, or touches a one-way door**
    (`door.py` over the review's range, a hit on a file of a finding the reframe removes; a
-   `door.py` that fails closed counts as a hit). Emitted by `reframe-record`. Do not build it
-   until the packet is answered.
+   `door.py` that fails closed, raises, or has no reviewed checkout to read counts as a hit).
+   Emitted by `reframe-record`. The call is decided before anything prints and logged on the
+   verdict as `user_call`: stdout says "do not build until answered" in place of "build it"
+   whether or not the packet was written, and `dispose --reframed --by judge` refuses it (it is
+   `--by user`).
 2. **A blocking finding that survived two rounds with no qualifying reframe** — round 3 or
    later with no SHIP, or a blocking finding ending a `reopens` chain of three — and no accepted,
    non-overturning reframe anywhere in the lineage. Emitted by `record`. `local-maxima` flags

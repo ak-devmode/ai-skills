@@ -1537,7 +1537,7 @@ class TestReview(unittest.TestCase):
         steps = [(None, "9.1-r1-01", "judge did not accept the reframe of 9.1-r1 (latest verdict: none)"),
                  (dict(verdict="reject", reason="it moves the scanner"), "9.1-r1-01",
                   "(latest verdict: rejected)"),
-                 (dict(overturns="D7: one writer"), "9.1-r1-01", "overturns a recorded decision (D7: one writer)"),
+                 (dict(overturns="D7: one writer"), "9.1-r1-01", "overturns a recorded decision: D7: one writer"),
                  (dict(), "9.1-r1-02", "no reframe in 9.1-r1-02's review lineage removes it")]
         for verdict, fid, needle in steps:
             with self.subTest(verdict=verdict, fid=fid):
@@ -1563,8 +1563,14 @@ class TestReview(unittest.TestCase):
         # a reframe in another lineage never backs it (fail closed), nor does an unknown review
         vl = load("verify_lib.py")
         recs = self.records("finding") + self.records("reframe") + \
-            [{"record": "reframe-verdict", "review_id": "9.1-r1", "verdict": "accepted", "overturns": None}]
+            [{"record": "reframe-verdict", "review_id": "9.1-r1", "verdict": "accepted", "overturns": None,
+              "user_call": None}]
         self.assertIsNone(vl.judge_took(recs, "9.1-r1-01", {"9.1-r1": ("9.1-r1", 1)}))
+        # review 10.2-r3-01: a door-touching accept is the user's; an unclassified one fails closed
+        door = recs[:-1] + [dict(recs[-1], user_call="touches migrations/001.sql")]
+        self.assertIn("touches migrations/001.sql", vl.judge_took(door, "9.1-r1-01", {"9.1-r1": ("9.1-r1", 1)}))
+        bare = recs[:-1] + [{k: v for k, v in recs[-1].items() if k != "user_call"}]
+        self.assertIn("no door classification", vl.judge_took(bare, "9.1-r1-01", {"9.1-r1": ("9.1-r1", 1)}))
         other = [dict(r, review_id="9.1-r0") if r["record"] != "finding" else r for r in recs]
         self.assertIn("no reframe", vl.judge_took(other, "9.1-r1-01", {"9.1-r1": ("9.1-r1", 1),
                                                                       "9.1-r0": ("9.1-r0", 1)}))

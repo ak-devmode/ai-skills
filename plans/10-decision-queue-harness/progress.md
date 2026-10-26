@@ -7,9 +7,9 @@ Script-owned (`plans-index.py`); PLANS-INDEX.md is rendered from it.
 <!-- plans-index:begin -->
 | # | Status | Folder | Description | Created by |
 |---|---|---|---|---|
-| 10 | 📝 Draft (2026-10-25) | `10-decision-queue-harness/` | Re-targets the harness from closing review findings to surfacing decisions: every lane ends done or with a decision in Alex's queue. Adds structured decision packets, a one-way/two-way door rule with a per-repo floor, and a queue page on homelab that both machines write to over the tailnet; Alex answers by pasting an edited prefilled reply into the named pane. Review loops stop on diminishing returns and emit packets instead of patching local maxima, drivers merge their own PRs to develop outside the floor, and the 21-day log analysis becomes a re-runnable scorecard. | Alex |
-| 10.1 | 📝 Draft (2026-10-25) | `10-decision-queue-harness/` | Phase 1 — Decision queue v1, usable today: packet schema, packet.py/door.py, homelab queue service with the data-model template, /plan and /concurrency wiring. | Alex |
-| 10.2 | 📝 Draft (2026-10-25) | `10-decision-queue-harness/` | Phase 2 — Review and verify re-pointed at decisions: diminishing-returns exit rule, lineage fix, --reframed disposition, packets from cascade/convergence/run-cap stops. | Alex |
+| 10 | 🚧 In progress (2026-10-26) — 10.1 + 10.2 running as concurrent lanes | `10-decision-queue-harness/` | Re-targets the harness from closing review findings to surfacing decisions: every lane ends done or with a decision in Alex's queue. Adds structured decision packets, a one-way/two-way door rule with a per-repo floor, and a queue page on homelab that both machines write to over the tailnet; Alex answers by pasting an edited prefilled reply into the named pane. Review loops stop on diminishing returns and emit packets instead of patching local maxima, drivers merge their own PRs to develop outside the floor, and the 21-day log analysis becomes a re-runnable scorecard. | Alex |
+| 10.1 | 🚧 In progress (2026-10-26) — lanes A packet/door, B queue service | `10-decision-queue-harness/` | Phase 1 — Decision queue v1, usable today: packet schema, packet.py/door.py, homelab queue service with the data-model template, /plan and /concurrency wiring. | Alex |
+| 10.2 | 🚧 In progress (2026-10-26) — lane C review changes, lineage fix first | `10-decision-queue-harness/` | Phase 2 — Review and verify re-pointed at decisions: diminishing-returns exit rule, lineage fix, --reframed disposition, packets from cascade/convergence/run-cap stops. | Alex |
 | 10.3 | 📝 Draft (2026-10-25) | `10-decision-queue-harness/` | Phase 3 — Driver merges its own PRs (develop for code, main for docs repos) when green with real checks and no floor path; floor hits become packets. | Alex |
 | 10.4 | 📝 Draft (2026-10-25) | `10-decision-queue-harness/` | Phase 4 — UI-change template (old/new screenshots), harness scorecard from the mining scripts, herdr attention filter ignores finished lanes. | Alex |
 <!-- plans-index:end -->
@@ -25,9 +25,9 @@ Script-owned (`plans-index.py`); PLANS-INDEX.md is rendered from it.
 
 ## Resume Context
 **Scope:** ~/Projects/ai-skills/plans/10-decision-queue-harness/scope.md
-**Last action:** /plan-eng-review done (2026-10-26) — 46 issues mapped to T1–T12, finish table rev 3 approved; record `artifacts/eng-review-2026-10-25.md`
-**Next action:** /plan 10.1 and a concurrent 10.2 lane (lanes A packet/door, B queue service, C review changes)
-**Open blockers:** dev-workbench uncommitted config changes (scope §2 drift); decision 74 (effort bump beyond round 1) open
+**Last action:** /plan 10.1 + 10.2 Phase 0 done (2026-10-26); plans Ready to execute; dev-workbench drift committed (28850dc)
+**Next action:** /concurrency launches lanes A (10.1 packet schema + packet.py/door.py, ai-skills), B (10.1 queue service + data-model template, dev-workbench), C (10.2 review changes, lineage fix first, ai-skills); this pane drives
+**Open blockers:** none
 **Key files changed:** None yet
 
 ---
@@ -41,6 +41,7 @@ Script-owned (`plans-index.py`); PLANS-INDEX.md is rendered from it.
   per-round reframe prompt judged by a fresh agent, three review cases to the queue, round-1
   effort trial. Harness errors never stop work (dead queue → `Blocked` in pane). Driver merges
   include degraded reviews (flagged) and `--admin`. Details: scope.md §4 and the review report.
+- (2026-10-26) /plan start: Alex overrode the Repo Graph drift stop (decision 76); his dev-workbench config committed as-is (75); 10.1 and 10.2 run as concurrent lanes.
 - (2026-10-26) Eng review: queue on 127.0.0.1 behind `tailscale serve` (HTTPS MagicDNS URL kept);
   one packet path via lane outboxes, drivers POST; rules-version stamp on review records for
   cutover; lineage fix lands first; no should-fix cap at any round (later-round findings are
@@ -54,6 +55,7 @@ Script-owned (`plans-index.py`); PLANS-INDEX.md is rendered from it.
 
 | Date | Skill/Action | Status | Notes |
 |------|--------------|--------|-------|
+| 2026-10-26 | /plan 10.1 + 10.2 | Phase 0 done | Ready to execute; repo-graph drift overridden by Alex; lanes via /concurrency |
 | 2026-10-26 | /plan-eng-review | Done | outside voice codex-int; 46 issues, 0 critical gaps; finish table rev 3 approved; gstack pulled to 1.91.226 |
 | 2026-10-25 | /plan-ceo-review | Done | HOLD SCOPE; outside voice = in-host Claude; finish table rev 2 pending approval |
 | 2026-10-25 | finish table + table creates | Approved | rev 1; packets/events/views creates approved |
@@ -65,7 +67,7 @@ Script-owned (`plans-index.py`); PLANS-INDEX.md is rendered from it.
 
 | Step | Status | Notes |
 |------|--------|-------|
-| Resolve dev-workbench uncommitted settings.json / codex config.toml | [ ] Pending | before 10.1 touches dev-workbench |
+| Resolve dev-workbench uncommitted settings.json / codex config.toml | [x] Done | committed 28850dc on Alex's yes, 2026-10-26 (local) |
 | Approve the `decision_queue` table creates (scope §7) | [x] Done | Alex, 2026-10-25 |
 | Approve finish-conditions.md | [x] Done | rev 1, Alex, 2026-10-25 |
 | Approve finish-conditions.md rev 2 | [x] Done | Alex, 2026-10-25 |
@@ -78,8 +80,8 @@ Script-owned (`plans-index.py`); PLANS-INDEX.md is rendered from it.
 
 | # | Plan File | Phase | Status | Notes |
 |---|-----------|-------|--------|-------|
-| 10.1 | 10.1-decision-queue-harness-PLAN.md | Phase 1 — Decision queue v1 | Draft | gate D then A |
-| 10.2 | 10.2-decision-queue-harness-PLAN.md | Phase 2 — Review/verify re-pointed | Draft | gate C, concurrent with 10.1 |
+| 10.1 | 10.1-decision-queue-harness-PLAN.md | Phase 1 — Decision queue v1 | In progress | gate D then A |
+| 10.2 | 10.2-decision-queue-harness-PLAN.md | Phase 2 — Review/verify re-pointed | In progress | gate C, concurrent with 10.1 |
 | 10.3 | 10.3-decision-queue-harness-PLAN.md | Phase 3 — Driver merges | Draft | gate D, after 10.1 packet tooling |
 | 10.4 | 10.4-decision-queue-harness-PLAN.md | Phase 4 — UI template, scorecard, herdr | Draft | gate A, after 10.1 packet tooling |
 
@@ -89,3 +91,33 @@ Script-owned (`plans-index.py`); PLANS-INDEX.md is rendered from it.
 - `artifacts/baseline-2026-10-25.md` — 21-day both-host baseline
 - `artifacts/mining/` — mine.py, mine2.py, reviews.py, lineage.py (per-lineage rounds; supersedes reviews.py's round counts), infix.py (where later-round findings land), fixpairs.py (why fixes draw findings)
 - `artifacts/eng-review-2026-10-25.md` — eng review record, decisions 62–74
+
+---
+
+## Plan 10.1: Decision queue v1, usable today
+
+### Resume Context (Plan 10.1)
+**Status:** Phase 0 done; tasks 1.1–1.4 dispatched to lanes A and B
+**Next action:** collect lane A (1.1, 1.2) and lane B (1.3, 1.4); then 1.5 skill wiring, 1.6 deploy
+**Base:** ai-skills ad15797 · dev-workbench 28850dc (closeout-prep.md)
+
+### Session: 2026-10-26
+#### Phase 0 — ✅ DONE
+- Inputs and Related Docs resolve; Status flipped Draft → Ready to execute on Alex's word; Executed by stamped.
+- Repo Graph: ai-skills advanced (own commits); dev-workbench diverged on the known drift — Alex overrode (76); drift committed 28850dc (75).
+- Finish table rev 3 approved. Branches: lane worktrees `feature/10-decision-queue-*`, cut over to ai-skills main in one step; dev-workbench feature branch merged to main before install.
+#### Task 1.0 — ✅ DONE
+- dev-workbench clean: Alex's allow rule + codex trust entries committed 28850dc.
+
+---
+
+## Plan 10.2: Review re-pointed at decisions
+
+### Resume Context (Plan 10.2)
+**Status:** Phase 0 done; tasks 2.3 (lineage first) → 2.1 → 2.1b → 2.2 → 2.4 dispatched to lane C; 2.5 waits for 10.1 packet.py
+**Next action:** collect lane C
+**Base:** ai-skills ad15797 (closeout-prep.md)
+
+### Session: 2026-10-26
+#### Phase 0 — ✅ DONE
+- Status flipped Draft → Ready to execute on Alex's word; Executed by stamped; shares 10.1's freshness result.

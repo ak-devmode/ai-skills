@@ -1059,7 +1059,7 @@ class TestReview(unittest.TestCase):
         revs = [("9.1-r1", "svc", "a1", "b1"), ("9.1-r2", "svc", "b1", "c1"), ("9.1-r3", "other", "x", "y"),
                 ("9.1-r4", "svc", "d1", "e1")]
         want = {"9.1-r1": ("9.1-r1", 1), "9.1-r2": ("9.1-r1", 2), "9.1-r3": ("9.1-r3", 1), "9.1-r4": ("9.1-r1", 3)}
-        for stamped in (set(), {"9.1-r2", "9.1-r4"}):
+        for stamped in (set(), {"9.1-r1", "9.1-r2", "9.1-r4"}):
             with self.subTest(stamped=stamped):
                 err = io.StringIO()
                 with contextlib.redirect_stderr(err):
@@ -1068,17 +1068,39 @@ class TestReview(unittest.TestCase):
                 # r2 starts at r1's head: unstamped, it continues without git; stamped, git cannot
                 # say whether it holds r1's fix, so it continues r1 itself — never the repo's
                 # highest round, which could be another lineage (review 10.2-r1-02)
-                self.assertNotIn("[WARN] lineage of 9.1-r2", err.getvalue())
+                self.assertEqual("[WARN] lineage of 9.1-r2" in err.getvalue(), bool(stamped))
                 self.assertIn("[WARN] lineage of 9.1-r4", err.getvalue())
                 self.assertIn("continuing 9.1-r2 (round 2)", err.getvalue())
         # with no fix to look for, a stamped head-is-base start is new code, decided without git;
         # an unstamped one keeps the old continuation (decision 65 for the lineage rule)
-        for stamped, r2 in (({"9.1-r2"}, ("9.1-r2", 1)), (set(), ("9.1-r1", 2))):
+        for stamped, r2 in (({"9.1-r1", "9.1-r2"}, ("9.1-r2", 1)), (set(), ("9.1-r1", 2))):
             err = io.StringIO()
             with contextlib.redirect_stderr(err):
                 lin = vl.review_lineage(revs[:2], lambda key: gone, None, None, stamped)
             self.assertEqual(lin, {"9.1-r1": ("9.1-r1", 1), "9.1-r2": r2})
             self.assertEqual(err.getvalue(), "")
+
+    def test_the_rule_follows_the_parent_lineage_root_stamp(self):
+        # review 10.2-r2-01 (decision 65): an unstamped lineage finishes under the old rules, so a
+        # stamped r3 starting at r2's head continues as round 3 (the round-3 STOP) with no fixed
+        # disposition; the child's own stamp never switches the rule. Git-unsure warns on stderr.
+        import contextlib
+        import io
+        vl = load("verify_lib.py")
+        gone = os.path.join(self.tmp.name, "gone")
+        revs = [("9.1-r1", "svc", "a1", "b1"), ("9.1-r2", "svc", "b1", "c1"), ("9.1-r3", "svc", "c1", "d1")]
+        for stamped, r3 in ((frozenset({"9.1-r3"}), ("9.1-r1", 3)), (frozenset({"9.1-r1", "9.1-r3"}), ("9.1-r2", 2))):
+            with self.subTest(stamped=sorted(stamped)):
+                err = io.StringIO()
+                with contextlib.redirect_stderr(err):
+                    lin = vl.review_lineage(revs, lambda key: gone, None, None, set(stamped))
+                self.assertEqual(lin["9.1-r3"], r3)
+        # root stamped + a fix to look for + git cannot tell: continue the parent, say so
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            lin = vl.review_lineage(revs[:2], lambda key: gone, {"9.1-r1": {"f1"}}, None, {"9.1-r1", "9.1-r2"})
+        self.assertEqual(lin["9.1-r2"], ("9.1-r1", 2))
+        self.assertIn("[WARN] lineage of 9.1-r2: git cannot tell whether it holds a fix of 9.1-r1", err.getvalue())
 
     def test_pruned_history_never_merges_a_lineage_into_another(self):
         # review 10.2-r1-02 (149.2-r36 went round 2 -> 8): git cannot read a fix re-review's range;

@@ -483,8 +483,8 @@ def review_lineage(reviews, path_of, fixes=None, continues=None, stamped=None):
     cannot tell, it fails closed: the review continues the repo's highest round in the unit,
     with a warning on stderr — a silent round 1 would disable the round-3 STOP.
     The fix-commit test is versioned like the loop rules (decision 65, review 10.2-r1-02): only a
-    review in `stamped` (recorded under rules 2+) needs it. An unstamped one keeps the rule it
-    was recorded under — starting at a head continues, decided without git — so a closed unit's
+    lineage whose ROOT is in `stamped` (recorded under rules 2+) needs it, root-scoped like
+    lineage_rules. A lineage rooted unstamped keeps the rule it was recorded under — starting at a head continues, decided without git — so a closed unit's
     round-cap stop stands (kalpa-docs 194.1: r6 continued r5, r7 was round 3 and its `accept`
     stood in for the re-review; under the new rule r7 was round 2 and the gate blocked)."""
     fixes, continues, stamped = fixes or {}, continues or {}, stamped or set()
@@ -496,8 +496,8 @@ def review_lineage(reviews, path_of, fixes=None, continues=None, stamped=None):
         for prid, prepo, pbase, phead in reversed(seen if parent is None else []):
             if prepo != repo or not (base and head and pbase and phead):
                 continue
-            if base == phead and rid not in stamped:
-                share = True   # rules 1: the old continuation, never re-decided by git
+            if base == phead and out[prid][0] not in stamped:
+                share = True   # rules 1 (the parent lineage's root predates the stamp): old continuation, never re-decided by git
             elif base == phead:
                 shas = set().union(*(fixes.get(x, ()) for x, (rt, _) in out.items() if rt == out[prid][0]))
                 held = _range_holds(path_of(repo), base, head, shas, cache) if shas else False
@@ -506,6 +506,10 @@ def review_lineage(reviews, path_of, fixes=None, continues=None, stamped=None):
                 # continue, at its round + 1. A restart at round 1 could disable the round-3 STOP;
                 # the `unsure` fallback below (the repo's highest round) could merge an unrelated
                 # lineage into this one and inflate the round (149.2-r36 went 2 -> 8).
+                if held is None:
+                    print(f"[WARN] lineage of {rid}: git cannot tell whether it holds a fix of {prid}'s lineage; "
+                          f"continuing {prid} (round {out[prid][1] + 1}) rather than restarting at round 1",
+                          file=sys.stderr)
                 share = True if held is None else held
             else:
                 share = (base, head) == (pbase, phead) or \

@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "id": "evt0touch001",
+  "kind": "touch",
+  "packet_id": "gen0two-way01",
+  "created_at": "2026-10-26T09:11:00Z",
+  "machine": "mba",
+  "workspace": "ai-skills-10",
+  "agent": "packet",
+  "body": "",
+  "reversal_cost": {
+    "commits_stacked": 4,
+    "as_of": "2026-10-26T09:11:00Z"
+  }
+}

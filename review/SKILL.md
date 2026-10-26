@@ -91,8 +91,8 @@ a bad `AI_SKILLS_REVIEW_MODE`) is a stop: report its message and don't pick a mo
 [--continues <review id>] [--kalpa-only|--engine-only]` → prints `prompt:`, `schema:`, a
 `passes:` line, a `range:` line — the range resolved to full SHAs, which the prompt uses —
 an `effort:` line and a `round:` line; keep them all, pass that `range:` to §2.4 and that
-effort to §2.3. Without `--scope`/`--unit` the round is unknown and the prompt is round 1's
-(§5.1).
+effort to §2.3 — under the effort trial it is a tier above the diff-size tier (§5.1). Without
+`--scope`/`--unit` the round is unknown and the prompt is round 1's (§5.1).
 
 2.1.1 **Checks, run for the reviewer.** `prepare` also runs the repo's declared checks and
 puts each one's command, exit status and the end of its output in the prompt; its last
@@ -271,6 +271,14 @@ loops run without a per-round check-in (Alex's standing approval):
   rejection again only with new evidence, and sets `reopens: <finding ID>` on a finding that
   is an earlier one not fully fixed. `record` keeps a `reopens` naming no finding of the unit
   as a plain finding, drops the link and warns.
+- **The effort trial.** Every round, round 1 and fix rounds alike, runs codex one tier above
+  `verify_lib.effort_for`'s diff-size tier (`low` → `medium` → `high` → `xhigh`, capped at
+  `xhigh`). `prepare` prints it as `effort trial: <base> → <tier>`. Fix ranges average about
+  350 lines, so the bump is cheap there, and fix code is where defects concentrate. `record`
+  stamps the review record with `round`, `effort` and `effort_base` (null for a non-codex
+  reviewer) so the scorecard can compare round 1 with fix rounds. The trial stays per bucket
+  only if findings move earlier without more codex credit-outs.
+  `verify_lib.EFFORT_TRIAL = False` ends it.
 - **SHIP proceeds.** A round whose verdict is `SHIP`, once every finding is dispositioned
   and `verdict-gate.py` wants nothing re-reviewed (`rereview:` — an off-anchor fix still
   needs its round), goes straight to `/verify`. Record the outcomes yourself:

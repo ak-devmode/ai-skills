@@ -561,6 +561,24 @@ def effort_for(stats):
     return "high", why
 
 
+EFFORT_LEVELS = ("low", "medium", "high", "xhigh")   # codex-exec.py's --effort choices, lowest first
+# The review effort trial (scope 10 §4.2, eng review 2026-10-26): every round of a lineage rooted
+# under rules 2+ runs one tier above effort_for, and the review record keeps tier + round so the
+# scorecard can compare round 1 with fix rounds. False ends the trial; nothing else changes.
+EFFORT_TRIAL = True
+
+
+def review_effort(stats, rules):
+    """(effort, base, why) for a codex review: `base` is effort_for's tier, `effort` the one to
+    run — a tier higher under the trial when the lineage's rules (`rules`, from lineage_rules)
+    are 2+, capped at the top tier. An older lineage keeps its own effort (decision 65)."""
+    base, why = effort_for(stats)
+    if not (EFFORT_TRIAL and rules >= 2):
+        return base, base, why
+    up = EFFORT_LEVELS[min(EFFORT_LEVELS.index(base) + 1, len(EFFORT_LEVELS) - 1)]
+    return up, base, f"{why}; effort trial: {base} → {up}"
+
+
 LEAN_CAP = 1500  # changed lines a lean bundle inlines, across every repo (plan 7, Alex 2026-10-02)
 
 

@@ -341,15 +341,30 @@ def disposition_line(d):
     return f"{kind}" + (f" {sha}" if sha else "") + (f" — {why}" if why else "")
 
 
+def lineage_of(recs, unit, review_id, rng, key, continues=None):
+    """(root, round, rules version, lineage map) that review `review_id` over `rng` has, or will have once
+    `record` writes it: a probe `review` record stamped with today's rules stands in for it, so
+    prepare's count and record's agree, and a new lineage is rooted under the current rules."""
+    base, _, head = rng.partition("..")
+    probe = {"record": "review", "review_id": review_id, "range": {key: rng}, "shas": {"base": base, "head": head},
+             "rules_version": vl.RULES_VERSION}
+    if continues:
+        probe["continues"] = continues
+    recs = [r for r in recs if not (r.get("record") == "review" and r.get("review_id") == review_id)] + [probe]
+    _, lin = rounds(recs, unit)
+    root, rnd = lin[review_id]
+    return root, rnd, vl.lineage_rules(recs, lin)[review_id], lin
+
+
 def round_context(a, key):
-    """((round, ROUND text, PREVIOUS text), None) or (None, error code): the lineage round the
+    """((round, ROUND text, PREVIOUS text, rules), None) or (None, error code): the lineage round the
     review `prepare` sets up will have, and the findings it re-reads — every finding of the
     previous round, and every rejection from earlier rounds — with their latest dispositions.
     Without --scope/--unit it cannot know the lineage: it says so and gives round 1, the prompt
     that asks for the most (review/SKILL.md §5.1)."""
     if not (a.scope and a.unit):
         print("(no --scope/--unit: the lineage round is unknown — round 1's prompt)", file=sys.stderr)
-        return (1, ROUND_ONE, "- (none — prepare ran without --scope/--unit)"), None
+        return (1, ROUND_ONE, "- (none — prepare ran without --scope/--unit)", vl.RULES_VERSION), None
     recs = vl.read_jsonl(os.path.join(a.scope, "artifacts", f"review-{a.unit}.jsonl"))
     code = check_continues(a, recs, key)
     if code is not None:
@@ -357,14 +372,9 @@ def round_context(a, key):
     taken = [int(m.group(1)) for r in recs for m in [re.match(rf"^{re.escape(a.unit)}-r(\d+)$",
                                                                str(r.get("review_id", "")))] if m]
     me = f"{a.unit}-r{max(taken, default=0) + 1}"
-    base, _, head = a.range.partition("..")
-    probe = {"record": "review", "review_id": me, "range": {key: a.range}, "shas": {"base": base, "head": head}}
-    if getattr(a, "continues", None):
-        probe["continues"] = a.continues
-    _, lin = rounds(recs + [probe], a.unit)
-    root, rnd = lin[me]
+    root, rnd, rules, lin = lineage_of(recs, a.unit, me, a.range, key, getattr(a, "continues", None))
     if rnd < 2:
-        return (rnd, ROUND_ONE, "- (none — new code)"), None
+        return (rnd, ROUND_ONE, "- (none — new code)", rules), None
     latest = {}
     for r in recs:
         if r.get("record") == "disposition":
@@ -378,7 +388,7 @@ def round_context(a, key):
             text = " ".join(str(f.get("text", "")).split())
             lines.append(f"- `{f['finding_id']}` [{f.get('severity')}] `{f.get('file')}:{f.get('line')}` — {text} "
                          f"→ **{disposition_line(d)}**")
-    return (rnd, ROUND_FIX.format(n=rnd), "\n".join(lines) or "- (the previous round had no findings)"), None
+    return (rnd, ROUND_FIX.format(n=rnd), "\n".join(lines) or "- (the previous round had no findings)", rules), None
 
 
 def fill_template(text, fill):
@@ -398,7 +408,7 @@ def cmd_prepare(a):
     ctx, code = round_context(a, repo_key(main_worktree(a.repo)))
     if code is not None:
         return code
-    a.round, a.round_text, a.previous = ctx
+    a.round, a.round_text, a.previous, a.rules = ctx
     if a.lean:
         out_dir = a.out_dir or tempfile.mkdtemp(prefix="review-")
         os.makedirs(out_dir, exist_ok=True)
@@ -438,7 +448,7 @@ def cmd_prepare(a):
     prompt = os.path.join(out_dir, "review-prompt.md")
     with open(prompt, "w", encoding="utf-8") as fh:
         fh.write(text)
-    effort, why = vl.effort_for([vl.diff_stat(a.repo, a.range)])
+    effort, _, why = vl.review_effort([vl.diff_stat(a.repo, a.range)], a.rules)
     print(f"prompt: {prompt}\nschema: {SCHEMA}\npasses: {' · '.join(passes)}\nrange: {a.range}\n"
           f"effort: {effort} ({why})\nround: {a.round}\n{checks_line}")
     return vl.EXIT_PASS
@@ -591,6 +601,12 @@ def cmd_record(a):
         if code is not None:
             return code
         unlink_reopens(ordered, vl.read_jsonl(log), a.unit, doc.get("reframe"))
+        # the effort trial's evidence (scope 10 §4.2): the lineage round, and the tier prepare
+        # printed for this range — a non-codex reviewer ran at no codex tier, so none is stamped
+        _, rnd, rules, _ = lineage_of(vl.read_jsonl(log), a.unit, review_id, a.range, key, getattr(a, "continues", None))
+        effort, base, _ = vl.review_effort([vl.diff_stat(a.repo, a.range)], rules)
+        codex = a.reviewer.startswith("codex ")
+        a.stamp = {"round": rnd, "effort": effort if codex else None, "effort_base": base if codex else None}
         records, findings, report = build(a, doc, ordered, key, n, review_id)
         vl.append_verified(log, records)
         out = os.path.join(art, f"review-{review_id}.md")
@@ -864,7 +880,8 @@ def build(a, doc, ordered, key, n, review_id):
     shas = dict(zip(("base", "head"), a.range.split("..")))
     review = {"schema": vl.SCHEMA, "ts": ts, "record": "review", "review_id": review_id, "reviewer": a.reviewer,
               "range": {key: a.range}, "shas": shas, "passes": a.passes or "", "findings": len(findings),
-              "verdict": doc["verdict"], "mode": a.mode or "", "rules_version": vl.RULES_VERSION}
+              "verdict": doc["verdict"], "mode": a.mode or "", "rules_version": vl.RULES_VERSION,
+              **getattr(a, "stamp", {})}
     if getattr(a, "continues", None):
         review["continues"] = a.continues
     if rf:

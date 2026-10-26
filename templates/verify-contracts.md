@@ -341,7 +341,9 @@ Every record carries `record`: `review`, `finding`, `disposition`, `acceptance`,
 `schema` · `ts` · `review_id` · `reviewer` (judge line, §4.6) · `range` · `shas`
 (`{base, head}`, the range resolved to commits at record time) · `passes` · `findings`
 (count) · `verdict` · `mode` · `rules_version` (`verify_lib.RULES_VERSION`; absent = 1) ·
-`continues` (optional, `record --continues`). `review.py` allocates the `review_id` and appends
+`continues` (optional, `record --continues`) · `round` (this review's lineage round) · `effort`
+and `effort_base` (the codex tier prepare printed for the range and `effort_for`'s diff-size tier
+under it — they differ under the effort trial, review/SKILL.md §5.1; null for a non-codex reviewer). `review.py` allocates the `review_id` and appends
 under an exclusive lock on the log, so concurrent or clean reviews never share an ID.
 **A lineage runs under its root's `rules_version`** (scope 10, decision 65): skills symlink into
 the live checkout, so a session mid-review sees new scripts at cutover, and the gate and `record`

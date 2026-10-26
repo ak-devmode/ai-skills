@@ -1472,5 +1472,58 @@ class TestReview(unittest.TestCase):
         self.assertEqual(vl.schema_problems(None, {"type": ["object", "null"]}), [])
 
 
+    # ---- effort trial (scope 10 §4.2, plan 10.2 Task 2.4)
+    def prepare_range(self, rng):
+        p = run(REVIEW, "prepare", "--repo", self.repo, "--range", rng, "--scope", self.scope, "--unit", "9.1",
+                "--out-dir", os.path.join(self.tmp.name, "prep"), "--no-checks", env=self.env)
+        self.assertEqual(p.returncode, 0, p.stderr)
+        return p.stdout
+
+    def test_the_effort_trial_bumps_round_one_and_fix_rounds_and_stamps_the_record(self):
+        base = git(self.repo, "rev-parse", "HEAD")
+        head = self.commit(self.repo, "a.sh")
+        out = self.prepare_range(f"{base}..{head}")
+        self.assertIn("round: 1\n", out)
+        self.assertIn("effort: medium (1 file(s), 1 changed line(s); effort trial: low → medium)", out)
+        self.record_range(f"{base}..{head}", findings=[self.finding("blocking", "b")])
+        fix = self.commit(self.repo, "a.sh")
+        self.assertEqual(self.dispose("9.1-r1-01", "--fixed", fix).returncode, 0)
+        out = self.prepare_range(f"{head}..{fix}")
+        self.assertIn("round: 2\n", out)
+        self.assertIn("effort trial: low → medium", out)
+        self.record_range(f"{head}..{fix}", findings=[])
+        stamps = [(r["round"], r["effort"], r["effort_base"]) for r in self.records("review")]
+        self.assertEqual(stamps, [(1, "medium", "low"), (2, "medium", "low")])
+        # a lineage rooted before the cutover keeps its own effort (decision 65)
+        with open(self.log) as fh:
+            recs = [json.loads(x) for x in fh]
+        recs[0]["rules_version"] = 1
+        with open(self.log, "w") as fh:
+            fh.writelines(json.dumps(r) + "\n" for r in recs)
+        fix2 = self.commit(self.repo, "a.sh")
+        self.assertEqual(self.dispose("9.1-r1-01", "--fixed", fix2).returncode, 0)
+        out = self.prepare_range(f"{fix}..{fix2}")
+        self.assertIn("round: 3\n", out)
+        self.assertIn("effort: low (1 file(s), 1 changed line(s))\n", out)
+        # a non-codex reviewer ran at no codex tier
+        p = run(REVIEW, "record", "--repo", self.repo, "--range", f"{fix}..{fix2}", "--reviewer",
+                "claude-fallback codex out", "--input", self.answer(findings=[]), "--scope", self.scope,
+                "--unit", "9.1", "--passes", "p", env=self.env)
+        self.assertEqual(p.returncode, 0, p.stderr)
+        last = self.records("review")[-1]
+        self.assertEqual((last["round"], last["effort"], last["effort_base"]), (3, None, None))
+
+    def test_effort_trial_tiers_and_flag(self):
+        vl = load("review/scripts/review.py").vl
+        self.assertEqual(vl.review_effort([(30, 5000)], 2)[:2], ("xhigh", "high"))
+        self.assertEqual(vl.review_effort([(1, 100)], 2)[:2], ("high", "medium"))
+        self.assertEqual(vl.review_effort([], 2)[:2], ("high", "medium"))
+        self.assertEqual(vl.review_effort([(1, 1)], 1)[:2], ("low", "low"))
+        vl.EFFORT_TRIAL = False   # verify_lib is a shared module: restore it for the other tests
+        try:
+            self.assertEqual(vl.review_effort([(1, 1)], 2), ("low", "low", "1 file(s), 1 changed line(s)"))
+        finally:
+            vl.EFFORT_TRIAL = True
+
 if __name__ == "__main__":
     unittest.main()

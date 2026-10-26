@@ -11,8 +11,10 @@ queue never fails the caller: the packet is printed with a `Blocked` note, exit 
 harness error; the stop is the caller's (`PARKED <id>`), not this script's.
 
 Lane identity = machine/workspace/agent. In herdr: hostname, $HERDR_WORKSPACE_ID,
-$HERDR_AGENT_NAME (else $HERDR_PANE_ID). Outside herdr: hostname, cwd-<name>-<hash>,
-session-<session id>. The reply the page hands Alex opens with
+$HERDR_AGENT_NAME (else $HERDR_PANE_ID). Outside herdr: hostname, cwd-<name>-<hash of the
+repo toplevel>, session-<$CLAUDE_CODE_SESSION_ID | $CLAUDE_SESSION_ID | $CODEX_SESSION_ID>.
+With no session id the agent is `session-none`, which two lanes can share: `new` warns on
+stderr, `check-reply` refuses unless --lane names the lane (cannot prove whose reply it is). The reply the page hands Alex opens with
 `[lane <machine>/<workspace>/<agent> <packet-id>]`; `check-reply` refuses anything else.
 
 Failure stances (each is fail-closed unless it says otherwise):
@@ -20,9 +22,15 @@ Failure stances (each is fail-closed unless it says otherwise):
   * check-reply: wrong or missing tag, unknown packet, another lane's, closed, stale,
     two different lane tags in one reply -> refuse, exit 1
   * POST failure -> FAIL-OPEN by design (Blocked note, exit 0): the queue is a convenience
-    channel; stopping Alex's two-way work for a harness error is worse than a late card
+    channel; stopping Alex's two-way work for a harness error is worse than a late card.
+    The POST has a hard 3 s wall-clock deadline (a worker thread, not just a socket
+    timeout) and refuses redirects: a 3xx is a failure, never a send
+  * flush: an unreadable item is reported and skipped, the rest of the outbox still goes
   * stale: git cannot be read -> exit 1 without marking. Fail-open on purpose: marking
-    stale discards a pending decision, and applying a reply is gated by check-reply anyway
+    stale discards a pending decision
+  * check-reply on a ONE-WAY packet also compares the lane repo's HEAD with the packet's
+    head_sha (the lane is parked, so HEAD must not have moved); a moved or unreadable HEAD
+    refuses. Two-way packets skip this: work continues past them by design (see `touch`)
   * --range classification failure -> door.py returns one-way (promote-only)
 
   packet.py new --door D --type T --title S --unit U --option LABEL [--option ...]
@@ -46,12 +54,14 @@ import secrets
 import socket
 import subprocess
 import sys
+import threading
 import urllib.error
 import urllib.request
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-POST_TIMEOUT = 3
+POST_TIMEOUT = float(os.environ.get("PACKET_POST_TIMEOUT") or 3)  # env: tests only
+SKIP = "Skipped: "
 TAG_RE = re.compile(r"\[lane ([^/\]\[\n]+)/([^/\]\[\n]+)/([^/\]\[\n]+) ([A-Za-z0-9_-]{8,64})\]")
 
 
@@ -84,11 +94,12 @@ def lane_identity():
         agent = os.environ["PACKET_AGENT"]
     if not agent and os.environ.get("HERDR_PANE_ID"):
         agent = os.environ["HERDR_PANE_ID"]
-    if not ws or not agent:  # outside herdr: machine + cwd + session id
-        cwd = os.getcwd()
-        sid = os.environ.get("CLAUDE_SESSION_ID") or os.environ.get("CODEX_SESSION_ID") or "none"
-        ws = ws or f"cwd-{os.path.basename(cwd)}-{hashlib.sha1(cwd.encode()).hexdigest()[:6]}"
-        agent = agent or f"session-{sid[:12]}"
+    if not ws or not agent:  # outside herdr: machine + repo toplevel + session id
+        top = toplevel()  # not cwd: a subdirectory must resolve to the same lane
+        sid = (os.environ.get("CLAUDE_CODE_SESSION_ID") or os.environ.get("CLAUDE_SESSION_ID")
+               or os.environ.get("CODEX_SESSION_ID") or "")
+        ws = ws or f"cwd-{os.path.basename(top)}-{hashlib.sha1(top.encode()).hexdigest()[:6]}"
+        agent = agent or f"session-{sid[:12] or 'none'}"
     return machine, clean(ws), clean(agent)
 
 
@@ -153,6 +164,13 @@ def find_packet(dirs, pid):
     raise LookupError(f"packet {pid} not found in this lane's outbox")
 
 
+def repo_of(d):
+    """The lane repo an outbox belongs to (<repo>/.decision-queue/outbox), else the cwd's."""
+    if d.name == "outbox" and d.parent.name == ".decision-queue":
+        return str(d.parent.parent)
+    return None
+
+
 def is_driver(args):
     return bool(getattr(args, "driver", False)) or os.environ.get("HERDR_AGENT_NAME") == "driver"
 
@@ -162,17 +180,32 @@ def queue_url():
     return url if url.startswith(("http://", "https://")) else ""
 
 
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, *a, **k):
+        return None  # a 3xx surfaces as HTTPError: urllib would re-issue the POST as a body-less GET
+
+
 def post(path, doc):
-    """(ok, note). 200/201/204 and 409 (already stored: idempotent) count as sent."""
+    """(ok, note). 200/201/204 and 409 (already stored: idempotent) count as sent.
+    Hard POST_TIMEOUT wall clock: DNS and slow-drip servers defeat a per-socket timeout."""
     req = urllib.request.Request(queue_url() + path, data=json.dumps(doc).encode(),
                                  headers={"Content-Type": "application/json"}, method="POST")
-    try:
-        with urllib.request.urlopen(req, timeout=POST_TIMEOUT) as r:
-            return r.status in (200, 201, 204), f"HTTP {r.status}"
-    except urllib.error.HTTPError as e:
-        return e.code == 409, f"HTTP {e.code}"
-    except (urllib.error.URLError, OSError, ValueError, http.client.HTTPException) as e:
-        return False, str(getattr(e, "reason", e))
+    opener = urllib.request.build_opener(_NoRedirect)
+    box = []
+
+    def work():
+        try:
+            with opener.open(req, timeout=POST_TIMEOUT) as r:
+                box.append((r.status in (200, 201, 204), f"HTTP {r.status}"))
+        except urllib.error.HTTPError as e:
+            box.append((e.code == 409, f"HTTP {e.code}"))
+        except (urllib.error.URLError, OSError, ValueError, http.client.HTTPException) as e:
+            box.append((False, str(getattr(e, "reason", e))))
+
+    t = threading.Thread(target=work, daemon=True)
+    t.start()
+    t.join(POST_TIMEOUT)
+    return box[0] if box and not t.is_alive() else (False, f"timed out after {POST_TIMEOUT:g}s")
 
 
 def new_id(prefix):
@@ -194,8 +227,18 @@ def emit_event(d, kind, body, packet_id=None, reversal_cost=None):
     return ev
 
 
+def sent_marker(d, pid):
+    return d / f"{pid}.sent"
+
+
+def is_sent(d, pid):
+    return sent_marker(d, pid).exists()
+
+
 def try_send(args, d, ev=None, pid=None):
-    """POST a stored item if this caller may. Returns a human note ('' when not attempted)."""
+    """POST a stored item if this caller may. Returns a human note ('' when not attempted).
+    "sent" lives in a marker file, never in the state file: a concurrent close/stale must not
+    be overwritten by a write-back that spans the network call (10.1-r1-02)."""
     if not (queue_url() and is_driver(args)):
         return ""
     if ev is not None:
@@ -203,11 +246,13 @@ def try_send(args, d, ev=None, pid=None):
         if ok:
             (d / f"evt-{ev['id']}.sent").write_text(note + "\n")
         return "" if ok else f"Blocked: queue unreachable ({note}); event kept in outbox, `packet.py flush` re-sends"
-    doc, state = read_json(d / f"{pid}.json"), read_json(d / f"{pid}.state.json")
+    try:
+        doc = read_json(d / f"{pid}.json")
+    except (OSError, ValueError) as e:
+        return f"{SKIP}packet {pid} unreadable ({e}); not sent"
     ok, note = post("/packets", doc)
     if ok:
-        state["sent"] = True
-        write_json(d / f"{pid}.state.json", state)
+        sent_marker(d, pid).write_text(note + "\n")
     return "" if ok else f"Blocked: queue unreachable ({note}); packet kept in outbox, `packet.py flush` re-sends"
 
 
@@ -251,6 +296,9 @@ def cmd_new(args):
         door = res["door"]
     pid = args.id or new_id("pk")
     m, w, a = lane_identity()
+    if a == "session-none":
+        print("packet.py: warning: no session id in the environment; this lane's identity is "
+              "shared with any other session-none lane in this repo", file=sys.stderr)
     options = [{"id": str(i), "label": lab, "recommended": i == args.recommended}
                for i, lab in enumerate(args.option, 1)]
     if args.payload_file:
@@ -260,8 +308,12 @@ def cmd_new(args):
             print(f"packet.py: payload file unreadable ({e})", file=sys.stderr)
             return 1
     else:
-        body = args.body if args.body is not None else (
-            Path(args.body_file).read_text() if args.body_file else "")
+        try:
+            body = args.body if args.body is not None else (
+                Path(args.body_file).read_text() if args.body_file else "")
+        except (OSError, ValueError) as e:
+            print(f"packet.py: body file unreadable ({e})", file=sys.stderr)
+            return 1
         payload = {"body": body}
     rec = next((o for o in options if o["recommended"]), None)
     prefill = f"Option {rec['id']}: {rec['label']}." if rec else "ack"
@@ -322,7 +374,7 @@ def cmd_stale(args):
         return 1
     if not args.force:
         try:
-            head = git("rev-parse", "HEAD")
+            head = git("rev-parse", "HEAD", cwd=repo_of(d))
         except (RuntimeError, OSError, subprocess.SubprocessError) as e:
             print(f"packet.py: cannot read HEAD ({e}); not marking stale (use --force)", file=sys.stderr)
             return 1
@@ -342,7 +394,7 @@ def cmd_touch(args):
         print("packet.py: touch refreshes an open two-way card only", file=sys.stderr)
         return 1
     try:
-        n = int(git("rev-list", "--count", f"{doc['head_sha']}..HEAD"))
+        n = int(git("rev-list", "--count", f"{doc['head_sha']}..HEAD", cwd=repo_of(d)))
     except (RuntimeError, OSError, ValueError, subprocess.SubprocessError) as e:
         print(f"packet.py: cannot count commits ({e}); reversal cost not refreshed", file=sys.stderr)
         return 1
@@ -372,7 +424,11 @@ def cmd_check_reply(args):
     if args.reply == "-" or (args.reply is None and not args.file):
         text = sys.stdin.read()
     elif args.file:
-        text = Path(args.file).read_text()
+        try:
+            text = Path(args.file).read_text()
+        except (OSError, ValueError) as e:
+            print(f"packet.py: reply refused: reply file unreadable ({e})", file=sys.stderr)
+            return 1
     else:
         text = args.reply
     refuse = lambda why: (print(f"packet.py: reply refused: {why}", file=sys.stderr), 1)[1]
@@ -385,6 +441,8 @@ def cmd_check_reply(args):
     if not TAG_RE.match(text.lstrip()):
         return refuse("lane tag malformed")
     me = tuple(args.lane.split("/")) if args.lane else lane_identity()
+    if not args.lane and me[2] == "session-none":
+        return refuse("this lane has no session id, so its identity is shared; pass --lane M/W/A")
     if len(me) != 3:
         return refuse("--lane must be machine/workspace/agent")
     if (m, w, a) != tuple(me):
@@ -397,6 +455,13 @@ def cmd_check_reply(args):
         return refuse(f"packet {pid} was emitted by another lane")
     if state.get("status") != "open":
         return refuse(f"packet {pid} is {state.get('status')}")
+    if doc["door"] == "one-way":  # the lane is parked: HEAD moving means the decision is stale
+        try:
+            head = git("rev-parse", "HEAD", cwd=repo_of(d))
+        except (RuntimeError, OSError, subprocess.SubprocessError) as e:
+            return refuse(f"cannot read HEAD to confirm the one-way packet is current ({e})")
+        if not (head.startswith(doc["head_sha"]) or doc["head_sha"].startswith(head)):
+            return refuse(f"one-way packet {pid} is stale: HEAD moved past {doc['head_sha'][:7]}; run `stale`")
     print(f"OK {pid}")
     return 0
 
@@ -409,18 +474,18 @@ def cmd_flush(args):
         print("flush: DECISION_QUEUE_URL not set; nothing sent")
         return 0
     sent = {"packets": 0, "events": 0}
-    blocked = ""
+    blocked, skipped = "", []
     for d in outboxes(args):
         if not d.is_dir():
             continue
         for f in sorted(d.glob("*.state.json")):
             pid = f.name[: -len(".state.json")]
-            try:
-                if read_json(f).get("sent"):
-                    continue
-            except (OSError, ValueError):
+            if is_sent(d, pid):
                 continue
             note = try_send(args, d, pid=pid)
+            if note.startswith(SKIP):  # one bad item never strands the rest of the outbox
+                skipped.append(note)
+                continue
             if note:
                 blocked = note
                 break
@@ -432,7 +497,8 @@ def cmd_flush(args):
                 continue
             try:
                 ev = read_json(f)
-            except (OSError, ValueError):
+            except (OSError, ValueError) as e:
+                skipped.append(f"{SKIP}{f.name} unreadable ({e}); not sent")
                 continue
             note = try_send(args, d, ev=ev)
             if note:
@@ -442,6 +508,8 @@ def cmd_flush(args):
         if blocked:
             break
     print(f"FLUSHED {sent['packets']} packets, {sent['events']} events")
+    for note in skipped:
+        print(f"  {note}")
     if blocked:
         print(f"  {blocked}")
     return 0

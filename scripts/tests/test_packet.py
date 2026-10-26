@@ -8,14 +8,17 @@ touch/stale/close state transitions.
 """
 import json
 import os
+import socket
 import subprocess
 import tempfile
 import threading
+import time
 import unittest
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 from _helpers import run
 
+SESSION_VARS = ("CLAUDE_CODE_SESSION_ID", "CLAUDE_SESSION_ID", "CODEX_SESSION_ID")
 LANE = {"PACKET_MACHINE": "mba", "PACKET_WORKSPACE": "ws1", "PACKET_AGENT": "laneA"}
 
 
@@ -33,12 +36,20 @@ class Stub:
     """Local queue: records (path, body); fail=True answers 500; seen ids answer 409."""
 
     def __init__(self):
-        self.posts, self.fail, ids = [], False, set()
+        self.posts, self.fail, self.redirect, self.delay, ids = [], False, False, 0, set()
         outer = self
 
         class H(BaseHTTPRequestHandler):
+            def do_GET(self):  # where a redirected POST lands: 200, but nothing is stored
+                self.send_response(200); self.end_headers()
+
             def do_POST(self):
                 body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+                time.sleep(outer.delay)
+                if outer.redirect:
+                    self.send_response(302)
+                    self.send_header("Location", outer.url + "/elsewhere"); self.end_headers()
+                    return
                 if outer.fail:
                     code = 500
                 elif body["id"] in ids:
@@ -68,7 +79,8 @@ class PacketBase(unittest.TestCase):
         put(os.path.join(self.repo, "a.txt"), "a\n")
         self.commit("base")
         self.env = {k: v for k, v in os.environ.items()
-                    if not k.startswith(("HERDR_", "DECISION_QUEUE", "PACKET_"))}
+                    if not k.startswith(("HERDR_", "DECISION_QUEUE", "PACKET_"))
+                    and k not in SESSION_VARS}
         self.env.update(LANE)
 
     def g(self, *a):
@@ -92,6 +104,9 @@ class PacketBase(unittest.TestCase):
 
     def outbox(self):
         return os.path.join(self.repo, ".decision-queue", "outbox")
+
+    def sent(self, pid):
+        return os.path.exists(os.path.join(self.outbox(), f"{pid}.sent"))
 
     def tag(self, pid, who="mba/ws1/laneA"):
         return f"[lane {who} {pid}] Option 1: alpha."
@@ -132,8 +147,7 @@ class TestQueue(PacketBase):
         pid, out = self.new("--driver", env={"DECISION_QUEUE_URL": "http://127.0.0.1:9"})
         self.assertIn("Blocked", out)
         self.assertIn(f"PACKET {pid}", out)
-        state = load(os.path.join(self.outbox(), f"{pid}.state.json"))
-        self.assertFalse(state["sent"])
+        self.assertFalse(self.sent(pid))
 
     def test_server_error_is_blocked_not_fatal(self):
         s = Stub(); self.addCleanup(s.stop); s.fail = True
@@ -164,11 +178,15 @@ class TestQueue(PacketBase):
         out = self.pk("flush", "--driver", env=env).stdout
         self.assertIn("FLUSHED 1 packets", out)
         self.assertEqual([b["id"] for _, b in s.posts], [pid])
+        self.assertTrue(self.sent(pid))
         out = self.pk("flush", "--driver", env=env).stdout
         self.assertIn("FLUSHED 0 packets", out)
         # retrying `new --id` for the same id re-sends but the queue still holds one row
-        self.new("--driver", "--id", pid, env=env)
+        out = self.new("--driver", "--id", pid, env=env)[1]
         self.assertEqual(len(s.posts), 1)
+        # the 409 from the second POST counts as sent: no Blocked note, still marked sent
+        self.assertNotIn("Blocked", out)
+        self.assertTrue(self.sent(pid))
 
     def test_driver_flushes_a_lane_outbox(self):
         s = Stub(); self.addCleanup(s.stop)
@@ -176,12 +194,15 @@ class TestQueue(PacketBase):
         out = self.pk("flush", "--driver", "--outbox", self.outbox(),
                       env={"DECISION_QUEUE_URL": s.url}).stdout
         self.assertIn("FLUSHED 1 packets", out)
+        self.assertEqual([(p, b["id"]) for p, b in s.posts], [("/packets", pid)])
+        self.assertTrue(self.sent(pid))
 
     def test_lane_flush_sends_nothing(self):
         s = Stub(); self.addCleanup(s.stop)
         self.new()
         self.pk("flush", env={"DECISION_QUEUE_URL": s.url})
         self.assertEqual(s.posts, [])
+        self.assertEqual([f for f in os.listdir(self.outbox()) if f.endswith(".sent")], [])
 
     def test_close_event_posts_via_driver(self):
         s = Stub(); self.addCleanup(s.stop)
@@ -295,6 +316,181 @@ class TestStateTransitions(PacketBase):
         p = self.pk("event", "--kind", "done", "--body", "task 1.2 done")
         self.assertEqual(p.returncode, 0, p.stderr)
         self.assertEqual(self.pk("event", "--kind", "closed").returncode, 1)  # needs --packet-id
+
+
+class Drip:
+    """Raw socket server that answers with one header byte every 0.3 s for `secs` seconds:
+    each socket read succeeds, so only a wall-clock deadline can stop the caller."""
+
+    def __init__(self, secs=6):
+        self.sock = socket.socket()
+        self.sock.bind(("127.0.0.1", 0)); self.sock.listen(5)
+        self.url = f"http://127.0.0.1:{self.sock.getsockname()[1]}"
+        threading.Thread(target=self.loop, args=(secs,), daemon=True).start()
+
+    def loop(self, secs):
+        try:
+            conn, _ = self.sock.accept()
+            conn.settimeout(1)
+            try:
+                conn.recv(65536)
+            except OSError:
+                pass
+            for ch in b"HTTP/1.1 200 OK\r\n" + b"X-Pad: " + b"a" * 200:
+                conn.sendall(bytes([ch])); time.sleep(secs / 220)
+            conn.close()
+        except OSError:
+            pass
+
+    def stop(self):
+        self.sock.close()
+
+
+class TestSendPath(PacketBase):
+    """10.1-r1-02 (send must not clobber concurrent state), -05 (bounded, no redirect), -06 (robust)."""
+
+    def test_close_during_post_is_not_overwritten(self):
+        s = Stub(); self.addCleanup(s.stop); s.delay = 1.5
+        env = dict(self.env, DECISION_QUEUE_URL=s.url)
+        proc = subprocess.Popen(
+            ["python3", os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "packet.py"),
+             "new", "--driver", "--door", "two-way", "--title", "t", "--unit", "u",
+             "--option", "a", "--body", "b"],
+            cwd=self.repo, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        self.addCleanup(proc.kill)
+        deadline = time.time() + 5
+        while time.time() < deadline and not (
+                os.path.isdir(self.outbox()) and any(f.endswith(".state.json") for f in os.listdir(self.outbox()))):
+            time.sleep(0.05)
+        pid = next(f for f in os.listdir(self.outbox()) if f.endswith(".state.json"))[: -len(".state.json")]
+        time.sleep(0.3)  # the driver is now inside the POST
+        self.assertEqual(self.pk("close", pid).returncode, 0)
+        proc.communicate(timeout=10)
+        self.assertEqual(load(os.path.join(self.outbox(), f"{pid}.state.json"))["status"], "closed")
+        self.assertTrue(self.sent(pid))
+
+    def test_redirect_is_a_failure_not_a_send(self):
+        s = Stub(); self.addCleanup(s.stop); s.redirect = True
+        pid, out = self.new("--driver", env={"DECISION_QUEUE_URL": s.url})
+        self.assertIn("Blocked", out)
+        self.assertIn("HTTP 302", out)
+        self.assertFalse(self.sent(pid))
+
+    def test_slow_drip_server_cannot_hold_the_caller_past_the_deadline(self):
+        d = Drip(); self.addCleanup(d.stop)
+        t0 = time.time()
+        pid, out = self.new("--driver", env={"DECISION_QUEUE_URL": d.url, "PACKET_POST_TIMEOUT": "1"})
+        self.assertLess(time.time() - t0, 3.5)
+        self.assertIn("Blocked", out)
+        self.assertIn("timed out", out)
+        self.assertFalse(self.sent(pid))
+
+    def test_flush_skips_a_corrupt_item_and_sends_the_rest(self):
+        s = Stub(); self.addCleanup(s.stop)
+        ids = [self.new()[0] for _ in range(3)]
+        put(os.path.join(self.outbox(), f"{ids[1]}.json"), "{nope")
+        p = self.pk("flush", "--driver", env={"DECISION_QUEUE_URL": s.url})
+        self.assertEqual(p.returncode, 0, p.stderr)
+        self.assertNotIn("Traceback", p.stderr)
+        self.assertIn("FLUSHED 2 packets", p.stdout)
+        self.assertIn(ids[1], p.stdout)  # reported, not silent
+        self.assertEqual(sorted(b["id"] for _, b in s.posts), sorted(ids[:1] + ids[2:]))
+
+    def test_flush_skips_a_missing_packet_file(self):
+        s = Stub(); self.addCleanup(s.stop)
+        ids = [self.new()[0] for _ in range(2)]
+        os.remove(os.path.join(self.outbox(), f"{ids[0]}.json"))
+        p = self.pk("flush", "--driver", env={"DECISION_QUEUE_URL": s.url})
+        self.assertEqual(p.returncode, 0, p.stderr)
+        self.assertIn("FLUSHED 1 packets", p.stdout)
+
+    def test_unreadable_files_are_exit_one_not_a_traceback(self):
+        p = self.pk("new", "--door", "two-way", "--title", "t", "--unit", "u", "--option", "a",
+                    "--body-file", os.path.join(self.repo, "missing.txt"))
+        self.assertEqual(p.returncode, 1)
+        self.assertNotIn("Traceback", p.stderr)
+        p = self.pk("check-reply", "--file", os.path.join(self.repo, "missing.txt"))
+        self.assertEqual(p.returncode, 1)
+        self.assertNotIn("Traceback", p.stderr)
+
+
+class TestInfoAndOneWayHead(PacketBase):
+    def test_info_packet_with_range_stays_info(self):  # 10.1-r1-03
+        self.commit("second")  # HEAD~1 must resolve, else the range fails closed
+        p = self.pk("new", "--door", "info", "--title", "FYI", "--unit", "u", "--option", "ack", "--body", "b",
+                    "--range", "HEAD~1..HEAD")
+        self.assertEqual(p.returncode, 0, p.stderr)
+        pid = next(l.split()[1] for l in p.stdout.splitlines() if l.startswith("PACKET "))
+        self.assertEqual(load(os.path.join(self.outbox(), f"{pid}.json"))["door"], "info")
+
+    def test_one_way_reply_refused_after_head_moves(self):  # 10.1-r1-07
+        pid, _ = self.new(door="one-way")
+        self.assertEqual(self.pk("check-reply", "--reply", self.tag(pid)).returncode, 0)
+        self.commit("moved")
+        p = self.pk("check-reply", "--reply", self.tag(pid))
+        self.assertEqual(p.returncode, 1)
+        self.assertIn("stale", p.stderr)
+
+    def test_two_way_reply_still_accepted_after_head_moves(self):
+        pid, _ = self.new()
+        self.commit("moved")
+        self.assertEqual(self.pk("check-reply", "--reply", self.tag(pid)).returncode, 0)
+
+    def test_one_way_reply_refused_when_head_unreadable(self):
+        pid, _ = self.new(door="one-way")
+        with tempfile.TemporaryDirectory() as elsewhere:
+            odd = os.path.join(elsewhere, "box")  # not <repo>/.decision-queue/outbox
+            subprocess.run(["cp", "-R", self.outbox(), odd], check=True)
+            p = run("packet.py", "check-reply", "--reply", self.tag(pid), "--outbox", odd,
+                    cwd=elsewhere, env=self.env)
+        self.assertEqual(p.returncode, 1)
+        self.assertIn("cannot read HEAD", p.stderr)
+
+    def test_driver_outside_the_repo_checks_the_lane_repos_head(self):
+        pid, _ = self.new(door="one-way")
+        with tempfile.TemporaryDirectory() as elsewhere:
+            p = run("packet.py", "check-reply", "--reply", self.tag(pid), "--outbox", self.outbox(),
+                    "--lane", "mba/ws1/laneA", cwd=elsewhere, env=self.env)
+        self.assertEqual(p.returncode, 0, p.stderr)
+
+
+class TestSessionIdentity(PacketBase):  # 10.1-r1-01
+    def env_no_lane(self, **extra):
+        env = {k: v for k, v in self.env.items() if not k.startswith("PACKET_")}
+        env["PACKET_MACHINE"] = "mba"
+        env.update(extra)
+        return env
+
+    def newp(self, env, cwd=None):
+        return run("packet.py", "new", "--door", "two-way", "--title", "t", "--unit", "u",
+                   "--option", "a", "--body", "b", cwd=cwd or self.repo, env=env)
+
+    def test_claude_code_session_id_is_read(self):
+        p = self.newp(self.env_no_lane(CLAUDE_CODE_SESSION_ID="abcd1234efgh"))
+        self.assertIn("/session-abcd1234efgh ", p.stdout)
+
+    def test_subdirectory_resolves_to_the_same_lane(self):
+        env = self.env_no_lane(CLAUDE_CODE_SESSION_ID="abcd1234efgh")
+        p = self.newp(env)
+        pid = next(l.split()[1] for l in p.stdout.splitlines() if l.startswith("PACKET "))
+        tag = next(l for l in p.stdout.splitlines() if "reply:" in l).split("reply: ")[1]
+        sub = os.path.join(self.repo, "deep", "dir"); os.makedirs(sub)
+        p = run("packet.py", "check-reply", "--reply", tag, cwd=sub, env=env)
+        self.assertEqual(p.returncode, 0, p.stderr)
+        self.assertIn(pid, p.stdout)
+
+    def test_no_session_id_warns_and_check_reply_needs_an_explicit_lane(self):
+        env = self.env_no_lane()
+        p = self.newp(env)
+        self.assertEqual(p.returncode, 0, p.stderr)
+        self.assertIn("warning", p.stderr)
+        tag = next(l for l in p.stdout.splitlines() if "reply:" in l).split("reply: ")[1]
+        p = run("packet.py", "check-reply", "--reply", tag, cwd=self.repo, env=env)
+        self.assertEqual(p.returncode, 1)
+        self.assertIn("--lane", p.stderr)
+        lane = tag[len("[lane "):].split(" ")[0]
+        p = run("packet.py", "check-reply", "--reply", tag, "--lane", lane, cwd=self.repo, env=env)
+        self.assertEqual(p.returncode, 0, p.stderr)
 
 
 if __name__ == "__main__":

@@ -25,9 +25,9 @@ Script-owned (`plans-index.py`); PLANS-INDEX.md is rendered from it.
 
 ## Resume Context
 **Scope:** ~/Projects/ai-skills/plans/10-decision-queue-harness/scope.md
-**Last action:** /plan 10.1 + 10.2 Phase 0 done (2026-10-26); plans Ready to execute; dev-workbench drift committed (28850dc)
-**Next action:** /concurrency launches lanes A (10.1 packet schema + packet.py/door.py, ai-skills), B (10.1 queue service + data-model template, dev-workbench), C (10.2 review changes, lineage fix first, ai-skills); this pane drives
-**Open blockers:** none
+**Last action:** lanes A + C review-clean and merged on `feature/10-decision-queue` (ai-skills worktree, local); lane B at review round 3 stop (decisions 78/79 open)
+**Next action:** lanes D1 (1.5 wiring) + D2 (2.5 review packets) off the cutover branch → merge → review cutover range (incl. lane A ef078ba) → Alex cuts over to ai-skills main; lane B per 78/79 → dev-workbench merge → 1.6 deploy
+**Open blockers:** decisions 78 (reject r5-01, never deployed) / 79 (fix r5-02 + one more round) for lane B
 **Key files changed:** None yet
 
 ---
@@ -123,6 +123,11 @@ Script-owned (`plans-index.py`); PLANS-INDEX.md is rendered from it.
 - ERD + side-by-side data-model styles with a no-JS per-card toggle; screenshots in `queue/docs/`.
 - Review: fresh pane `queue review` (w14:p1J), unit 10.1, range 28850dc..concurrency/10-queue.
 
+#### Review loops (2026-10-26)
+- Lane A: r1 SHIP 16 findings (15 fixed, r1-11 accepted for 1.5 wiring) → r3 SHIP 3 notes, batch-fixed bb0bc6d; driver contract fix ef078ba (409 = conflict, 404 event = retry) — reviewed with the cutover range.
+- Lane B: r2 SHIP AFTER BLOCKING 7 → all fixed (+ D1 409 on changed retry, D2 schema drift guard); r4 SHIP AFTER BLOCKING 7 → fixed; event replay REFRAMED (driver call: delete server replay, 404 unknown-packet events, client orders) instead of patched; r5 = round-3 stop + [CONVERGENCE] db.py → decisions 78/79 to Alex.
+- Watcher lesson: markers quoted in a prompt or brief echo in the pane; `~/cc/lane-watch.sh` seeds what's on screen and ignores `<placeholder>` lines.
+
 ---
 
 ## Plan 10.2: Review re-pointed at decisions
@@ -139,3 +144,6 @@ Script-owned (`plans-index.py`); PLANS-INDEX.md is rendered from it.
 - dc48248 lineage continues only on a fix re-review (closes the P1 TO-DO, plans/TO-DO.md ~483) · 8358edc `dispose --reframed` · c40e04a `rules_version` stamp, lineages keep their root's rules (decision 65, 10.1 Task 1.5's stamp done here) · 90a95af findings budget + round-aware prompt + `reopens` · f8196ab fix discipline + reopens chain stop · 140b5dd reframe prompt + fresh judge · eaa3355 effort trial (`verify_lib.EFFORT_TRIAL`, default on, capped xhigh) · 3e1517e review skill 3.9.0.
 - Lane notes: an accepted reframe that overturns a recorded decision fills `overturns` and goes to Alex before anything is built; the judge's objective comes from `--objective`, else scope.md §1, else exit 3; the trial flag is a code constant, not an env var; `verify_lib.schema_problems` now handles boolean and errors on unsupported types (check against lane A's `schema_check.py` at merge); 2.5 packet data lives in the new reframe / reframe-verdict records.
 - Review: fresh pane `review-loop review` (w14:p1M, tab "10 lanes 2"), unit 10.2, range 14954fc..concurrency/10-review.
+#### Review loop (2026-10-26)
+- r1 SHIP AFTER BLOCKING 3: judge provenance unenforced (75609c8), lineage fix retroactive on closed units — versioned, sweep 0/300 logs change verdict (f65d635), effort stamp (55da072); r2 SHIP, 1 note (rule keyed on lineage root) batch-fixed aaf63aa. Full suite 346 OK.
+- Lanes A + C merged on `feature/10-decision-queue` (95a8b89, 4cdea98), clean merges.

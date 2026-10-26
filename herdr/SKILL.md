@@ -1,6 +1,6 @@
 ---
 name: herdr
-version: 0.5.0
+version: 0.5.1
 description: |
   Alex's herdr WORKFLOW layer — the single source of truth for how we drive
   herdr (terminal workspace manager for AI agents) for agent work: naming, the
@@ -323,5 +323,8 @@ curl both endpoint styles before touching account settings.
 - PRIMARY wait is the skill's own done-marker, not a herdr state:
   `herdr pane wait-output <pane> --match "<marker>"`. `agent wait --until done`
   hangs on codex (it reports `idle`); use `--until blocked` for alerts only.
+  A lane parked on a decision packet prints `PARKED <id>` and never reaches its
+  done-marker until answered, so wait on both: `--regex "PARTITION-DONE|PARKED "`
+  (`/concurrency` §7.2.1). herdr's `blocked` state does not cover a parked lane.
 - `pane.report_agent` states: `idle | working | blocked | done | unknown`.
   `unknown` is not proof of completion; `blocked` = an approval/question UI.

@@ -9,7 +9,7 @@ deleted, mode-changed, and BOTH sides of a rename (git diff --no-renames reports
 rename as delete + add). Any hit, or any edit to `.one-way-doors` itself, = one-way.
 
 Promote-only: the result is max(agent claim, computed); a `--claim two-way` can never
-lower a floor hit. Fails closed: an unparseable range, a ref that does not resolve, a
+lower a floor hit. The one exception is an `info` claim with NO floor hit, which is kept. Fails closed: an unparseable range, a ref that does not resolve, a
 git error, an unreadable defaults file, an unreadable base `.one-way-doors`, or an
 invalid claim all return one-way with the reason — a wrong "two-way" is the only
 costly error, a wrong "one-way" costs one human glance. Matching is case-insensitive
@@ -169,11 +169,16 @@ def classify(repo, rng, claim=None, defaults=DEFAULTS):
                     break
     except Failed as e:
         return {"door": "one-way", "paths": [], "reason": f"fail-closed: {e}"}
-    door = "one-way" if hits else "two-way"
+    computed = "one-way" if hits else "two-way"
+    door = computed
     reason = (f"{len(hits)} floor path(s) touched" if hits else "no floor path touched")
-    if claim and RANK[claim] > RANK[door]:
+    if claim and RANK[claim] > RANK[computed]:
         door, reason = claim, f"{reason}; promoted by agent claim"
-    elif claim and RANK[claim] < RANK[door]:
+    elif claim == "info" and not hits:
+        # an info claim with no floor hit is kept: two-way is only the no-claim baseline, and
+        # promoting an info packet to two-way made packet.py refuse it (10.1-r1-03)
+        door, reason = "info", f"{reason}; info claim kept"
+    elif claim and RANK[claim] < RANK[computed]:
         reason += f"; agent claim {claim!r} ignored (promote-only)"
     return {"door": door, "paths": hits, "reason": reason}
 

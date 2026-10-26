@@ -96,6 +96,16 @@ class TestPromoteOnly(DoorBase):
         self.commit("e")
         self.assertEqual(self.classify("HEAD~1..HEAD", "--claim", "one-way")["door"], "one-way")
 
+    def test_info_claim_without_floor_hit_is_kept(self):
+        write(self.repo, "src/app.py", "print(5)\n")
+        self.commit("e")
+        self.assertEqual(self.classify("HEAD~1..HEAD", "--claim", "info")["door"], "info")
+
+    def test_info_claim_on_floor_path_still_one_way(self):
+        write(self.repo, "db/migrations/009.sql")
+        self.commit("m")
+        self.assertEqual(self.classify("HEAD~1..HEAD", "--claim", "info")["door"], "one-way")
+
     def test_invalid_claim_fails_closed(self):
         write(self.repo, "src/app.py", "print(4)\n")
         self.commit("e")

@@ -1,6 +1,6 @@
 ---
 name: review
-version: 3.8.0
+version: 3.9.0
 description: |
   Pre-landing code review with codex as the gate: the opposing model family, headless
   and read-only, reviews an explicit revision range against gstack's review checklist,

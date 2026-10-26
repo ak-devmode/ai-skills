@@ -1058,21 +1058,74 @@ class TestReview(unittest.TestCase):
         gone = os.path.join(self.tmp.name, "gone")
         revs = [("9.1-r1", "svc", "a1", "b1"), ("9.1-r2", "svc", "b1", "c1"), ("9.1-r3", "other", "x", "y"),
                 ("9.1-r4", "svc", "d1", "e1")]
-        err = io.StringIO()
-        with contextlib.redirect_stderr(err):
-            lin = vl.review_lineage(revs, lambda key: gone, {"9.1-r1": {"f1"}})
-        self.assertEqual(lin, {"9.1-r1": ("9.1-r1", 1), "9.1-r2": ("9.1-r1", 2), "9.1-r3": ("9.1-r3", 1),
-                               "9.1-r4": ("9.1-r1", 3)})
-        # r2 starts at r1's head and r1 has a fix: git cannot say whether r2 holds it
-        self.assertIn("[WARN] lineage of 9.1-r2", err.getvalue())
-        self.assertIn("[WARN] lineage of 9.1-r4", err.getvalue())
-        self.assertIn("continuing 9.1-r2 (round 2)", err.getvalue())
-        # with no fix to look for, a head-is-base start is new code, decided without git
-        err = io.StringIO()
-        with contextlib.redirect_stderr(err):
-            lin = vl.review_lineage(revs[:2], lambda key: gone)
-        self.assertEqual(lin, {"9.1-r1": ("9.1-r1", 1), "9.1-r2": ("9.1-r2", 1)})
-        self.assertEqual(err.getvalue(), "")
+        want = {"9.1-r1": ("9.1-r1", 1), "9.1-r2": ("9.1-r1", 2), "9.1-r3": ("9.1-r3", 1), "9.1-r4": ("9.1-r1", 3)}
+        for stamped in (set(), {"9.1-r2", "9.1-r4"}):
+            with self.subTest(stamped=stamped):
+                err = io.StringIO()
+                with contextlib.redirect_stderr(err):
+                    lin = vl.review_lineage(revs, lambda key: gone, {"9.1-r1": {"f1"}}, None, stamped)
+                self.assertEqual(lin, want)
+                # r2 starts at r1's head: unstamped, it continues without git; stamped, git cannot
+                # say whether it holds r1's fix, so it continues r1 itself — never the repo's
+                # highest round, which could be another lineage (review 10.2-r1-02)
+                self.assertNotIn("[WARN] lineage of 9.1-r2", err.getvalue())
+                self.assertIn("[WARN] lineage of 9.1-r4", err.getvalue())
+                self.assertIn("continuing 9.1-r2 (round 2)", err.getvalue())
+        # with no fix to look for, a stamped head-is-base start is new code, decided without git;
+        # an unstamped one keeps the old continuation (decision 65 for the lineage rule)
+        for stamped, r2 in (({"9.1-r2"}, ("9.1-r2", 1)), (set(), ("9.1-r1", 2))):
+            err = io.StringIO()
+            with contextlib.redirect_stderr(err):
+                lin = vl.review_lineage(revs[:2], lambda key: gone, None, None, stamped)
+            self.assertEqual(lin, {"9.1-r1": ("9.1-r1", 1), "9.1-r2": r2})
+            self.assertEqual(err.getvalue(), "")
+
+    def test_pruned_history_never_merges_a_lineage_into_another(self):
+        # review 10.2-r1-02 (149.2-r36 went round 2 -> 8): git cannot read a fix re-review's range;
+        # joining the repo's highest round merged lane B's r5 into lane A's capped lineage
+        import contextlib
+        import io
+        from unittest import mock
+        vl = load("verify_lib.py")
+        revs = [("9.1-r1", "svc", "a0", "a1"), ("9.1-r2", "svc", "a1", "a2"), ("9.1-r3", "svc", "a2", "a3"),
+                ("9.1-r4", "svc", "b0", "b1"), ("9.1-r5", "svc", "b1", "b2")]
+        fixes = {"9.1-r1": {"a2"}, "9.1-r2": {"a3"}, "9.1-r4": {"b2"}}
+        with mock.patch.object(vl, "_range_holds", lambda *a: None), \
+                mock.patch.object(vl, "_ranges_share", lambda *a: False), contextlib.redirect_stderr(io.StringIO()):
+            lin = vl.review_lineage(revs, lambda key: key, fixes, None, {r[0] for r in revs})
+        self.assertEqual(lin["9.1-r3"], ("9.1-r1", 3))
+        self.assertEqual(lin["9.1-r5"], ("9.1-r4", 2))
+
+    def test_a_pre_cutover_round_cap_stop_still_stands(self):
+        # review 10.2-r1-02, kalpa-docs 194.1's shape: an unstamped log where r2 and r3 each start
+        # at the previous head with no `fixed` disposition. Recorded under the old rule they are
+        # rounds 2 and 3, so r3's blocking fix is stopped by the `accept`; the lineage rule is
+        # versioned, so the closed unit's stop stands. The same log stamped rules 2 blocks.
+        gate = load("verdict-gate.py")
+        work = git(self.repo, "rev-parse", "HEAD")
+        h1, h2, h3 = (self.commit(self.repo, f"f{i}.txt") for i in (1, 2, 3))
+        fx = self.commit(self.repo, "a.sh")
+        key = "wellmed/svc"
+
+        def log(stamp):
+            recs = []
+            for n, (b, h) in enumerate(((work, h1), (h1, h2), (h2, h3)), 1):
+                rid, rng = f"9.1-r{n}", f"{b}..{h}"
+                recs += [dict({"record": "review", "review_id": rid, "reviewer": "codex gpt-test",
+                               "range": {key: rng}, "shas": {"base": b, "head": h}, "findings": 1,
+                               "verdict": "SHIP AFTER BLOCKING"}, **stamp),
+                         {"record": "finding", "review_id": rid, "finding_id": f"{rid}-01", "range": {key: rng},
+                          "file": "a.sh", "line": 2, "category": "c", "severity": "blocking", "text": "t"}]
+                recs.append({"record": "disposition", "finding_id": f"{rid}-01", "by": "t",
+                             **({"disposition": "fixed", "sha": fx, "repo": key, "via": "anchor"} if n == 3 else
+                                {"disposition": "rejected", "reason": "not a defect"})})
+            recs.append({"record": "acceptance", "by": "Alex"})
+            with open(self.log, "w") as fh:
+                fh.write("".join(json.dumps(r) + "\n" for r in recs))
+            return [b[0] for b in gate.review_presence_blocks(self.log, {}, self.projects)]
+
+        self.assertNotIn("rereview:9.1-r3-01", log({}))
+        self.assertIn("rereview:9.1-r3-01", log({"rules_version": 2}))   # new code each time: round 1
 
     def test_accepted_is_a_process_nit_never_a_rejection(self):
         self.record()

@@ -452,21 +452,24 @@ def _range_holds(path, base, head, shas, cache):
 
 
 def lineage_links(recs):
-    """({review_id: {fix shas}}, {review_id: continued review_id}) from review-log records: the
-    commits named by a `fixed` disposition of each review's findings, and each review record's
-    explicit `continues` (review.py --continues). review_lineage's inputs."""
+    """({review_id: {fix shas}}, {review_id: continued review_id}, {stamped review_id}) from
+    review-log records: the commits named by a `fixed` disposition of each review's findings,
+    each review record's explicit `continues` (review.py --continues), and the reviews recorded
+    under rules 2+ (an int `rules_version` >= 2). review_lineage's inputs."""
     of = {r.get("finding_id"): r.get("review_id") for r in recs if r.get("record") == "finding"}
     fixes, continues = {}, {}
+    stamped = {r.get("review_id") for r in recs if r.get("record") == "review"
+               and isinstance(r.get("rules_version"), int) and r["rules_version"] >= 2}
     for r in recs:
         if r.get("record") == "disposition" and r.get("disposition") == "fixed" and r.get("sha") \
                 and of.get(r.get("finding_id")):
             fixes.setdefault(of[r["finding_id"]], set()).add(r["sha"])
         elif r.get("record") == "review" and r.get("continues"):
             continues[r.get("review_id")] = r["continues"]
-    return fixes, continues
+    return fixes, continues, stamped
 
 
-def review_lineage(reviews, path_of, fixes=None, continues=None):
+def review_lineage(reviews, path_of, fixes=None, continues=None, stamped=None):
     """{review_id: (root review_id, round)} for `reviews`, [(review_id, repo, base, head)] in
     review order (repo a canonical key; `path_of(repo)` is where git reads it). Rounds follow
     the code, not the repo (WellMed 171.2: two lanes in one repo hit the round cap on a first
@@ -478,8 +481,13 @@ def review_lineage(reviews, path_of, fixes=None, continues=None):
     round 4–5 (WellMed 171.2-r15, 171.3-r5). `continues` ({review_id: earlier review_id}, from
     `--continues`) names the parent outright. Anything else starts a lineage at round 1. When git
     cannot tell, it fails closed: the review continues the repo's highest round in the unit,
-    with a warning on stderr — a silent round 1 would disable the round-3 STOP."""
-    fixes, continues = fixes or {}, continues or {}
+    with a warning on stderr — a silent round 1 would disable the round-3 STOP.
+    The fix-commit test is versioned like the loop rules (decision 65, review 10.2-r1-02): only a
+    review in `stamped` (recorded under rules 2+) needs it. An unstamped one keeps the rule it
+    was recorded under — starting at a head continues, decided without git — so a closed unit's
+    round-cap stop stands (kalpa-docs 194.1: r6 continued r5, r7 was round 3 and its `accept`
+    stood in for the re-review; under the new rule r7 was round 2 and the gate blocked)."""
+    fixes, continues, stamped = fixes or {}, continues or {}, stamped or set()
     out, seen, cache = {}, [], {}
     for rid, repo, base, head in reviews:
         parent, unsure = None, False
@@ -488,9 +496,17 @@ def review_lineage(reviews, path_of, fixes=None, continues=None):
         for prid, prepo, pbase, phead in reversed(seen if parent is None else []):
             if prepo != repo or not (base and head and pbase and phead):
                 continue
-            if base == phead:
+            if base == phead and rid not in stamped:
+                share = True   # rules 1: the old continuation, never re-decided by git
+            elif base == phead:
                 shas = set().union(*(fixes.get(x, ()) for x, (rt, _) in out.items() if rt == out[prid][0]))
-                share = bool(shas) and _range_holds(path_of(repo), base, head, shas, cache)
+                held = _range_holds(path_of(repo), base, head, shas, cache) if shas else False
+                # git cannot tell (pruned history, a gone checkout): continue prid, the old rule's
+                # answer. `base == phead` is read without git, so prid is the one review this can
+                # continue, at its round + 1. A restart at round 1 could disable the round-3 STOP;
+                # the `unsure` fallback below (the repo's highest round) could merge an unrelated
+                # lineage into this one and inflate the round (149.2-r36 went 2 -> 8).
+                share = True if held is None else held
             else:
                 share = (base, head) == (pbase, phead) or \
                     _ranges_share(path_of(repo), (base, head), (pbase, phead))

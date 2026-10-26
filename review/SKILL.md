@@ -1,6 +1,6 @@
 ---
 name: review
-version: 3.9.0
+version: 3.9.1
 description: |
   Pre-landing code review with codex as the gate: the opposing model family, headless
   and read-only, reviews an explicit revision range against gstack's review checklist,
@@ -312,7 +312,10 @@ loops run without a per-round check-in (Alex's standing approval):
 
 **A reframe that is taken** — accepted by the fresh judge (`--by judge`) or by the user at
 a stop (`--by user`) — is recorded on each finding it replaced: `dispose --reframed "<what
-changed>" --commit <the replacing commit>`, at any round and any severity. Never `--rejected`
+changed>" --commit <the replacing commit>`, at any round and any severity. `--by judge` is
+read from the log, never taken on your word: `dispose` refuses it, and the gate blocks it,
+unless a reframe in the finding's lineage removes that finding and its latest verdict is
+`accepted` without `overturns` — an accept that overturns a decision is `--by user`. Never `--rejected`
 (the finding was not wrong) and never a stale `--fixed` (a reverted fix: `dispose` warns when
 a `--fixed` commit has been reverted on HEAD). The gate counts it like a deferral, `/verify`
 never audits it as a rejection, and the gate wants the replacing commit inside a later

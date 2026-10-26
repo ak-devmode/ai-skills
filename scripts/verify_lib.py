@@ -538,6 +538,44 @@ def accepted_nits(recs):
             if d.get("disposition") == "accepted"]
 
 
+# who took a reframe (review/SKILL.md §5.1): `judge` (the fresh judge's accepted verdict, §5.2)
+# or `user` (the user's call at a stop) — the first word of a `reframed` disposition's `by`
+REFRAMED_BY = re.compile(r"^(judge|user)\b")
+
+
+def judge_took(recs, finding_id, lineage):
+    """None when a `reframed --by judge` of `finding_id` is backed by the log, else why not.
+    Backed = a review in the finding's lineage (`lineage` from review_lineage) proposed a reframe
+    whose `removes` names the finding, and that review's latest `reframe-verdict` is `accepted`
+    with no `overturns` — an accept that overturns a recorded decision is the user's call
+    (`--by user`), never the judge's. Review 10.2-r1-01: `--by judge` was the driver's word, so a
+    driver could clear any finding, blocking included, without a judge ever running. Fails
+    closed: a finding whose review has no lineage (unknown, or a log without review records)
+    has nothing to back it."""
+    f = next((r for r in recs if r.get("record") == "finding" and r.get("finding_id") == finding_id), None)
+    froot = (lineage.get((f or {}).get("review_id")) or (None,))[0]
+    if froot is None:
+        return f"{finding_id}'s review has no lineage to find the judge's verdict in"
+    reframe, verdict = {}, {}
+    for r in recs:   # the latest of each, per review
+        if r.get("record") == "reframe":
+            reframe[r.get("review_id")] = r
+        elif r.get("record") == "reframe-verdict":
+            verdict[r.get("review_id")] = r
+    mine = [rid for rid, r in reframe.items() if finding_id in (r.get("removes") or [])
+            and (lineage.get(rid) or (None,))[0] == froot]
+    if not mine:
+        return f"no reframe in {finding_id}'s review lineage removes it"
+    took = [rid for rid in mine if (verdict.get(rid) or {}).get("verdict") == "accepted"]
+    if any(not verdict[rid].get("overturns") for rid in took):
+        return None
+    if took:
+        return (f"the judge's accept of {', '.join(took)} overturns a recorded decision "
+                f"({'; '.join(verdict[rid]['overturns'] for rid in took)}): that is the user's call")
+    return (f"the judge did not accept the reframe of {', '.join(mine)} (latest verdict: "
+            f"{', '.join((verdict.get(rid) or {}).get('verdict') or 'none' for rid in mine)})")
+
+
 # a judge row the runner decided itself (verify-run.py: zero rejections to audit); the judge never sees it
 AUTO_PREFIX = "auto: "
 # verify/SKILL.md §3.9: finalized /verify runs of one unit before the fix loop stops and asks.

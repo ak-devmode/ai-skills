@@ -1118,10 +1118,13 @@ class TestReview(unittest.TestCase):
                 p = how(*extra)
                 self.assertEqual(p.returncode, code, p.stdout + p.stderr)
                 self.assertIn(needle, p.stderr)
-        # round 1, on a blocking finding: recorded, counted, never audited as a rejection
-        p = how("--reframed", "one call site, no retry", "--commit", new, "--by", "judge")
+        # round 1, on a blocking finding: recorded, counted, never audited as a rejection — the
+        # user's call here (the judge's is checked against the log: test_by_judge_is_read_from_the_log)
+        p = how("--reframed", "one call site, no retry", "--commit", new, "--by", "user")
         self.assertEqual(p.returncode, 0, p.stderr)
         self.assertIn("9.1-r1-01: reframed", p.stdout)
+        self.assertIn("the user's call", p.stdout)
+        self.assertEqual(self.records("disposition")[-1]["call"], "user")
         self.assertNotIn("9.1-r1-01", str(gate.coverage_blocks(self.log)[0]))
         self.assertEqual(vr.rejections(self.scope, "9.1"), 0)
         # the gate wants the replacing commit reviewed — a new lineage, round 1
@@ -1446,6 +1449,51 @@ class TestReview(unittest.TestCase):
             self.assertEqual(self.judged("9.1-r1", **over).returncode, 3, over)
         self.assertEqual(self.judged("9.1-r1", judge="gpt").returncode, 2)
         self.assertEqual(len(self.verdicts()), n)
+
+    def test_by_judge_is_read_from_the_log(self):
+        # review 10.2-r1-01: `--by judge` was the driver's word, so any finding, blocking included,
+        # could be cleared as reframed without a judge ever running. dispose and the gate both read
+        # the judge's verdict from the log; an accept that overturns a decision is the user's call.
+        gate = load("verdict-gate.py")
+        self.record(reframe=self.REFRAME)   # removes 9.1-r1-03 (note) and 9.1-r1-01 (blocking)
+        new = self.commit(self.repo, "a.sh")
+        how = lambda fid, by: run(REVIEW, "dispose", "--scope", self.scope, "--unit", "9.1", "--finding", fid,
+                                  "--reframed", "one table", "--commit", new, "--by", by, env=self.env)
+        steps = [(None, "9.1-r1-01", "judge did not accept the reframe of 9.1-r1 (latest verdict: none)"),
+                 (dict(verdict="reject", reason="it moves the scanner"), "9.1-r1-01",
+                  "(latest verdict: rejected)"),
+                 (dict(overturns="D7: one writer"), "9.1-r1-01", "overturns a recorded decision (D7: one writer)"),
+                 (dict(), "9.1-r1-02", "no reframe in 9.1-r1-02's review lineage removes it")]
+        for verdict, fid, needle in steps:
+            with self.subTest(verdict=verdict, fid=fid):
+                if verdict is not None:
+                    self.assertEqual(self.judged("9.1-r1", **verdict).returncode, 0)
+                p = how(fid, "judge")
+                self.assertEqual(p.returncode, 1, p.stdout + p.stderr)
+                self.assertIn(needle, p.stderr)
+        self.assertEqual(self.records("disposition"), [])
+        # the judge's clean accept (the latest verdict) backs it; the user's call needs no verdict
+        self.assertEqual(how("9.1-r1-01", "judge codex gpt-test").returncode, 0)
+        self.assertEqual(self.records("disposition")[-1]["call"], "judge")
+        self.assertEqual(how("9.1-r1-02", "user").returncode, 0)
+        # the gate reads the same log: a hand-written `--by judge` the judge never took blocks
+        with open(self.log, "a") as fh:
+            fh.write(json.dumps({"record": "disposition", "finding_id": "9.1-r1-03", "disposition": "reframed",
+                                 "sha": new, "reason": "x", "by": "judge"}) + "\n")
+        ids = lambda: [b[0] for b in gate.review_presence_blocks(self.log, {}, self.projects)
+                       if b[0].startswith("reframe:")]
+        self.assertEqual(ids(), [])   # 9.1-r1-03 is in the accepted reframe's `removes`
+        self.assertEqual(self.judged("9.1-r1", overturns="D7").returncode, 0)   # now the latest verdict
+        self.assertEqual(ids(), ["reframe:9.1-r1-01", "reframe:9.1-r1-03"])   # 9.1-r1-02 is `--by user`
+        # a reframe in another lineage never backs it (fail closed), nor does an unknown review
+        vl = load("verify_lib.py")
+        recs = self.records("finding") + self.records("reframe") + \
+            [{"record": "reframe-verdict", "review_id": "9.1-r1", "verdict": "accepted", "overturns": None}]
+        self.assertIsNone(vl.judge_took(recs, "9.1-r1-01", {"9.1-r1": ("9.1-r1", 1)}))
+        other = [dict(r, review_id="9.1-r0") if r["record"] != "finding" else r for r in recs]
+        self.assertIn("no reframe", vl.judge_took(other, "9.1-r1-01", {"9.1-r1": ("9.1-r1", 1),
+                                                                      "9.1-r0": ("9.1-r0", 1)}))
+        self.assertIn("has no lineage", vl.judge_took(recs, "9.1-r1-01", {}))
 
     def test_a_malformed_reframe_is_exit_3(self):
         for rf in ({"proposal": "", "removes": ["#1"], "deletes": "x"}, {"proposal": "p", "removes": ["#9"],

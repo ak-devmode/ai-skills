@@ -1063,9 +1063,10 @@ def _dispose(a, log):
     rec = {"schema": vl.SCHEMA, "ts": now(), "record": "disposition", "finding_id": a.finding,
            "disposition": kind, "sha": fix.get("sha"), "reason": reason, "by": by}
     if fix:
-        rec.update(repo=fix["repo"], via=fix["via"])
+        rec.update(repo=fix["repo"], via=fix["via"], **({"call": fix["call"]} if "call" in fix else {}))
     vl.append_verified(log, [rec])
-    print(f"{a.finding}: {kind} {rec['sha'] or reason}" + (f" in {fix['repo']} (via {fix['via']})" if fix else ""))
+    print(f"{a.finding}: {kind} {rec['sha'] or reason}" + (f" in {fix['repo']} (via {fix['via']})" if fix else "")
+          + (" — the user's call, not the judge's" if fix.get("call") == "user" else ""))
     return vl.EXIT_PASS
 
 
@@ -1085,8 +1086,6 @@ def note_batches(recs, unit, f, sha):
     return [] if sha in shas else sorted(shas)
 
 
-REFRAMED_BY = re.compile(r"^(judge|user)\b")
-
 
 def reframe_check(a, f, recs):
     """({sha, repo, via}, None) or (None, a §10 error code) for `--reframed`: an accepted reframe
@@ -1097,10 +1096,20 @@ def reframe_check(a, f, recs):
     if not a.reframed.strip():
         return None, err("`reframed` needs what changed", "the reframe that replaced the code", "empty",
                          a.finding, "--reframed \"<what changed>\"", cause="code", code=vl.EXIT_FAIL)
-    if not REFRAMED_BY.match(a.by or ""):
+    who = vl.REFRAMED_BY.match(a.by or "")
+    if not who:
         return None, err("`reframed` needs who accepted the reframe", "`--by judge` (the fresh judge, §5.2) or "
                          "`--by user` (the user's call)", repr(a.by), a.finding, "--by judge|user",
                          code=vl.EXIT_USAGE)
+    if who.group(1) == "judge":
+        # the judge's accept is read from the log, never taken on the driver's word (10.2-r1-01)
+        why = vl.judge_took(recs, a.finding, rounds(recs, a.unit)[1])
+        if why:
+            return None, err(f"`reframed --by judge`: {why}", "an `accepted` reframe-verdict, without "
+                             "`overturns`, on a reframe in the finding's lineage that removes it", "none",
+                             a.finding, "run the fresh judge (`reframe-prepare` / `reframe-record`, §5.2); an "
+                             "accept that overturns a decision, or a reframe taken at a stop, is `--by user`",
+                             cause="code", code=vl.EXIT_FAIL)
     path, key = fix_repo(f, a.fixed_in)
     if path is None:
         return None, err(f"`--fixed-in {a.fixed_in}` is not a git repository under {vl.PROJECTS}",
@@ -1116,7 +1125,7 @@ def reframe_check(a, f, recs):
         return None, err(f"`reframed --commit {a.commit}` predates the finding: {why}",
                          f"a commit made after review {f.get('review_id')} raised {a.finding}", full,
                          a.finding, "commit the reframe first, then record it", cause="code", code=vl.EXIT_FAIL)
-    return {"sha": full, "repo": key, "via": "reframe"}, None
+    return {"sha": full, "repo": key, "via": "reframe", "call": who.group(1)}, None
 
 
 def reverts_of(path, sha):

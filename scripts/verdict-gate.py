@@ -152,7 +152,7 @@ def coverage_blocks(review_log):
                            f"severity {f.get('severity')}, reason {d.get('reason')!r}", where, "code"))
         elif d.get("disposition") == "reframed" and (
                 not d.get("sha") or not str(d.get("reason") or "").strip()
-                or not re.match(r"^(judge|user)\b", str(d.get("by") or ""))):
+                or not vl.REFRAMED_BY.match(str(d.get("by") or ""))):
             # an accepted reframe replaced the code (review/SKILL.md §5.1): counted like a deferral,
             # never audited as a rejection; its commit is wanted re-reviewed below
             blocks.append((fid, "`reframed` disposition without its commit, what changed, or who accepted it",
@@ -369,6 +369,16 @@ def review_presence_blocks(review_log, base, projects, scope=None, unit=None):
                 or not d.get("sha"):
             continue
         reframed = d["disposition"] == "reframed"
+        who = vl.REFRAMED_BY.match(str(d.get("by") or "")) if reframed else None
+        why_not = who and who.group(1) == "judge" and vl.judge_took(recs, f["finding_id"], lineage)
+        if why_not:
+            # `--by judge` is checked against the log, as dispose checks it: a hand-written
+            # record, or one from before the check, never clears a finding on the driver's
+            # word (review 10.2-r1-01); `--by user` is the user's call and stands as recorded
+            blocks.append((f"reframe:{f['finding_id']}", "a `reframed --by judge` the judge never took",
+                           "an `accepted` reframe-verdict, without `overturns`, on a reframe in the "
+                           "finding's lineage that removes it", why_not, f"{review_log} · {f['finding_id']}",
+                           "code"))
         # the reviewed code is never its own fix: the commit that introduced a finding touches
         # its file (review adhoc-01); dispose refuses it, a hand-written record blocks here
         own, rng = next(iter((f.get("range") or {}).items()), ("", ""))

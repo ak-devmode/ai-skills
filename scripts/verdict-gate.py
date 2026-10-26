@@ -99,7 +99,9 @@ def first_unit_commit(path, b, tip, heads, unit=None):
             continue
         holds = any(is_ancestor(path, h, side) for h in heads for side in parents[1:])
         if holds or names_unit(path, c, unit):
-            brought = _git_list(path, "rev-list", "--reverse", f"{parents[0]}..{c}")
+            # Not what the base already reaches: a lane whose base merged the trunk in lands
+            # that trunk with it, older than the unit's own work (kalpa-iris 8.3).
+            brought = _git_list(path, "rev-list", "--reverse", c, f"^{parents[0]}", f"^{b}")
             return brought[0] if brought else c
     return None
 

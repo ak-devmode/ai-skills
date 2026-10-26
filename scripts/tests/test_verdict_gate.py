@@ -549,6 +549,34 @@ class TestReviewRequired(Fixture):
         code, doc = self.gate_json("--blocking")
         self.assertIn("review:svc", [b["id"] for b in doc["blocks"]])
 
+    def test_a_lane_whose_base_merged_the_trunk_in_is_not_blocked_by_the_trunk(self):
+        # kalpa-iris 8.3: the unit's lane began by merging the trunk in, and that merge is its
+        # base; the lane landed by a PR into the lane it branched from. The PR merge's side holds
+        # the trunk's commits too — reachable from the base, older than the unit's — so a reviewed
+        # unit read "never reviewed".
+        parent = self.h
+        git(self.svc, "checkout", "-q", "-b", "trunk", self.b)
+        subprocess.run(["git", "-C", self.svc, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q",
+                        "--allow-empty", "-m", "the trunk's work"], check=True,
+                       env=dict(os.environ, GIT_AUTHOR_DATE="2000-01-01T00:00:00", GIT_COMMITTER_DATE="2000-01-01T00:00:00"))
+        git(self.svc, "checkout", "-q", "-b", "feature/8-u", parent)
+        git(self.svc, "merge", "-q", "--no-ff", "-m", "merge the trunk into the lane", "trunk")
+        base = git(self.svc, "rev-parse", "HEAD")
+        git(self.svc, "commit", "-q", "--allow-empty", "-m", "the unit's work")
+        head = git(self.svc, "rev-parse", "HEAD")
+        git(self.svc, "checkout", "-q", "main")
+        git(self.svc, "merge", "-q", "--no-ff", "-m", "Merge pull request #54 from org/feature/8-u", "feature/8-u")
+        prep = os.path.join(self.scope, "closeout-prep.md")
+        with open(prep) as fh:
+            text = fh.read()
+        self.assertIn(self.b, text)
+        with open(prep, "w") as fh:
+            fh.write(text.replace(self.b, base))
+        self.review_record(base, head)
+        self.verify("codex gpt-test", [self.v("ok", "pass")])
+        code, doc = self.gate_json("--blocking")
+        self.assertEqual((code, doc["verdict"]), (0, "pass"), doc)
+
     def test_an_unreviewed_first_pr_of_the_unit_still_blocks(self):
         # review of the gate fix, finding 1: the unit lands U through M1 and V through M2, and only
         # V is reviewed. M1's side holds no reviewed head, but its branch names the unit, so U is

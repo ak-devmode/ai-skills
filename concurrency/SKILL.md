@@ -323,13 +323,16 @@ A lane's question to Alex is a packet, not prose in a pane. `scripts/README.md` 
   every POST; the box reaches the queue on its own tailnet, so `DECISION_QUEUE_URL` must
   be set in the box's ssh environment. Never pass a local-looking `--outbox` path for a
   box lane: `flush` silently skips a configured outbox that does not exist and reports
-  nothing sent. Check the output names the packets you expect.
+  nothing sent. `flush` prints a count, not ids: `FLUSHED <n>` must equal the number of
+  PARKED/PACKET ids the box lane printed since the last flush. `FLUSHED 0` while a box
+  lane is parked is a misconfigured path or env, not an empty outbox.
 - **Reply path.** Alex pastes the prefilled reply (opens `[lane <m>/<w>/<a> <id>]`) into
   the driver's pane. The driver runs `packet.py check-reply --outbox <that lane's outbox>
-  --lane <m>/<w>/<a> --reply "<pasted text>"` (box lane: the same command inside
-  `ssh <box> 'cd <remote worktree> && …'`, so the lane's own HEAD is checked on the box;
-  quote the reply for the remote shell), taking `--lane` from the `reply:` line the
-  lane printed in its OWN pane under `PACKET <id>` — never from the pasted text, which is
+  --lane <m>/<w>/<a> --reply -` with the pasted text piped on stdin (box lane:
+  `printf '%s' "<reply>" | ssh <box> 'cd <remote worktree> && ~/Projects/ai-skills/scripts/packet.py check-reply --lane <m>/<w>/<a> --reply -'`,
+  so the lane's own HEAD is checked on the box). Never put the reply in argv: an
+  apostrophe breaks the remote quoting and `$(…)` in pasted text would expand. Take
+  `--lane` from the `reply:` line the lane printed in its OWN pane under `PACKET <id>` — never from the pasted text, which is
   what is being checked. A refusal goes back to Alex verbatim; nothing is relayed. On
   `OK`, relay with `herdr agent prompt <lane> "<reply>"` (+ `enter`, §7.2). The lane runs
   `check-reply` itself, acts on the answer, runs `packet.py close <id>`, and resumes.

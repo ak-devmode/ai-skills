@@ -1586,13 +1586,13 @@ class TestReview(unittest.TestCase):
         out = self.prepare_range(f"{base}..{head}")
         self.assertIn("round: 1\n", out)
         self.assertIn("effort: medium (1 file(s), 1 changed line(s); effort trial: low → medium)", out)
-        self.record_range(f"{base}..{head}", findings=[self.finding("blocking", "b")])
+        self.record_range(f"{base}..{head}", ("--effort", "medium"), findings=[self.finding("blocking", "b")])
         fix = self.commit(self.repo, "a.sh")
         self.assertEqual(self.dispose("9.1-r1-01", "--fixed", fix).returncode, 0)
         out = self.prepare_range(f"{head}..{fix}")
         self.assertIn("round: 2\n", out)
         self.assertIn("effort trial: low → medium", out)
-        self.record_range(f"{head}..{fix}", findings=[])
+        self.record_range(f"{head}..{fix}", ("--effort", "medium"), findings=[])
         stamps = [(r["round"], r["effort"], r["effort_base"]) for r in self.records("review")]
         self.assertEqual(stamps, [(1, "medium", "low"), (2, "medium", "low")])
         # a lineage rooted before the cutover keeps its own effort (decision 65)
@@ -1613,6 +1613,15 @@ class TestReview(unittest.TestCase):
         self.assertEqual(p.returncode, 0, p.stderr)
         last = self.records("review")[-1]
         self.assertEqual((last["round"], last["effort"], last["effort_base"]), (3, None, None))
+        # review 10.2-r1-03: the stamp is the tier codex ran at, never a recomputed one (a prepare
+        # without --scope/--unit assumes rules 2); not passed, it is null with a warning
+        p = self.record_range(f"{fix}..{fix2}", ("--effort", "high"), findings=[])
+        self.assertIn("--effort high: this lineage's rules give low — stamped as run", p.stderr)
+        self.assertEqual(self.records("review")[-1]["effort"], "high")
+        p = self.record_range(f"{fix}..{fix2}", findings=[])
+        self.assertIn("no --effort: the tier codex ran at is not stamped", p.stderr)
+        self.assertEqual((self.records("review")[-1]["effort"], self.records("review")[-1]["effort_base"]),
+                         (None, "low"))
 
     def test_effort_trial_tiers_and_flag(self):
         vl = load("review/scripts/review.py").vl

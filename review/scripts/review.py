@@ -18,7 +18,7 @@ Usage:
   review.py prepare --repo PATH --range BASE..HEAD [--kalpa-only | --engine-only] [--lean] [--out-dir DIR]
                     --lean: inline the capped diff + this project's rules into one bundle (plan 7)
   review.py record  --repo PATH --range BASE..HEAD --reviewer LINE --input FILE
-                    [--scope DIR --unit N.P] [--passes TEXT] [--mode LINE]
+                    [--scope DIR --unit N.P] [--passes TEXT] [--mode LINE] [--effort TIER]
   review.py dispose --scope DIR --unit N.P --finding ID (--fixed SHA [--off-anchor REASON] | --rejected REASON |
                     --deferred TODO | --accepted REASON) [--by NAME]
                     --accepted: a non-blocking process nit, noted and never re-reviewed (SKILL.md §5.1)
@@ -601,12 +601,22 @@ def cmd_record(a):
         if code is not None:
             return code
         unlink_reopens(ordered, vl.read_jsonl(log), a.unit, doc.get("reframe"))
-        # the effort trial's evidence (scope 10 §4.2): the lineage round, and the tier prepare
-        # printed for this range — a non-codex reviewer ran at no codex tier, so none is stamped
+        # the effort trial's evidence (scope 10 §4.2): the lineage round, and the tier codex ran
+        # at — `--effort`, the one codex-exec was given, never a recomputed one: prepare without
+        # --scope/--unit assumes rules 2, so a recomputed tier can disagree with the run (review
+        # 10.2-r1-03). Not passed → stamped null with a warning, never a guess. A non-codex
+        # reviewer ran at no codex tier, so none is stamped.
         _, rnd, rules, _ = lineage_of(vl.read_jsonl(log), a.unit, review_id, a.range, key, getattr(a, "continues", None))
         effort, base, _ = vl.review_effort([vl.diff_stat(a.repo, a.range)], rules)
         codex = a.reviewer.startswith("codex ")
-        a.stamp = {"round": rnd, "effort": effort if codex else None, "effort_base": base if codex else None}
+        if codex and a.effort is None:
+            print(vl.message("WARN", "no --effort: the tier codex ran at is not stamped",
+                             "`--effort <the tier passed to codex-exec.py>`", "none", "record", "tooling",
+                             "the review is recorded with `effort: null` — out of the effort trial's scorecard",
+                             DOCS), file=sys.stderr)
+        elif codex and a.effort != effort:
+            print(f"(--effort {a.effort}: this lineage's rules give {effort} — stamped as run)", file=sys.stderr)
+        a.stamp = {"round": rnd, "effort": a.effort if codex else None, "effort_base": base if codex else None}
         records, findings, report = build(a, doc, ordered, key, n, review_id)
         vl.append_verified(log, records)
         out = os.path.join(art, f"review-{review_id}.md")
@@ -1482,6 +1492,8 @@ def main(argv):
     r.add_argument("--unit")
     r.add_argument("--passes")
     r.add_argument("--mode", help="review-mode.py's line, shown in the report header")
+    r.add_argument("--effort", choices=vl.EFFORT_LEVELS, help="the --effort codex-exec.py ran at (a codex "
+                   "reviewer): stamped on the review record for the effort trial")
     r.add_argument("--continues", metavar="REVIEW_ID", help="this review re-reads the fixes of that review: "
                    "continue its lineage's round count (when no `fixed` disposition ties the range to it)")
     d = sub.add_parser("dispose")

@@ -1,6 +1,6 @@
 ---
 name: review
-version: 3.9.1
+version: 3.9.2
 description: |
   Pre-landing code review with codex as the gate: the opposing model family, headless
   and read-only, reviews an explicit revision range against gstack's review checklist,
@@ -116,7 +116,8 @@ The prompt's directory is `$WORK`. Last line `codex <model>` → §2.4 with that
 the reviewer. `none <reason>` → §3 with that reason.
 
 2.4 **Record.** `$RV record --repo $REPO --range <the range: line> --reviewer "<line>" --input
-$WORK/answer.json --passes "<passes line>" --mode "$MODE" [--scope $SCOPE --unit $UNIT]`. It assigns
+$WORK/answer.json --passes "<passes line>" --mode "$MODE" --effort $EFFORT [--scope $SCOPE --unit $UNIT]`
+(`--effort`: the tier §2.3 gave codex-exec; a codex record without it is stamped `effort: null`). It assigns
 `<unit>-r<n>-NN` IDs in severity order, appends the raw findings, and writes
 `artifacts/review-<unit>-r<n>.md` — including **what the review did not cover** (codex's
 own `cannot_do` list plus skipped passes). Exit 3 → the answer was malformed and nothing
@@ -275,7 +276,7 @@ loops run without a per-round check-in (Alex's standing approval):
   `verify_lib.effort_for`'s diff-size tier (`low` → `medium` → `high` → `xhigh`, capped at
   `xhigh`). `prepare` prints it as `effort trial: <base> → <tier>`. Fix ranges average about
   350 lines, so the bump is cheap there, and fix code is where defects concentrate. `record`
-  stamps the review record with `round`, `effort` and `effort_base` (null for a non-codex
+  stamps the review record with `round`, `effort` (the `--effort` codex ran at) and `effort_base` (null for a non-codex
   reviewer) so the scorecard can compare round 1 with fix rounds. The trial stays per bucket
   only if findings move earlier without more codex credit-outs.
   `verify_lib.EFFORT_TRIAL = False` ends it.

@@ -10,7 +10,7 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["file", "line", "severity", "category", "group", "text", "fix", "target"],
+        "required": ["file", "line", "severity", "category", "group", "text", "fix", "target", "reopens"],
         "properties": {
           "file": {"type": "string"},
           "line": {"type": "integer"},
@@ -20,7 +20,8 @@
           "group": {"type": "string"},
           "text": {"type": "string"},
           "fix": {"type": "string"},
-          "target": {"type": "string", "enum": ["shipped", "scaffolding"]}
+          "target": {"type": "string", "enum": ["shipped", "scaffolding"]},
+          "reopens": {"type": ["string", "null"]}
         }
       }
     },

@@ -19,6 +19,14 @@ about the ADR, and must say which.
 
 {{CHECKS}}
 
+## This round
+
+{{ROUND}}
+
+### Earlier findings in this lineage, with their dispositions
+
+{{PREVIOUS}}
+
 ## Output
 
 Only the JSON object the schema describes.
@@ -33,6 +41,8 @@ Only the JSON object the schema describes.
 - `target`: `shipped` (what the change delivers) · `scaffolding` (a check, finish-table row,
   progress/plan note or procedure prose the session added). Scaffolding is never `blocking`
   (lenses §7).
+- `reopens`: the ID of an earlier finding this one is — the original defect not fully fixed,
+  or back on the fix's own lines. Otherwise null.
 - `checked_clear` / `not_applicable`: the rule groups you verified clean, and those with no
   surface in this range. They are different results — never merge them.
 - `cannot_do`: every check above you could not actually perform here (network, running

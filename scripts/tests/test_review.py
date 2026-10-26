@@ -1194,5 +1194,117 @@ class TestReview(unittest.TestCase):
         self.assertIn("to fix 9.1-r1-01", p.stdout)
 
 
+    # ---- findings budget + round-aware prompt (scope 10 §4.2, plan 10.2 Task 2.1)
+    def finding(self, sev, text, file="a.sh", **over):
+        return dict({"file": file, "line": 2, "severity": sev, "category": "engine", "group": "", "text": text,
+                     "fix": "f"}, **over)
+
+    def test_no_should_fix_cap_at_any_round_and_notes_accepted_at_round_one(self):
+        gate = load("verdict-gate.py")
+        base = git(self.repo, "rev-parse", "HEAD")
+        u1 = self.commit(self.repo, "a.sh")
+        many = [self.finding("should-fix", f"s{i}") for i in range(12)]
+        p = self.record_range(f"{base}..{u1}", findings=many + [self.finding("note", "wording")])
+        self.assertEqual(p.returncode, 0, p.stderr)
+        self.assertEqual(len(self.findings()), 13)
+        self.assertNotIn("[BUDGET]", p.stdout)   # round 1 is uncapped and unbudgeted
+        # a note may be accepted at round 1, and the gate takes it
+        self.assertEqual(self.dispose("9.1-r1-13", "--accepted", "wording only").returncode, 0)
+        self.assertNotIn("9.1-r1-13", str(gate.coverage_blocks(self.log)[0]))
+        fix = self.commit(self.repo, "a.sh")
+        for i in range(1, 13):
+            self.assertEqual(self.dispose(f"9.1-r1-{i:02d}", "--fixed", fix).returncode, 0)
+        p = self.record_range(f"{u1}..{fix}", findings=many + [self.finding("note", "n1"), self.finding("note", "n2")])
+        self.assertEqual(p.returncode, 0, p.stderr)
+        self.assertIn("round: 2 of ", p.stdout)
+        mine = [f for f in self.findings() if f["review_id"] == "9.1-r2"]
+        self.assertEqual(sum(f["severity"] == "should-fix" for f in mine), 12)   # every one logged
+        self.assertFalse(any(f["capped"] for f in mine))
+        self.assertIn("[BUDGET] round 2: 2 note(s)", p.stdout)
+
+    def test_fix_round_notes_get_one_batch_fix_and_no_rereview(self):
+        gate = load("verdict-gate.py")
+        base = git(self.repo, "rev-parse", "HEAD")
+        u1 = self.commit(self.repo, "a.sh")
+        self.record_range(f"{base}..{u1}")
+        fix = self.commit(self.repo, "a.sh")
+        self.assertEqual(self.dispose("9.1-r1-01", "--fixed", fix).returncode, 0)
+        p = self.record_range(f"{u1}..{fix}", findings=[self.finding("should-fix", "s"), self.finding("note", "n1"),
+                                                        self.finding("note", "n2")])
+        self.assertIn("round: 2 of ", p.stdout)
+        other = self.commit(self.repo, "doc.md")
+        for fid in ("9.1-r2-01", "9.1-r2-02"):
+            p = self.dispose(fid, "--fixed", other, "--off-anchor", "the doc said it")
+            self.assertEqual(p.returncode, 0, p.stderr)
+            self.assertNotIn("second batch fix", p.stderr)
+        # a second batch for the same round's notes: recorded, with a WARN
+        again = self.commit(self.repo, "a.sh")
+        p = self.dispose("9.1-r2-03", "--fixed", again)
+        self.assertEqual(p.returncode, 0, p.stderr)
+        self.assertIn("a second batch fix for 9.1-r2's notes", p.stderr)
+        # the off-anchor should-fix wants a re-review; the off-anchor note never does
+        ids = [b[0] for b in gate.review_presence_blocks(self.log, {}, self.projects)]
+        self.assertIn("rereview:9.1-r2-01", ids)
+        self.assertNotIn("rereview:9.1-r2-02", ids)
+
+    def test_a_fix_rounds_prompt_carries_the_earlier_findings_and_dispositions(self):
+        base = git(self.repo, "rev-parse", "HEAD")
+        u1 = self.commit(self.repo, "a.sh")
+        prep = lambda rng, *extra: run(REVIEW, "prepare", "--repo", self.repo, "--range", rng, "--no-checks",
+                                       "--scope", self.scope, "--unit", "9.1", "--out-dir",
+                                       os.path.join(self.tmp.name, "p"), *extra, env=self.env)
+        p = prep(f"{base}..{u1}")
+        self.assertEqual(p.returncode, 0, p.stderr)
+        self.assertIn("round: 1", p.stdout)
+        prompt = read(p.stdout.split("prompt: ")[1].split()[0])
+        self.assertIn("Report every defect you find, not a top few", prompt)
+        self.assertIn("names the class of defect", prompt)
+        self.record_range(f"{base}..{u1}", findings=[
+            self.finding("blocking", "swallowed {{DIFF}} failure"), self.finding("should-fix", "tenant", "b.go"),
+            self.finding("note", "wording")])
+        fix = self.commit(self.repo, "a.sh")
+        self.dispose("9.1-r1-01", "--fixed", fix)
+        self.dispose("9.1-r1-02", "--rejected", "the filter is in the repo layer")
+        for flags in ((), ("--lean",)):
+            with self.subTest(flags=flags):
+                p = prep(f"{u1}..{fix}", *flags)
+                self.assertEqual(p.returncode, 0, p.stderr)
+                self.assertIn("round: 2", p.stdout)
+                prompt = read(p.stdout.split("prompt: ")[1].split()[0])
+                self.assertIn("Round 2 of this review lineage", prompt)
+                self.assertIn("Do not raise a `rejected` finding again unless you have new evidence", prompt)
+                self.assertIn(f"`9.1-r1-01` [blocking] `a.sh:2` — swallowed {{{{DIFF}}}} failure → **fixed "
+                              f"{fix[:10]}**", prompt)   # a finding's own `{{…}}` is never substituted
+                self.assertIn("`9.1-r1-02` [should-fix] `b.go:2` — tenant → **rejected — the filter is in the "
+                              "repo layer**", prompt)
+                self.assertIn("`9.1-r1-03` [note] `a.sh:2` — wording → **undisposed**", prompt)
+                self.assertIn("`reopens`", prompt)
+                self.assertNotRegex(prompt, r"\{\{(ROUND|PREVIOUS|DIFF|LOG|RULES|CHECKS)\}\}(?! failure)")
+        # a bad --continues is refused here as in record
+        p = prep(f"{u1}..{fix}", "--continues", "9.1-r9")
+        self.assertEqual(p.returncode, 2, p.stdout)
+
+    def test_a_finding_that_reopens_records_the_link(self):
+        base = git(self.repo, "rev-parse", "HEAD")
+        u1 = self.commit(self.repo, "a.sh")
+        self.record_range(f"{base}..{u1}")
+        fix = self.commit(self.repo, "a.sh")
+        self.dispose("9.1-r1-01", "--fixed", fix)
+        p = self.record_range(f"{u1}..{fix}", findings=[
+            self.finding("blocking", "still swallowed", reopens="9.1-r1-01"),
+            self.finding("should-fix", "typo link", reopens="9.1-r7-01"),
+            self.finding("note", "no link", reopens=None)])
+        self.assertEqual(p.returncode, 0, p.stderr)
+        mine = {f["finding_id"]: f for f in self.findings() if f["review_id"] == "9.1-r2"}
+        self.assertEqual(mine["9.1-r2-01"]["reopens"], "9.1-r1-01")
+        self.assertNotIn("reopens", mine["9.1-r2-02"])   # an unknown ID: kept, link dropped, WARN
+        self.assertIn("reopens 9.1-r7-01`: no such finding in 9.1 — link dropped", p.stderr)
+        self.assertNotIn("reopens", mine["9.1-r2-03"])
+        self.assertIn("reopens 9.1-r1-01", read(os.path.join(self.scope, "artifacts", "review-9.1-r2.md")))
+        # a value that is not a finding ID is a malformed answer — nothing recorded
+        p = self.record_range(f"{u1}..{fix}", findings=[self.finding("note", "x", reopens="see above")])
+        self.assertEqual(p.returncode, 3, p.stdout)
+        self.assertIn("not a finding ID", p.stderr)
+
 if __name__ == "__main__":
     unittest.main()

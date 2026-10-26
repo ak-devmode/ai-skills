@@ -176,6 +176,15 @@ def schema_problems(doc, schema, path="answer"):
     judge.py) run this before any semantic check, so a wrong container or a missing field
     is exit 3 and never a crash or a partial write (review 5.2-r1-06)."""
     t = schema.get("type")
+    if isinstance(t, list):
+        # a nullable field (`["string", "null"]`): codex's strict output schemas require every
+        # property, so an optional one is written as required-or-null (review-output `reopens`)
+        if doc is None and "null" in t:
+            return []
+        rest = [x for x in t if x != "null"]
+        if len(rest) != 1:
+            return [f"{path}: schema type {t!r} is not supported"]  # fail closed on a schema we can't read
+        return schema_problems(doc, dict(schema, type=rest[0]), path)
     if t == "integer":
         if not isinstance(doc, int) or isinstance(doc, bool):
             return [f"{path} is not an integer"]

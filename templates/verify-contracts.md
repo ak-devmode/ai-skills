@@ -351,7 +351,9 @@ apply the rules the lineage started with. An unstamped or malformed root is vers
 (judge line, §4.6) · `range` (`{repo: "base..head"}`) · `file` · `line` · `category`
 (`engine | domain | local-maxima | silent-failure | dirty-comment | doc-claim | fail-open`) ·
 `group` (the domain rule section, else empty) · `severity` (`blocking | should-fix | note`) ·
-`text` · `fix`. IDs are assigned in severity order.
+`text` · `fix` · `target` · `capped` · `reopens` (only when set: the `finding_id` of an
+earlier finding of the unit this one is — the original defect not fully fixed; `record` drops a
+link to an unknown ID with a warning, review/SKILL.md §5.1). IDs are assigned in severity order.
 
 6.2 **`disposition`** records: `schema` · `ts` · `finding_id` · `disposition`
 (`fixed | rejected | deferred | accepted | reframed`) · `sha` (required for `fixed` and `reframed`, the full

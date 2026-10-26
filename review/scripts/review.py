@@ -229,18 +229,16 @@ def prepare_lean(a, n, proj, out_dir):
     passes.append(f"lean: {inlined} of {total} file(s) inlined")
     with open(LEAN_PROMPT, encoding="utf-8") as fh:
         text = fh.read()
-    # DIFF goes last: a diff may itself contain `{{…}}`, and nothing after it is substituted
     fill = {"REPO": os.path.realpath(a.repo), "PROJECT": proj, "RANGE": a.range, "COMMITS": str(n), "LOG": log,
             "SECTIONS": "\n\n".join(sections),
-            "NOT_COVERED": "\n".join(f"- {u}" for u in uncovered) or "- (nothing — the whole range is inlined)"}
-    for k, v in fill.items():
-        text = text.replace("{{" + k + "}}", v)
-    text = text.replace("{{DIFF}}", diff).rstrip() + "\n\n## Output" + output_spec
+            "NOT_COVERED": "\n".join(f"- {u}" for u in uncovered) or "- (nothing — the whole range is inlined)",
+            "ROUND": a.round_text, "PREVIOUS": a.previous, "DIFF": diff}
+    text = fill_template(text, fill).rstrip() + "\n\n## Output" + output_spec
     bundle = os.path.join(out_dir, "review-lean-bundle.md")
     with open(bundle, "w", encoding="utf-8") as fh:
         fh.write(text)
     print(f"prompt: {bundle}\nschema: {SCHEMA}\npasses: {' · '.join(passes)}\nrange: {a.range}\n"
-          f"effort: n/a (lean — one Sonnet pass)\nuncovered: {len(uncovered)} item(s) — record recomputes them")
+          f"effort: n/a (lean — one Sonnet pass)\nround: {a.round}\nuncovered: {len(uncovered)} item(s) — record recomputes them")
     return vl.EXIT_PASS
 
 
@@ -312,6 +310,75 @@ def run_checks(repo, rng, skip=False):
     return intro + "\n\n" + "\n".join(blocks), "checks: " + " · ".join(marks)
 
 
+ROUND_ONE = ("Round 1 of this review lineage: new code. Report every defect you find, not a top few — "
+             "this is the round where fixing is cheapest. Each `fix` names the class of defect to fix and "
+             "where its siblings are, not only the example. `reopens` is null.")
+ROUND_FIX = ("Round {n} of this review lineage: a re-review after fixes. The earlier findings and their "
+             "dispositions are below.\n"
+             "- For each `fixed` one, check the fix resolved it. If the original defect is still there, or "
+             "comes back on the fix's own lines, report it with `reopens` set to that finding's ID.\n"
+             "- Do not raise a `rejected` finding again unless you have new evidence, and name that "
+             "evidence in `text`.\n"
+             "- Fix code is where defects concentrate: read each fix's own lines as closely as the "
+             "original change.\n"
+             "- From round 2 a note gets at most one batch fix and no re-review: report notes, but never "
+             "hold the verdict on one.")
+
+
+def disposition_line(d):
+    """One finding's latest disposition, for the round-aware prompt."""
+    if d is None:
+        return "undisposed"
+    kind, sha, why = d.get("disposition"), (d.get("sha") or "")[:10], d.get("reason")
+    return f"{kind}" + (f" {sha}" if sha else "") + (f" — {why}" if why else "")
+
+
+def round_context(a, key):
+    """((round, ROUND text, PREVIOUS text), None) or (None, error code): the lineage round the
+    review `prepare` sets up will have, and the findings it re-reads — every finding of the
+    previous round, and every rejection from earlier rounds — with their latest dispositions.
+    Without --scope/--unit it cannot know the lineage: it says so and gives round 1, the prompt
+    that asks for the most (review/SKILL.md §5.1)."""
+    if not (a.scope and a.unit):
+        print("(no --scope/--unit: the lineage round is unknown — round 1's prompt)", file=sys.stderr)
+        return (1, ROUND_ONE, "- (none — prepare ran without --scope/--unit)"), None
+    recs = vl.read_jsonl(os.path.join(a.scope, "artifacts", f"review-{a.unit}.jsonl"))
+    code = check_continues(a, recs, key)
+    if code is not None:
+        return None, code
+    taken = [int(m.group(1)) for r in recs for m in [re.match(rf"^{re.escape(a.unit)}-r(\d+)$",
+                                                               str(r.get("review_id", "")))] if m]
+    me = f"{a.unit}-r{max(taken, default=0) + 1}"
+    base, _, head = a.range.partition("..")
+    probe = {"record": "review", "review_id": me, "range": {key: a.range}, "shas": {"base": base, "head": head}}
+    if getattr(a, "continues", None):
+        probe["continues"] = a.continues
+    _, lin = rounds(recs + [probe], a.unit)
+    root, rnd = lin[me]
+    if rnd < 2:
+        return (rnd, ROUND_ONE, "- (none — new code)"), None
+    latest = {}
+    for r in recs:
+        if r.get("record") == "disposition":
+            latest[r.get("finding_id")] = r
+    lines = []
+    for f in recs:
+        if f.get("record") != "finding" or lin.get(f.get("review_id"), ("", 0))[0] != root:
+            continue
+        d = latest.get(f.get("finding_id"))
+        if lin[f["review_id"]][1] == rnd - 1 or (d or {}).get("disposition") == "rejected":
+            text = " ".join(str(f.get("text", "")).split())
+            lines.append(f"- `{f['finding_id']}` [{f.get('severity')}] `{f.get('file')}:{f.get('line')}` — {text} "
+                         f"→ **{disposition_line(d)}**")
+    return (rnd, ROUND_FIX.format(n=rnd), "\n".join(lines) or "- (the previous round had no findings)"), None
+
+
+def fill_template(text, fill):
+    """Substitute `{{KEY}}` placeholders in ONE pass: a value (a diff, a check's output, a
+    finding's text) may itself contain `{{…}}`, and must never be substituted again."""
+    return re.sub(r"\{\{([A-Z_]+)\}\}", lambda m: fill.get(m.group(1), m.group(0)), text)
+
+
 def cmd_prepare(a):
     n, code = count_range(a.repo, a.range)
     if code is not None:
@@ -320,6 +387,10 @@ def cmd_prepare(a):
     if code is not None:
         return code
     proj = project(a.repo)
+    ctx, code = round_context(a, repo_key(main_worktree(a.repo)))
+    if code is not None:
+        return code
+    a.round, a.round_text, a.previous = ctx
     if a.lean:
         out_dir = a.out_dir or tempfile.mkdtemp(prefix="review-")
         os.makedirs(out_dir, exist_ok=True)
@@ -351,11 +422,9 @@ def cmd_prepare(a):
     passes.append("lenses ✓")
     checks, checks_line = run_checks(a.repo, a.range, skip=a.no_checks)
     fill = {"REPO": os.path.realpath(a.repo), "PROJECT": proj, "RANGE": a.range, "COMMITS": str(n),
-            "RULES": "\n".join(rules), "CHECKS": checks}
+            "RULES": "\n".join(rules), "CHECKS": checks, "ROUND": a.round_text, "PREVIOUS": a.previous}
     with open(PROMPT, encoding="utf-8") as fh:
-        text = fh.read()
-    for k, v in fill.items():
-        text = text.replace("{{" + k + "}}", v)
+        text = fill_template(fh.read(), fill)
     out_dir = a.out_dir or tempfile.mkdtemp(prefix="review-")
     os.makedirs(out_dir, exist_ok=True)
     prompt = os.path.join(out_dir, "review-prompt.md")
@@ -363,7 +432,7 @@ def cmd_prepare(a):
         fh.write(text)
     effort, why = vl.effort_for([vl.diff_stat(a.repo, a.range)])
     print(f"prompt: {prompt}\nschema: {SCHEMA}\npasses: {' · '.join(passes)}\nrange: {a.range}\n"
-          f"effort: {effort} ({why})\n{checks_line}")
+          f"effort: {effort} ({why})\nround: {a.round}\n{checks_line}")
     return vl.EXIT_PASS
 
 
@@ -394,7 +463,16 @@ def cap_scaffolding(doc):
             f["target"] = "shipped"
 
 
+FINDING_ID = re.compile(r"^\S+-r\d+-\d+$")  # `<unit>-r<n>-<nn>` (build)
+
+
 def validate(doc):
+    # `reopens` is required-or-null for codex's strict schema; the Claude fallback and answers
+    # written before it may omit it, which means null — not a malformed answer
+    if isinstance(doc, dict) and isinstance(doc.get("findings"), list):
+        for f in doc["findings"]:
+            if isinstance(f, dict):
+                f.setdefault("reopens", None)
     with open(SCHEMA, encoding="utf-8") as fh:
         problems = vl.schema_problems(doc, json.load(fh))
     if problems:
@@ -408,6 +486,8 @@ def validate(doc):
             problems.append(f"finding {i} category {f.get('category')!r}")
         if not str(f.get("text", "")).strip():
             problems.append(f"finding {i} has no text")
+        if f.get("reopens") is not None and not FINDING_ID.match(f["reopens"]):
+            problems.append(f"finding {i} reopens {f['reopens']!r}, not a finding ID")
     if doc["verdict"] not in ("SHIP", "SHIP AFTER BLOCKING", "DO NOT SHIP"):
         problems.append(f"verdict {doc['verdict']!r}")
     return problems
@@ -423,6 +503,7 @@ def render(doc, findings, header):
             tag = f"{f['category']}{' ' + f['group'] if f.get('group') else ''}" + (
                 " · scaffolding, capped from blocking" if f.get("capped") else
                 " · scaffolding" if f.get("target") == "scaffolding" else "")
+            tag += f" · reopens {f['reopens']}" if f.get("reopens") else ""
             lines.append(f"- **{f['finding_id']}** `{f['file']}:{f['line']}` ({tag}) — {f['text']}"
                          + (f" → {f['fix']}" if f.get("fix") else ""))
         lines.append("")
@@ -487,6 +568,7 @@ def cmd_record(a):
         code = check_continues(a, vl.read_jsonl(log), key)
         if code is not None:
             return code
+        unlink_reopens(ordered, vl.read_jsonl(log), a.unit)
         records, findings, report = build(a, doc, ordered, key, n, review_id)
         vl.append_verified(log, records)
         out = os.path.join(art, f"review-{review_id}.md")
@@ -496,6 +578,10 @@ def cmd_record(a):
     repo, rnd = review_round(recs, a.unit, review_id)
     print(f"review {review_id}: {len(findings)} finding(s) logged -> {log}\nreport: {out}\nverdict: {doc['verdict']}\n"
           f"round: {rnd} of {repo} in {a.unit} (this review's lineage)")
+    notes = sum(f["severity"] == "note" for f in findings)
+    if notes and budgeted(recs, a.unit, review_id)[1]:
+        print(f"[BUDGET] round {rnd}: {notes} note(s) — at most one batch fix, never re-reviewed; or "
+              "`dispose --accepted \"<why it stands>\"` (review/SKILL.md §5.1)")
     for line in convergence(recs, a.unit) + cascades(recs, review_id, a.repo, key, a.range.split("..")[1]):
         print(line)
     return vl.EXIT_PASS
@@ -513,6 +599,21 @@ def check_continues(a, recs, key):
                    f"grep '\"record\": \"review\"' {os.path.join(a.scope, 'artifacts', f'review-{a.unit}.jsonl')}",
                    code=vl.EXIT_USAGE)
     return None
+
+
+def unlink_reopens(findings, recs, unit):
+    """Drop a `reopens` that names no earlier finding of `unit`, with a WARN. Its input failing
+    (a typo, another unit's ID) fails open on purpose: the finding itself still gates; only the
+    chain link is lost, and refusing the record would throw away a whole paid review over a
+    cross-reference (review/SKILL.md §5.1)."""
+    known = {r.get("finding_id") for r in recs if r.get("record") == "finding"}
+    for f in findings:
+        if f.get("reopens") and f["reopens"] not in known:
+            print(vl.message("WARN", f"finding `reopens {f['reopens']}`: no such finding in {unit} — link dropped",
+                             f"a finding ID of an earlier {unit} review", f["reopens"], f"{f['file']}:{f['line']}",
+                             "tooling", "the finding is recorded; the reopen chain cannot see it", DOCS),
+                  file=sys.stderr)
+            f["reopens"] = None
 
 
 def lean_uncovered(a):
@@ -564,6 +665,14 @@ def rounds(recs, unit):
     revs = reviews_of(recs, unit)
     return revs, vl.review_lineage([(e["id"], e["repo"], e["base"], e["head"]) for e in revs],
                                    lambda key: os.path.join(vl.PROJECTS, key), *vl.lineage_links(recs))
+
+
+def budgeted(recs, unit, review_id):
+    """(round, True when `review_id`'s notes are under the §5.1 findings budget): round 2+ of a
+    lineage rooted under rules 2+ (decision 65 — an older lineage keeps the old rule)."""
+    _, lin = rounds(recs, unit)
+    root, rnd = lin.get(review_id, ("", 0))
+    return rnd, rnd >= 2 and vl.lineage_rules(recs, lin).get(review_id, 1) >= 2
 
 
 def review_round(recs, unit, review_id):
@@ -670,7 +779,8 @@ def build(a, doc, ordered, key, n, review_id):
                 "finding_id": f["finding_id"], "reviewer": a.reviewer, "range": {key: a.range},
                 "file": f["file"], "line": f["line"], "category": f["category"], "group": f.get("group", ""),
                 "severity": f["severity"], "text": f["text"], "fix": f.get("fix", ""),
-                "target": f.get("target", "shipped"), "capped": bool(f.get("capped"))} for f in findings]
+                "target": f.get("target", "shipped"), "capped": bool(f.get("capped")),
+                **({"reopens": f["reopens"]} if f.get("reopens") else {})} for f in findings]
     lean = (f" (lean: single Sonnet pass over one bundle, no specialists, diff capped at {LEAN_CAP:,} lines)"
             if a.reviewer.startswith("claude-lean ") else "")
     degraded = [] if a.reviewer.startswith("codex ") else [
@@ -794,6 +904,13 @@ def _dispose(a, log):
                              "a fix that is still in the code", f"revert {reverted[:10]}", a.finding, "code",
                              "if a reframe replaced it, record `--reframed \"<what changed>\" --commit <sha> --by "
                              "judge|user` instead", DOCS), file=sys.stderr)
+        batch = note_batches(recs, a.unit, f, fix["sha"])
+        if batch:
+            print(vl.message("WARN", f"a second batch fix for {f.get('review_id')}'s notes",
+                             "one batch fix for a fix round's notes (review/SKILL.md §5.1)",
+                             f"already fixed in {', '.join(s[:10] for s in batch)}", a.finding, "code",
+                             "fold note fixes into one commit; `--accepted \"<why it stands>\"` the rest", DOCS),
+                  file=sys.stderr)
         if fix["predates"]:
             return err(f"`fixed {a.fixed}` predates the finding: {fix['predates']}",
                        f"a commit made after review {f.get('review_id')} raised {a.finding}", fix["sha"],
@@ -864,6 +981,22 @@ def _dispose(a, log):
     vl.append_verified(log, [rec])
     print(f"{a.finding}: {kind} {rec['sha'] or reason}" + (f" in {fix['repo']} (via {fix['via']})" if fix else ""))
     return vl.EXIT_PASS
+
+
+def note_batches(recs, unit, f, sha):
+    """The other commits already recorded as fixes for notes of `f`'s review, when `f` is a note
+    under the findings budget and `sha` is not one of them: a WARN, never a refusal — refusing a
+    correct fix pushes it toward being misrecorded, and the gate never re-reviews these notes."""
+    if f.get("severity") != "note" or not budgeted(recs, unit, f.get("review_id"))[1]:
+        return []
+    notes = {r.get("finding_id") for r in recs if r.get("record") == "finding"
+             and r.get("review_id") == f.get("review_id") and r.get("severity") == "note"}
+    latest = {}
+    for r in recs:
+        if r.get("record") == "disposition" and r.get("finding_id") in notes - {f.get("finding_id")}:
+            latest[r["finding_id"]] = r
+    shas = {d["sha"] for d in latest.values() if d.get("disposition") == "fixed" and d.get("sha")}
+    return [] if sha in shas else sorted(shas)
 
 
 REFRAMED_BY = re.compile(r"^(judge|user)\b")
@@ -1101,6 +1234,9 @@ def main(argv):
     p.add_argument("--out-dir")
     p.add_argument("--lean", action="store_true", help="write one self-contained bundle for a single Sonnet pass")
     p.add_argument("--no-checks", action="store_true", help="do not run the repo's .review-checks")
+    p.add_argument("--scope", help="with --unit: fill the lineage round and the earlier findings into the prompt")
+    p.add_argument("--unit")
+    p.add_argument("--continues", metavar="REVIEW_ID", help="as record's --continues; pass the same to both")
     r = sub.add_parser("record")
     for opt in ("--repo", "--range", "--reviewer", "--input"):
         r.add_argument(opt, required=True)

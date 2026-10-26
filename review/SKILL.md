@@ -87,10 +87,12 @@ a bad `AI_SKILLS_REVIEW_MODE`) is a stop: report its message and don't pick a mo
 
 ## 2. The Gate — codex
 
-2.1 **Render.** `$RV prepare --repo $REPO --range $RANGE [--kalpa-only|--engine-only]` →
-prints `prompt:`, `schema:`, a `passes:` line, a `range:` line — the range resolved to
-full SHAs, which the prompt uses — and an `effort:` line; keep all five, pass that `range:`
-to §2.4 and that effort to §2.3.
+2.1 **Render.** `$RV prepare --repo $REPO --range $RANGE --scope $SCOPE --unit $UNIT
+[--continues <review id>] [--kalpa-only|--engine-only]` → prints `prompt:`, `schema:`, a
+`passes:` line, a `range:` line — the range resolved to full SHAs, which the prompt uses —
+an `effort:` line and a `round:` line; keep them all, pass that `range:` to §2.4 and that
+effort to §2.3. Without `--scope`/`--unit` the round is unknown and the prompt is round 1's
+(§5.1).
 
 2.1.1 **Checks, run for the reviewer.** `prepare` also runs the repo's declared checks and
 puts each one's command, exit status and the end of its output in the prompt; its last
@@ -168,7 +170,11 @@ rule. (The first real run hit exactly this and moved on because the exit code wa
 
 3.5 **Record through the same writer.** Write the fallback's findings as JSON matching
 `review/schemas/review-output.schema.json` and run §2.4 with the `claude-fallback …`
-reviewer line. The fallback never gets its own log format.
+reviewer line. The fallback never gets its own log format. gstack grades on two levels, not
+this schema's three, so map its output: CRITICAL → `blocking`, INFORMATIONAL →
+`should-fix`, and a finding that is only process (a comment, a stale table, doc wording) →
+`note`. Read §2.1's prompt for the round and the earlier findings, and set `reopens` the
+same way.
 
 ---
 
@@ -238,6 +244,20 @@ loops run without a per-round check-in (Alex's standing approval):
 
 - **Rounds 1–3:** fix every finding you do not disagree with, dispose it, review the fix
   commits again, keep going. Reject, with the reason, what you do disagree with.
+- **The findings budget.** Round 1 is uncapped and is where the work goes: the reviewer
+  reports every defect, each `fix` naming the class, not only the example. From round 2,
+  `blocking` and `should-fix` findings are still fixed with no cap (later-round findings are
+  mostly defects in the fixes themselves), but notes get **at most one batch fix and no
+  re-review** — `record` prints `[BUDGET] round <k>: <n> note(s)`, `dispose` warns on a
+  second fix commit for one review's notes, and the gate never wants an off-anchor note fix
+  reviewed again. A note may be `--accepted` at any round.
+- **The prompt knows its round.** Pass `prepare` the same `--scope`/`--unit` (and
+  `--continues`) as `record`: it prints `round: <k>` and fills the lineage round and the
+  earlier findings with their dispositions into the prompt — the previous round's findings
+  and every rejection before it. The reviewer checks each fix resolved its finding, raises a
+  rejection again only with new evidence, and sets `reopens: <finding ID>` on a finding that
+  is an earlier one not fully fixed. `record` keeps a `reopens` naming no finding of the unit
+  as a plain finding, drops the link and warns.
 - **SHIP proceeds.** A round whose verdict is `SHIP`, once every finding is dispositioned
   and `verdict-gate.py` wants nothing re-reviewed (`rereview:` — an off-anchor fix still
   needs its round), goes straight to `/verify`. Record the outcomes yourself:
@@ -346,8 +366,9 @@ cheap path; when a lean report lists uncovered files that matter, say that `--fu
 Runs when §1.4 printed `mode: lean (…)`. The rules are the same files; what changes is
 who reads them and how much. The reviewer gets one packed file and no tools.
 
-7.1 **Render the bundle.** `$RV prepare --repo $REPO --range $RANGE --lean [--kalpa-only|--engine-only]`
-prints `prompt:` (the bundle), `schema:`, `passes:`, `range:` and an `uncovered:` count;
+7.1 **Render the bundle.** `$RV prepare --repo $REPO --range $RANGE --lean --scope $SCOPE --unit $UNIT
+[--kalpa-only|--engine-only]` prints `prompt:` (the bundle), `schema:`, `passes:`, `range:`,
+`round:` (§5.1) and an `uncovered:` count;
 keep them all. The bundle inlines the commits, the repo's CLAUDE.md and ARCHITECTURE.md at
 the range's head (≤ 24 KB each), gstack's checklist, only this project's `domain.md`
 sections, the lenses, and the diff. The diff is capped at 1,500 changed lines. Files are

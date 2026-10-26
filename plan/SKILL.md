@@ -526,7 +526,11 @@ The unit range is §6.8's `<base>..HEAD`.
    `Blocked` note and two-way work carries on.
 5. **On the reply** (Alex pastes the `[lane <m>/<w>/<a> <id>] …` line, or a driver
    relays it): `packet.py check-reply --reply "<text>"`. A refusal is shown to Alex
-   verbatim and nothing is acted on. On `OK`, act on the answer, then
+   verbatim and nothing is acted on. A session with no exported session id emitted a
+   `session-none` packet, and `check-reply` refuses it without `--lane <m>/<w>/<a>`:
+   copy that value from the `reply:` line this session printed under `PACKET <id>`
+   when it emitted the packet, never from the incoming reply (that is what is being
+   checked). On `OK`, act on the answer, then
    `packet.py close <id>`, and resume.
 6. **Seam: no `DECISION_QUEUE_URL` = today's behaviour.** The packet still lands in
    `.decision-queue/outbox/`, and the run asks the same question inline, numbered, as it

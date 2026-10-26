@@ -295,8 +295,11 @@ panes. Workers never `SendMessage` the supervisor.
 A lane's question to Alex is a packet, not prose in a pane. `scripts/README.md` has
 `packet.py`'s and `door.py`'s contracts; this is the wiring.
 - **One-way door** (door.py says so, or the brief does not settle it): the lane runs
-  `packet.py new --door one-way --type generic|data-model --title … --unit <task>
-  --option … --recommended N --body … --blocks … --range <base>..HEAD`. **Always pass
+  `packet.py new --door one-way --type generic --title … --unit <task>
+  --option … --recommended N --body … --blocks … --range <base>..HEAD` (a data-model
+  packet takes `--type data-model --payload-file <F>` instead of `--body`; F is JSON
+  `{"tables":[{"name","change","columns":[{"name","before","after","changed"}]}]}`,
+  see `scripts/tests/fixtures/packets/valid/data-model-one-way.json`). **Always pass
   `--range`**: it is what makes door.py promote a mislabelled two-way claim (a migration
   under `--door two-way` goes out one-way). The lane prints `PARKED <id>` and stops that
   line of work. **While parked it makes no commits outside `plans/`** — `check-reply`

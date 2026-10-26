@@ -504,8 +504,11 @@ also emits a packet. `scripts/README.md` has `packet.py`'s and `door.py`'s contr
 The unit range is §6.8's `<base>..HEAD`.
 1. **One-way** (door.py classifies the range one-way, or the plan does not settle the
    call): `~/Projects/ai-skills/scripts/packet.py new --door one-way --type
-   generic|data-model --title … --unit {N}.{P} --option … --recommended N --body …
-   --blocks "Task X.Y" --range <base>..HEAD`. **Always pass `--range`**: door.py then
+   generic --title … --unit {N}.{P} --option … --recommended N --body …
+   --blocks "Task X.Y" --range <base>..HEAD` (a data-model packet takes `--type
+   data-model --payload-file <F>` instead of `--body`; F is JSON `{"tables":[{"name",
+   "change","columns":[{"name","before","after","changed"}]}]}`, see
+   `scripts/tests/fixtures/packets/valid/data-model-one-way.json`). **Always pass `--range`**: door.py then
    promotes a mislabelled claim, and without it nothing checks the door. Print
    `PACKET <id>` (the script does) and `PARKED <id>`, then stop that line of work.
    **While parked, commit nothing outside `plans/` in that repo** — progress and ledger

@@ -311,11 +311,21 @@ A lane's question to Alex is a packet, not prose in a pane. `scripts/README.md` 
 - **Only the driver POSTs.** Every lane writes to its own worktree's
   `.decision-queue/outbox/`; codex and review panes have no queue env or network, so one
   path serves all. On each wake: `packet.py flush --driver --outbox <lane worktree>/.decision-queue/outbox`
-  (repeat `--outbox` per lane). A `Blocked` note (queue down) parks nothing: print the
+  (repeat `--outbox` per local lane). A `Blocked` note (queue down) parks nothing: print the
   card in your pane with the note, carry on with two-way work; the next flush re-sends.
+- **Box lanes: run packet.py ON the box, over ssh (MBA → box only, never the reverse).**
+  A box lane's outbox is on homelab2026 and packet.py has no remote transport. Flush with
+  `ssh <box> 'cd <remote worktree> && ~/Projects/ai-skills/scripts/packet.py flush --driver'`
+  — no `--outbox`: it resolves to that worktree's own outbox. The driver still initiates
+  every POST; the box reaches the queue on its own tailnet, so `DECISION_QUEUE_URL` must
+  be set in the box's ssh environment. Never pass a local-looking `--outbox` path for a
+  box lane: `flush` silently skips a configured outbox that does not exist and reports
+  nothing sent. Check the output names the packets you expect.
 - **Reply path.** Alex pastes the prefilled reply (opens `[lane <m>/<w>/<a> <id>]`) into
   the driver's pane. The driver runs `packet.py check-reply --outbox <that lane's outbox>
-  --lane <m>/<w>/<a> --reply "<pasted text>"`, taking `--lane` from the `reply:` line the
+  --lane <m>/<w>/<a> --reply "<pasted text>"` (box lane: the same command inside
+  `ssh <box> 'cd <remote worktree> && …'`, so the lane's own HEAD is checked on the box;
+  quote the reply for the remote shell), taking `--lane` from the `reply:` line the
   lane printed in its OWN pane under `PACKET <id>` — never from the pasted text, which is
   what is being checked. A refusal goes back to Alex verbatim; nothing is relayed. On
   `OK`, relay with `herdr agent prompt <lane> "<reply>"` (+ `enter`, §7.2). The lane runs

@@ -27,10 +27,15 @@ Usage:
                     the code: any round, any severity; the replacing commit is reviewed as a new lineage)
   review.py accept  --scope DIR --unit N.P --by NAME     (the outcomes accepted — the user, or the standing policy, §6.4)
   review.py misfiled --scope DIR --unit N.P              (rejections that say "fixed/resolved <sha>" → dispose lines)
+  review.py reframe-prepare --scope DIR --unit N.P --review ID [--objective TEXT] [--out-dir DIR]
+                    the fresh judge's prompt for review ID's reframe (SKILL.md §5.2); run it through codex-exec.py
+  review.py reframe-record  --scope DIR --unit N.P --review ID --judge LINE [--input FILE]
+                    the judge's answer: an accept stands only with the objective met and a named deletion
 Output: prepare prints `prompt:`, `schema:`, `passes:`, `range:`, `effort:` (+ an `uncovered:` count
         with --lean; record recomputes that list for a claude-lean reviewer); record prints the report path (or the
-        report, with no scope); dispose prints the disposition.
-Exit:   0 ok · 1 disposition refused · 2 usage · 3 could not evaluate (empty range, malformed answer)
+        report, with no scope); dispose prints the disposition; reframe-prepare prints `prompt:`, `schema:`,
+        `effort:`; reframe-record prints a `[REFRAME]` verdict line and a `[DECISION]` line per re-opened decision.
+Exit:   0 ok · 1 disposition refused · 2 usage · 3 could not evaluate (empty range, malformed answer, no objective)
 """
 
 import argparse
@@ -56,6 +61,9 @@ import verify_lib as vl  # noqa: E402
 PROMPT = os.path.join(SKILL, "prompts", "review.md")
 LEAN_PROMPT = os.path.join(SKILL, "prompts", "review-lean.md")
 SCHEMA = os.path.join(SKILL, "schemas", "review-output.schema.json")
+REFRAME_PROMPT = os.path.join(SKILL, "prompts", "reframe-judge.md")
+REFRAME_SCHEMA = os.path.join(SKILL, "schemas", "reframe-judge.schema.json")
+JUDGE_PY = os.path.join(os.path.dirname(SKILL), "verify", "scripts", "judge.py")
 DOMAIN = os.path.join(SKILL, "rules", "domain.md")
 LENSES = os.path.join(SKILL, "rules", "lenses.md")
 ENGINE = os.path.expanduser("~/.claude/skills/gstack/review/checklist.md")
@@ -470,6 +478,7 @@ def validate(doc):
     # `reopens` is required-or-null for codex's strict schema; the Claude fallback and answers
     # written before it may omit it, which means null — not a malformed answer
     if isinstance(doc, dict) and isinstance(doc.get("findings"), list):
+        doc.setdefault("reframe", None)   # likewise: no reframe stated is none proposed
         for f in doc["findings"]:
             if isinstance(f, dict):
                 f.setdefault("reopens", None)
@@ -488,6 +497,14 @@ def validate(doc):
             problems.append(f"finding {i} has no text")
         if f.get("reopens") is not None and not FINDING_ID.match(f["reopens"]):
             problems.append(f"finding {i} reopens {f['reopens']!r}, not a finding ID")
+    rf = doc["reframe"]
+    if rf is not None:
+        if not rf["proposal"].strip() or not rf["deletes"].strip():
+            problems.append("reframe needs its proposal and what it deletes (null when there is none)")
+        for x in rf["removes"]:
+            m = re.match(r"^#(\d+)$", x)
+            if not (FINDING_ID.match(x) or m and 1 <= int(m.group(1)) <= len(doc["findings"])):
+                problems.append(f"reframe removes {x!r}: neither `#<n>` of this answer's findings nor a finding ID")
     if doc["verdict"] not in ("SHIP", "SHIP AFTER BLOCKING", "DO NOT SHIP"):
         problems.append(f"verdict {doc['verdict']!r}")
     return problems
@@ -504,12 +521,17 @@ def render(doc, findings, header):
                 " · scaffolding, capped from blocking" if f.get("capped") else
                 " · scaffolding" if f.get("target") == "scaffolding" else "")
             tag += f" · reopens {f['reopens']}" if f.get("reopens") else ""
+            tag += " · advisory (fallback reviewer)" if f.get("advisory") else ""
             lines.append(f"- **{f['finding_id']}** `{f['file']}:{f['line']}` ({tag}) — {f['text']}"
                          + (f" → {f['fix']}" if f.get("fix") else ""))
         lines.append("")
     lines += ["## Checked and clear", "", ", ".join(doc["checked_clear"]) or "—", "",
               "## Not applicable", "", ", ".join(doc["not_applicable"]) or "—", "",
-              f"**Verdict:** {doc['verdict']}", "", "## What this review did not cover", ""]
+              f"**Verdict:** {doc['verdict']}", "", "## Reframe", ""]
+    rf = doc.get("reframe")
+    lines += [f"{rf['proposal']}", "", f"Deletes: {rf['deletes']} · removes: {', '.join(rf['removes']) or '—'}"
+              ] if rf else ["None proposed — the reviewer saw no simpler design that removes several findings."]
+    lines += ["", "## What this review did not cover", ""]
     lines += [f"- {c}" for c in doc["cannot_do"]] or ["- (reviewer listed nothing)"]
     return lines
 
@@ -568,7 +590,7 @@ def cmd_record(a):
         code = check_continues(a, vl.read_jsonl(log), key)
         if code is not None:
             return code
-        unlink_reopens(ordered, vl.read_jsonl(log), a.unit)
+        unlink_reopens(ordered, vl.read_jsonl(log), a.unit, doc.get("reframe"))
         records, findings, report = build(a, doc, ordered, key, n, review_id)
         vl.append_verified(log, records)
         out = os.path.join(art, f"review-{review_id}.md")
@@ -585,6 +607,10 @@ def cmd_record(a):
     for line in convergence(recs, a.unit) + cascades(recs, review_id, a.repo, key, a.range.split("..")[1]) \
             + chains(recs, a.unit, review_id):
         print(line)
+    if doc.get("reframe"):
+        print(f"[REFRAME] {review_id} proposes a simpler design that removes {len(doc['reframe']['removes'])} "
+              f"finding(s): judge it before fixing them — `review.py reframe-prepare --scope {a.scope} --unit "
+              f"{a.unit} --review {review_id}` (review/SKILL.md §5.2)")
     return vl.EXIT_PASS
 
 
@@ -602,7 +628,7 @@ def check_continues(a, recs, key):
     return None
 
 
-def unlink_reopens(findings, recs, unit):
+def unlink_reopens(findings, recs, unit, reframe=None):
     """Drop a `reopens` that names no earlier finding of `unit`, with a WARN. Its input failing
     (a typo, another unit's ID) fails open on purpose: the finding itself still gates; only the
     chain link is lost, and refusing the record would throw away a whole paid review over a
@@ -615,6 +641,13 @@ def unlink_reopens(findings, recs, unit):
                              "tooling", "the finding is recorded; the reopen chain cannot see it", DOCS),
                   file=sys.stderr)
             f["reopens"] = None
+    if reframe:   # the same for an earlier finding a reframe says it removes
+        gone = [x for x in reframe["removes"] if not x.startswith("#") and x not in known]
+        if gone:
+            print(vl.message("WARN", f"reframe removes {', '.join(gone)}: no such finding in {unit} — dropped",
+                             f"finding IDs of earlier {unit} reviews", ", ".join(gone), "reframe.removes",
+                             "tooling", "the reframe is recorded without them", DOCS), file=sys.stderr)
+            reframe["removes"] = [x for x in reframe["removes"] if x not in gone]
 
 
 def lean_uncovered(a):
@@ -743,7 +776,7 @@ def chains(recs, unit, review_id):
             walk.append(link[walk[-1]])
         if len(walk) >= 3:
             out.append(f"[CHAIN] {' reopens '.join(walk)}: the fix failed twice — stop patching and take the "
-                       "reframe prompt (review/SKILL.md §5.1 item 4) before another fix")
+                       "reframe prompt (review/SKILL.md §5.2) before another fix")
     return out
 
 
@@ -796,13 +829,24 @@ def foreign(file, repo):
 def build(a, doc, ordered, key, n, review_id):
     """(records, findings, report) for one review: a `review` record, then its findings."""
     ts = now()
-    findings = [dict(f, finding_id=f"{review_id}-{i:02d}") for i, f in enumerate(ordered, 1)]
+    # a fallback's `local-maxima` flag is advisory (SKILL.md §5.2): logged and disposed, never a
+    # stop or a packet — 120 of them in 178 fallback reviews (scope 10 baseline)
+    advisory = not a.reviewer.startswith("codex ")
+    findings = [dict(f, finding_id=f"{review_id}-{i:02d}",
+                     advisory=advisory and f["category"] == "local-maxima") for i, f in enumerate(ordered, 1)]
+    rf = doc.get("reframe")
+    if rf:
+        # `#<n>` is the reviewer's n-th finding; it names the ID that finding was just given
+        assigned = {id(f): g["finding_id"] for f, g in zip(ordered, findings)}
+        rf["removes"] = [assigned[id(doc["findings"][int(x[1:]) - 1])] if x.startswith("#") else x
+                         for x in rf["removes"]]
     records = [{"schema": vl.SCHEMA, "ts": ts, "record": "finding", "review_id": review_id,
                 "finding_id": f["finding_id"], "reviewer": a.reviewer, "range": {key: a.range},
                 "file": f["file"], "line": f["line"], "category": f["category"], "group": f.get("group", ""),
                 "severity": f["severity"], "text": f["text"], "fix": f.get("fix", ""),
                 "target": f.get("target", "shipped"), "capped": bool(f.get("capped")),
-                **({"reopens": f["reopens"]} if f.get("reopens") else {})} for f in findings]
+                **({"reopens": f["reopens"]} if f.get("reopens") else {}),
+                **({"advisory": True} if f["advisory"] else {})} for f in findings]
     lean = (f" (lean: single Sonnet pass over one bundle, no specialists, diff capped at {LEAN_CAP:,} lines)"
             if a.reviewer.startswith("claude-lean ") else "")
     degraded = [] if a.reviewer.startswith("codex ") else [
@@ -823,6 +867,9 @@ def build(a, doc, ordered, key, n, review_id):
               "verdict": doc["verdict"], "mode": a.mode or "", "rules_version": vl.RULES_VERSION}
     if getattr(a, "continues", None):
         review["continues"] = a.continues
+    if rf:
+        records.append({"schema": vl.SCHEMA, "ts": ts, "record": "reframe", "review_id": review_id,
+                        "proposal": rf["proposal"], "removes": rf["removes"], "deletes": rf["deletes"]})
     return [review] + records, findings, report
 
 
@@ -1244,6 +1291,149 @@ def candidate_repos(f):
     return [(p, k) for p, k in out if os.path.isdir(p)]
 
 
+# ---------- reframe judge (SKILL.md §5.2) ---------------------------------------------
+
+def verify_judge():
+    """verify/scripts/judge.py as a module — its section reader and progress-file lookup are
+    the ones /verify's judge uses; one owner (CLAUDE.md §3.5)."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("verify_judge", JUDGE_PY)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def reframe_of(recs, review_id):
+    """The latest `reframe` record of `review_id`, or None."""
+    return next((r for r in reversed(recs) if r.get("record") == "reframe" and r.get("review_id") == review_id),
+                None)
+
+
+def judged_reframes(recs, unit, review_id, verdict):
+    """[(review_id, proposal, reason)] of the reframes in `review_id`'s lineage, other than its
+    own, whose latest judge verdict is `verdict`."""
+    _, lin = rounds(recs, unit)
+    root = lin.get(review_id, (review_id, 0))[0]
+    last = {}
+    for r in recs:
+        if r.get("record") == "reframe-verdict":
+            last[r.get("review_id")] = r
+    return [(rid, (reframe_of(recs, rid) or {}).get("proposal", "?"), v.get("reason", ""))
+            for rid, v in last.items() if rid != review_id and v.get("verdict") == verdict
+            and lin.get(rid, (rid, 0))[0] == root]
+
+
+def cmd_reframe_prepare(a):
+    log = os.path.join(a.scope, "artifacts", f"review-{a.unit}.jsonl")
+    recs = vl.read_jsonl(log)
+    rf = reframe_of(recs, a.review)
+    if rf is None:
+        return err(f"review {a.review} proposed no reframe", "a review whose answer carried `reframe`",
+                   "none", log, f"grep '\"record\": \"reframe\"' {log}", code=vl.EXIT_USAGE)
+    jm = verify_judge()
+    scope_md = os.path.join(a.scope, "scope.md")
+    text = open(scope_md, encoding="utf-8").read() if os.path.isfile(scope_md) else ""
+    # the objective decides condition (i); a judge without it can only guess, so no objective
+    # is exit 3, never a prompt with a hole in it
+    objective = (a.objective or "").strip() or "\n\n".join(jm.md_sections(text, lambda h: h.startswith("## 1.")))
+    if not objective.strip():
+        return err("no objective for the judge", "`--objective \"<the plan's core objective>\"`, or a scope.md "
+                   "with a `## 1.` section", "neither", a.scope, "pass --objective from the plan",
+                   cause="code", code=vl.EXIT_EVAL)
+    decisions = "\n\n".join(jm.md_sections(text, lambda h: h.startswith("## 11."))) or "(no scope.md §11)"
+    prog = jm.progress_file(a.scope)
+    dlog = "\n\n".join(jm.md_sections(open(prog, encoding="utf-8").read(), lambda h: "decisions log" in h.lower())
+                       ) if prog else ""
+    found = {r.get("finding_id"): r for r in recs if r.get("record") == "finding"}
+    line = lambda f: (f"- `{f['finding_id']}` [{f.get('severity')}] `{f.get('file')}:{f.get('line')}` — "
+                      + " ".join(str(f.get("text", "")).split()))
+    rejected = judged_reframes(recs, a.unit, a.review, "rejected")
+    fill = {"OBJECTIVE": objective.strip(), "REVIEW": a.review, "PROPOSAL": rf["proposal"], "CLAIM": rf["deletes"],
+            "REMOVES": "\n".join(line(found[x]) for x in rf["removes"] if x in found) or "- (none named)",
+            "FINDINGS": "\n".join(line(f) for f in found.values() if f.get("review_id") == a.review) or "- (none)",
+            "DECISIONS": decisions, "DECISIONS_LOG": dlog or "(no Decisions Log)",
+            "REJECTED": "\n".join(f"- {rid}: {prop} — rejected: {why}" for rid, prop, why in rejected) or "- (none)"}
+    with open(REFRAME_PROMPT, encoding="utf-8") as fh:
+        prompt_text = fill_template(fh.read(), fill)
+    out_dir = a.out_dir or tempfile.mkdtemp(prefix="reframe-")
+    os.makedirs(out_dir, exist_ok=True)
+    prompt = os.path.join(out_dir, f"reframe-{a.review}.md")
+    with open(prompt, "w", encoding="utf-8") as fh:
+        fh.write(prompt_text)
+    print(f"prompt: {prompt}\nschema: {REFRAME_SCHEMA}\neffort: high (a design judged against recorded decisions)")
+    return vl.EXIT_PASS
+
+
+def cmd_reframe_record(a):
+    if not vl.JUDGE_LINE.match(a.judge):
+        return err("judge line is malformed", "`codex <model>` / `claude-fallback <reason>` / `none <reason>`",
+                   a.judge, "--judge", "pass the line codex-exec.py printed", code=vl.EXIT_USAGE)
+    log = os.path.join(a.scope, "artifacts", f"review-{a.unit}.jsonl")
+    with log_lock(log):
+        recs = vl.read_jsonl(log)
+        if reframe_of(recs, a.review) is None:
+            return err(f"review {a.review} proposed no reframe", "a review whose answer carried `reframe`", "none",
+                       log, f"grep '\"record\": \"reframe\"' {log}", code=vl.EXIT_USAGE)
+        rec = {"schema": vl.SCHEMA, "ts": now(), "record": "reframe-verdict", "review_id": a.review,
+               "judge": a.judge, "deletes": "", "overturns": None, "reopened_decisions": []}
+        if a.judge.startswith("none "):
+            # no judge ran: the reframe is not taken — never accepted by default
+            rec.update(verdict="not-judged", reason=a.judge[5:].strip())
+        else:
+            if not a.input:
+                return err("a judge's answer needs --input", "the JSON the judge wrote", "none", "--input",
+                           "pass the answer file", code=vl.EXIT_USAGE)
+            try:
+                with open(a.input, encoding="utf-8") as fh:
+                    doc = json.load(fh)
+                with open(REFRAME_SCHEMA, encoding="utf-8") as fh:
+                    problems = vl.schema_problems(doc, json.load(fh))
+            except (OSError, ValueError) as exc:
+                doc, problems = None, [str(exc)]
+            reason = " ".join(str(doc.get("reason", "")).split()) if not problems else ""
+            if not problems and not reason:
+                problems = ["`reason` is empty — a verdict needs its one-line reason"]
+            if problems:
+                return err("reframe judge answer is malformed — nothing recorded", "the JSON "
+                           "review/schemas/reframe-judge.schema.json describes", "; ".join(problems[:4]), a.input,
+                           "re-run the judge")
+            verdict = "accepted" if doc["verdict"] == "accept" else "rejected"
+            # the judge can only downgrade: an accept stands only on both conditions and a named
+            # deletion (scope 10 §4.2) — "simpler" with nothing deleted is a rejection
+            missing = [w for w, ok in (("the objective is not met", doc["meets_objective"]),
+                                       ("it does not simplify", doc["simplifies"]),
+                                       ("it names nothing it deletes", doc["deletes"].strip())) if not ok]
+            if verdict == "accepted" and missing:
+                verdict, reason = "rejected", f"{'; '.join(missing)} — {reason}"
+            known = {r.get("finding_id") for r in recs if r.get("record") == "finding"}
+            flags = [d for d in doc["reopened_decisions"] if d["finding"] in known and d["decision"].strip()]
+            if len(flags) < len(doc["reopened_decisions"]):
+                print(vl.message("WARN", "judge flagged a decision on an unknown finding, or with no decision named — "
+                                 "dropped", f"finding IDs of {a.unit} and the decision each re-opens",
+                                 str([d for d in doc["reopened_decisions"] if d not in flags])[:200], a.input,
+                                 "tooling", "the verdict is recorded without them", DOCS), file=sys.stderr)
+            rec.update(verdict=verdict, reason=reason, deletes=doc["deletes"].strip(),
+                       overturns=(doc["overturns"] or "").strip() or None, reopened_decisions=flags)
+        vl.append_verified(log, [rec])
+    rf = reframe_of(recs, a.review)
+    if rec["verdict"] == "accepted" and rec["overturns"]:
+        # scope 10 §4.2: overturning a recorded decision is the user's call — accepted, not taken
+        print(f"[REFRAME] {a.review} accepted by {a.judge}, but it overturns a recorded decision "
+              f"({rec['overturns']}): bring it to the user before building it (review/SKILL.md §5.2)")
+    elif rec["verdict"] == "accepted":
+        print(f"[REFRAME] {a.review} accepted by {a.judge} — deletes {rec['deletes']}: build it, then record each "
+              f"finding it replaced ({', '.join(rf['removes']) or 'none named'}) with `dispose --reframed "
+              "\"<what changed>\" --commit <sha> --by judge` (review/SKILL.md §5.2)")
+    elif rec["verdict"] == "rejected":
+        print(f"[REFRAME] {a.review} rejected: {rec['reason']}")
+    else:
+        print(f"[REFRAME] {a.review} not judged ({rec['reason']}): not taken — fix the findings, or bring the "
+              "reframe to the user (review/SKILL.md §5.2)")
+    for d in rec["reopened_decisions"]:
+        print(f"[DECISION] {d['finding']} re-opens a recorded decision: {d['decision']}")
+    return vl.EXIT_PASS
+
+
 def main(argv):
     ap = argparse.ArgumentParser(description="/review plumbing (prepare | record | dispose).")
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -1288,6 +1478,18 @@ def main(argv):
     mf = sub.add_parser("misfiled")
     mf.add_argument("--scope", required=True)
     mf.add_argument("--unit", required=True)
+    rp = sub.add_parser("reframe-prepare")
+    rp.add_argument("--scope", required=True)
+    rp.add_argument("--unit", required=True)
+    rp.add_argument("--review", required=True)
+    rp.add_argument("--objective", help="the plan's core objective; default: scope.md's `## 1.` section")
+    rp.add_argument("--out-dir")
+    rr = sub.add_parser("reframe-record")
+    rr.add_argument("--scope", required=True)
+    rr.add_argument("--unit", required=True)
+    rr.add_argument("--review", required=True)
+    rr.add_argument("--judge", required=True)
+    rr.add_argument("--input")
     c = sub.add_parser("accept")
     c.add_argument("--scope", required=True)
     c.add_argument("--unit", required=True)
@@ -1296,12 +1498,13 @@ def main(argv):
         a = ap.parse_args(argv)
     except SystemExit as exc:
         return vl.EXIT_USAGE if exc.code else vl.EXIT_PASS
-    if a.cmd == "record" and bool(a.scope) != bool(a.unit):
-        return err("--scope and --unit go together", "both or neither", "one of them", "record",
+    if a.cmd in ("record", "prepare") and bool(a.scope) != bool(a.unit):
+        return err("--scope and --unit go together", "both or neither", "one of them", a.cmd,
                    "pass both to log findings for dispositions", code=vl.EXIT_USAGE)
     try:
         return {"prepare": cmd_prepare, "record": cmd_record, "dispose": cmd_dispose, "accept": cmd_accept,
-                "misfiled": cmd_misfiled}[a.cmd](a)
+                "misfiled": cmd_misfiled, "reframe-prepare": cmd_reframe_prepare,
+                "reframe-record": cmd_reframe_record}[a.cmd](a)
     except vl.ContractError as exc:
         print(exc.msg, file=sys.stderr)
         return vl.EXIT_EVAL

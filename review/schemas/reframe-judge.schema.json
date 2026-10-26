@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "/review reframe judge output",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["verdict", "meets_objective", "simplifies", "deletes", "reason", "overturns", "reopened_decisions"],
+  "properties": {
+    "verdict": {"type": "string", "enum": ["accept", "reject"]},
+    "meets_objective": {"type": "boolean"},
+    "simplifies": {"type": "boolean"},
+    "deletes": {"type": "string"},
+    "reason": {"type": "string"},
+    "overturns": {"type": ["string", "null"]},
+    "reopened_decisions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["finding", "decision"],
+        "properties": {
+          "finding": {"type": "string"},
+          "decision": {"type": "string"}
+        }
+      }
+    }
+  }
+}

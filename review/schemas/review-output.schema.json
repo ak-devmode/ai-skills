@@ -3,7 +3,7 @@
   "title": "/review gate output",
   "type": "object",
   "additionalProperties": false,
-  "required": ["findings", "checked_clear", "not_applicable", "cannot_do", "verdict"],
+  "required": ["findings", "checked_clear", "not_applicable", "cannot_do", "verdict", "reframe"],
   "properties": {
     "findings": {
       "type": "array",
@@ -28,6 +28,16 @@
     "checked_clear": {"type": "array", "items": {"type": "string"}},
     "not_applicable": {"type": "array", "items": {"type": "string"}},
     "cannot_do": {"type": "array", "items": {"type": "string"}},
-    "verdict": {"type": "string", "enum": ["SHIP", "SHIP AFTER BLOCKING", "DO NOT SHIP"]}
+    "verdict": {"type": "string", "enum": ["SHIP", "SHIP AFTER BLOCKING", "DO NOT SHIP"]},
+    "reframe": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": ["proposal", "removes", "deletes"],
+      "properties": {
+        "proposal": {"type": "string"},
+        "removes": {"type": "array", "items": {"type": "string"}},
+        "deletes": {"type": "string"}
+      }
+    }
   }
 }

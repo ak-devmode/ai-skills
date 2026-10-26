@@ -1335,5 +1335,142 @@ class TestReview(unittest.TestCase):
                              env=self.env, capture_output=True, text=True, check=True).stdout
         self.assertEqual(out.strip(), "[]")
 
+    # ---- reframe prompt + fresh judge (scope 10 §4.2, plan 10.2 Task 2.2) — the codex call is stubbed:
+    # each test writes the judge's answer file and passes the judge line codex-exec.py would print
+    REFRAME = {"proposal": "replace the per-line scanner with one allowlist table", "removes": ["#1", "#2"],
+               "deletes": "the scanner module"}
+
+    def judged(self, rid, verdict="accept", judge="codex gpt-test", **over):
+        doc = dict({"verdict": verdict, "meets_objective": True, "simplifies": True, "deletes": "scanner.sh",
+                    "reason": "one table replaces two patched heuristics", "overturns": None,
+                    "reopened_decisions": []}, **over)
+        path = os.path.join(self.tmp.name, f"judge-{rid}.json")
+        with open(path, "w") as fh:
+            json.dump(doc, fh)
+        return run(REVIEW, "reframe-record", "--scope", self.scope, "--unit", "9.1", "--review", rid,
+                   "--judge", judge, "--input", path, env=self.env)
+
+    def records(self, kind):
+        with open(self.log) as fh:
+            return [r for r in map(json.loads, fh) if r["record"] == kind]
+
+    def verdicts(self):
+        return self.records("reframe-verdict")
+
+    def test_a_reframe_is_recorded_and_its_judge_reads_the_decisions(self):
+        with open(os.path.join(self.scope, "scope.md"), "w") as fh:
+            fh.write("# S\n\n## 1. Context\n\nOBJ: every fix lands reviewed.\n\n## 11. Key Decisions Captured\n\n"
+                     "- D7: one writer for the log.\n\n## 12. Other\n\nnot this\n")
+        with open(os.path.join(self.scope, "progress.md"), "w") as fh:
+            fh.write("# P\n\n## Decisions Log\n\n- 2026-10-01: JSONL stays.\n\n## Plan 9.1\n\nnot this\n")
+        p = self.record(reframe=self.REFRAME)
+        self.assertEqual(p.returncode, 0, p.stderr)
+        self.assertIn("[REFRAME] 9.1-r1 proposes a simpler design that removes 2 finding(s)", p.stdout)
+        rf = self.records("reframe")
+        # `#n` is the nth finding of the answer: the note (#1) and the blocking one (#2), IDs by severity
+        self.assertEqual(rf[0]["removes"], ["9.1-r1-03", "9.1-r1-01"])
+        self.assertEqual(self.judged("9.1-r1", "reject", reason="it moves the scanner").returncode, 0)
+        p = self.record(reframe=dict(self.REFRAME, removes=["9.1-r1-01", "9.1-r0-09"]))  # same range: round 2
+        self.assertIn("round: 2 of", p.stdout)
+        self.assertIn("9.1-r0-09", p.stderr)   # an unknown earlier ID is dropped, with a warning
+        self.assertEqual(self.records("reframe")[1]["removes"],
+                         ["9.1-r1-01"])
+        out = os.path.join(self.tmp.name, "rf")
+        p = run(REVIEW, "reframe-prepare", "--scope", self.scope, "--unit", "9.1", "--review", "9.1-r2",
+                "--out-dir", out, env=self.env)
+        self.assertEqual(p.returncode, 0, p.stderr)
+        self.assertIn("reframe-judge.schema.json", p.stdout)
+        prompt = read(p.stdout.split("prompt: ")[1].split()[0])
+        for want in ("OBJ: every fix lands reviewed.", "D7: one writer for the log.", "2026-10-01: JSONL stays.",
+                     "9.1-r1: replace the per-line scanner with one allowlist table — rejected: it moves the scanner",
+                     "`9.1-r1-01`", "`9.1-r2-01`"):
+            self.assertIn(want, prompt)
+        self.assertNotIn("not this", prompt)
+        self.assertNotRegex(prompt, r"\{\{[A-Z_]+\}\}")
+        # a review's own rejection is never listed as an earlier one
+        p = run(REVIEW, "reframe-prepare", "--scope", self.scope, "--unit", "9.1", "--review", "9.1-r1",
+                "--out-dir", out, env=self.env)
+        own = read(p.stdout.split("prompt: ")[1].split()[0])
+        self.assertIn("## Reframes this lineage already rejected\n\n- (none)", own)
+        # no objective anywhere: exit 3, never a prompt with a hole
+        os.remove(os.path.join(self.scope, "scope.md"))
+        p = run(REVIEW, "reframe-prepare", "--scope", self.scope, "--unit", "9.1", "--review", "9.1-r2",
+                "--out-dir", out, env=self.env)
+        self.assertEqual(p.returncode, 3, p.stderr)
+        p = run(REVIEW, "reframe-prepare", "--scope", self.scope, "--unit", "9.1", "--review", "9.1-r2",
+                "--objective", "OBJ2", "--out-dir", out, env=self.env)
+        self.assertEqual(p.returncode, 0, p.stderr)
+        # a review without a reframe has nothing to judge
+        self.record()
+        p = run(REVIEW, "reframe-prepare", "--scope", self.scope, "--unit", "9.1", "--review", "9.1-r3",
+                "--objective", "O", "--out-dir", out, env=self.env)
+        self.assertEqual(p.returncode, 2, p.stderr)
+
+    def test_the_judge_accepts_only_a_reframe_that_meets_the_objective_and_deletes_something(self):
+        self.record(reframe=self.REFRAME)
+        # acceptance: one that deletes nothing is rejected with a reason
+        p = self.judged("9.1-r1", deletes="  ")
+        self.assertEqual(p.returncode, 0, p.stderr)
+        v = self.verdicts()[-1]
+        self.assertEqual((v["verdict"], v["deletes"]), ("rejected", ""))
+        self.assertTrue(v["reason"].startswith("it names nothing it deletes — "), v["reason"])
+        self.assertIn("[REFRAME] 9.1-r1 rejected: it names nothing it deletes", p.stdout)
+        p = self.judged("9.1-r1", meets_objective=False)
+        self.assertTrue(self.verdicts()[-1]["reason"].startswith("the objective is not met — "))
+        # acceptance: one that meets the objective and deletes a module is accepted
+        p = self.judged("9.1-r1", deletes="the scanner module (scanner.sh)",
+                        reopened_decisions=[{"finding": "9.1-r1-02", "decision": "D7: tenant filter in the repo"},
+                                            {"finding": "9.1-r9-01", "decision": "D1"}])
+        self.assertEqual(p.returncode, 0, p.stderr)
+        v = self.verdicts()[-1]
+        self.assertEqual((v["verdict"], v["deletes"], v["judge"]), ("accepted", "the scanner module (scanner.sh)",
+                                                                    "codex gpt-test"))
+        self.assertIn("dispose --reframed", p.stdout)
+        self.assertIn("9.1-r1-03, 9.1-r1-01", p.stdout)
+        self.assertIn("[DECISION] 9.1-r1-02 re-opens a recorded decision: D7: tenant filter in the repo", p.stdout)
+        self.assertEqual(len(v["reopened_decisions"]), 1)     # the unknown finding was dropped
+        self.assertIn("9.1-r9-01", p.stderr)
+        # accepted, but it overturns a decision: the user's call before anything is built
+        p = self.judged("9.1-r1", overturns="D7: one writer")
+        self.assertEqual(self.verdicts()[-1]["overturns"], "D7: one writer")
+        self.assertIn("bring it to the user before building it", p.stdout)
+        self.assertNotIn("dispose --reframed", p.stdout)
+        # no judge ran: not taken, never accepted by default
+        p = run(REVIEW, "reframe-record", "--scope", self.scope, "--unit", "9.1", "--review", "9.1-r1",
+                "--judge", "none codex out of credits", env=self.env)
+        self.assertEqual(p.returncode, 0, p.stderr)
+        self.assertEqual(self.verdicts()[-1]["verdict"], "not-judged")
+        # a malformed answer or an empty reason records nothing: exit 3
+        n = len(self.verdicts())
+        for over in ({"reason": "  "}, {"meets_objective": "yes"}, {"verdict": "maybe"}):
+            self.assertEqual(self.judged("9.1-r1", **over).returncode, 3, over)
+        self.assertEqual(self.judged("9.1-r1", judge="gpt").returncode, 2)
+        self.assertEqual(len(self.verdicts()), n)
+
+    def test_a_malformed_reframe_is_exit_3(self):
+        for rf in ({"proposal": "", "removes": ["#1"], "deletes": "x"}, {"proposal": "p", "removes": ["#9"],
+                   "deletes": "x"}, {"proposal": "p", "removes": ["bogus"], "deletes": "x"},
+                   {"proposal": "p", "removes": [], "deletes": " "}):
+            self.assertEqual(self.record(reframe=rf).returncode, 3, rf)
+        self.assertFalse(os.path.exists(self.log) and self.findings())
+
+    def test_a_fallback_local_maxima_finding_is_advisory(self):
+        lm = [self.finding("should-fix", "patched heuristic again", category="local-maxima"),
+              self.finding("should-fix", "swallowed error", category="silent-failure")]
+        p = self.record(reviewer="claude-fallback codex out of credits", findings=lm)
+        self.assertEqual(p.returncode, 0, p.stderr)
+        self.assertEqual([f.get("advisory") for f in self.findings()], [True, None])
+        self.record(findings=lm)   # the same flag from codex is a real finding
+        self.assertEqual([f.get("advisory") for f in self.findings()][2:], [None, None])
+
+    def test_schema_types_outside_the_subset_fail_closed(self):
+        vl = load("review/scripts/review.py").vl
+        self.assertEqual(vl.schema_problems(True, {"type": "boolean"}), [])
+        self.assertTrue(vl.schema_problems(1, {"type": "boolean"}))
+        self.assertTrue(vl.schema_problems(1.5, {"type": "number"}))
+        self.assertTrue(vl.schema_problems("x", {"type": ["string", "integer", "null"]}))
+        self.assertEqual(vl.schema_problems(None, {"type": ["object", "null"]}), [])
+
+
 if __name__ == "__main__":
     unittest.main()

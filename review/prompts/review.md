@@ -43,6 +43,16 @@ Only the JSON object the schema describes.
   (lenses §7).
 - `reopens`: the ID of an earlier finding this one is — the original defect not fully fixed,
   or back on the fix's own lines. Otherwise null.
+- `reframe`: answer this every round. Would a simpler design remove several of these findings
+  at once, instead of a patch for each? If it would, give `{proposal, removes, deletes}`:
+  - `proposal`: the design in a few sentences.
+  - `removes`: the findings it makes disappear, as `#n` (the nth finding of this answer) or
+    as an earlier finding's ID.
+  - `deletes`: what it deletes, named — a module, a function, a code path, a flag.
+
+  Moving or renaming code, or wrapping it in a new layer, deletes nothing, so it is not a
+  reframe. If no simpler design exists, set `reframe` to null. A fresh judge decides whether
+  the reframe is taken.
 - `checked_clear` / `not_applicable`: the rule groups you verified clean, and those with no
   surface in this range. They are different results — never merge them.
 - `cannot_do`: every check above you could not actually perform here (network, running

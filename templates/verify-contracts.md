@@ -329,12 +329,13 @@ pass.
 
 ## 6. Review disposition log — `artifacts/review-<unit>.jsonl`
 
-**Writer:** `review/scripts/review.py` only — `record` (findings, from the reviewer's JSON)
-and `dispose` (dispositions). No hand-written JSON.
+**Writer:** `review/scripts/review.py` only — `record` (findings, from the reviewer's JSON),
+`dispose` (dispositions), `accept`, and `reframe-record` (the judge's verdict). No hand-written JSON.
 **Readers:** `verdict-gate.py` enforces coverage (§5.2.1); `/verify` audits every
 rejection's reasoning.
 
-Every record carries `record`: `review`, `finding` or `disposition`.
+Every record carries `record`: `review`, `finding`, `disposition`, `acceptance`, `reframe` or
+`reframe-verdict`.
 
 6.0 **`review`** records — one per `record` call, written even when there are no findings:
 `schema` · `ts` · `review_id` · `reviewer` (judge line, §4.6) · `range` · `shas`
@@ -353,7 +354,9 @@ apply the rules the lineage started with. An unstamped or malformed root is vers
 `group` (the domain rule section, else empty) · `severity` (`blocking | should-fix | note`) ·
 `text` · `fix` · `target` · `capped` · `reopens` (only when set: the `finding_id` of an
 earlier finding of the unit this one is — the original defect not fully fixed; `record` drops a
-link to an unknown ID with a warning, review/SKILL.md §5.1). IDs are assigned in severity order.
+link to an unknown ID with a warning, review/SKILL.md §5.1) · `advisory` (only when set: a
+`local-maxima` finding from a non-codex reviewer — logged and disposed, never a stop or a packet,
+review/SKILL.md §3.5). IDs are assigned in severity order.
 
 6.2 **`disposition`** records: `schema` · `ts` · `finding_id` · `disposition`
 (`fixed | rejected | deferred | accepted | reframed`) · `sha` (required for `fixed` and `reframed`, the full
@@ -402,6 +405,18 @@ stay.
 by the user's answer at a stop (`review/SKILL.md` §5.1) — refused while any finding lacks a disposition. Under a table
 with an `**Approved:**` line (§3.1.1), the gate blocks (`review-acceptance`) when a
 `finding` or `disposition` record follows the last acceptance — a new round reopens it.
+
+6.5 **`reframe`** and **`reframe-verdict`** records (review/SKILL.md §5.2). `record` writes a
+`reframe` when the reviewer's answer proposes one: `schema` · `ts` · `review_id` · `proposal` ·
+`removes` (finding IDs; the answer's `#n` resolved, and unknown earlier IDs dropped with a
+warning) · `deletes` (what the reviewer says it deletes). `reframe-record` writes the judge's
+`reframe-verdict`: `schema` · `ts` · `review_id` · `judge` (judge line, §4.6) · `verdict`
+(`accepted | rejected | not-judged`) · `reason` (one line) · `deletes` · `overturns` (the recorded
+decision an accepted design overturns, else null) · `reopened_decisions` (`[{finding, decision}]`).
+An `accept` with the objective unmet, no simplification, or nothing named in `deletes` is
+recorded `rejected`. A `none` judge line is `not-judged`, never accepted. Neither record type
+counts toward coverage or reopens an acceptance. A taken reframe is recorded on its findings as
+`reframed` dispositions (§6.2).
 
 ---
 

@@ -173,8 +173,10 @@ rule. (The first real run hit exactly this and moved on because the exit code wa
 reviewer line. The fallback never gets its own log format. gstack grades on two levels, not
 this schema's three, so map its output: CRITICAL → `blocking`, INFORMATIONAL →
 `should-fix`, and a finding that is only process (a comment, a stale table, doc wording) →
-`note`. Read §2.1's prompt for the round and the earlier findings, and set `reopens` the
-same way.
+`note`. Read §2.1's prompt for the round and the earlier findings, and set `reopens` and
+`reframe` the same way. A fallback's `local-maxima` finding is **advisory**: `record` tags it
+and it is disposed like any other, but it is never a stop and never a packet. 120 such flags
+in 178 fallback reviews would have flooded the queue.
 
 ---
 
@@ -231,7 +233,7 @@ findings per line of the change it fixes (scope 10 baseline §3.3), so:
 4. Run the affected tests before the re-review.
 5. A finding that `reopens` one that already reopened another is a chain: `record` prints
    `[CHAIN] <id> reopens <id> reopens <id>`. Stop patching and take the reframe prompt
-   (§5.1 item 4) before another fix.
+   (§5.2) before another fix.
 
 `--rejected` is refused without a reason — never use it to record a fix the tool refused.
 The latest disposition decides, so a fix logged as a rejection is corrected by disposing it
@@ -296,9 +298,9 @@ loops run without a per-round check-in (Alex's standing approval):
 4. **An edge-case cascade** — a fix for one edge case raises another, sequential or net
    new. `record` prints `[CASCADE] <file>` when a new finding lands on a line an earlier
    finding's fix commit in the unit last changed. That is a local maximum: a better way to
-   think about the original solution exists. Stop fixing and bring the user a proposed
-   reframe. You may propose a reframe at any time, cascade or not. A `reopens` chain (`[CHAIN]`, §5) is
-   the same signal.
+   think about the original solution exists. Stop fixing, and put a reframe to the fresh
+   judge (§5.2). You may propose a reframe at any time, cascade or not. A `reopens` chain
+   (`[CHAIN]`, §5) is the same signal.
 
 **A reframe that is taken** — accepted by the fresh judge (`--by judge`) or by the user at
 a stop (`--by user`) — is recorded on each finding it replaced: `dispose --reframed "<what
@@ -349,6 +351,40 @@ the session had added.
 > 171.2 also hit the round-3 cap on a first review of new code, because rounds counted per
 > repo and two lanes shared one. The user is now asked only where their judgment changes
 > the outcome: design, a repeat, no SHIP, a cascade. Process nits stopped earning rounds.
+
+5.2 **Reframes — every round, judged fresh.** Every round, the reviewer answers `reframe`:
+either a simpler design that removes several findings, naming what it deletes, or null.
+Few loops reframe on their own (22 of 4,044 dispositions; 85% of `local-maxima` findings were
+patched), so the question is asked every round. When the answer carries one, `record` prints
+`[REFRAME] <id> proposes …`. Judge it before fixing the findings it removes. A driver never
+judges its own design:
+
+```bash
+$RV reframe-prepare --scope $SCOPE --unit $UNIT --review <id> [--objective "<the plan's objective>"]
+$S/codex-exec.py exec --prompt $PROMPT --schema $SCHEMA --out $WORK/reframe.json --cd $REPO --timeout 900 --effort high
+$RV reframe-record --scope $SCOPE --unit $UNIT --review <id> --judge "<codex-exec.py's last line>" --input $WORK/reframe.json
+```
+
+The judge reads only the objective, the review's findings and the proposal, scope §11, the
+progress file's Decisions Log, and the lineage's earlier rejected reframes. The objective
+defaults to scope.md's `## 1.` section, and `reframe-prepare` exits 3 when there is none. The
+judge accepts only when the design **(i) meets the objective** and **(ii) simplifies by
+deleting something named**. `reframe-record` holds it to that: an accept with either condition
+false, or with nothing in `deletes`, is recorded `rejected` and says what was missing. Every
+verdict is a `reframe-verdict` record with a one-line reason. What each verdict does:
+
+- **Accepted:** build it. Then record each finding it replaced with `dispose --reframed
+  "<what changed>" --commit <sha> --by judge` (§5.1), and review the replacing commit as a
+  new lineage.
+- **Accepted, but it overturns a recorded decision** (`overturns`): bring it to the user
+  before anything is built.
+- **Rejected:** keep fixing the findings. A reframe the reviewer proposes again after a
+  rejection is judged against that rejection, and is the user's call if it recurs.
+- **Not judged** (`--judge "none <reason>"`, codex unavailable): the reframe is not taken.
+  Fix the findings, or bring the reframe to the user.
+
+The same judge lists findings that re-open a recorded decision (`[DECISION] <id> re-opens
+…`). Handle each as stop 1 (a design decision), not as a fix.
 
 ---
 

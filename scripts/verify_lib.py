@@ -167,12 +167,13 @@ class ContractError(Exception):
 
 # ---------- answer schemas -----------------------------------------------------------
 
-_TYPES = {"object": dict, "array": list, "string": str}
+_TYPES = {"object": dict, "array": list, "string": str, "boolean": bool}
 
 
 def schema_problems(doc, schema, path="answer"):
-    """Problems with `doc` against the JSON Schema subset our answer schemas use — type,
-    required, additionalProperties: false, enum, items. Both answer writers (review.py,
+    """Problems with `doc` against the JSON Schema subset our answer schemas use — type (one, or
+    one plus "null"), required, additionalProperties: false, enum, items. A type outside the
+    subset is a problem, never a pass: an unchecked field would be fail-open. Both answer writers (review.py,
     judge.py) run this before any semantic check, so a wrong container or a missing field
     is exit 3 and never a crash or a partial write (review 5.2-r1-06)."""
     t = schema.get("type")
@@ -185,6 +186,8 @@ def schema_problems(doc, schema, path="answer"):
         if len(rest) != 1:
             return [f"{path}: schema type {t!r} is not supported"]  # fail closed on a schema we can't read
         return schema_problems(doc, dict(schema, type=rest[0]), path)
+    if t is not None and t != "integer" and t not in _TYPES:
+        return [f"{path}: schema type {t!r} is not supported"]
     if t == "integer":
         if not isinstance(doc, int) or isinstance(doc, bool):
             return [f"{path} is not an integer"]

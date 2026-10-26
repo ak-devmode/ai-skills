@@ -29,8 +29,8 @@ Failure stances (each is fail-closed unless it says otherwise):
   * stale: git cannot be read -> exit 1 without marking. Fail-open on purpose: marking
     stale discards a pending decision
   * check-reply on a ONE-WAY packet also compares the lane repo's HEAD with the packet's
-    head_sha (the lane is parked, so HEAD must not have moved); a moved or unreadable HEAD
-    refuses. Two-way packets skip this: work continues past them by design (see `touch`)
+    head_sha (the lane is parked): HEAD may advance only by commits touching plans/ alone
+    (bookkeeping); a code path, a non-ancestor HEAD or unreadable git refuses. Two-way packets skip this: work continues past them by design (see `touch`)
   * --range classification failure -> door.py returns one-way (promote-only)
 
   packet.py new --door D --type T --title S --unit U --option LABEL [--option ...]
@@ -60,7 +60,16 @@ import urllib.request
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-POST_TIMEOUT = float(os.environ.get("PACKET_POST_TIMEOUT") or 3)  # env: tests only
+
+
+def post_timeout():
+    """PACKET_POST_TIMEOUT (tests only), read where used; a bad value falls back to 3 so a
+    harness setting can never stop the caller."""
+    try:
+        v = float(os.environ.get("PACKET_POST_TIMEOUT") or 3)
+    except ValueError:
+        return 3.0
+    return v if v > 0 else 3.0
 SKIP = "Skipped: "
 TAG_RE = re.compile(r"\[lane ([^/\]\[\n]+)/([^/\]\[\n]+)/([^/\]\[\n]+) ([A-Za-z0-9_-]{8,64})\]")
 
@@ -187,15 +196,16 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
 
 def post(path, doc):
     """(ok, note). 200/201/204 and 409 (already stored: idempotent) count as sent.
-    Hard POST_TIMEOUT wall clock: DNS and slow-drip servers defeat a per-socket timeout."""
+    Hard post_timeout() wall clock: DNS and slow-drip servers defeat a per-socket timeout."""
     req = urllib.request.Request(queue_url() + path, data=json.dumps(doc).encode(),
                                  headers={"Content-Type": "application/json"}, method="POST")
     opener = urllib.request.build_opener(_NoRedirect)
     box = []
+    timeout = post_timeout()
 
     def work():
         try:
-            with opener.open(req, timeout=POST_TIMEOUT) as r:
+            with opener.open(req, timeout=timeout) as r:
                 box.append((r.status in (200, 201, 204), f"HTTP {r.status}"))
         except urllib.error.HTTPError as e:
             box.append((e.code == 409, f"HTTP {e.code}"))
@@ -204,8 +214,8 @@ def post(path, doc):
 
     t = threading.Thread(target=work, daemon=True)
     t.start()
-    t.join(POST_TIMEOUT)
-    return box[0] if box and not t.is_alive() else (False, f"timed out after {POST_TIMEOUT:g}s")
+    t.join(timeout)
+    return box[0] if box and not t.is_alive() else (False, f"timed out after {timeout:g}s")
 
 
 def new_id(prefix):
@@ -332,7 +342,7 @@ def cmd_new(args):
         return 1
     d = ensure_outbox(dirs[0])
     write_json(d / f"{pid}.json", doc)
-    write_json(d / f"{pid}.state.json", {"status": "open", "sent": False})
+    write_json(d / f"{pid}.state.json", {"status": "open"})
     note = try_send(args, d, pid=pid)
     if not note and not queue_url():
         note = "queue: DECISION_QUEUE_URL not set (outbox only)"
@@ -461,7 +471,19 @@ def cmd_check_reply(args):
         except (RuntimeError, OSError, subprocess.SubprocessError) as e:
             return refuse(f"cannot read HEAD to confirm the one-way packet is current ({e})")
         if not (head.startswith(doc["head_sha"]) or doc["head_sha"].startswith(head)):
-            return refuse(f"one-way packet {pid} is stale: HEAD moved past {doc['head_sha'][:7]}; run `stale`")
+            # bookkeeping commits (plans/ lives in the same repo) may land while parked;
+            # anything else, a non-ancestor, or an unreadable git refuses (fail closed)
+            try:
+                git("merge-base", "--is-ancestor", doc["head_sha"], "HEAD", cwd=repo_of(d))
+                moved = git("diff", "--name-only", "--no-renames", "-z", f"{doc['head_sha']}..HEAD",
+                            cwd=repo_of(d)).split("\0")
+            except (RuntimeError, OSError, subprocess.SubprocessError) as e:
+                return refuse(f"one-way packet {pid} is stale: HEAD is not a descendant of "
+                              f"{doc['head_sha'][:7]} or git is unreadable ({e}); run `stale`")
+            other = [x for x in moved if x and not x.startswith("plans/")]
+            if other:
+                return refuse(f"one-way packet {pid} is stale: paths outside plans/ moved since "
+                              f"{doc['head_sha'][:7]}: {', '.join(other[:5])}; run `stale`")
     print(f"OK {pid}")
     return 0
 

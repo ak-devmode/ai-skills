@@ -431,6 +431,37 @@ class TestInfoAndOneWayHead(PacketBase):
         self.assertEqual(p.returncode, 1)
         self.assertIn("stale", p.stderr)
 
+    def test_one_way_reply_accepted_after_plans_only_commit(self):  # 10.1-r3-02
+        pid, _ = self.new(door="one-way")
+        os.makedirs(os.path.join(self.repo, "plans"), exist_ok=True)
+        put(os.path.join(self.repo, "plans", "p.md"), "x\n", "a")
+        self.g("add", "-A"); self.g("commit", "-q", "-m", "plans only")
+        self.assertEqual(self.pk("check-reply", "--reply", self.tag(pid)).returncode, 0)
+
+    def test_one_way_reply_refused_when_plans_and_code_move(self):  # 10.1-r3-02
+        pid, _ = self.new(door="one-way")
+        os.makedirs(os.path.join(self.repo, "plans"), exist_ok=True)
+        put(os.path.join(self.repo, "plans", "p.md"), "x\n", "a")
+        self.commit("code too")
+        p = self.pk("check-reply", "--reply", self.tag(pid))
+        self.assertEqual(p.returncode, 1)
+        self.assertIn("a.txt", p.stderr)
+
+    def test_one_way_reply_refused_after_history_rewrite(self):  # 10.1-r3-02
+        pid, _ = self.new(door="one-way")
+        self.g("commit", "-q", "--amend", "--allow-empty", "-m", "rewritten")
+        p = self.pk("check-reply", "--reply", self.tag(pid))
+        self.assertEqual(p.returncode, 1)
+        self.assertIn("stale", p.stderr)
+
+    def test_bad_post_timeout_does_not_break_the_caller(self):  # 10.1-r3-03
+        pid, out = self.new(env={"PACKET_POST_TIMEOUT": "abc"})
+        self.assertNotIn("Traceback", out)
+
+    def test_new_state_has_no_dead_sent_field(self):  # 10.1-r3-01
+        pid, _ = self.new()
+        self.assertNotIn("sent", load(os.path.join(self.outbox(), f"{pid}.state.json")))
+
     def test_two_way_reply_still_accepted_after_head_moves(self):
         pid, _ = self.new()
         self.commit("moved")

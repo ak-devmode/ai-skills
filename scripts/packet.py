@@ -25,10 +25,18 @@ Failure stances (each is fail-closed unless it says otherwise):
     channel; stopping Alex's two-way work for a harness error is worse than a late card.
     The POST has a hard 3 s wall-clock deadline (a worker thread, not just a socket
     timeout) and refuses redirects: a 3xx is a failure, never a send
-  * queue verdicts per item: 409 (id reused with different content) -> `<id>.conflict`, 4xx
-    refusal -> `<id>.rejected`, each printed once and never retried (flush lists them);
-    404 on an event (packet not on the queue yet) -> kept unsent, retried next flush;
-    5xx / network -> Blocked as above. All exit 0 (a harness error never stops the caller)
+  * queue verdicts per item: 409 (id reused with different content) -> `<id>.conflict`;
+    400/413/415/422 (definitive content refusals) -> `<id>.rejected`; each printed once and
+    never retried (flush lists them). Every other 4xx (401/403/408/429, 404 on /packets) and
+    5xx / network -> Blocked as above: keep, break the flush, retry next time (a credential,
+    rate or URL problem must not make packets permanent). 404 on an event (packet not on the
+    queue yet) -> kept unsent, retried next flush. All exit 0 (a harness error never stops
+    the caller). To clear a marker once the cause is fixed: delete `<id>.rejected` /
+    `<id>.conflict` in the outbox (and its events' `evt-*.rejected`); flush re-sends.
+  * events of a refused packet (its `.conflict` or `.rejected` in the same outbox): never
+    POSTed, marked `evt-<id>.rejected` ("packet refused"). Conflict too: the queue holds
+    other content under that id, so a lane's close/stale must not apply to it
+  * flush --outbox DIR that does not exist -> `Skipped: outbox DIR does not exist`, exit 0
   * flush: an unreadable item is reported and skipped, the rest of the outbox still goes
   * stale: git cannot be read -> exit 1 without marking. Fail-open on purpose: marking
     stale discards a pending decision
@@ -74,6 +82,7 @@ def post_timeout():
     except ValueError:
         return 3.0
     return v if v > 0 else 3.0
+REFUSED = (400, 413, 415, 422)  # 4xx that mean "this content is refused"; all other 4xx retry
 SKIP = "Skipped: "
 HELD = "Held: "
 NOT_SENT = (SKIP, HELD, "Conflict: ", "Rejected: ")  # per-item outcomes: report, never stop the flush
@@ -204,8 +213,10 @@ def post(path, doc):
     """(kind, note); kind is ok | conflict | missing | rejected | blocked.
     200/201/204 are ok (a 200 `duplicate` is the queue confirming an identical retry);
     409 = the queue holds DIFFERENT content for this id (conflict, never sent);
-    404 = an event whose packet the queue lacks (missing: keep, retry after the packet);
-    any other 4xx = refused (rejected); 5xx, 3xx, network, timeout = blocked (retry).
+    404 on /events = an event whose packet the queue lacks (missing: keep, retry after the packet);
+    400/413/415/422 = definitive content refusals (rejected, permanent);
+    everything else (401/403/408/429, 404 on /packets, other 4xx, 5xx, 3xx, network,
+    timeout) = blocked: a credential, rate or URL problem is not the packet's fault, so retry.
     Hard post_timeout() wall clock: DNS and slow-drip servers defeat a per-socket timeout."""
     req = urllib.request.Request(queue_url() + path, data=json.dumps(doc).encode(),
                                  headers={"Content-Type": "application/json"}, method="POST")
@@ -218,7 +229,10 @@ def post(path, doc):
             with opener.open(req, timeout=timeout) as r:
                 box.append(("ok" if r.status in (200, 201, 204) else "blocked", f"HTTP {r.status}"))
         except urllib.error.HTTPError as e:
-            kind = {409: "conflict", 404: "missing"}.get(e.code, "rejected" if 400 <= e.code < 500 else "blocked")
+            if e.code == 404 and path == "/events":
+                kind = "missing"
+            else:
+                kind = {409: "conflict"}.get(e.code, "rejected" if e.code in REFUSED else "blocked")
             box.append((kind, f"HTTP {e.code}"))
         except (urllib.error.URLError, OSError, ValueError, http.client.HTTPException) as e:
             box.append(("blocked", str(getattr(e, "reason", e))))
@@ -264,6 +278,13 @@ def _refusal(d, stem, kind, note, what):
     return f"Rejected: queue refused {what} ({note}); not sent, marked {stem}.rejected"
 
 
+def _refuse_event(d, ev):
+    """An event of a packet the queue refused is never POSTed (10.1-r7-02/03)."""
+    stem = f"evt-{ev['id']}"
+    (d / f"{stem}.rejected").write_text("packet refused\n")
+    return f"Rejected: event {ev['id']} not sent: its packet {ev['packet_id']} was refused by the queue (packet refused); marked {stem}.rejected"
+
+
 def try_send(args, d, ev=None, pid=None):
     """POST a stored item if this caller may. Returns a human note ('' when not attempted).
     "sent" lives in a marker file, never in the state file: a concurrent close/stale must not
@@ -271,6 +292,9 @@ def try_send(args, d, ev=None, pid=None):
     if not (queue_url() and is_driver(args)):
         return ""
     if ev is not None:
+        pk = ev.get("packet_id")
+        if pk and any((d / f"{pk}.{k}").exists() for k in ("conflict", "rejected")):
+            return _refuse_event(d, ev)
         kind, note = post("/events", ev)
         if kind == "ok":
             (d / f"evt-{ev['id']}.sent").write_text(note + "\n")
@@ -288,8 +312,8 @@ def try_send(args, d, ev=None, pid=None):
     if kind == "ok":
         sent_marker(d, pid).write_text(note + "\n")
         return ""
-    if kind in ("conflict", "rejected", "missing"):
-        return _refusal(d, pid, "conflict" if kind == "conflict" else "rejected", note, f"packet {pid}")
+    if kind in ("conflict", "rejected"):
+        return _refusal(d, pid, kind, note, f"packet {pid}")
     return f"Blocked: queue unreachable ({note}); packet kept in outbox, `packet.py flush` re-sends"
 
 
@@ -526,6 +550,8 @@ def cmd_flush(args):
     blocked, skipped = "", []
     for d in outboxes(args):
         if not d.is_dir():
+            if args.outbox or os.environ.get("PACKET_OUTBOX"):  # the default outbox may just be empty
+                skipped.append(f"{SKIP}outbox {d} does not exist")
             continue
         for f in sorted(d.glob("*.state.json")):
             pid = f.name[: -len(".state.json")]

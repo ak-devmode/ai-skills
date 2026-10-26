@@ -231,6 +231,54 @@ class TestQueue(PacketBase):
         self.assertIn(".rejected", out)
         self.assertEqual(s.posts, [])
 
+    def test_other_4xx_stay_blocked_and_retry(self):  # 10.1-r7-01
+        s = Stub(); self.addCleanup(s.stop)
+        env = {"DECISION_QUEUE_URL": s.url}
+        for code in (401, 403, 404, 408, 429):
+            s.force = code
+            pid, out = self.new("--driver", env=env)
+            self.assertIn("Blocked", out, code)
+            self.assertFalse(self._marker(f"{pid}.rejected") or self._marker(f"{pid}.conflict"), code)
+            s.force = None
+            out = self.pk("flush", "--driver", env=env).stdout
+            self.assertIn("FLUSHED 1 packets", out, code)
+        for code in (413, 415, 422):
+            s.force = code
+            pid, out = self.new("--driver", env=env)
+            self.assertIn("Rejected:", out, code)
+            self.assertTrue(self._marker(f"{pid}.rejected"), code)
+
+    def _event_of_refused_packet(self, code):
+        s = Stub(); self.addCleanup(s.stop); s.force = code
+        env = {"DECISION_QUEUE_URL": s.url}
+        pid, _ = self.new("--driver", env=env)
+        marker = "conflict" if code == 409 else "rejected"
+        self.assertTrue(self._marker(f"{pid}.{marker}"))
+        s.force = None
+        n = len(s.posts)
+        self.assertEqual(self.pk("close", pid, "--driver", env=env).returncode, 0)
+        for _ in range(2):
+            out = self.pk("flush", "--driver", env=env).stdout
+        self.assertEqual(len(s.posts), n)  # nothing POSTed: neither packet nor close event
+        evs = [f for f in os.listdir(self.outbox()) if f.startswith("evt-") and f.endswith(".json")]
+        self.assertTrue(evs)
+        for f in evs:
+            self.assertTrue(self._marker(f[:-5] + ".rejected"))
+        self.assertIn("FLUSHED 0 packets, 0 events", out)
+
+    def test_event_of_400_packet_is_marked_not_posted(self):  # 10.1-r7-02
+        self._event_of_refused_packet(400)
+
+    def test_event_of_409_packet_is_marked_not_posted(self):  # 10.1-r7-03
+        self._event_of_refused_packet(409)
+
+    def test_flush_warns_on_missing_outbox(self):  # driver todo
+        s = Stub(); self.addCleanup(s.stop)
+        gone = os.path.join(self.repo, "nope")
+        p = self.pk("flush", "--driver", "--outbox", gone, env={"DECISION_QUEUE_URL": s.url})
+        self.assertEqual(p.returncode, 0)
+        self.assertIn(f"Skipped: outbox {gone} does not exist", p.stdout)
+
     def test_5xx_stays_blocked_and_retries(self):
         s = Stub(); self.addCleanup(s.stop); s.force = 503
         env = {"DECISION_QUEUE_URL": s.url}

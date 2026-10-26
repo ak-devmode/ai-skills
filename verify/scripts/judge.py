@@ -40,6 +40,7 @@ SKILL = os.path.dirname(HERE)
 SCRIPTS = os.path.join(os.path.dirname(SKILL), "scripts")
 sys.path.insert(0, SCRIPTS)
 import verify_lib as vl  # noqa: E402
+import packet_emit  # noqa: E402
 
 PROMPT = os.path.join(SKILL, "prompts", "judge.md")
 LEAN_PROMPT = os.path.join(SKILL, "prompts", "judge-lean.md")
@@ -397,6 +398,25 @@ def run_cap_line(log, unit, run_id):
             "run, or stop here (verify/SKILL.md §3.9)")
 
 
+def stop_packet(a, stop, gate_line):
+    """Scope 10 §4.2: the run-cap STOP with a gate that is not a clean PASS needs Alex, so it
+    writes a packet (outbox in the repo this runs in; the driver POSTs; the inline question
+    stands without a queue URL). One-way: nothing else can decide it. A clean PASS is the
+    nit-only case §3.9 settles without asking. Never raises: a harness error only warns."""
+    try:
+        pid = packet_emit.emit(
+            os.getcwd(), a.unit, f"{a.unit}: verify run cap reached",
+            ["Stop here and accept the gate as reported", "One more run", "Propose a reframe of the failing check"],
+            f"{stop}\n\nGate: {gate_line.replace('verdict: ', '')}\nReport: {a.scope}/artifacts/verify-{a.unit}-report.md\n\n"
+            "Lineage: verify runs of this unit, counted from the verdict log.\n"
+            "Recommendation: stop here unless the failure is a new defect rather than a repeat — a repeat means a reframe.",
+            pid=packet_emit.stable_id("vf", a.unit, a.run_id))
+    except Exception as exc:  # noqa: BLE001
+        print(f"judge.py: warning: packet not written ({exc}); ask the question inline", file=sys.stderr)
+        return None
+    return pid
+
+
 def cmd_report(a):
     p = paths(a.scope, a.unit)
     pend, recs = pending_of(p["log"], a.run_id)
@@ -417,6 +437,8 @@ def cmd_report(a):
         gate_line = f"verdict: GATE ERROR (exit {gate.returncode}) — {why}"
     marker = next((x for x in gate.stdout.splitlines() if x.startswith("marker:")), "")
     stop = run_cap_line(p["log"], a.unit, a.run_id)
+    if stop and not gate_line.startswith("verdict: PASS"):
+        stop_packet(a, stop, gate_line)
     by_pend = {r["check_id"]: r for r in recs if r.get("run_state") == "pending"}   # auto rows too
     lines = [f"# Verify report — unit {a.unit}", "", *([f"**{a.mode}**", ""] if a.mode else []),
              f"**Run:** `{a.run_id}` · **Judge:** {final['judge']} · **Table revision:** {final['table_rev']}",

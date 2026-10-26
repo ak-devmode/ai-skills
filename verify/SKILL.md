@@ -165,6 +165,12 @@ follows run 1 without asking: fix what the first run found, then run again. At t
   bring it to the user, inline: `1.` one more run, or `2.` stop here and accept the gate as
   reported. Ask again before each further run.
 
+At the STOP, when the gate is not a clean PASS, `report` also writes one one-way `generic`
+packet (`scripts/packet_emit.py`, outbox in the repo it runs in, `PACKET <id>` printed, stable
+id per run): options stop-and-accept, one more run, propose a reframe. The inline question
+above still applies when `DECISION_QUEUE_URL` is unset; a packet that cannot be written only
+warns. A clean PASS at the cap is the nit-only case and writes none.
+
 Lean and full runs count toward the same cap.
 
 **Accepted nits are spot-checked inside the run, never in one of their own.** The judge gives

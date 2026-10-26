@@ -6,13 +6,14 @@ The judge's answer is a fixture file — the executor (codex or the Claude fallb
 not what is under test here; the plumbing both of them share is.
 """
 
+import glob
 import json
 import os
 import subprocess
 import tempfile
 import unittest
 
-from _helpers import run
+from _helpers import load, run
 
 JUDGE = "verify/scripts/judge.py"
 HEADER = ("| check_id | deliverable | owner | class | check | repo | dir | env | timeout | rung "
@@ -370,6 +371,33 @@ class TestJudge(unittest.TestCase):
                 stop = f"[CONVERGENCE] verify 9.1 run {n} of 2: STOP"
                 self.assertEqual(stop in p.stdout, n >= 2, p.stdout)
                 self.assertEqual(stop in text.split("## 1. Checks")[0], n >= 2)
+
+    def test_run_cap_stop_writes_a_packet(self):
+        # scope 10 §4.2 / plan 10.2 Task 2.5: the STOP with a gate that is not a clean PASS emits one
+        # one-way packet into the outbox of the repo the report runs in; run 1 emits none
+        env = dict(self.env, CLAUDE_CODE_SESSION_ID="t-sess")
+        env.pop("DECISION_QUEUE_URL", None)
+        self.ledger(self.base)
+        table = os.path.join(self.scope, "finish-conditions.md")
+        seen = []
+        for n in (1, 2):
+            if n > 1:
+                p = run("verify-run.py", "run", "--table", table, "--log", self.log, "--owner", "9.1", env=self.env)
+                self.rid = p.stdout.split("run_id: ")[1].split()[0]
+            self.judge("record", "--judge", "codex gpt-test", "--input", self.answer(verdicts=[
+                {"check_id": c, "verdict": "fail", "rung_reached": 1, "reason": "x"} for c in ("ok", "jr", "away")]))
+            run("verify-run.py", "finalize", "--log", self.log, "--run-id", self.rid, env=self.env)
+            p = run(JUDGE, "report", "--scope", self.scope, "--unit", "9.1", "--run-id", self.rid,
+                    cwd=self.svc, env=env)
+            seen.append((p.stdout, sorted(glob.glob(os.path.join(self.svc, ".decision-queue", "outbox", "pk-*.json")))))
+        self.assertEqual(seen[0][1], [])
+        self.assertIn("PACKET pk-vf-9-1-", seen[1][0])
+        (path,) = [f for f in seen[1][1] if not f.endswith(".state.json")]
+        doc = json.load(open(path))
+        schema_check = load("schema_check.py")
+        self.assertEqual(schema_check.validate(doc), [])
+        self.assertEqual((doc["door"], doc["type"]), ("one-way", "generic"))
+        self.assertIn("run 2 of 2: STOP", doc["payload"]["body"])
 
     def test_report_propagates_a_gate_error(self):
         # 5.2-r1-05: a gate that errors must not become a successful report.

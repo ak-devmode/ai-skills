@@ -222,6 +222,17 @@ which directories count: each guess was a new way through (review r1/r2 on this 
 file, so `dispose` refuses an ancestor of the head that review saw (in another repo, a commit
 older than the review), with or without `--off-anchor`, and the gate blocks one — and blocks
 a fix not reachable from HEAD in the repo holding it, until its branch merges.
+**Fix discipline — binds whoever applies the fixes.** Fix code draws about four times the
+findings per line of the change it fixes (scope 10 baseline §3.3), so:
+1. Name the defect class and search for its siblings before fixing the example.
+2. Every new check or guard states what it does when its own input fails — fail closed by
+   default, unless a stated reason makes fail-open the better behaviour.
+3. A regression test must fail with the fix reverted: revert, re-run, restore.
+4. Run the affected tests before the re-review.
+5. A finding that `reopens` one that already reopened another is a chain: `record` prints
+   `[CHAIN] <id> reopens <id> reopens <id>`. Stop patching and take the reframe prompt
+   (§5.1 item 4) before another fix.
+
 `--rejected` is refused without a reason — never use it to record a fix the tool refused.
 The latest disposition decides, so a fix logged as a rejection is corrected by disposing it
 again: `$RV misfiled --scope $SCOPE --unit $UNIT` lists every rejection whose reason says
@@ -286,7 +297,8 @@ loops run without a per-round check-in (Alex's standing approval):
    new. `record` prints `[CASCADE] <file>` when a new finding lands on a line an earlier
    finding's fix commit in the unit last changed. That is a local maximum: a better way to
    think about the original solution exists. Stop fixing and bring the user a proposed
-   reframe. You may propose a reframe at any time, cascade or not.
+   reframe. You may propose a reframe at any time, cascade or not. A `reopens` chain (`[CHAIN]`, §5) is
+   the same signal.
 
 **A reframe that is taken** — accepted by the fresh judge (`--by judge`) or by the user at
 a stop (`--by user`) — is recorded on each finding it replaced: `dispose --reframed "<what

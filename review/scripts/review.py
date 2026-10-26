@@ -582,7 +582,8 @@ def cmd_record(a):
     if notes and budgeted(recs, a.unit, review_id)[1]:
         print(f"[BUDGET] round {rnd}: {notes} note(s) — at most one batch fix, never re-reviewed; or "
               "`dispose --accepted \"<why it stands>\"` (review/SKILL.md §5.1)")
-    for line in convergence(recs, a.unit) + cascades(recs, review_id, a.repo, key, a.range.split("..")[1]):
+    for line in convergence(recs, a.unit) + cascades(recs, review_id, a.repo, key, a.range.split("..")[1]) \
+            + chains(recs, a.unit, review_id):
         print(line)
     return vl.EXIT_PASS
 
@@ -722,6 +723,27 @@ def convergence(recs, unit):
         for f in sorted(set.intersection(*sets) - seen):
             out.append(f"[CONVERGENCE] {f} (outside the reviewed repos) drew findings in each of the unit's last "
                        f"{REPEAT} reviews: stop patching — raise it to the user as a design finding")
+    return out
+
+
+def chains(recs, unit, review_id):
+    """SKILL.md §5 fix discipline: a [CHAIN] line for each finding of `review_id` that reopens a
+    finding which itself reopened another — two fixes of one defect have failed, so the loop
+    stops patching and takes the reframe prompt. Lineages rooted before rules 2 keep the old
+    rules (decision 65). A link to an ID not in the log ends the walk (record already dropped it)."""
+    if not budgeted(recs, unit, review_id)[1]:
+        return []
+    link = {r.get("finding_id"): r.get("reopens") for r in recs if r.get("record") == "finding"}
+    out = []
+    for r in recs:
+        if r.get("record") != "finding" or r.get("review_id") != review_id or not r.get("reopens"):
+            continue
+        walk = [r["finding_id"]]
+        while link.get(walk[-1]) and link[walk[-1]] not in walk:
+            walk.append(link[walk[-1]])
+        if len(walk) >= 3:
+            out.append(f"[CHAIN] {' reopens '.join(walk)}: the fix failed twice — stop patching and take the "
+                       "reframe prompt (review/SKILL.md §5.1 item 4) before another fix")
     return out
 
 

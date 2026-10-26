@@ -1306,5 +1306,34 @@ class TestReview(unittest.TestCase):
         self.assertEqual(p.returncode, 3, p.stdout)
         self.assertIn("not a finding ID", p.stderr)
 
+    def test_a_reopens_chain_of_two_stops_patching(self):
+        # scope 10 §4.2 fix discipline: the second failed fix of one defect takes the reframe prompt
+        base = git(self.repo, "rev-parse", "HEAD")
+        head = self.commit(self.repo, "a.sh")
+        self.record_range(f"{base}..{head}")
+        for rnd, parent in ((2, "9.1-r1-01"), (3, "9.1-r2-01")):
+            fix = self.commit(self.repo, "a.sh")
+            self.assertEqual(self.dispose(parent, "--fixed", fix).returncode, 0)
+            p = self.record_range(f"{head}..{fix}", findings=[self.finding("blocking", "still", reopens=parent)])
+            self.assertIn(f"round: {rnd} of ", p.stdout)
+            head = fix
+        self.assertNotIn("[CHAIN]", p.stdout.split("9.1-r3")[0])
+        self.assertIn("[CHAIN] 9.1-r3-01 reopens 9.1-r2-01 reopens 9.1-r1-01: the fix failed twice — stop "
+                      "patching and take the reframe prompt", p.stdout)
+        # a lineage rooted under the old rules keeps them (decision 65)
+        with open(self.log) as fh:
+            recs = [json.loads(x) for x in fh]
+        for r in recs:
+            if r.get("review_id") == "9.1-r1" and r["record"] == "review":
+                r["rules_version"] = 1
+        with open(self.log, "w") as fh:
+            fh.writelines(json.dumps(r) + "\n" for r in recs)
+        out = subprocess.run([sys.executable, "-c", "import sys; sys.path.insert(0, sys.argv[1]); "
+                              "from _helpers import load; rr = load('review/scripts/review.py'); "
+                              "print(rr.chains(rr.vl.read_jsonl(sys.argv[2]), '9.1', '9.1-r3'))",
+                              os.path.dirname(os.path.abspath(__file__)), self.log],
+                             env=self.env, capture_output=True, text=True, check=True).stdout
+        self.assertEqual(out.strip(), "[]")
+
 if __name__ == "__main__":
     unittest.main()

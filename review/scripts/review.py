@@ -644,9 +644,18 @@ def cmd_record(a):
             + chains(recs, a.unit, review_id):
         print(line)
     if doc.get("reframe"):
-        print(f"[REFRAME] {review_id} proposes a simpler design that removes {len(doc['reframe']['removes'])} "
-              f"finding(s): judge it before fixing them — `review.py reframe-prepare --scope {a.scope} --unit "
-              f"{a.unit} --review {review_id}` (review/SKILL.md §5.2)")
+        # a repeat is decided before the judge-it line: a rejected idea back again is the user's
+        # call, and a judge-it line would send the loop to re-judge it (review 10.2-r3-03)
+        again, why = repeat_of(recs, a.unit, review_id)
+        if again or why:
+            prior = why or "; ".join(f"{rid}: {r}" for rid, _, r in again)
+            print(f"[REFRAME] {review_id} proposes a reframe this lineage already rejected ({prior}): the user's "
+                  "call, not the loop's — do not re-judge it (reframe-prepare refuses) and do not build until "
+                  "answered: the packet, or the inline question (review/SKILL.md §5.2)")
+        else:
+            print(f"[REFRAME] {review_id} proposes a simpler design that removes {len(doc['reframe']['removes'])} "
+                  f"finding(s): judge it before fixing them — `review.py reframe-prepare --scope {a.scope} --unit "
+                  f"{a.unit} --review {review_id}` (review/SKILL.md §5.2)")
     emit_review_packets(recs, a.unit, review_id, repeat=bool(doc.get("reframe")))
     return vl.EXIT_PASS
 
@@ -1433,6 +1442,16 @@ def repeated_reframe(recs, unit, review_id):
             if me and difflib.SequenceMatcher(None, me, norm_text(x[1])).ratio() >= 0.85]
 
 
+def repeat_of(recs, unit, review_id):
+    """(repeated_reframe's list, None), or (None, why) when the check itself failed. A failed
+    check fails closed — the caller treats it as a repeat: a wrong hold costs the user one glance;
+    a re-judge that accepts an idea the lineage already rejected builds against its answer."""
+    try:
+        return repeated_reframe(recs, unit, review_id), None
+    except Exception as exc:  # noqa: BLE001 — any failure is "cannot tell", held
+        return None, f"could not check for an earlier rejection ({' '.join(str(exc).split())[:160]})"
+
+
 def reframe_door(recs, unit, review_id):
     """('one-way', why) when the reframe touches a one-way door, else ('two-way', ''). The paths are
     the files of the findings the reframe removes (the code it replaces); door.py classifies the
@@ -1555,6 +1574,14 @@ def cmd_reframe_prepare(a):
     if rf is None:
         return err(f"review {a.review} proposed no reframe", "a review whose answer carried `reframe`",
                    "none", log, f"grep '\"record\": \"reframe\"' {log}", code=vl.EXIT_USAGE)
+    again, why = repeat_of(recs, a.unit, a.review)
+    if again or why:
+        # scope 10 §4.2: a rejected reframe proposed again is the user's to see, not the loop's to
+        # re-judge — refused, never prompted (review 10.2-r3-03)
+        return err(f"{a.review}'s reframe repeats one this lineage rejected — the user's call, not a re-judge",
+                   "a reframe the lineage's judge has not rejected", why or "; ".join(f"{rid}: {r}" for rid, _, r in again),
+                   log, "answer the repeat packet or the inline question; taking it is the user's call "
+                   "(`dispose --reframed ... --by user`)", cause="code", code=vl.EXIT_FAIL)
     jm = verify_judge()
     scope_md = os.path.join(a.scope, "scope.md")
     text = open(scope_md, encoding="utf-8").read() if os.path.isfile(scope_md) else ""

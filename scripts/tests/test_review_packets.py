@@ -41,6 +41,11 @@ class TestReviewPackets(unittest.TestCase):
                 out.append(json.load(fh))
         return out
 
+    def prepare(self, rid):
+        return tr.run(tr.REVIEW, "reframe-prepare", "--scope", self.scope, "--unit", "9.1", "--review", rid,
+                      "--objective", "every fix lands reviewed", "--out-dir", os.path.join(self.tmp.name, "rf"),
+                      env=self.env)
+
     def assertValid(self, doc):
         self.assertEqual(schema_check.validate(doc), [])
         self.assertEqual(doc["door"], "one-way")
@@ -177,13 +182,31 @@ class TestReviewPackets(unittest.TestCase):
         (doc,) = self.packets()
         self.assertValid(doc)
         self.assertIn("it moves the scanner", doc["payload"]["body"])
+        # review 10.2-r3-03: the hold replaces the judge-it line, and reframe-prepare refuses a re-judge
+        self.assertIn("do not re-judge it", p.stdout)
+        self.assertNotIn("judge it before fixing", p.stdout)
+        q = self.prepare("9.1-r2")
+        self.assertEqual(q.returncode, 1, q.stdout + q.stderr)
+        self.assertIn("repeats one this lineage rejected", q.stderr)
+        self.assertIn("9.1-r1: it moves the scanner", q.stderr)
 
     def test_case3_a_different_reframe_is_no_packet(self):
         self.run_env()
         self.record(reframe=self.REFRAME)
         self.judged("9.1-r1", "reject", reason="it moves the scanner")
-        self.record(reframe=dict(self.REFRAME, proposal="drop the retry loop and fail fast on the first error"))
+        p = self.record(reframe=dict(self.REFRAME, proposal="drop the retry loop and fail fast on the first error"))
         self.assertEqual(self.packets(), [])
+        self.assertIn("judge it before fixing", p.stdout)
+        self.assertEqual(self.prepare("9.1-r2").returncode, 0)
+
+    def test_case3_a_repeat_check_that_fails_holds(self):
+        rv = load("review/scripts/review.py")
+
+        def boom(*_):
+            raise RuntimeError("log unreadable")
+        rv.repeated_reframe = boom
+        self.assertEqual(rv.repeat_of([], "9.1", "9.1-r2"),
+                         (None, "could not check for an earlier rejection (log unreadable)"))
 
     def test_an_emission_failure_never_stops_the_review(self):
         # the outbox cannot be created (`.decision-queue` is a file): packet.py fails, the review

@@ -418,7 +418,9 @@ A packet that cannot be written only warns on stderr — the review never stops 
    non-overturning reframe anywhere in the lineage. Emitted by `record`. `local-maxima` flags
    from a fallback reviewer (`advisory`) never count.
 3. **A rejected reframe proposed again** — the new proposal matches (≥ 0.85 similarity) one the
-   judge already rejected in the lineage. Emitted by `record`, before any re-judging.
+   judge already rejected in the lineage. Emitted by `record`, which prints the hold in place
+   of the judge-it line; `reframe-prepare` refuses it (exit 1) — a re-judge is never the path.
+   A repeat check that cannot run is held the same way.
 
 ---
 

@@ -1448,7 +1448,9 @@ class TestReview(unittest.TestCase):
         # `#n` is the nth finding of the answer: the note (#1) and the blocking one (#2), IDs by severity
         self.assertEqual(rf[0]["removes"], ["9.1-r1-03", "9.1-r1-01"])
         self.assertEqual(self.judged("9.1-r1", "reject", reason="it moves the scanner").returncode, 0)
-        p = self.record(reframe=dict(self.REFRAME, removes=["9.1-r1-01", "9.1-r0-09"]))  # same range: round 2
+        # a different idea (a repeat is refused, not re-judged — review 10.2-r3-03); same range: round 2
+        p = self.record(reframe=dict(self.REFRAME, proposal="drop the retry loop and fail fast on the first error",
+                                     removes=["9.1-r1-01", "9.1-r0-09"]))
         self.assertIn("round: 2 of", p.stdout)
         self.assertIn("9.1-r0-09", p.stderr)   # an unknown earlier ID is dropped, with a warning
         self.assertEqual(self.records("reframe")[1]["removes"],

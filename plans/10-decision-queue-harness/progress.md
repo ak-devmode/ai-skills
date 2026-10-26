@@ -97,7 +97,7 @@ Script-owned (`plans-index.py`); PLANS-INDEX.md is rendered from it.
 ## Plan 10.1: Decision queue v1, usable today
 
 ### Resume Context (Plan 10.1)
-**Status:** Phase 0 done; tasks 1.1–1.4 dispatched to lanes A and B
+**Status:** 1.1 + 1.2 done on lane A (in review); 1.3 + 1.4 running on lane B
 **Next action:** collect lane A (1.1, 1.2) and lane B (1.3, 1.4); then 1.5 skill wiring, 1.6 deploy
 **Base:** ai-skills ad15797 · dev-workbench 28850dc (closeout-prep.md)
 
@@ -108,6 +108,13 @@ Script-owned (`plans-index.py`); PLANS-INDEX.md is rendered from it.
 - Finish table rev 3 approved. Branches: lane worktrees `feature/10-decision-queue-*`, cut over to ai-skills main in one step; dev-workbench feature branch merged to main before install.
 #### Task 1.0 — ✅ DONE
 - dev-workbench clean: Alex's allow rule + codex trust entries committed 28850dc.
+
+#### Task 1.1 — ✅ DONE (lane A, b7df5d2 on `concurrency/10-packet`)
+- `schemas/packet.schema.json`, `scripts/schema_check.py` (stdlib subset validator, fails on unknown keywords), fixtures `scripts/tests/fixtures/packets/{valid,invalid}/`, `scripts/tests/test_packet_schema.py`.
+#### Task 1.2 — ✅ DONE pending review (lane A, 41e788d)
+- `scripts/packet.py`, `scripts/door.py`, `scripts/one-way-doors.defaults`, `scripts/tests/test_packet.py`, `scripts/tests/test_door.py`, `scripts/README.md`. Driver re-ran from the branch: full suite 373 OK (2 skipped).
+- Lane's open calls (two-way, kept): `check-reply --lane M/W/A --outbox` lets the driver check a reply for a lane; `stale` fails open with a stated reason (it discards a pending decision, and check-reply gates anyway); `!` negations in `.one-way-doors` ignored; matching case-insensitive; door.py exit 2 on usage error, callers treat non-zero as one-way.
+- Review: fresh pane `packet review` (w14:p1H), unit 10.1, range 14954fc..concurrency/10-packet.
 
 ---
 

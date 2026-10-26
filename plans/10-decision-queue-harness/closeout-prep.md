@@ -47,7 +47,7 @@ fail loudly. Bump version when changing field shapes.
 <!-- Grouped by repo, then by category (code | test | config | doc | schema | migration).
      One line per file with terse intent. Workspace-relative paths. -->
 
-_(none)_
+- ai-skills (lane A, `concurrency/10-packet`): schema `schemas/packet.schema.json` · code `scripts/packet.py`, `scripts/door.py`, `scripts/schema_check.py` · config `scripts/one-way-doors.defaults` · test `scripts/tests/test_packet.py`, `test_door.py`, `test_packet_schema.py`, `fixtures/packets/` · doc `scripts/README.md`
 
 ---
 

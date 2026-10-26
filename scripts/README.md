@@ -68,6 +68,11 @@ by `test_entrypoint.py`'s compile check.
       floor hit promotes the door. Lane identity: machine/workspace/agent from herdr env, else
       machine/repo-hash/session id ($CLAUDE_CODE_SESSION_ID); with none, check-reply needs --lane. Schema: schemas/packet.schema.json, checked by schema_check.py.
 
+    packet_emit.py (importable)   emit(repo, unit, title, options, body, door, range_, blocks, pid) -> id | None
+      Review + verify's packet writer (scope 10 §4.2): runs `packet.py new` with cwd = the repo under review,
+      prints `PACKET <id>`, and on ANY failure warns on stderr and returns None — a harness error never
+      stops the caller, which keeps its inline question. `stable_id(*parts)` makes re-emitting idempotent.
+
     door.py classify --repo PATH --range BASE..HEAD [--claim one-way|two-way|info] [--defaults FILE]
       stdout: JSON {door, paths[{path,pattern,change}], reason} · exit: 0 classified · 2 usage
       Floor = scripts/one-way-doors.defaults + the repo's `.one-way-doors` read at the BASE

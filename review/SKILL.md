@@ -398,6 +398,25 @@ verdict is a `reframe-verdict` record with a one-line reason. What each verdict 
 The same judge lists findings that re-open a recorded decision (`[DECISION] <id> re-opens
 …`). Handle each as stop 1 (a design decision), not as a fix.
 
+**Packets — the three cases that need the user.** Each writes one one-way `generic` packet
+(`scripts/packet_emit.py` → `packet.py new`, outbox in the repo under review; the driver POSTs
+it; ids are stable per review and case, so a re-run re-sends and never duplicates). The body
+names the finding ids, the lineage, the options and a recommendation. `record` or
+`reframe-record` prints `PACKET <id>` and a `[PACKET]` / `[REFRAME]` line; the inline numbered
+question stays the path when `DECISION_QUEUE_URL` is unset (the packet is still in the outbox).
+A packet that cannot be written only warns on stderr — the review never stops for it:
+
+1. **An accepted reframe that overturns a recorded decision, or touches a one-way door**
+   (`door.py` over the review's range, a hit on a file of a finding the reframe removes; a
+   `door.py` that fails closed counts as a hit). Emitted by `reframe-record`. Do not build it
+   until the packet is answered.
+2. **A blocking finding that survived two rounds with no qualifying reframe** — round 3 or
+   later with no SHIP, or a blocking finding ending a `reopens` chain of three — and no accepted,
+   non-overturning reframe anywhere in the lineage. Emitted by `record`. `local-maxima` flags
+   from a fallback reviewer (`advisory`) never count.
+3. **A rejected reframe proposed again** — the new proposal matches (≥ 0.85 similarity) one the
+   judge already rejected in the lineage. Emitted by `record`, before any re-judging.
+
 ---
 
 ## 6. Behaviors

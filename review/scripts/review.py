@@ -42,8 +42,10 @@ import argparse
 import calendar
 import contextlib
 import datetime
+import difflib
 import fcntl
 import functools
+import importlib.util
 import json
 import os
 import re
@@ -57,6 +59,7 @@ SKILL = os.path.dirname(HERE)
 SCRIPTS = os.path.join(os.path.dirname(SKILL), "scripts")
 sys.path.insert(0, SCRIPTS)
 import verify_lib as vl  # noqa: E402
+import packet_emit  # noqa: E402
 
 PROMPT = os.path.join(SKILL, "prompts", "review.md")
 LEAN_PROMPT = os.path.join(SKILL, "prompts", "review-lean.md")
@@ -637,6 +640,7 @@ def cmd_record(a):
         print(f"[REFRAME] {review_id} proposes a simpler design that removes {len(doc['reframe']['removes'])} "
               f"finding(s): judge it before fixing them — `review.py reframe-prepare --scope {a.scope} --unit "
               f"{a.unit} --review {review_id}` (review/SKILL.md §5.2)")
+    emit_review_packets(recs, a.unit, review_id, repeat=bool(doc.get("reframe")))
     return vl.EXIT_PASS
 
 
@@ -1359,6 +1363,165 @@ def judged_reframes(recs, unit, review_id, verdict):
             and lin.get(rid, (rid, 0))[0] == root]
 
 
+# ---------- packets (scope 10 §4.2 "What reaches Alex from review", plan 10.2 Task 2.5) ----------
+# The three cases that need Alex each write one packet (scripts/packet_emit.py → packet.py new, outbox
+# in the repo under review) and still print the inline question: with DECISION_QUEUE_URL unset the
+# outbox is all that happens. Emission failing only warns — the caller keeps going. Every packet is
+# one-way: each case exists because the loop cannot decide without Alex. Ids are stable per
+# (review, case), so re-running a step re-sends instead of duplicating.
+
+def review_repo_path(recs, unit, review_id):
+    """(path, base, head) of the repo review `review_id` read, under the projects root; path is None
+    when it is not there (the packet then has no outbox to land in — warned by the caller)."""
+    e = next((x for x in reviews_of(recs, unit) if x["id"] == review_id), None)
+    if not e or not e["repo"]:
+        return None, None, None
+    path = os.path.join(vl.PROJECTS, e["repo"])
+    return (path if os.path.isdir(path) else None), e["base"], e["head"]
+
+
+def lineage_ids(recs, unit, review_id):
+    """Review IDs of `review_id`'s lineage, in order."""
+    revs, lin = rounds(recs, unit)
+    root = lin.get(review_id, (review_id, 0))[0]
+    return [e["id"] for e in revs if lin[e["id"]][0] == root]
+
+
+def packet_for(recs, unit, review_id, case, title, options, body, door="one-way", range_=None):
+    """Emit one packet; print `PACKET <id>` (inside packet_emit) and return the id, or warn and return
+    None. A review whose repo is not under the projects root cannot land a packet: warn, inline stays."""
+    path, base, head = review_repo_path(recs, unit, review_id)
+    if path is None:
+        print(f"review.py: warning: no repo for {review_id} under {vl.PROJECTS}: no packet written ({case}); "
+              "ask the question inline", file=sys.stderr)
+        return None
+    lin = " → ".join(lineage_ids(recs, unit, review_id)) or review_id
+    body = f"{body}\n\nLineage: {lin}"
+    return packet_emit.emit(path, unit, title, options, body, door=door, range_=range_,
+                            pid=packet_emit.stable_id("rv", unit, review_id, case))
+
+
+def norm_text(t):
+    return " ".join(re.sub(r"[^a-z0-9 ]", " ", str(t).lower()).split())
+
+
+def repeated_reframe(recs, unit, review_id):
+    """[(review_id, proposal, reason)] earlier rejected reframes of this lineage that `review_id`'s
+    reframe proposes again: the same proposal after normalizing case/punctuation, or one that
+    differs only slightly (similarity >= 0.85). A judge's rejection is the lineage's answer; the
+    same idea back again is Alex's to see, not the loop's to re-judge. Fails closed toward a
+    packet: unknown similarity (no proposal text) is not a repeat, but no earlier verdict means no
+    packet — nothing was rejected."""
+    rf = reframe_of(recs, review_id)
+    if not rf:
+        return []
+    me = norm_text(rf.get("proposal", ""))
+    return [x for x in judged_reframes(recs, unit, review_id, "rejected")
+            if me and difflib.SequenceMatcher(None, me, norm_text(x[1])).ratio() >= 0.85]
+
+
+def reframe_door(recs, unit, review_id):
+    """('one-way', why) when the reframe touches a one-way door, else ('two-way', ''). The paths are
+    the files of the findings the reframe removes (the code it replaces); door.py classifies the
+    review's own range and a hit on one of those files counts. A door.py that fails closed (it
+    returns one-way with no paths) counts as a hit: a wrong one-way costs one glance."""
+    rf = reframe_of(recs, review_id)
+    path, base, head = review_repo_path(recs, unit, review_id)
+    if not rf or path is None or not (base and head):
+        return "one-way", "door unknown (no repo or range to classify): treated as one-way"
+    spec = importlib.util.spec_from_file_location("door", os.path.join(SCRIPTS, "door.py"))
+    door = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(door)
+    res = door.classify(path, f"{base}..{head}")
+    files = {r.get("file") for r in recs if r.get("record") == "finding" and r.get("finding_id") in rf["removes"]}
+    hit = sorted(h["path"] for h in res["paths"] if h["path"] in files)
+    if res["door"] == "one-way" and not res["paths"]:
+        return "one-way", res["reason"]
+    return ("one-way", "touches " + ", ".join(hit)) if hit else ("two-way", "")
+
+
+def reframe_options(review_id, extra):
+    return [f"Take the reframe (build it, then dispose the replaced findings `--reframed`){extra}",
+            "Reject it and fix the findings as they stand",
+            "Hold: Alex decides after reading the lineage"]
+
+
+def packet_overturn(recs, unit, review_id, verdict):
+    """Case 1: an accepted reframe that overturns a recorded decision, or touches a one-way door."""
+    rf = reframe_of(recs, review_id) or {}
+    why = verdict.get("overturns")
+    door, note = ("one-way", f"overturns a recorded decision: {why}") if why else reframe_door(recs, unit, review_id)
+    if not why and door != "one-way":
+        return None
+    body = (f"The fresh judge accepted review {review_id}'s reframe, but it needs Alex ({note}).\n\n"
+            f"Proposal: {rf.get('proposal', '?')}\nDeletes: {verdict.get('deletes') or rf.get('deletes', '?')}\n"
+            f"Would replace findings: {', '.join(rf.get('removes') or []) or 'none named'}\n"
+            f"Judge reason: {verdict.get('reason', '')}\n\nRecommendation: take the reframe — the judge found it meets "
+            "the objective and deletes code; only the overturned decision or door makes it Alex's call.")
+    return packet_for(recs, unit, review_id, "overturn", f"{unit} {review_id}: reframe overturns a decision / touches a one-way door",
+                      reframe_options(review_id, ""), body)
+
+
+def packet_repeat(recs, unit, review_id):
+    """Case 3: a reframe the judge already rejected, proposed again."""
+    rf, again = reframe_of(recs, review_id) or {}, repeated_reframe(recs, unit, review_id)
+    if not again:
+        return None
+    prior = "; ".join(f"{rid}: {why}" for rid, _, why in again)
+    body = (f"Review {review_id} proposes a reframe this lineage already had rejected.\n\n"
+            f"Proposal: {rf.get('proposal', '?')}\nEarlier rejection: {prior}\n"
+            f"Findings it would remove: {', '.join(rf.get('removes') or []) or 'none named'}\n\n"
+            "Recommendation: keep the rejection and fix the findings — unless the objective changed.")
+    return packet_for(recs, unit, review_id, "repeat", f"{unit} {review_id}: a rejected reframe is proposed again",
+                      ["Keep the rejection; fix the findings", "Reverse it: take the reframe",
+                       "Hold: Alex decides after reading the lineage"], body)
+
+
+def packet_stuck(recs, unit, review_id):
+    """Case 2: a blocking finding that survived two rounds with no qualifying reframe. `Survived`:
+    the review is round >= 3 of its lineage with no SHIP, or a blocking finding ends a `reopens`
+    chain of >= 3 (two failed fixes). `Qualifying reframe`: an accepted, non-overturning verdict
+    anywhere in the lineage. Fail-closed: an unknown round is round 0, so it never fires early."""
+    _, rnd = review_round(recs, unit, review_id)
+    ids = lineage_ids(recs, unit, review_id)
+    if any(r.get("record") == "reframe-verdict" and r.get("verdict") == "accepted" and not r.get("overturns")
+           and r.get("review_id") in ids for r in recs):
+        return None
+    link = {r.get("finding_id"): r.get("reopens") for r in recs if r.get("record") == "finding"}
+    blocking = [r for r in recs if r.get("record") == "finding" and r.get("review_id") == review_id
+                and r.get("severity") == "blocking" and not r.get("advisory")]
+    review = next((r for r in recs if r.get("record") == "review" and r.get("review_id") == review_id), {})
+
+    def depth(fid):
+        walk = [fid]
+        while link.get(walk[-1]) and link[walk[-1]] not in walk:
+            walk.append(link[walk[-1]])
+        return len(walk)
+    stuck = [r for r in blocking if depth(r["finding_id"]) >= 3 or (rnd >= ROUND_CAP and review.get("verdict") != "SHIP")]
+    if not stuck:
+        return None
+    lines = "\n".join(f"- {r['finding_id']} `{r.get('file')}:{r.get('line')}` — {' '.join(str(r.get('text', '')).split())[:200]}"
+                      for r in stuck)
+    body = (f"Blocking finding(s) survived round {rnd} of {unit}'s review lineage and no reframe qualified:\n{lines}\n\n"
+            "Options: one more fix round; a reframe (the reviewer or you propose one); or stop here and accept.\n"
+            "Recommendation: take a reframe — repeated patching of one place means the design is wrong.")
+    return packet_for(recs, unit, review_id, "stuck", f"{unit} {review_id}: blocking finding survived {rnd} rounds",
+                      ["Stop patching; bring a reframe", "One more fix round", "Stop here and accept as reported"], body)
+
+
+def emit_review_packets(recs, unit, review_id, repeat):
+    """cmd_record's packets: case 3 (a rejected reframe proposed again) and case 2 (a blocking finding
+    that survived two rounds, no qualifying reframe). Never raises: a harness error warns and the
+    inline question stands."""
+    for fn in ((packet_repeat,) if repeat else ()) + (packet_stuck,):
+        try:
+            if fn(recs, unit, review_id):
+                print(f"[PACKET] {review_id}: {fn.__name__[7:]} case — Alex's call; the inline question stands "
+                      "when no queue is set (review/SKILL.md §5.2)")
+        except Exception as exc:  # noqa: BLE001 — harness errors never stop the review
+            print(f"review.py: warning: packet not written ({exc}); ask the question inline", file=sys.stderr)
+
+
 def cmd_reframe_prepare(a):
     log = os.path.join(a.scope, "artifacts", f"review-{a.unit}.jsonl")
     recs = vl.read_jsonl(log)
@@ -1467,6 +1630,14 @@ def cmd_reframe_record(a):
               "reframe to the user (review/SKILL.md §5.2)")
     for d in rec["reopened_decisions"]:
         print(f"[DECISION] {d['finding']} re-opens a recorded decision: {d['decision']}")
+    if rec["verdict"] == "accepted":
+        # case 1 (never stops the caller: a failed emission warns and the inline question stands)
+        try:
+            if packet_overturn(vl.read_jsonl(log), a.unit, a.review, rec):
+                print(f"[REFRAME] {a.review}: this reframe needs Alex (overturns a decision or touches a one-way "
+                      "door) — do not build it until the packet is answered")
+        except Exception as exc:  # noqa: BLE001 — harness errors never stop the review
+            print(f"review.py: warning: packet not written ({exc}); ask the question inline", file=sys.stderr)
     return vl.EXIT_PASS
 
 

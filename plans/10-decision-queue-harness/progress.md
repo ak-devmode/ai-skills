@@ -128,10 +128,14 @@ Script-owned (`plans-index.py`); PLANS-INDEX.md is rendered from it.
 ## Plan 10.2: Review re-pointed at decisions
 
 ### Resume Context (Plan 10.2)
-**Status:** Phase 0 done; tasks 2.3 (lineage first) → 2.1 → 2.1b → 2.2 → 2.4 dispatched to lane C; 2.5 waits for 10.1 packet.py
+**Status:** 2.1–2.4 built on lane C, in review; 2.5 waits for 10.1 packet.py to land
 **Next action:** collect lane C
 **Base:** ai-skills ad15797 (closeout-prep.md)
 
 ### Session: 2026-10-26
 #### Phase 0 — ✅ DONE
 - Status flipped Draft → Ready to execute on Alex's word; Executed by stamped; shares 10.1's freshness result.
+#### Tasks 2.3, 2.1, 2.1b, 2.2, 2.4 + rules-version stamp — ✅ DONE pending review (lane C, `concurrency/10-review`)
+- dc48248 lineage continues only on a fix re-review (closes the P1 TO-DO, plans/TO-DO.md ~483) · 8358edc `dispose --reframed` · c40e04a `rules_version` stamp, lineages keep their root's rules (decision 65, 10.1 Task 1.5's stamp done here) · 90a95af findings budget + round-aware prompt + `reopens` · f8196ab fix discipline + reopens chain stop · 140b5dd reframe prompt + fresh judge · eaa3355 effort trial (`verify_lib.EFFORT_TRIAL`, default on, capped xhigh) · 3e1517e review skill 3.9.0.
+- Lane notes: an accepted reframe that overturns a recorded decision fills `overturns` and goes to Alex before anything is built; the judge's objective comes from `--objective`, else scope.md §1, else exit 3; the trial flag is a code constant, not an env var; `verify_lib.schema_problems` now handles boolean and errors on unsupported types (check against lane A's `schema_check.py` at merge); 2.5 packet data lives in the new reframe / reframe-verdict records.
+- Review: fresh pane `review-loop review` (w14:p1M, tab "10 lanes 2"), unit 10.2, range 14954fc..concurrency/10-review.

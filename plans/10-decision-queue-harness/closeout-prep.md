@@ -49,6 +49,7 @@ fail loudly. Bump version when changing field shapes.
 
 - ai-skills (lane A, `concurrency/10-packet`): schema `schemas/packet.schema.json` · code `scripts/packet.py`, `scripts/door.py`, `scripts/schema_check.py` · config `scripts/one-way-doors.defaults` · test `scripts/tests/test_packet.py`, `test_door.py`, `test_packet_schema.py`, `fixtures/packets/` · doc `scripts/README.md`
 - dev-workbench (lane B, `concurrency/10-queue`): code `queue/` (service, templates, migrations) · test `queue/tests/test_queue.py` · config `config/systemd/decision-queue.service`, `install.sh`, `queue/pyproject.toml`, `queue/uv.lock` · doc `queue/README.md`, `queue/docs/*.png`
+- ai-skills (lane C, `concurrency/10-review`): code `scripts/verify_lib.py`, `review/scripts/review.py`, `scripts/verdict-gate.py` · prompt `review/prompts/review.md`, `review-lean.md` · schema `review/schemas/review-output.schema.json` · doc `review/SKILL.md`, `templates/verify-contracts.md` · test `scripts/tests/test_review.py`, `test_verdict_gate.py`
 
 ---
 

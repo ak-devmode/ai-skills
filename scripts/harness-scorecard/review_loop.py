@@ -116,7 +116,9 @@ class Git:
             d = os.path.join(self.projects, repo)
             out = None
             if os.path.isdir(d):
-                p = subprocess.run(["git", "-C", d, *args], capture_output=True, text=True)
+                # diffs carry file contents, which need not be UTF-8; only the ASCII hunk
+                # headers and numstat counts are read, so a replaced byte changes no number
+                p = subprocess.run(["git", "-C", d, *args], capture_output=True, text=True, errors="replace")
                 out = p.stdout if p.returncode == 0 else None
             self.cache[k] = out
         return self.cache[k]

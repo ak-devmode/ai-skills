@@ -190,6 +190,20 @@ class LineageTest(unittest.TestCase):
         lin = self.analyze({("s", "1.1"): u11b})["tables"]["Effort trial lineages"]["rows"]
         self.assertEqual(lin["pre-trial · base low"], [1, 1.0, 50.0, 1, 0])   # r1–r2 closed (r2 fell back), r3 open
 
+    def test_git_reads_a_non_utf8_diff(self):
+        d = os.path.join(self.projects, "demo")
+        base = git(d, "rev-parse", "HEAD")
+        with open(os.path.join(d, "latin.txt"), "wb") as fh:
+            fh.write(b"caf\xe9 \xe2\x28\n")
+        git(d, "add", "latin.txt"); git(d, "commit", "-qm", "latin")
+        head = git(d, "rev-parse", "HEAD")
+        try:
+            g = review_loop.Git(self.projects)
+            self.assertEqual(g.hunks("demo", f"{base}..{head}")["latin.txt"], [(1, 1)])
+            self.assertEqual(g.stat("demo", f"{base}..{head}"), (1, 1))
+        finally:
+            git(d, "reset", "-q", "--hard", base)
+
     def test_effort_base_unreadable_range_is_unresolved(self):
         with mock.patch.object(self.rv.vl, "PROJECTS", self.projects):
             out = review_loop.analyze({("s", "1.1"): unit_11(self.shas)}, self.rv, git=review_loop.Git("", enabled=False))
@@ -384,6 +398,17 @@ class CliTest(unittest.TestCase):
             self.assertIn(f"Δ against {ref} (window 2026-10-05 00:00 → 2026-10-25 23:59, 21d, git on sessions off)", again.stdout)
             with open(os.path.join(st, ref)) as fh:
                 self.assertEqual(json.load(fh)["flags"], {"git": True, "sessions": False})
+
+    def test_bad_date_is_usage_but_an_inner_value_error_is_not(self):
+        import scorecard
+        with tempfile.TemporaryDirectory() as tmp, mock.patch("sys.stderr", __import__("io").StringIO()) as err:
+            self.assertEqual(scorecard.main(["run", "--since", "2026-13-45", "--logs", tmp]), 2)
+            self.assertIn("[USAGE]", err.getvalue())
+            # a decode error inside a run is a failure, never reported as a bad flag
+            with mock.patch.object(scorecard.review_loop, "load_logs",
+                                   side_effect=UnicodeDecodeError("utf-8", b"\xe2", 0, 1, "x")):
+                with self.assertRaises(UnicodeDecodeError):
+                    scorecard.main(["run", "--logs", tmp])
 
     def test_empty_logs_fail_closed(self):
         with tempfile.TemporaryDirectory() as tmp:

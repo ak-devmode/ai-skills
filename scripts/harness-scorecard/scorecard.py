@@ -51,8 +51,16 @@ def die(msg):
     return 1
 
 
+class UsageError(Exception):
+    """A bad argument — exit 2. Its own class: a ValueError from inside a run (a decode
+    error, a bad number) is a failed step, not a usage error, and must not read as one."""
+
+
 def day(s, end=False):
-    d = dt.datetime.strptime(s, "%Y-%m-%d").replace(tzinfo=dt.timezone.utc)
+    try:
+        d = dt.datetime.strptime(s, "%Y-%m-%d").replace(tzinfo=dt.timezone.utc)
+    except ValueError:
+        raise UsageError(f"{s!r} is not a YYYY-MM-DD date") from None
     return (d + dt.timedelta(days=1) - dt.timedelta(seconds=1)).timestamp() if end else d.timestamp()
 
 
@@ -65,7 +73,7 @@ def count_files(root, suffix):
 
 def rsync(src, dst, extra=()):
     os.makedirs(dst, exist_ok=True)
-    p = subprocess.run(["rsync", "-a", *RSYNC_KEEP, *extra, src, dst], capture_output=True, text=True)
+    p = subprocess.run(["rsync", "-a", *RSYNC_KEEP, *extra, src, dst], capture_output=True, text=True, errors="replace")
     # 24 = source files vanished mid-copy (a live session rotated a file): the rest copied
     if p.returncode not in (0, 24):
         raise RuntimeError(f"rsync {src} → {dst} exit {p.returncode}: {p.stderr.strip()[-300:]}")
@@ -95,7 +103,7 @@ def cmd_pull(a):
         probe = subprocess.run(["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=15", a.host,
                                 "for d in .claude/projects .codex/sessions " + " ".join(PLAN_SOURCES)
                                 + "; do [ -d \"$d\" ] && echo \"$d\"; done"],
-                               capture_output=True, text=True, timeout=60)
+                               capture_output=True, text=True, errors="replace", timeout=60)
         if probe.returncode != 0:
             return die(f"ssh {a.host} unreachable (exit {probe.returncode}): {probe.stderr.strip()[-200:]} — cache not refreshed")
         have = set(probe.stdout.split())
@@ -208,7 +216,7 @@ def main(argv=None):
     a = ap.parse_args(argv)
     try:
         return {"pull": cmd_pull, "run": cmd_run}[a.cmd](a)
-    except ValueError as exc:
+    except UsageError as exc:
         print(f"[USAGE] {exc}", file=sys.stderr)
         return 2
 

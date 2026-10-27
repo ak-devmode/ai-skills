@@ -135,12 +135,18 @@ class Git:
                 h[cur].append((s, s + max(n, 1) - 1))
         return h
 
-    def changed(self, repo, rng):
+    def stat(self, repo, rng):
+        """(files, changed lines) — verify_lib.diff_stat's shape, but None when git cannot read
+        the range (diff_stat reads that as an empty diff, which effort_for calls `low`)."""
         out = self._run(repo, "diff", "--numstat", rng)
         if out is None:
             return None
-        return sum(int(a) + int(b) for a, b, *_ in (l.split("\t") for l in out.splitlines())
-                   if a.isdigit() and b.isdigit())
+        rows = [l.split("\t") for l in out.splitlines() if l.strip()]
+        return len(rows), sum(int(r[0]) + int(r[1]) for r in rows if len(r) > 2 and r[0].isdigit() and r[1].isdigit())
+
+    def changed(self, repo, rng):
+        s = self.stat(repo, rng)
+        return None if s is None else s[1]
 
     def commits(self, repo, rng):
         out = self._run(repo, "rev-list", rng)
@@ -153,6 +159,16 @@ def _ratio(a, b):
 
 def _pct(a, b):
     return round(100 * a / b, 1) if b else None
+
+
+TIER_ORDER = ("low", "medium", "high", "xhigh")
+
+
+def _trial_order(k):
+    """Effort-trial row order: pre-trial before trial, base tiers lowest first (unstamped /
+    unresolved last), round 1 before fix rounds."""
+    b, t, *p = k
+    return (b != "pre-trial", TIER_ORDER.index(t) if t in TIER_ORDER else len(TIER_ORDER), t, p != ["round 1"])
 
 
 def analyze(units, rv, since=None, git=None):
@@ -220,6 +236,23 @@ def analyze(units, rv, since=None, git=None):
             t = ts_of(rid)
             return since is None or (t is not None and t >= since)
 
+        def base_of(e):
+            """effort_for's tier for review `e` — the trial's bucket key (it decides per base tier
+            whether the bump pays). review.py stamps `effort_base`; under rules 1 the stamped
+            `effort` is the base, and an unstamped pre-trial review is recomputed with effort_for
+            on its own range. A trial review without a stamp is `unstamped`, never recomputed
+            (review.py's stamp is the tier it ran from); a range git cannot read is `unresolved`."""
+            m = meta.get(e["id"]) or {}
+            if m.get("effort_base"):
+                return m["effort_base"]
+            if rules.get(e["id"], 1) >= 2:
+                return "unstamped"
+            if m.get("effort"):
+                return m["effort"]
+            st = git.stat(e["repo"], f"{e['base']}..{e['head']}") if e.get("base") and e.get("head") else None
+            return rv.vl.effort_for([st])[0] if st is not None else "unresolved"
+
+        ev_of = {e["id"]: e for e in revs}
         heads, byhead, kind, maxr = collections.defaultdict(set), {}, {}, {}
         for e in revs:
             rid, repo = e["id"], e["repo"]
@@ -293,14 +326,17 @@ def analyze(units, rv, since=None, git=None):
                         fk = "pure fix" if cs and all(sh in fixshas for sh in cs) else "fix + new"
                     fp_rev[fk] += 1; fp_find[fk] += len(fs); fp_lines[fk] += c
 
-            # effort trial — round 1 vs fix rounds, trial (lineage rules 2+) vs pre-trial
+            # effort trial — trial (lineage rules 2+) vs pre-trial, per base tier, then round 1 vs
+            # fix rounds. A codex row takes its own review's base; a lineage its root's.
             bucket = "trial" if rules.get(rid, 1) >= 2 else "pre-trial"
             phase = "round 1" if rnd == 1 else "fix rounds"
-            tr_all[bucket] += 1
-            tr_out[bucket] += fa == "fallback" and "out of credits" in reviewer
-            tr_lin_max[(scope, unit, root, bucket)] = max(tr_lin_max.get((scope, unit, root, bucket), 0), rnd)
+            lk = (bucket, base_of(ev_of[root]) if root in ev_of else "unstamped")
+            tr_all[lk] += 1
+            tr_out[lk] += fa == "fallback" and "out of credits" in reviewer
+            tr_lin_max[(scope, unit, root, lk)] = max(tr_lin_max.get((scope, unit, root, lk), 0), rnd)
             if fa == "codex":
-                tr_rev[(bucket, phase)] += 1; tr_find[(bucket, phase)] += len(fs); tr_blk[(bucket, phase)] += nblk
+                ck = (bucket, base_of(e), phase)
+                tr_rev[ck] += 1; tr_find[ck] += len(fs); tr_blk[ck] += nblk
                 if bucket == "trial":
                     tiers[m.get("effort") or "unstamped"] += 1
             if isinstance(m.get("round"), int) and m["round"] != rnd:
@@ -348,15 +384,15 @@ def analyze(units, rv, since=None, git=None):
                  for k in ("round 1", "pure fix", "fix + new") if fp_rev[k]}}
     tables["Effort trial (codex)"] = {
         "cols": ["Reviews", "Findings/rev", "Blocking/rev"],
-        "rows": {f"{b} · {p}": [tr_rev[(b, p)], _ratio(tr_find[(b, p)], tr_rev[(b, p)]), _ratio(tr_blk[(b, p)], tr_rev[(b, p)])]
-                 for b in ("pre-trial", "trial") for p in ("round 1", "fix rounds") if tr_rev[(b, p)]}}
+        "rows": {f"{b} · base {t} · {p}": [tr_rev[k], _ratio(tr_find[k], tr_rev[k]), _ratio(tr_blk[k], tr_rev[k])]
+                 for k in sorted(tr_rev, key=_trial_order) for b, t, p in [k]}}
     lin_by = collections.defaultdict(list)
-    for (_, _, _, b), mx in tr_lin_max.items():
-        lin_by[b].append(mx)
+    for (_, _, _, lk), mx in tr_lin_max.items():
+        lin_by[lk].append(mx)
     tables["Effort trial lineages"] = {
         "cols": ["Lineages", "Fix rounds/lineage", "Credit-outs %"],
-        "rows": {b: [len(lin_by[b]), _ratio(sum(v - 1 for v in lin_by[b]), len(lin_by[b])), _pct(tr_out[b], tr_all[b])]
-                 for b in ("pre-trial", "trial") if lin_by[b]}}
+        "rows": {f"{b} · base {t}": [len(v), _ratio(sum(x - 1 for x in v), len(v)), _pct(tr_out[(b, t)], tr_all[(b, t)])]
+                 for (b, t), v in sorted(lin_by.items(), key=lambda kv: _trial_order(kv[0]))}}
     notes = {"rounds_calls": rounds_calls, "failed_units": fails, "trial_effort_tiers": dict(tiers),
              "stamped_round_mismatches": round_mismatch,
              "lineage_warns": {"total": sum(lin_warns.values()), "units": dict(sorted(lin_warns.items()))},

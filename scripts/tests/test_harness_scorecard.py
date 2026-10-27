@@ -81,7 +81,7 @@ def unit_11(s):
 def unit_12(s):
     """Effort trial: stamped rules 2, r1 then an explicit continuation → trial round 1 + fix round."""
     st = {"rules_version": 2}
-    return [review("1.2", 1, s["a"], s["b"], "2026-10-20T00:00:00Z", effort="high", round=1, **st),
+    return [review("1.2", 1, s["a"], s["b"], "2026-10-20T00:00:00Z", effort="high", effort_base="medium", round=1, **st),
             finding("1.2", 1, 1, "2026-10-20T00:00:00Z", "blocking"),
             review("1.2", 2, s["b"], s["c"], "2026-10-21T00:00:00Z", effort="high", round=2, continues="1.2-r1", **st)]
 
@@ -162,15 +162,23 @@ class LineageTest(unittest.TestCase):
     def test_effort_trial_splits_round1_and_fix_rounds(self):
         out = self.analyze({("s", "1.1"): unit_11(self.shas), ("s", "1.2"): unit_12(self.shas)})
         rows = out["tables"]["Effort trial (codex)"]["rows"]
-        self.assertEqual(rows["trial · round 1"], [1, 1.0, 1.0])
-        self.assertEqual(rows["trial · fix rounds"][0], 1)
-        self.assertEqual(rows["pre-trial · round 1"][0], 2)   # the fallback r2 is not a codex review
-        self.assertNotIn("pre-trial · fix rounds", rows)
+        self.assertEqual(rows["trial · base medium · round 1"], [1, 1.0, 1.0])
+        # r2 carries no effort_base: counted as unstamped, never dropped or recomputed
+        self.assertEqual(rows["trial · base unstamped · fix rounds"][0], 1)
+        # pre-trial reviews carry no stamp: effort_for on their range (1 file, 1 line → low)
+        self.assertEqual(rows["pre-trial · base low · round 1"][0], 2)   # the fallback r2 is not a codex review
+        self.assertFalse([k for k in rows if k.startswith("pre-trial") and k.endswith("fix rounds")])
+        self.assertEqual(list(rows)[0], "pre-trial · base low · round 1")
         lin = out["tables"]["Effort trial lineages"]["rows"]
-        self.assertEqual(lin["trial"][:2], [1, 1.0])
-        self.assertEqual(lin["pre-trial"][0], 2)
+        self.assertEqual(lin["trial · base medium"][:2], [1, 1.0])   # a lineage takes its root's base
+        self.assertEqual(lin["pre-trial · base low"][0], 2)
         self.assertEqual(out["notes"]["trial_effort_tiers"], {"high": 2})
         self.assertEqual(out["notes"]["stamped_round_mismatches"], 0)
+
+    def test_effort_base_unreadable_range_is_unresolved(self):
+        with mock.patch.object(self.rv.vl, "PROJECTS", self.projects):
+            out = review_loop.analyze({("s", "1.1"): unit_11(self.shas)}, self.rv, git=review_loop.Git("", enabled=False))
+        self.assertEqual(list(out["tables"]["Effort trial (codex)"]["rows"]), ["pre-trial · base unresolved · round 1"])
 
     def test_lineage_warns_are_counted_not_dropped(self):
         real = self.rv.rounds

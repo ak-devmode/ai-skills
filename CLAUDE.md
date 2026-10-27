@@ -225,6 +225,7 @@ scripts/lever-candidates.py     — /closeout: lever candidates → TO-DO.md, se
 scripts/verify-prereqs.sh       — setup.sh step 4: Python + codex checks, warns, always exit 0
 scripts/clone-behind.py         — one line when this clone is behind origin/main (/verify, /plan)
 scripts/review-mode.py          — /review + /verify mode: flag > AI_SKILLS_REVIEW_MODE > default lean
+scripts/harness-scorecard/      — harness scorecard: `pull` homelab logs (MBA only), `run` the baseline tables + Δ, effort trial on a fixed follow-up
 scripts/tests/                  — stdlib unittest suite for the scripts (CLAUDE.md §6 Test:)
 plans/PLANS-INDEX.md            — local plans tracking ai-skills development
 plans/<scope>/                  — active scope folders

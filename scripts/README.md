@@ -201,6 +201,16 @@ PNG within the cap. The tenant check is a **declaration** check: the author atte
 demo tenant; nothing ties the pixels to it. The protection against real patient data (WellMed dev and
 staging hold it) is taking the shots on the demo tenant in the first place, and scrubbing them (step 3).
 
+## harness-scorecard/
+
+    scripts/harness-scorecard/scorecard.py pull
+    scripts/harness-scorecard/scorecard.py run [--since D] [--until D] [--follow-up DAYS] [--no-git] [--no-sessions]
+      exit: 0 ok · 1 a step failed (named on stderr) · 2 usage
+
+The scope-10 baseline as a re-runnable scorecard: rounds per lineage through review.py's own
+functions, the effort trial on a fixed follow-up cohort, and a Δ against the last comparable run.
+Aggregates only, never prompt text. Full contract: `scripts/harness-scorecard/README.md`.
+
 ## edit-guard.py
 
     edit-guard.py <spec.json|-> [--write] [--root DIR]

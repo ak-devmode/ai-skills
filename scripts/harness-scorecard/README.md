@@ -49,8 +49,12 @@ Copies are never pruned. Worktrees are deleted after merge, and their review log
 only here.
 
 3.2 **Store** `~/.cache/harness-scorecard/<UTC stamp>.json`: one file per run, numbers
-only. The next run's Δ columns compare against the latest file. If that file is unreadable,
-the run prints a WARN and leaves Δ out. The Δ is advisory, so it never blocks today's numbers.
+only, plus the run's flags (`git`, `sessions`) and window class (its length, `21d` by default).
+The next run's Δ columns compare against the latest file with the **same flags and window
+class** — a `--no-git` run, a `--no-sessions` run or the ten-month baseline replay is never a
+default run's reference — and the header names the reference's window and flags. A run stored
+before flags existed matches nothing. If a newer file is unreadable, the run prints a WARN and
+leaves Δ out. The Δ is advisory, so it never blocks today's numbers.
 
 3.3 **No text leaves the logs.** Transcripts and review logs can carry patient data. The
 scorecard classifies prompt text in memory and stores and prints counts only. Never commit

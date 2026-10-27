@@ -5,6 +5,8 @@ Approach: each run's tables are saved as one JSON file under the store dir
 back). A table is {"cols": [...], "rows": {label: [numbers]}} — numbers only, so the store
 never holds transcript text. The delta is cell-wise current − previous for the same table /
 row / column; rendering adds a Δ column after every numeric column when a previous run exists.
+The previous run is the latest with the same profile (flags + window length): a Δ against a
+run computed another way measures the configuration, not the harness.
 
 A previous run that cannot be read does not stop the scorecard: the delta is advisory (nothing
 gates on it), so the run prints with no Δ and a WARN naming the file — failing the whole report
@@ -42,18 +44,29 @@ def save(store_dir, result, now=None):
     return path
 
 
-def previous(store_dir, before=None):
-    """(path, result) of the latest stored run (excluding `before`'s path), (path, None) when it
-    is unreadable, (None, None) when there is none."""
+def profile(result):
+    """What makes two runs comparable: their flags and their window length. A run stored before
+    profiles existed has neither, and matches no profiled run."""
+    return {"flags": result.get("flags"), "window_class": (result.get("window") or {}).get("class")}
+
+
+def previous(store_dir, before=None, match=None):
+    """(path, result) of the latest stored run (excluding `before`'s path) whose profile equals
+    `match` (any run when None), (path, None) when a newer run is unreadable, (None, None) when
+    there is none. An unreadable run newer than the match stops the search: it may have been
+    the reference, and a Δ against an older one would be read as today's movement."""
     runs = sorted(p for p in glob.glob(os.path.join(store_dir, "*.json")) if p != before)  # stamps sort by time
-    if not runs:
-        return None, None
-    try:
-        with open(runs[-1]) as fh:
-            res = json.load(fh)
-        return runs[-1], res if isinstance(res.get("tables"), dict) else None
-    except (OSError, ValueError, AttributeError):
-        return runs[-1], None
+    for path in reversed(runs):
+        try:
+            with open(path) as fh:
+                res = json.load(fh)
+            if not isinstance(res.get("tables"), dict):
+                return path, None
+        except (OSError, ValueError, AttributeError):
+            return path, None
+        if match is None or profile(res) == match:
+            return path, res
+    return None, None
 
 
 def _num(v):

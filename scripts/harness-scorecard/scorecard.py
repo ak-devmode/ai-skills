@@ -141,18 +141,24 @@ def cmd_run(a):
     if not a.no_sessions:
         tables.update(sessions.tables(sessions.scan(a.logs, since, until)))
     tables.update(loop["tables"])
-    result = {"window": {"since": fmt(since), "until": fmt(until)}, "logs_pulled": pulled,
+    # the Δ reference must be computed the same way: same flags, same window length. A --no-git
+    # run's §3.2 is all `unresolved`, a --no-sessions run has no §1/§2/§4, and the baseline replay
+    # spans ten months — against any of them a default run's Δ is configuration, not movement.
+    flags = {"git": not a.no_git, "sessions": not a.no_sessions}
+    window = {"since": fmt(since), "until": fmt(until), "class": f"{round((until - since) / 86400)}d"}
+    result = {"window": window, "flags": flags, "logs_pulled": pulled,
               "generated": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
               "notes": {**loop["notes"], "review_logs": lstats}, "tables": tables}
-    ppath, prev = store.previous(a.store)
+    ppath, prev = store.previous(a.store, match=store.profile(result))
     d = store.delta(tables, prev["tables"]) if prev else None
-    print(f"# Harness scorecard — {result['window']['since']} → {result['window']['until']}\n")
+    print(f"# Harness scorecard — {window['since']} → {window['until']} ({window['class']}, {fmt_flags(flags)})\n")
     if ppath and prev:
-        print(f"Δ against {os.path.basename(ppath)} (window {prev['window']['since']} → {prev['window']['until']})\n")
+        print(f"Δ against {os.path.basename(ppath)} (window {prev['window']['since']} → {prev['window']['until']}, "
+              f"{prev['window']['class']}, {fmt_flags(prev['flags'])})\n")
     elif ppath:
         print(f"[WARN] previous run {ppath} unreadable — no Δ this run\n")
     else:
-        print("No previous run — no Δ.\n")
+        print(f"No previous run with {window['class']}, {fmt_flags(flags)} — no Δ.\n")
     n = loop["notes"]
     if n["failed_units"]:
         print(f"[WARN] {len(n['failed_units'])} unit(s) failed lineage resolution and are NOT counted: "
@@ -175,6 +181,10 @@ def cmd_run(a):
         except (OSError, ValueError) as exc:
             return die(f"could not save this run under {a.store}: {exc}")
     return 0
+
+
+def fmt_flags(f):
+    return " ".join(f"{k} {'on' if v else 'off'}" for k, v in sorted(f.items()))
 
 
 def fmt(t):

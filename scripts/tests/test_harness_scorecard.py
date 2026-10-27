@@ -314,6 +314,17 @@ class DeltaTest(unittest.TestCase):
             self.assertIsNone(res)
             self.assertEqual(store.previous(d, before=path)[0], p)
 
+    def test_previous_matches_profile(self):
+        a = {"window": {"class": "21d"}, "flags": {"git": True}, "tables": self.PREV}
+        b = {"window": {"class": "21d"}, "flags": {"git": False}, "tables": self.CUR}
+        with tempfile.TemporaryDirectory() as d:
+            pa = store.save(d, a)
+            store.save(d, {"window": {}, "tables": self.CUR})          # pre-profile run: matches nothing
+            store.save(d, b)
+            self.assertEqual(store.previous(d, match=store.profile(a)), (pa, json.loads(json.dumps(a))))
+            self.assertEqual(store.previous(d, match=store.profile(b))[1]["flags"], {"git": False})
+            self.assertEqual(store.previous(d, match={"flags": None, "window_class": "7d"}), (None, None))
+
     def test_save_never_overwrites_an_earlier_run(self):
         # two runs stamped the same instant: the second must fail, not clobber the first
         now = store.datetime(2026, 10, 27, 1, 2, 3, 456789, tzinfo=store.timezone.utc)
@@ -354,6 +365,25 @@ class CliTest(unittest.TestCase):
                 with open(p) as fh:
                     self.assertNotIn(SECRET, fh.read())
             self.assertNotIn(SECRET, second.stdout)
+
+    def test_delta_reference_has_the_same_flags_and_window_class(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            projects, logs, st = (os.path.join(tmp, n) for n in ("projects", "logs", "store"))
+            shas = make_repo(projects)
+            env = {**os.environ, "VERIFY_PROJECTS": projects}
+            write_log(logs, "s", "1.1", unit_11(shas))
+            win = ["run", "--since", "2026-10-05", "--until", "2026-10-25", "--logs", logs, "--store", st, "--no-sessions"]
+            first = self.run_cli(*win, env=env)
+            self.assertEqual(first.returncode, 0, first.stderr[-800:])
+            ref = sorted(os.listdir(st))[0]
+            # a --no-git run and a long-window run are stored, but are never a default run's reference
+            self.assertEqual(self.run_cli(*win, "--no-git", env=env).returncode, 0)
+            self.assertIn("No previous run with 298d, git off sessions off",
+                          self.run_cli(*win, "--no-git", "--no-save", "--since", "2026-01-01", env=env).stdout)
+            again = self.run_cli(*win, "--no-save", env=env)
+            self.assertIn(f"Δ against {ref} (window 2026-10-05 00:00 → 2026-10-25 23:59, 21d, git on sessions off)", again.stdout)
+            with open(os.path.join(st, ref)) as fh:
+                self.assertEqual(json.load(fh)["flags"], {"git": True, "sessions": False})
 
     def test_empty_logs_fail_closed(self):
         with tempfile.TemporaryDirectory() as tmp:

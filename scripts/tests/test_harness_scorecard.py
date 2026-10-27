@@ -170,49 +170,82 @@ class LineageTest(unittest.TestCase):
         self.assertFalse([k for k in rows if k.startswith("pre-trial") and k.endswith("fix rounds")])
         self.assertEqual(list(rows)[0], "pre-trial · base low · round 1")
         lin = out["tables"]["Effort trial lineages"]["rows"]
-        # a lineage takes its root's base; none closed, so no horizon can be measured: none
-        # is counted (fail closed), each is reported as within the unknown horizon
-        self.assertEqual(lin["trial · base medium"], [0, None, None, 0, 1, 0, 0])
-        self.assertEqual(lin["pre-trial · base low"], [0, None, None, 0, 2, 0, 0])
-        self.assertEqual(out["notes"]["trial_maturity_horizon"], {"hours": None, "closed_lineages": 0})
+        # a lineage takes its root's base. The cut is the latest stamp (10-21), so until − F is
+        # 10-14: 1.1's two lineages (10-10, 10-12) count, closed or not; 1.2 (10-20) is too young
+        self.assertEqual(lin["pre-trial · base low"], [2, 0.5, 33.3, 0.0, 0, 0, 0])   # r2 fell back
+        self.assertEqual(lin["trial · base medium"], [0, None, None, None, 1, 0, 0])
+        self.assertEqual(out["notes"]["trial_follow_up"], {"days": 7.0, "unplaced_reviews": 0})
         self.assertEqual(out["notes"]["trial_effort_tiers"], {"high": 2})
         self.assertEqual(out["notes"]["stamped_round_mismatches"], 0)
 
-    def test_trial_lineages_count_matured_and_in_window(self):
+    def test_trial_lineages_count_in_window_and_followed_up(self):
         u12 = unit_12(self.shas)
-        u12[-1] = {**u12[-1], "verdict": "SHIP"}             # trial lineage closes on SHIP
-        u11 = unit_11(self.shas) + [{"record": "acceptance", "by": "t", "ts": "2026-10-12T00:00:00Z"}]
-        out = self.analyze({("s", "1.1"): u11, ("s", "1.2"): u12}, since=ts("2026-10-11T00:00:00Z"))
+        u12[-1] = {**u12[-1], "verdict": "SHIP"}
+        out = self.analyze({("s", "1.1"): unit_11(self.shas), ("s", "1.2"): u12},
+                           since=ts("2026-10-11T00:00:00Z"), until=ts("2026-10-31T23:59:59Z"))
         lin = out["tables"]["Effort trial lineages"]["rows"]
-        # horizon = p90 of {1.2: 1d, 1.1 r3: 0d} = 1d; the cut is the latest stamp, 10-21
-        self.assertEqual(out["notes"]["trial_maturity_horizon"], {"hours": 24.0, "closed_lineages": 2})
-        self.assertEqual(lin["trial · base medium"], [1, 1.0, 0.0, 0, 0, 0, 0])
+        self.assertEqual(lin["trial · base medium"], [1, 1.0, 0.0, 100.0, 0, 0, 0])
         # 1.1: r1's lineage is rooted before `since` (excluded, counted); r3's is counted
-        self.assertEqual(lin["pre-trial · base low"], [1, 0.0, 0.0, 0, 0, 1, 0])
-        # an acceptance before the lineage's last review does not close it: r3's lineage stays
-        # open, and is rooted inside the 1.5d horizon (r1–r2 closed in 1.5d), so it is excluded
-        u11b = unit_11(self.shas) + [{"record": "acceptance", "by": "t", "ts": "2026-10-11T12:00:00Z"}]
-        lin = self.analyze({("s", "1.1"): u11b})["tables"]["Effort trial lineages"]["rows"]
-        self.assertEqual(lin["pre-trial · base low"], [1, 1.0, 50.0, 0, 1, 0, 0])   # r2 fell back
+        self.assertEqual(lin["pre-trial · base low"], [1, 0.0, 0.0, 0.0, 0, 1, 0])
 
-    def test_open_long_trial_lineage_still_counts_past_the_horizon(self):
-        # closed-only counting kept the short lineages and dropped the long open one, lowering
-        # the trial's fix rounds; the horizon cuts on the root's age, blind to the outcome
-        s, st = self.shas, {"rules_version": 2, "effort": "medium", "effort_base": "low"}
+    def test_follow_up_is_fixed_and_the_same_for_every_bucket(self):
+        # a reopen chain (closed-only → data-estimated horizon) both let the outcome decide which
+        # lineages count. Now: rooted at or before until − F, outcome read over F from the root.
+        s = self.shas
+        trial = {"rules_version": 2, "effort": "medium", "effort_base": "low"}
 
         def tr(u, n, base, head, t, **kw):
-            return review(u, n, s[base], s[head], t, round=n, **st, **kw)
-        units = {("s", "2.1"): [tr("2.1", 1, "a", "b", "2026-10-01T00:00:00Z"),
-                                tr("2.1", 2, "b", "c", "2026-10-02T00:00:00Z", continues="2.1-r1", verdict="SHIP")],
-                 ("s", "2.2"): [tr("2.2", 1, "a", "b", "2026-10-03T00:00:00Z", verdict="SHIP")],
-                 ("s", "2.3"): [tr("2.3", 1, "a", "b", "2026-10-20T00:00:00Z"),       # long, open at the cut
-                                tr("2.3", 2, "b", "c", "2026-10-25T00:00:00Z", continues="2.3-r1"),
-                                tr("2.3", 3, "b", "c", "2026-10-29T00:00:00Z", continues="2.3-r2")],
-                 ("s", "2.4"): [tr("2.4", 1, "a", "b", "2026-10-31T06:00:00Z", verdict="SHIP")]}   # within H
-        out = self.analyze(units, since=ts("2026-10-01T00:00:00Z"), until=ts("2026-10-31T23:59:59Z"))
-        self.assertEqual(out["notes"]["trial_maturity_horizon"], {"hours": 24.0, "closed_lineages": 3})
-        # 2.1, 2.2, 2.3 counted: (1 + 0 + 2) / 3; 2.3 open (a lower bound); 2.4 too young
-        self.assertEqual(out["tables"]["Effort trial lineages"]["rows"]["trial · base low"], [3, 1.0, 0.0, 1, 1, 0, 0])
+            return review(u, n, s[base], s[head], t, round=n, **trial, **kw)
+
+        def pre(u, n, base, head, t, **kw):
+            return review(u, n, s[base], s[head], t, effort_base="low", **kw)
+
+        def long3(mk, u, t1, t2, t3):
+            return [mk(u, 1, "a", "b", t1), mk(u, 2, "b", "c", t2, continues=f"{u}-r1"),
+                    mk(u, 3, "b", "c", t3, continues=f"{u}-r2", verdict="SHIP")]
+        units = {
+            # the same long lineage on each side: r3 (and its SHIP) lands 11 days after the root,
+            # past F = 7d, so both read 1 fix round and no SHIP — truncated identically
+            ("s", "2.1"): long3(tr, "2.1", "2026-10-01T00:00:00Z", "2026-10-03T00:00:00Z", "2026-10-12T00:00:00Z"),
+            ("s", "3.1"): long3(pre, "3.1", "2026-10-01T00:00:00Z", "2026-10-03T00:00:00Z", "2026-10-12T00:00:00Z"),
+            ("s", "2.2"): [tr("2.2", 1, "a", "b", "2026-10-05T00:00:00Z", verdict="SHIP")],
+            # rooted after until − F (10-24 23:59:59): too young, whether still looping (2.3, the
+            # long one near the cut) or already shipped (2.4) — never judged by having closed
+            ("s", "2.3"): long3(tr, "2.3", "2026-10-28T00:00:00Z", "2026-10-29T00:00:00Z", "2026-10-30T00:00:00Z")[:2],
+            ("s", "2.4"): [tr("2.4", 1, "a", "b", "2026-10-29T00:00:00Z", verdict="SHIP")]}
+        until = ts("2026-10-31T23:59:59Z")
+        out = self.analyze(units, since=ts("2026-10-01T00:00:00Z"), until=until)
+        lin = out["tables"]["Effort trial lineages"]["rows"]
+        self.assertEqual(out["tables"]["Effort trial lineages"]["cols"][4], "Too young (rooted after until − F)")
+        self.assertEqual(lin["trial · base low"], [2, 0.5, 0.0, 50.0, 2, 0, 0])
+        self.assertEqual(lin["pre-trial · base low"], [1, 1.0, 0.0, 0.0, 0, 0, 0])
+        # a longer F sees the whole of 2.1 / 3.1 and fewer lineages old enough: 2.2 still counts
+        with mock.patch.object(self.rv.vl, "PROJECTS", self.projects):
+            out = review_loop.analyze(units, self.rv, since=ts("2026-10-01T00:00:00Z"), until=until,
+                                      follow_up=14 * 86400, git=review_loop.Git(self.projects))
+        lin = out["tables"]["Effort trial lineages"]["rows"]
+        self.assertEqual(lin["trial · base low"], [2, 1.0, 0.0, 100.0, 2, 0, 0])
+        self.assertEqual(lin["pre-trial · base low"], [1, 2.0, 0.0, 100.0, 0, 0, 0])
+        # a lineage root exactly at until − F has had its full follow-up: it counts
+        edge = {("s", "2.5"): [tr("2.5", 1, "a", "b", "2026-10-24T23:59:59Z")]}
+        lin = self.analyze(edge, since=ts("2026-10-01T00:00:00Z"), until=until)["tables"]["Effort trial lineages"]["rows"]
+        self.assertEqual(lin["trial · base low"][0], 1)
+
+    def test_unstamped_review_is_left_out_of_the_follow_up(self):
+        s, st = self.shas, {"rules_version": 2, "effort": "medium", "effort_base": "low"}
+        u = [review("2.6", 1, s["a"], s["b"], "2026-10-01T00:00:00Z", round=1, **st),
+             {k: v for k, v in review("2.6", 2, s["b"], s["c"], "", round=2, continues="2.6-r1", **st).items() if k != "ts"}]
+        # no --since: with one, `counted()` already drops a review with no stamp before this point
+        out = self.analyze({("s", "2.6"): u}, until=ts("2026-10-31T23:59:59Z"))
+        self.assertEqual(out["tables"]["Effort trial lineages"]["rows"]["trial · base low"][:2], [1, 0.0])
+        self.assertEqual(out["notes"]["trial_follow_up"]["unplaced_reviews"], 1)
+
+    def test_closed_only_and_estimated_horizon_code_is_gone(self):
+        for f in ("review_loop.py", "scorecard.py", "README.md"):
+            with open(os.path.join(HS, f), encoding="utf-8") as fh:
+                text = fh.read()
+            for dead in ("_p90", "def closure", "close_ts", "maturity", "horizon", "Open at cut", '"closed"'):
+                self.assertFalse(dead in text, f"{f} still carries {dead!r}")
 
     def test_git_reads_a_non_utf8_diff(self):
         d = os.path.join(self.projects, "demo")
@@ -236,7 +269,7 @@ class LineageTest(unittest.TestCase):
         u = [review("1.3", 1, s["a"], s["b"], "2026-10-20T00:00:00Z", reviewer=fb, round=1, **st),
              review("1.3", 2, s["b"], s["c"], "2026-10-21T00:00:00Z", effort="medium", effort_base="low",
                     round=2, continues="1.3-r1", verdict="SHIP", **st)]
-        out = self.analyze({("s", "1.3"): u})
+        out = self.analyze({("s", "1.3"): u}, until=ts("2026-10-31T23:59:59Z"))
         lin = out["tables"]["Effort trial lineages"]["rows"]
         self.assertEqual(list(lin), ["trial · base low"])
         self.assertEqual(lin["trial · base low"][2], 50.0)   # the credit-out stays in its tier
@@ -417,6 +450,12 @@ class CliTest(unittest.TestCase):
         for now in (early, late):
             self.assertEqual(scorecard.window_class(now - 21 * 86400, now), "21d")
         self.assertEqual(scorecard.window_class(scorecard.day("2026-10-05"), scorecard.day("2026-10-25", end=True)), "21d")
+        # with no --since, since is derived from until: a default run and an --until-only run
+        # (ending 23:59:59) are both 21d — until − 21×86400 classed the latter as 22d
+        for until in (early, late, scorecard.day("2026-10-26", end=True)):
+            self.assertEqual(scorecard.window_class(scorecard.default_since(until), until), "21d")
+        self.assertEqual(scorecard.default_since(scorecard.day("2026-10-26", end=True)), scorecard.day("2026-10-06"))
+        self.assertEqual(scorecard.default_since(late), scorecard.day("2026-10-06"))
 
     def test_run_twice_prints_delta_and_stores_aggregates_only(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -173,16 +173,14 @@ def _trial_order(k):
     return (b != "pre-trial", TIER_ORDER.index(t) if t in TIER_ORDER else len(TIER_ORDER), t, p != ["round 1"])
 
 
-def _p90(xs):
-    """Nearest-rank 90th percentile; None for an empty list."""
-    xs = sorted(xs)
-    return xs[max(0, -(-9 * len(xs) // 10) - 1)] if xs else None
+FOLLOW_UP_DAYS = 7
 
 
-def analyze(units, rv, since=None, git=None, until=None):
+def analyze(units, rv, since=None, git=None, until=None, follow_up=FOLLOW_UP_DAYS * 86400):
     """All review-loop tables for `units` (from load_logs). `rv` is the loaded review.py;
     `git` a Git (None = no hunk/line analyses); `until` the cut the logs were read at (None =
-    the latest stamp in them). Returns {"tables": {...}, "notes": {...}}."""
+    the latest stamp in them); `follow_up` the effort trial's fixed follow-up, in seconds.
+    Returns {"tables": {...}, "notes": {...}}."""
     git = git or Git("", enabled=False)
     rounds_calls = 0
     fails = []
@@ -264,27 +262,6 @@ def analyze(units, rv, since=None, git=None, until=None):
             return rv.vl.effort_for([st])[0] if st is not None else "unresolved"
 
         ev_of = {e["id"]: e for e in revs}
-        # when a lineage closed: its latest review (highest round, then latest stamp) is SHIP, or
-        # the unit's outcomes were accepted after it. Used for the maturity horizon only — whether
-        # a lineage is counted never depends on it having closed (that is the outcome measured).
-        last = {}
-        for e in revs:
-            root, rnd = lin[e["id"]]
-            key = (rnd, ts_of(e["id"]) or 0)
-            if root not in last or key >= last[root][0]:
-                last[root] = (key, e["id"])
-        accepted = [parse_ts(r.get("ts")) for r in recs if r.get("record") == "acceptance"]
-
-        def closure(root):
-            """(closed, close time or None)."""
-            rid_ = last[root][1]
-            t = ts_of(rid_)
-            if (meta.get(rid_) or {}).get("verdict") == "SHIP":
-                return True, t
-            # an acceptance or review with no stamp cannot be ordered: the acceptance counts only
-            # when both are stamped and it came at or after the lineage's last review
-            acc = [a for a in accepted if a is not None and t is not None and a >= t]
-            return (True, min(acc)) if acc else (False, None)
         heads, byhead, kind, maxr = collections.defaultdict(set), {}, {}, {}
         for e in revs:
             rid, repo = e["id"], e["repo"]
@@ -365,12 +342,19 @@ def analyze(units, rv, since=None, git=None, until=None):
             lk = (bucket, base_of(ev_of[root]) if root in ev_of else "unresolved")
             L = trial_lin.get((scope, unit, root))
             if L is None:
-                c, ct = closure(root)
                 L = trial_lin[(scope, unit, root)] = {"lk": lk, "root_ts": ts_of(root), "in_window": counted(root),
-                                                      "closed": c, "close_ts": ct, "maxr": 0, "all": 0, "out": 0}
-            L["maxr"] = max(L["maxr"], rnd)
-            L["all"] += 1
-            L["out"] += fa == "fallback" and "out of credits" in reviewer
+                                                      "maxr": 0, "all": 0, "out": 0, "ship": False, "unplaced": 0}
+            # the outcome is read over the fixed follow-up only: reviews within `follow_up` of the
+            # root. A review with no stamp cannot be placed in it, so it is left out (fail closed:
+            # counting it would let an unbounded tail back in) and counted under the notes.
+            t, rt = ts_of(rid), L["root_ts"]
+            if t is None or rt is None:
+                L["unplaced"] += rt is not None
+            elif t - rt <= follow_up:
+                L["maxr"] = max(L["maxr"], rnd)
+                L["all"] += 1
+                L["out"] += fa == "fallback" and "out of credits" in reviewer
+                L["ship"] |= m.get("verdict") == "SHIP"
             if fa == "codex":
                 ck = (bucket, base_of(e), phase)
                 tr_rev[ck] += 1; tr_find[ck] += len(fs); tr_blk[ck] += nblk
@@ -423,43 +407,40 @@ def analyze(units, rv, since=None, git=None, until=None):
         "cols": ["Reviews", "Findings/rev", "Blocking/rev"],
         "rows": {f"{b} · base {t} · {p}": [tr_rev[k], _ratio(tr_find[k], tr_rev[k]), _ratio(tr_blk[k], tr_rev[k])]
                  for k in sorted(tr_rev, key=_trial_order) for b, t, p in [k]}}
-    # Maturity horizon: a lineage rooted near the cut is still mid-loop, the newest (trial) ones
-    # most. Dropping the open ones keeps the short lineages and loses the long — the bias the
-    # trial is judged on — so the cut is made on the root's age instead, the same for every
-    # bucket and blind to the outcome: a lineage counts when its root is at least H before the
-    # cut, closed or not (an open one's rounds are a lower bound, counted beside it). H is the
-    # p90 root-to-close time of the window's closed lineages, all buckets pooled. With no closed
-    # lineage to measure, H is unknown and no lineage is counted (fail closed): counting them
-    # all would bring the truncation back.
+    # Fixed follow-up: a lineage counts when its root is in the window and at least `follow_up`
+    # before the cut, and its outcome (fix rounds, credit-outs, SHIP) is read only from reviews
+    # within `follow_up` of its root — the same for every bucket, nothing estimated from the data,
+    # nothing depending on whether it closed. Every counted lineage is then observed for the full
+    # follow-up, so the newest (trial) lineages are not cut short at `until` (right-censoring).
+    # With no cut at all (no stamp anywhere) none can be placed, so none is counted (fail closed).
     lin_list = list(trial_lin.values())
     cut = until if until is not None else max((t for recs in units.values() for t in (parse_ts(r.get("ts")) for r in recs)
                                                 if t is not None), default=None)
-    durs = [L["close_ts"] - L["root_ts"] for L in lin_list if L["in_window"] and L["closed"]
-            and L["close_ts"] is not None and L["root_ts"] is not None]
-    H = _p90(durs)
-    lin_by, tr_all, tr_out = collections.defaultdict(list), collections.Counter(), collections.Counter()
-    tr_openc, tr_young, tr_before, tr_nots = (collections.Counter() for _ in range(4))
+    lin_by, tr_all, tr_out, tr_ship = (collections.defaultdict(list), collections.Counter(),
+                                       collections.Counter(), collections.Counter())
+    tr_young, tr_before, tr_nots = (collections.Counter() for _ in range(3))
+    unplaced = 0
     for L in lin_list:
         lk = L["lk"]
         if L["root_ts"] is None:
-            tr_nots[lk] += 1     # no stamp: neither the window nor the horizon can place it
+            tr_nots[lk] += 1     # no stamp: neither the window nor the follow-up can place it
         elif not L["in_window"]:
             tr_before[lk] += 1   # its round 1 predates the window
-        elif H is None or cut is None or L["root_ts"] > cut - H:
-            tr_young[lk] += 1
+        elif cut is None or L["root_ts"] > cut - follow_up:
+            tr_young[lk] += 1    # rooted after until − F: its follow-up is not over
         else:
             lin_by[lk].append(L["maxr"])
-            tr_all[lk] += L["all"]; tr_out[lk] += L["out"]
-            tr_openc[lk] += not L["closed"]
+            tr_all[lk] += L["all"]; tr_out[lk] += L["out"]; tr_ship[lk] += L["ship"]
+            unplaced += L["unplaced"]
     tables["Effort trial lineages"] = {
-        "cols": ["Lineages", "Fix rounds/lineage", "Credit-outs %", "Open at cut (rounds a lower bound)",
-                 "Within horizon (excluded)", "Rooted before window (excluded)", "Unstamped root (excluded)"],
+        "cols": ["Lineages", "Fix rounds/lineage", "Credit-outs %", "SHIP within follow-up %",
+                 "Too young (rooted after until − F)", "Rooted before window (excluded)", "Unstamped root (excluded)"],
         "rows": {f"{b} · base {t}": [len(lin_by[(b, t)]), _ratio(sum(x - 1 for x in lin_by[(b, t)]), len(lin_by[(b, t)])),
-                                     _pct(tr_out[(b, t)], tr_all[(b, t)]), tr_openc[(b, t)], tr_young[(b, t)],
-                                     tr_before[(b, t)], tr_nots[(b, t)]]
+                                     _pct(tr_out[(b, t)], tr_all[(b, t)]), _pct(tr_ship[(b, t)], len(lin_by[(b, t)])),
+                                     tr_young[(b, t)], tr_before[(b, t)], tr_nots[(b, t)]]
                  for b, t in sorted({L["lk"] for L in lin_list}, key=_trial_order)}}
     notes = {"rounds_calls": rounds_calls, "failed_units": fails, "trial_effort_tiers": dict(tiers),
-             "trial_maturity_horizon": {"hours": None if H is None else round(H / 3600, 1), "closed_lineages": len(durs)},
+             "trial_follow_up": {"days": round(follow_up / 86400, 2), "unplaced_reviews": unplaced},
              "stamped_round_mismatches": round_mismatch,
              "lineage_warns": {"total": sum(lin_warns.values()), "units": dict(sorted(lin_warns.items()))},
              "other_stderr_lines": {"total": sum(other_err.values()), "units": dict(sorted(other_err.items()))}}

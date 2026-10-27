@@ -45,9 +45,11 @@ def save(store_dir, result, now=None):
 
 
 def profile(result):
-    """What makes two runs comparable: their flags and their window length. A run stored before
-    profiles existed has neither, and matches no profiled run."""
-    return {"flags": result.get("flags"), "window_class": (result.get("window") or {}).get("class")}
+    """What makes two runs comparable: their flags, their window length and the effort trial's
+    follow-up (a different F measures a different outcome). A run stored before profiles existed
+    has none of them, and matches no profiled run."""
+    w = result.get("window") or {}
+    return {"flags": result.get("flags"), "window_class": w.get("class"), "follow_up_days": w.get("follow_up_days")}
 
 
 def previous(store_dir, before=None, match=None):

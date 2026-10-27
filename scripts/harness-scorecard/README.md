@@ -20,14 +20,16 @@ Tests: `scripts/tests/test_harness_scorecard.py` (synthetic logs, stdlib only).
 
 ```
 scripts/harness-scorecard/scorecard.py pull
-nice -n 10 scripts/harness-scorecard/scorecard.py run [--since YYYY-MM-DD] [--until YYYY-MM-DD]
+nice -n 10 scripts/harness-scorecard/scorecard.py run [--since YYYY-MM-DD] [--until YYYY-MM-DD] [--follow-up DAYS]
 ```
 
 - `pull` from the MBA (refuses elsewhere). Reads homelab2026 over ssh (rsync's sender side;
       nothing is written there). Exit 1 when ssh fails or a destination reads back empty.
-- `run` defaults to the 21 days before now. It takes minutes and a CPU core: lineage
+- `run` defaults to the 21 calendar days ending at `--until` (or now): since is the start of the
+      UTC day 21 days before, so a default run and an `--until`-only run are both `21d`. It takes minutes and a CPU core: lineage
       resolution and §3.2/§3.3 read git ancestry and diffs in `~/Projects`. Run it once per
       look, not in a loop.
+- `--follow-up DAYS` (default 7, printed) is the effort trial's fixed follow-up (§4.5).
 - `--no-sessions` skips the transcript scan, `--no-git` skips the §3.2/§3.3 diff analyses,
   `--no-save` prints without storing.
 
@@ -64,11 +66,11 @@ real directory, that account's sessions drop out of the scorecard, and the input
 changing then.
 
 3.2 **Store** `~/.cache/harness-scorecard/<UTC stamp>.json`: one file per run, numbers
-only, plus the run's flags (`git`, `sessions`) and window class (its length in calendar days,
+only, plus the run's flags (`git`, `sessions`), window class (its length in calendar days,
 `21d` by default — dates, not elapsed hours, so a `--since` run's class does not move with the
-hour it ran).
-The next run's Δ columns compare against the latest file with the **same flags and window
-class** — a `--no-git` run, a `--no-sessions` run or the ten-month baseline replay is never a
+hour it ran) and follow-up.
+The next run's Δ columns compare against the latest file with the **same flags, window
+class and follow-up** — a `--no-git` run, a `--no-sessions` run or the ten-month baseline replay is never a
 default run's reference — and the header names the reference's window and flags. A run stored
 before flags existed matches nothing. If a newer file is unreadable, the run prints a WARN and
 leaves Δ out. The Δ is advisory, so it never blocks today's numbers.
@@ -106,16 +108,19 @@ One rule buckets both sides: the stamped `effort_base`, else effort_for on the r
 range (review.py stamps codex reviews only, so a fallback or lean review is always recomputed);
 a range git cannot read is `unresolved`; `unstamped` is only a codex trial review that lacks
 the stamp it should carry. A lineage takes its root's base. The lineage table shows fix rounds
-per lineage and the share of codex credit-outs (the fallback reviewer is the noisy one), over
-lineages rooted in the window **at least a maturity horizon before the cut**, closed or not.
-The horizon is the p90 root-to-close time of the window's closed lineages (closed: the latest
-review is SHIP, or the unit's outcomes were accepted after it), pooled across buckets and
-printed with the run. Counting only closed lineages would keep the short ones and drop the long
-— the newest, trial ones most — so the cut is on the root's age, never on the outcome; an open
-lineage past the horizon counts with its current rounds, a lower bound, and is counted beside
-them. With no closed lineage the horizon is unknown and none is counted. Lineages inside the
-horizon, rooted before `--since` (counted from their tail only), or with an unstamped root
-are excluded and counted in their own columns. The trial is kept per bucket when
+per lineage, the share of codex credit-outs (the fallback reviewer is the noisy one) and the
+share that reached SHIP, over a **fixed follow-up F** (`--follow-up`, default 7 days), the same
+for every bucket: a lineage counts when its root is in the window and at or before `until − F`,
+and its outcome is read only from reviews within F of its root. Nothing is estimated from the
+data and nothing depends on whether a lineage closed. **Why:** trial lineages are the newest,
+so at any cut more of them are still looping. Counting them as they stand truncates their
+rounds; dropping the open ones keeps the short lineages and loses the long; a cut estimated
+from closed lineages inherits the same skew. All three right-censor the trial bucket toward
+fewer fix rounds — the metric that decides the trial. A fixed follow-up observes every counted
+lineage for the same F, so none is cut short. Lineages rooted after `until − F` (too young),
+rooted before `--since` (counted from their tail only), or with an unstamped root are excluded
+and counted in their own columns; a review with no stamp cannot be placed in F and is left
+out, counted in the run's footer. The trial is kept per bucket when
 findings move earlier without more credit-outs. A stamped `round` that disagrees with the
 recomputed one is counted under `stamped-round mismatches`.
 

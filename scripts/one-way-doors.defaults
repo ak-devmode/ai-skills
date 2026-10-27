@@ -36,13 +36,3 @@ production/
 *.prod.*
 *-prod.*
 prod.*
-# CI definitions (10.3-r1-05): a PR that edits the CI producing its own green runs never
-# auto-merges — "real green" is self-referential when the job itself changed
-.github/workflows/
-.github/actions/
-CODEOWNERS
-.circleci/
-.gitlab-ci.yml
-Jenkinsfile
-buildspec*.yml
-buildspec*.yaml

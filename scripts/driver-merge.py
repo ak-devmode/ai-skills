@@ -22,6 +22,10 @@ eligible only when ALL hold:
                head says nothing about the PR's start); and verdict-gate.py --blocking reads `pass`. A reviewer other than codex (fallback /
                lean) still merges, flagged; a `none` reviewer is no review
   * floor    — door.py classifies merge-base..head with no floor path
+  * ci       — merge-base..head touches no CI definition (CI_DEFINITIONS: workflows, actions,
+               CODEOWNERS, …). A PR editing the CI that produced its own green never auto-merges,
+               but CI edits are reversible, so this is a two-way "CI change" packet — Alex
+               reviews and merges by hand — not a floor path (10.3-r2-04)
   * mergeable — mergeStateStatus CLEAN / HAS_HOOKS merges; BLOCKED merges with --admin (branch
                protection is what blocks once every condition above holds — what Alex does by
                hand) ONLY when every required check of the base branch (classic protection AND
@@ -38,7 +42,8 @@ and prints why.
 Failure stances (fail closed: every one of these is "no merge" with the reason):
   * gh error, unparseable gh JSON, unknown check type/state, mergeStateStatus still UNKNOWN
   * BLOCKED and the base's protection or rulesets unreadable -> no --admin, no merge
-  * origin remote unreadable, git error, PR commits not fetchable (door.py then fails closed)
+  * origin remote unreadable, git error, PR commits not fetchable (door.py then fails closed;
+    the ci condition too)
   * a PR commit outside every review range of this repo in the unit, an unparseable or
     unresolvable review range
   * review log missing / malformed, no review of this repo in the unit, verdict-gate exit != 0,
@@ -79,6 +84,19 @@ MERGE_OK = {"CLEAN", "HAS_HOOKS"}
 FIELDS = ("number,state,isDraft,baseRefName,headRefName,baseRefOid,headRefOid,"
           "mergeStateStatus,url,statusCheckRollup")
 UNKNOWN_RETRIES, UNKNOWN_SLEEP = 3, 2.0
+# Never auto-merged, in door.py's glob syntax (10.3-r2-04): a PR that edits the CI producing its
+# own green runs rides a self-referential green. Reversible, so NOT on the one-way floor (that
+# would park every lane that touches CI) — a two-way packet: Alex reviews and merges by hand.
+CI_DEFINITIONS = """
+.github/workflows/
+.github/actions/
+CODEOWNERS
+.circleci/
+.gitlab-ci.yml
+Jenkinsfile
+buildspec*.yml
+buildspec*.yaml
+"""
 EXIT_OK, EXIT_REFUSED, EXIT_USAGE, EXIT_NO_EVENT = 0, 1, 2, 4
 
 
@@ -291,6 +309,25 @@ def cond_floor(repo, base_oid, head_oid):
     return False, f"{res.get('reason')}" + (f": {shown}" if shown else ""), hits, rng
 
 
+def cond_ci(repo, rng):
+    """(ok, detail). merge-base..head touches no CI definition. Fails closed: no range, or a git
+    error reading the touched paths, is a CI change for this purpose (Alex merges by hand)."""
+    if not rng:
+        return False, "fail-closed: no merge-base range to read for CI definitions"
+    door = _load("door", os.path.join(HERE, "door.py"))
+    try:
+        rules = door.compile_rules(CI_DEFINITIONS)
+        base, head = door.parse_range(rng)
+        paths = door.touched(repo, door.resolve(repo, base), door.resolve(repo, head))
+    except door.Failed as e:
+        return False, f"fail-closed: CI definitions unreadable ({e})"
+    hits = [f"{p} ({t})" for _, p in paths for t, rx in rules if rx.match(p)]
+    if hits:
+        return False, (f"CI change — Alex reviews and merges by hand: {', '.join(hits[:6])}"
+                       + (f" (+{len(hits) - 6})" if len(hits) > 6 else ""))
+    return True, "no CI definition touched"
+
+
 def run_gate(scope, unit):
     """verdict-gate.py in --blocking mode, and its JSON verdict must be `pass` with exit 0.
     Its exit code alone means "reported", not "passed": advisory mode exits 0 on every block
@@ -434,10 +471,13 @@ def emit_packet(repo, unit, label, failed, hits, rng, head, title=None, options=
         "merge", label.replace("/", "-").replace("#", "-"), head[:12], door)
     body = "\n".join([f"driver-merge.py did not merge {label}:"] + [f"- {n}: {d}" for n, d in failed]
                      + [f"- floor path: {h['path']} ({h['pattern']}, {h['change']})" for h in hits])
+    ci = any(name == "ci" for name, _ in failed)
     options = options or (["Alex reviews the floor change and merges by hand", "Rework the PR off the floor"]
-                          if one_way else ["Driver fixes the failed condition and re-runs driver-merge",
-                                           "Alex merges by hand"])
-    title = title or ("Floor path" if one_way else "Not merged")
+                          if one_way else ["Alex reviews the CI change and merges by hand",
+                                           "Driver fixes any other failed condition and re-runs driver-merge"]
+                          if ci else ["Driver fixes the failed condition and re-runs driver-merge",
+                                      "Alex merges by hand"])
+    title = title or ("Floor path" if one_way else "CI change" if ci else "Not merged")
     cmd = [sys.executable, PACKET, "new", "--door", door, "--type", "generic", "--title",
            f"{title}: {label}", "--unit", unit, "--recommended", "1",
            "--body", body, "--id", pid, "--driver"]
@@ -484,6 +524,7 @@ def evaluate(a):
     rows.append(("verdict", vok, vdetail))
     fok, fdetail, hits, rng = cond_floor(a.repo, base_oid, head_oid)
     rows.append(("floor", fok, fdetail))
+    rows.append(("ci",) + cond_ci(a.repo, rng))
     mok, mdetail, admin = cond_mergeable(doc.get("mergeStateStatus"), slug, base, doc.get("statusCheckRollup"))
     rows.append(("mergeable", mok, mdetail))
     facts = {"slug": slug, "label": f"{slug}#{a.pr}", "base": base, "head": head_oid, "admin": admin,

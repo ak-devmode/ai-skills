@@ -98,7 +98,8 @@ by `test_entrypoint.py`'s compile check.
       saw the PR head (later commits plans/-only), every non-plans/ commit in merge-base..head sits in some
       review's base..head for the repo in the unit (else "unreviewed commits", named), verdict-gate.py
       --blocking reads `pass` (advisory, not-judged, predates or unknown = no merge), door.py finds no floor path on
-      merge-base..head, mergeStateStatus CLEAN/HAS_HOOKS (BLOCKED → `--admin` only when every required
+      merge-base..head, no CI definition touched (workflows, actions, CODEOWNERS… — a two-way "CI change"
+      packet, Alex merges by hand; not floor: CI edits are reversible), mergeStateStatus CLEAN/HAS_HOOKS (BLOCKED → `--admin` only when every required
       check of the base — classic protection and rulesets, both read — is SUCCESS on the head; unreadable
       protection is no merge; anything else refused).
       `gh pr merge --match-head-commit`, never `--auto`; the merge is read back as MERGED at the checked

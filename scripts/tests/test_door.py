@@ -66,14 +66,6 @@ class TestFloor(DoorBase):
             ("infra/main.tf", "*.tf"),
             ("deploy/.env.production", ".env.*"),
             ("config/prod/app.yml", "prod/"),
-            # CI definitions (10.3-r1-05): a PR that rewrites its own CI must not ride its own green
-            (".github/workflows/ci.yml", ".github/workflows/"),
-            (".github/actions/setup/action.yml", ".github/actions/"),
-            (".github/CODEOWNERS", "CODEOWNERS"),
-            (".circleci/config.yml", ".circleci/"),
-            (".gitlab-ci.yml", ".gitlab-ci.yml"),
-            ("Jenkinsfile", "Jenkinsfile"),
-            ("buildspec-dev.yml", "buildspec*.yml"),
         ]
         for path, pattern in cases:
             with self.subTest(path):
@@ -83,6 +75,13 @@ class TestFloor(DoorBase):
                 self.assertEqual(r["door"], "one-way", r)
                 self.assertEqual(r["paths"][0]["path"], path)
                 self.assertEqual(r["paths"][0]["pattern"], pattern)
+
+    def test_ci_definitions_are_not_floor(self):
+        # CI edits are reversible: driver-merge.py refuses to auto-merge them (two-way packet), but
+        # the floor would park every lane that touches a workflow (10.3-r2-04)
+        write(self.repo, ".github/workflows/ci.yml")
+        self.commit("add ci")
+        self.assertEqual(self.classify()["door"], "two-way")
 
     def test_case_insensitive_match(self):
         # ADRS/ has no lowercase twin in the repo, so core.ignorecase cannot fold the path

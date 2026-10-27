@@ -62,8 +62,14 @@ CASES = [
     ("docs repo merges to main", {"name": "kalpa-docs", "base": "main"}, 0, {"merged": True}),
     ("docs repo refuses develop", {"name": "kalpa-docs", "base": "develop"}, 1, {"merged": False}),
     ("floor hit -> one-way packet", {"floor": True}, 1, {"merged": False, "packet": "one-way", "says": "proto"}),
-    ("PR edits its own CI -> one-way", {"path": ".github/workflows/ci.yml"}, 1,
-     {"merged": False, "packet": "one-way", "says": ".github/workflows/"}),
+    # CI definitions never auto-merge, but a CI edit is reversible: a two-way "CI change" packet,
+    # not the one-way floor (10.3-r2-04; the floor rows moved here from test_door)
+    *[(f"PR edits CI {p} -> two-way", {"path": p}, 1, {"merged": False, "packet": "two-way", "says": pat})
+      for p, pat in [(".github/workflows/ci.yml", ".github/workflows/"),
+                     (".github/actions/setup/action.yml", ".github/actions/"),
+                     (".github/CODEOWNERS", "CODEOWNERS"), (".circleci/config.yml", ".circleci/"),
+                     (".gitlab-ci.yml", ".gitlab-ci.yml"), ("Jenkinsfile", "Jenkinsfile"),
+                     ("buildspec-dev.yml", "buildspec*.yml")]],
     ("degraded review merges, flagged", {"reviewer": "claude-lean subscription"}, 0,
      {"merged": True, "event": "degraded review: claude-lean"}),
     ("no reviewer is no review", {"reviewer": "none codex down"}, 1, {"merged": False}),
@@ -262,6 +268,9 @@ class DriverMergeTest(unittest.TestCase):
                         self.assertEqual([p["door"] for p in packets], [door], out)
                         if door == "one-way":
                             self.assertIn(o.get("path") or "proto/a.proto", packets[0]["payload"]["body"])
+                        if o.get("path"):  # a CI change: Alex reviews and merges by hand
+                            self.assertIn(o["path"], packets[0]["payload"]["body"])
+                            self.assertIn("CI change", json.dumps(packets[0]))
 
     def test_check_never_merges_or_writes(self):
         for name, o, want_rc, _ in CASES:

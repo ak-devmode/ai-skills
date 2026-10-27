@@ -231,6 +231,102 @@ class TestQueue(PacketBase):
         self.assertIn(".rejected", out)
         self.assertEqual(s.posts, [])
 
+    def test_other_4xx_stay_blocked_and_retry(self):  # 10.1-r7-01
+        s = Stub(); self.addCleanup(s.stop)
+        env = {"DECISION_QUEUE_URL": s.url}
+        for code in (401, 403, 404, 408, 429):
+            s.force = code
+            pid, out = self.new("--driver", env=env)
+            self.assertIn("Blocked", out, code)
+            self.assertFalse(self._marker(f"{pid}.rejected") or self._marker(f"{pid}.conflict"), code)
+            s.force = None
+            out = self.pk("flush", "--driver", env=env).stdout
+            self.assertIn("FLUSHED 1 packets", out, code)
+        for code in (413, 415, 422):
+            s.force = code
+            pid, out = self.new("--driver", env=env)
+            self.assertIn("Rejected:", out, code)
+            self.assertTrue(self._marker(f"{pid}.rejected"), code)
+
+    def _event_of_refused_packet(self, code):
+        s = Stub(); self.addCleanup(s.stop); s.force = code
+        env = {"DECISION_QUEUE_URL": s.url}
+        pid, _ = self.new("--driver", env=env)
+        marker = "conflict" if code == 409 else "rejected"
+        self.assertTrue(self._marker(f"{pid}.{marker}"))
+        s.force = None
+        n = len(s.posts)
+        self.assertEqual(self.pk("close", pid, "--driver", env=env).returncode, 0)
+        for _ in range(2):
+            out = self.pk("flush", "--driver", env=env).stdout
+        self.assertEqual(len(s.posts), n)  # nothing POSTed: neither packet nor close event
+        evs = [f for f in os.listdir(self.outbox()) if f.startswith("evt-") and f.endswith(".json")]
+        self.assertTrue(evs)
+        for f in evs:
+            self.assertTrue(self._marker(f[:-5] + ".rejected"))
+        self.assertIn("FLUSHED 0 packets, 0 events", out)
+
+    def test_event_of_400_packet_is_marked_not_posted(self):  # 10.1-r7-02
+        self._event_of_refused_packet(400)
+
+    def test_event_of_409_packet_is_marked_not_posted(self):  # 10.1-r7-03
+        self._event_of_refused_packet(409)
+
+    def test_resend_after_400_clears_marker_and_close_is_posted(self):  # 10.1-r10-01
+        s = Stub(); self.addCleanup(s.stop); s.force = 400
+        env = {"DECISION_QUEUE_URL": s.url}
+        pid, _ = self.new("--driver", env=env)
+        self.assertTrue(self._marker(f"{pid}.rejected"))
+        s.force = None
+        p = self.pk("new", "--id", pid, "--driver", "--door", "two-way", "--title", "Pick one",
+                    "--unit", "10/1.2", "--option", "alpha", "--option", "beta", "--body", "why", env=env)
+        self.assertEqual(p.returncode, 0, p.stderr)
+        self.assertTrue(self.sent(pid))
+        self.assertFalse(self._marker(f"{pid}.rejected"))
+        self.assertEqual(self.pk("close", pid, "--driver", env=env).returncode, 0)
+        self.pk("flush", "--driver", env=env)  # close --driver POSTs at once; flush must not undo it
+        self.assertEqual([path for path, _ in s.posts], ["/packets", "/events"])
+        self.assertFalse([f for f in os.listdir(self.outbox()) if f.startswith("evt-") and f.endswith(".rejected")])
+
+    def test_marker_unlink_failure_is_reported_and_flush_recovers(self):  # 10.1-r12-01
+        s = Stub(); self.addCleanup(s.stop); s.force = 400
+        env = {"DECISION_QUEUE_URL": s.url}
+        pid, _ = self.new("--driver", env=env)
+        s.force = None
+        self.assertEqual(self.pk("close", pid, "--driver", env=env).returncode, 0)  # event marked refused
+        # sitecustomize makes unlink of evt-*.rejected raise PermissionError until the flag file is gone
+        inj = tempfile.mkdtemp(); self.addCleanup(lambda: __import__("shutil").rmtree(inj, True))
+        flag = os.path.join(inj, "fail")
+        put(flag, "")
+        put(os.path.join(inj, "sitecustomize.py"),
+            "import os, pathlib\n_u = pathlib.Path.unlink\n"
+            "def unlink(self, *a, **k):\n"
+            f"    if self.name.startswith('evt-') and self.name.endswith('.rejected') and os.path.exists({flag!r}):\n"
+            "        raise PermissionError(13, 'injected')\n"
+            "    return _u(self, *a, **k)\n"
+            "pathlib.Path.unlink = unlink\n")
+        bad = dict(env, PYTHONPATH=inj)
+        p = self.pk("new", "--id", pid, "--driver", "--door", "two-way", "--title", "Pick one",
+                    "--unit", "10/1.2", "--option", "alpha", "--option", "beta", "--body", "why", env=bad)
+        self.assertEqual(p.returncode, 0, p.stderr)  # harness error never stops the caller
+        self.assertIn("refusal markers not cleared", p.stderr)
+        self.assertTrue(self.sent(pid))
+        n = len(s.posts)
+        self.pk("flush", "--driver", env=bad)  # still failing: reported again, no event POSTed
+        self.assertEqual(len(s.posts), n)
+        os.remove(flag)  # permissions recover
+        out = self.pk("flush", "--driver", env=bad).stdout
+        self.assertIn("FLUSHED 0 packets, 1 events", out)
+        self.assertEqual([path for path, _ in s.posts][n:], ["/events"])
+        self.assertFalse([f for f in os.listdir(self.outbox()) if f.endswith(".rejected")])
+
+    def test_flush_warns_on_missing_outbox(self):  # driver todo
+        s = Stub(); self.addCleanup(s.stop)
+        gone = os.path.join(self.repo, "nope")
+        p = self.pk("flush", "--driver", "--outbox", gone, env={"DECISION_QUEUE_URL": s.url})
+        self.assertEqual(p.returncode, 0)
+        self.assertIn(f"Skipped: outbox {gone} does not exist", p.stdout)
+
     def test_5xx_stays_blocked_and_retries(self):
         s = Stub(); self.addCleanup(s.stop); s.force = 503
         env = {"DECISION_QUEUE_URL": s.url}

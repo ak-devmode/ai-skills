@@ -63,7 +63,7 @@ by `test_entrypoint.py`'s compile check.
       Every packet lands in `<worktree>/.decision-queue/outbox/` (self-ignoring); only a driver
       (`--driver` or $HERDR_AGENT_NAME=driver) POSTs, and only with $DECISION_QUEUE_URL set (hard 3 s
       deadline, redirects refused, /packets and /events, idempotent on id; "sent" is a `<id>.sent` marker). A dead queue prints a `Blocked` note and exits 0;
-      `flush` re-sends. check-reply refuses a missing/other-lane tag, an unknown, closed, stale or
+      `flush` re-sends. Only 400/409/413/415/422 are permanent (`<id>.rejected` / `.conflict`); every other 4xx is Blocked and retried. Events of a refused packet are marked `evt-<id>.rejected`, never POSTed. To clear a marker, delete the `<id>.rejected` / `.conflict` file (and its events' `evt-*.rejected`) from the outbox. `flush --outbox DIR` on a missing DIR prints `Skipped: outbox DIR does not exist` (exit 0). check-reply refuses a missing/other-lane tag, an unknown, closed, stale or
       other lane's packet, two different tags, unreadable state, and a one-way packet whose HEAD moved. `--range` runs door.py and a
       floor hit promotes the door. Lane identity: machine/workspace/agent from herdr env, else
       machine/repo-hash/session id ($CLAUDE_CODE_SESSION_ID); with none, check-reply needs --lane. Schema: schemas/packet.schema.json, checked by schema_check.py.

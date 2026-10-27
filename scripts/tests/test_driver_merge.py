@@ -354,6 +354,32 @@ class DriverMergeTest(unittest.TestCase):
                 self.assertEqual([c for c in calls if c[:2] == ("pr", "merge")], [])
                 self.assertEqual((packets, events), ([], []))
 
+    def test_refusal_then_merged_elsewhere_is_a_second_packet(self):  # 10.3-r3-03
+        # a re-run after a two-way refusal on head H finds the PR merged past H: the old card
+        # must not be re-sent in place of "Merged past the checked head"
+        built = self.build({})
+        with mock.patch.object(self, "build", lambda o: built):
+            rc1, out1, _, p1, _ = self.run_case("merge", {"checks": []})
+            rc2, out2, _, p2, _ = self.run_case("merge", {"merge_rc": 1, "readback_head": "e" * 40})
+        self.assertEqual((rc1, rc2), (1, 1), out2)
+        self.assertIn("MERGED-ELSEWHERE", out2)
+        self.assertEqual(len(p1), 1)
+        self.assertEqual(len(p2), 2, out2)
+        new = [p for p in p2 if p["id"] != p1[0]["id"]][0]
+        self.assertIn("Merged past the checked head", new["title"])
+        self.assertIn("f" * 12, new["id"])  # keyed on the merge commit that landed
+
+    def test_refusal_id_tracks_the_case(self):  # 10.3-r3-03 siblings: what differs must reach the id
+        repo = self.build({})[0]
+        label = "Some-Long-Organisation/a-rather-long-repository-name#1234"
+        cases = [([("checks", "pending")], "a" * 40), ([("checks", "x")], "a" * 40),
+                 ([("mergeable", "UNSTABLE")], "a" * 40), ([("checks", "pending")], "b" * 40)]
+        with contextlib.redirect_stdout(io.StringIO()):
+            ids = [dm.emit_packet(repo, "10.3", label, failed, [], None, head) for failed, head in cases]
+        self.assertTrue(all(ids), ids)
+        self.assertEqual(ids[0], ids[1], "same failed conditions, same head: idempotent")
+        self.assertEqual(len({ids[0], ids[2], ids[3]}), 3, ids)  # another condition / head: a new card
+
     def test_event_failure_exits_4(self):
         o = {}
         with mock.patch.object(dm, "post_event", lambda repo, body: False):

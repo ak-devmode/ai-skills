@@ -71,6 +71,7 @@ Exit:   0 eligible (check) / merged and event written (merge) · 1 refused / not
         2 usage · 4 merged, event not written
 """
 import argparse
+import hashlib
 import importlib.util
 import json
 import os
@@ -552,11 +553,17 @@ def covered(repo, seen, head, rid):
 
 # ---------- packet / event ---------------------------------------------------------
 
-def emit_packet(repo, unit, label, failed, hits, rng, head, title=None, options=None):
+def emit_packet(repo, unit, label, failed, hits, rng, head, title=None, options=None, kind="merge"):
+    """Write the refusal packet. Its id must change whenever the case does, or packet.py `new
+    --id` re-sends the OLD card (10.3-r3-03): it carries the kind (`merge-elsewhere` is keyed on
+    the merge commit that landed, passed as `head`), the head, the door and the failed condition
+    names. Those lead the id because stable_id cuts at 64 chars and a long owner/repo label
+    would otherwise cut them off; the label goes last."""
     one_way = bool(hits) or any(name == "floor" for name, _ in failed)
     door = "one-way" if one_way else "two-way"
+    conds = hashlib.sha1("+".join(sorted({n for n, _ in failed})).encode()).hexdigest()[:6]
     pid = _load("packet_emit", os.path.join(HERE, "packet_emit.py")).stable_id(
-        "merge", label.replace("/", "-").replace("#", "-"), head[:12], door)
+        kind, head[:12], door, conds, label.replace("/", "-").replace("#", "-"))
     body = "\n".join([f"driver-merge.py did not merge {label}:"] + [f"- {n}: {d}" for n, d in failed]
                      + [f"- floor path: {h['path']} ({h['pattern']}, {h['change']})" for h in hits])
     ci = any(name == "ci" for name, _ in failed)
@@ -693,10 +700,10 @@ def main(argv):
         sha, why, gh_flag, elsewhere = merge(a, facts)
         if elsewhere:
             print(f"MERGED-ELSEWHERE {facts['label']} {elsewhere} — {why}; no `merged` event")
-            emit_packet(a.repo, a.unit, facts["label"], [("merge", why)], [], None, facts["head"],
+            emit_packet(a.repo, a.unit, facts["label"], [("merge", why)], [], None, elsewhere,
                         title="Merged past the checked head",
                         options=["Alex reviews the commits merged past the checked head",
-                                 "Revert the merge and re-run the unit"])
+                                 "Revert the merge and re-run the unit"], kind="merge-elsewhere")
             return EXIT_REFUSED
         if sha:
             flags += [gh_flag] if gh_flag else []

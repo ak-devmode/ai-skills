@@ -60,6 +60,8 @@ CASES = [
     ("docs repo merges to main", {"name": "kalpa-docs", "base": "main"}, 0, {"merged": True}),
     ("docs repo refuses develop", {"name": "kalpa-docs", "base": "develop"}, 1, {"merged": False}),
     ("floor hit -> one-way packet", {"floor": True}, 1, {"merged": False, "packet": "one-way", "says": "proto"}),
+    ("PR edits its own CI -> one-way", {"path": ".github/workflows/ci.yml"}, 1,
+     {"merged": False, "packet": "one-way", "says": ".github/workflows/"}),
     ("degraded review merges, flagged", {"reviewer": "claude-lean subscription"}, 0,
      {"merged": True, "event": "degraded review: claude-lean"}),
     ("no reviewer is no review", {"reviewer": "none codex down"}, 1, {"merged": False}),
@@ -97,7 +99,7 @@ class DriverMergeTest(unittest.TestCase):
         git(repo, "remote", "add", "origin", f"git@github-alias:Owner/{name}.git")
         base = commit(repo, "README.md", "x\n", "base")
         git(repo, "checkout", "-q", "-b", "feature/x")
-        head = commit(repo, "proto/a.proto" if o.get("floor") else "app/a.go", "y\n", "change")
+        head = commit(repo, o.get("path") or ("proto/a.proto" if o.get("floor") else "app/a.go"), "y\n", "change")
         reviewed = head
         if o.get("after_review"):
             head = commit(repo, o["after_review"], "z\n", "later")
@@ -185,7 +187,7 @@ class DriverMergeTest(unittest.TestCase):
                     else:
                         self.assertEqual([p["door"] for p in packets], [door], out)
                         if door == "one-way":
-                            self.assertIn("proto/a.proto", packets[0]["payload"]["body"])
+                            self.assertIn(o.get("path") or "proto/a.proto", packets[0]["payload"]["body"])
 
     def test_check_never_merges_or_writes(self):
         for name, o, want_rc, _ in CASES:

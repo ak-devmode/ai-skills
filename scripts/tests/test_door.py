@@ -66,6 +66,14 @@ class TestFloor(DoorBase):
             ("infra/main.tf", "*.tf"),
             ("deploy/.env.production", ".env.*"),
             ("config/prod/app.yml", "prod/"),
+            # CI definitions (10.3-r1-05): a PR that rewrites its own CI must not ride its own green
+            (".github/workflows/ci.yml", ".github/workflows/"),
+            (".github/actions/setup/action.yml", ".github/actions/"),
+            (".github/CODEOWNERS", "CODEOWNERS"),
+            (".circleci/config.yml", ".circleci/"),
+            (".gitlab-ci.yml", ".gitlab-ci.yml"),
+            ("Jenkinsfile", "Jenkinsfile"),
+            ("buildspec-dev.yml", "buildspec*.yml"),
         ]
         for path, pattern in cases:
             with self.subTest(path):

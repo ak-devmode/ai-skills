@@ -176,10 +176,11 @@ def _trial_order(k):
 FOLLOW_UP_DAYS = 7
 
 
-def analyze(units, rv, since=None, git=None, until=None, follow_up=FOLLOW_UP_DAYS * 86400):
+def analyze(units, rv, since=None, git=None, until=None, follow_up=FOLLOW_UP_DAYS * 86400, data_end=None):
     """All review-loop tables for `units` (from load_logs). `rv` is the loaded review.py;
     `git` a Git (None = no hunk/line analyses); `until` the cut the logs were read at (None =
-    the latest stamp in them); `follow_up` the effort trial's fixed follow-up, in seconds.
+    the latest stamp in them); `follow_up` the effort trial's fixed follow-up, in seconds;
+    `data_end` when the logs stop (the pull time; -inf = unknown, so no lineage counts as followed up).
     Returns {"tables": {...}, "notes": {...}}."""
     git = git or Git("", enabled=False)
     rounds_calls = 0
@@ -414,6 +415,8 @@ def analyze(units, rv, since=None, git=None, until=None, follow_up=FOLLOW_UP_DAY
     # follow-up, so the newest (trial) lineages are not cut short at `until` (right-censoring).
     # With no cut at all (no stamp anywhere) none can be placed, so none is counted (fail closed).
     lin_list = list(trial_lin.values())
+    if until is not None and data_end is not None:
+        until = min(until, data_end)   # nothing after the pull exists, so a later `until` observes nothing more
     cut = until if until is not None else max((t for recs in units.values() for t in (parse_ts(r.get("ts")) for r in recs)
                                                 if t is not None), default=None)
     lin_by, tr_all, tr_out, tr_ship = (collections.defaultdict(list), collections.Counter(),

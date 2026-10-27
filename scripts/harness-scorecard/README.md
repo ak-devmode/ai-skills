@@ -25,8 +25,12 @@ nice -n 10 scripts/harness-scorecard/scorecard.py run [--since YYYY-MM-DD] [--un
 
 - `pull` from the MBA (refuses elsewhere). Reads homelab2026 over ssh (rsync's sender side;
       nothing is written there). Exit 1 when ssh fails or a destination reads back empty.
-- `run` defaults to the 21 calendar days ending at `--until` (or now): since is the start of the
-      UTC day 21 days before, so a default run and an `--until`-only run are both `21d`. It takes minutes and a CPU core: lineage
+- `run` defaults to the 21 calendar days ending at the date of `--until` (or today): since is the
+      start of the UTC day 20 days before that date, so a default run and an `--until` run of the
+      same day start on the same date and are both `21d`. The cut for "matured" lineages is
+      min(until, `.pulled`): the logs stop at the pull, so a later `until` observes nothing more.
+      A missing or unparseable `.pulled` stamp counts no lineage as matured (stderr says so).
+      It takes minutes and a CPU core: lineage
       resolution and §3.2/§3.3 read git ancestry and diffs in `~/Projects`. Run it once per
       look, not in a loop.
 - `--follow-up DAYS` (default 7, printed) is the effort trial's fixed follow-up (§4.5).

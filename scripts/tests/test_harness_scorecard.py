@@ -231,6 +231,35 @@ class LineageTest(unittest.TestCase):
         lin = self.analyze(edge, since=ts("2026-10-01T00:00:00Z"), until=until)["tables"]["Effort trial lineages"]["rows"]
         self.assertEqual(lin["trial · base low"][0], 1)
 
+    def test_cut_is_the_data_end_not_a_later_until(self):
+        # r13-01: the logs stop at the pull. until a week past it must not make a lineage rooted
+        # after pulled − F look fully followed up
+        tr = lambda u, n, b, h, t, **k: review(u, n, self.shas[b], self.shas[h], t, rules_version=2,
+                                               effort="medium", effort_base="low", **k)
+        units = {("s", "2.7"): [tr("2.7", 1, "a", "b", "2026-10-20T00:00:00Z")],   # 7d before the pull + 1d
+                 ("s", "2.8"): [tr("2.8", 1, "a", "b", "2026-10-10T00:00:00Z")]}
+        kw = dict(since=ts("2026-10-01T00:00:00Z"), until=ts("2026-10-31T23:59:59Z"), follow_up=7 * 86400)
+        def rows(**x):
+            with mock.patch.object(self.rv.vl, "PROJECTS", self.projects):
+                o = review_loop.analyze(units, self.rv, git=review_loop.Git(self.projects), **kw, **x)
+            return o["tables"]["Effort trial lineages"]["rows"]["trial · base low"]
+        pulled = ts("2026-10-24T00:00:00Z")
+        self.assertEqual(rows(), [2, 0.0, 0.0, 0.0, 0, 0, 0])               # no data_end: the old cut counts both
+        self.assertEqual(rows(data_end=pulled)[0::4], [1, 1])               # 2.7 is rooted after pulled − F: too young
+        self.assertEqual(rows(data_end=float("-inf"))[0::4], [0, 2])        # unknown stamp: none matured (fail closed)
+
+    def test_missing_or_bad_pulled_stamp_counts_nothing_as_matured(self):
+        import scorecard
+        with tempfile.TemporaryDirectory() as d:
+            for body in (None, "garbage\n"):
+                if body is not None:
+                    with open(os.path.join(d, scorecard.PULLED), "w") as fh:
+                        fh.write(body)
+                self.assertEqual(scorecard.read_data_end(d)[0], float("-inf"))
+            with open(os.path.join(d, scorecard.PULLED), "w") as fh:
+                fh.write("2026-10-24T00:00:00Z\n")
+            self.assertEqual(scorecard.read_data_end(d)[0], ts("2026-10-24T00:00:00Z"))
+
     def test_unstamped_review_is_left_out_of_the_follow_up(self):
         s, st = self.shas, {"rules_version": 2, "effort": "medium", "effort_base": "low"}
         u = [review("2.6", 1, s["a"], s["b"], "2026-10-01T00:00:00Z", round=1, **st),

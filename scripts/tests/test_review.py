@@ -1448,7 +1448,9 @@ class TestReview(unittest.TestCase):
         # `#n` is the nth finding of the answer: the note (#1) and the blocking one (#2), IDs by severity
         self.assertEqual(rf[0]["removes"], ["9.1-r1-03", "9.1-r1-01"])
         self.assertEqual(self.judged("9.1-r1", "reject", reason="it moves the scanner").returncode, 0)
-        p = self.record(reframe=dict(self.REFRAME, removes=["9.1-r1-01", "9.1-r0-09"]))  # same range: round 2
+        # a different idea (a repeat is refused, not re-judged — review 10.2-r3-03); same range: round 2
+        p = self.record(reframe=dict(self.REFRAME, proposal="drop the retry loop and fail fast on the first error",
+                                     removes=["9.1-r1-01", "9.1-r0-09"]))
         self.assertIn("round: 2 of", p.stdout)
         self.assertIn("9.1-r0-09", p.stderr)   # an unknown earlier ID is dropped, with a warning
         self.assertEqual(self.records("reframe")[1]["removes"],
@@ -1534,10 +1536,10 @@ class TestReview(unittest.TestCase):
         new = self.commit(self.repo, "a.sh")
         how = lambda fid, by: run(REVIEW, "dispose", "--scope", self.scope, "--unit", "9.1", "--finding", fid,
                                   "--reframed", "one table", "--commit", new, "--by", by, env=self.env)
-        steps = [(None, "9.1-r1-01", "judge did not accept the reframe of 9.1-r1 (latest verdict: none)"),
+        steps = [(None, "9.1-r1-01", "9.1-r1: unjudged (no judge verdict yet)"),
                  (dict(verdict="reject", reason="it moves the scanner"), "9.1-r1-01",
-                  "(latest verdict: rejected)"),
-                 (dict(overturns="D7: one writer"), "9.1-r1-01", "overturns a recorded decision (D7: one writer)"),
+                  "9.1-r1: rejected (it moves the scanner)"),
+                 (dict(overturns="D7: one writer"), "9.1-r1-01", "overturns a recorded decision: D7: one writer"),
                  (dict(), "9.1-r1-02", "no reframe in 9.1-r1-02's review lineage removes it")]
         for verdict, fid, needle in steps:
             with self.subTest(verdict=verdict, fid=fid):
@@ -1563,8 +1565,14 @@ class TestReview(unittest.TestCase):
         # a reframe in another lineage never backs it (fail closed), nor does an unknown review
         vl = load("verify_lib.py")
         recs = self.records("finding") + self.records("reframe") + \
-            [{"record": "reframe-verdict", "review_id": "9.1-r1", "verdict": "accepted", "overturns": None}]
+            [{"record": "reframe-verdict", "review_id": "9.1-r1", "verdict": "accepted", "overturns": None,
+              "user_call": None}]
         self.assertIsNone(vl.judge_took(recs, "9.1-r1-01", {"9.1-r1": ("9.1-r1", 1)}))
+        # review 10.2-r3-01: a door-touching accept is the user's; an unclassified one fails closed
+        door = recs[:-1] + [dict(recs[-1], user_call="touches migrations/001.sql")]
+        self.assertIn("touches migrations/001.sql", vl.judge_took(door, "9.1-r1-01", {"9.1-r1": ("9.1-r1", 1)}))
+        bare = recs[:-1] + [{k: v for k, v in recs[-1].items() if k != "user_call"}]
+        self.assertIn("no door classification", vl.judge_took(bare, "9.1-r1-01", {"9.1-r1": ("9.1-r1", 1)}))
         other = [dict(r, review_id="9.1-r0") if r["record"] != "finding" else r for r in recs]
         self.assertIn("no reframe", vl.judge_took(other, "9.1-r1-01", {"9.1-r1": ("9.1-r1", 1),
                                                                       "9.1-r0": ("9.1-r0", 1)}))

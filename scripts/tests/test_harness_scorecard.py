@@ -1,0 +1,314 @@
+"""Tests for scripts/harness-scorecard/ — lineage counting, reply tagging, delta, the CLI.
+
+Approach: small synthetic logs in a temp dir, laid out as the real cache is
+(`<logs>/mba-plans/.../artifacts/review-<unit>.jsonl`, `<logs>/mba/claude-projects/<p>/<s>.jsonl`),
+and a throwaway git repo as the projects root so review.py's lineage rules read real ancestry.
+No real transcript or review text is used. Stdlib only.
+"""
+
+import json
+import os
+import subprocess
+import sys
+import tempfile
+import unittest
+from unittest import mock
+
+from _helpers import REPO, SCRIPTS
+
+HS = os.path.join(SCRIPTS, "harness-scorecard")
+sys.path.insert(0, HS)
+import review_loop  # noqa: E402
+import sessions  # noqa: E402
+import store  # noqa: E402
+
+SECRET = "pasien Budi Santoso RM-000123"  # must never reach the store
+
+
+def git(d, *a):
+    return subprocess.run(["git", "-C", d, *a], capture_output=True, text=True, check=True).stdout.strip()
+
+
+def make_repo(root):
+    """demo repo: a → b → c on main, y on a side branch from a. Returns {name: sha}."""
+    d = os.path.join(root, "demo")
+    os.makedirs(d)
+    git(d, "init", "-q", "-b", "main")
+    git(d, "config", "user.email", "t@example.com"); git(d, "config", "user.name", "t")
+    shas = {}
+    for n in ("a", "b", "c"):
+        with open(os.path.join(d, "f.txt"), "a") as fh:
+            fh.write(n + "\n")
+        git(d, "add", "f.txt"); git(d, "commit", "-qm", n)
+        shas[n] = git(d, "rev-parse", "HEAD")
+    git(d, "checkout", "-q", "-b", "side", shas["a"])
+    with open(os.path.join(d, "g.txt"), "w") as fh:
+        fh.write("y\n")
+    git(d, "add", "g.txt"); git(d, "commit", "-qm", "y")
+    shas["y"] = git(d, "rev-parse", "HEAD")
+    git(d, "checkout", "-q", "main")
+    return shas
+
+
+def review(unit, n, base, head, ts, reviewer="codex gpt-6.1-sol", **extra):
+    return {"record": "review", "review_id": f"{unit}-r{n}", "reviewer": reviewer, "ts": ts,
+            "range": {"demo": f"{base}..{head}"}, "shas": {"base": base, "head": head}, "verdict": "SHIP AFTER BLOCKING", **extra}
+
+
+def finding(unit, n, i, ts, severity="should-fix", reviewer="codex gpt-6.1-sol", file="f.txt"):
+    return {"record": "finding", "review_id": f"{unit}-r{n}", "finding_id": f"{unit}-r{n}-{i:02d}", "reviewer": reviewer,
+            "severity": severity, "file": file, "line": 1, "category": "engine", "text": SECRET, "ts": ts,
+            "range": {}}
+
+
+def write_log(logs, scope, unit, recs, host="mba"):
+    d = os.path.join(logs, f"{host}-plans", "Projects", "demo", "plans", scope, "artifacts")
+    os.makedirs(d, exist_ok=True)
+    with open(os.path.join(d, f"review-{unit}.jsonl"), "w") as fh:
+        for r in recs:
+            fh.write(json.dumps(r) + "\n")
+
+
+def unit_11(s):
+    """r1 a..b, r2 b..c (a fix re-review: round 2), r3 a..y (new code: round 1 again)."""
+    return [review("1.1", 1, s["a"], s["b"], "2026-10-10T00:00:00Z"),
+            finding("1.1", 1, 1, "2026-10-10T00:00:00Z", "blocking"), finding("1.1", 1, 2, "2026-10-10T00:00:00Z"),
+            review("1.1", 2, s["b"], s["c"], "2026-10-11T00:00:00Z", reviewer="claude-fallback codex out of credits"),
+            finding("1.1", 2, 1, "2026-10-11T00:00:00Z", reviewer="claude-fallback codex out of credits"),
+            review("1.1", 3, s["a"], s["y"], "2026-10-12T00:00:00Z")]
+
+
+def unit_12(s):
+    """Effort trial: stamped rules 2, r1 then an explicit continuation → trial round 1 + fix round."""
+    st = {"rules_version": 2}
+    return [review("1.2", 1, s["a"], s["b"], "2026-10-20T00:00:00Z", effort="high", round=1, **st),
+            finding("1.2", 1, 1, "2026-10-20T00:00:00Z", "blocking"),
+            review("1.2", 2, s["b"], s["c"], "2026-10-21T00:00:00Z", effort="high", round=2, continues="1.2-r1", **st)]
+
+
+def ts(s):
+    return review_loop.parse_ts(s)
+
+
+class LineageTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = tempfile.TemporaryDirectory()
+        cls.projects = os.path.join(cls.tmp.name, "projects")
+        cls.shas = make_repo(cls.projects)
+        cls.rv = review_loop.load_review_module()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.tmp.cleanup()
+
+    def analyze(self, units, since=None):
+        with mock.patch.object(self.rv.vl, "PROJECTS", self.projects):
+            return review_loop.analyze(units, self.rv, since=since, git=review_loop.Git(self.projects))
+
+    def test_rounds_follow_lineage_not_unit_rn(self):
+        out = self.analyze({("s", "1.1"): unit_11(self.shas)})
+        rows = out["tables"]["3.1 Lineage rounds"]["rows"]
+        # r3 is the unit's third review but new code: lineage round 1, so r1 has 2 reviews
+        self.assertEqual(rows["r1"][0], 2)
+        self.assertEqual(rows["r2"][0], 1)
+        self.assertNotIn("r3", rows)
+        self.assertEqual(rows["r1"][2], 1.0)  # 2 findings over 2 r1 reviews
+        summary = out["tables"]["3.1 Lineage summary"]["rows"]
+        self.assertEqual(summary["lineages (r1 reviews)"], [2])
+        self.assertEqual(summary["fallback out of credits"], [1])
+
+    def test_rounds_called_once_per_unit(self):
+        calls = []
+        real = self.rv.rounds
+        with mock.patch.object(self.rv, "rounds", side_effect=lambda recs, unit: calls.append(unit) or real(recs, unit)):
+            out = self.analyze({("s", "1.1"): unit_11(self.shas), ("s", "1.2"): unit_12(self.shas)})
+        self.assertEqual(sorted(calls), ["1.1", "1.2"])
+        self.assertEqual(out["notes"]["rounds_calls"], 2)
+
+    def test_since_keeps_history_for_lineage(self):
+        # r1 falls before the window: not counted, but r2 is still round 2 of its lineage
+        out = self.analyze({("s", "1.1"): unit_11(self.shas)}, since=ts("2026-10-11T00:00:00Z"))
+        rows = out["tables"]["3.1 Lineage rounds"]["rows"]
+        self.assertEqual(rows["r2"][0], 1)
+        self.assertEqual(rows["r1"][0], 1)  # only r3
+
+    def test_until_drops_later_records(self):
+        logs = os.path.join(self.tmp.name, "logs-until")
+        write_log(logs, "s", "1.1", unit_11(self.shas))
+        units, stats = review_loop.load_logs(logs, until=ts("2026-10-11T12:00:00Z"))
+        self.assertEqual(stats["dropped_after_until"], 1)  # r3
+        self.assertEqual(len(units[("s", "1.1")]), 5)
+
+    def test_largest_copy_wins(self):
+        logs = os.path.join(self.tmp.name, "logs-dedupe")
+        write_log(logs, "s", "1.1", unit_11(self.shas)[:2], host="homelab")
+        write_log(logs, "s", "1.1", unit_11(self.shas), host="mba")
+        units, _ = review_loop.load_logs(logs)
+        self.assertEqual(len(units), 1)
+        self.assertEqual(len(units[("s", "1.1")]), 6)
+
+    def test_effort_trial_splits_round1_and_fix_rounds(self):
+        out = self.analyze({("s", "1.1"): unit_11(self.shas), ("s", "1.2"): unit_12(self.shas)})
+        rows = out["tables"]["Effort trial (codex)"]["rows"]
+        self.assertEqual(rows["trial · round 1"], [1, 1.0, 1.0])
+        self.assertEqual(rows["trial · fix rounds"][0], 1)
+        self.assertEqual(rows["pre-trial · round 1"][0], 2)   # the fallback r2 is not a codex review
+        self.assertNotIn("pre-trial · fix rounds", rows)
+        lin = out["tables"]["Effort trial lineages"]["rows"]
+        self.assertEqual(lin["trial"][:2], [1, 1.0])
+        self.assertEqual(lin["pre-trial"][0], 2)
+        self.assertEqual(out["notes"]["trial_effort_tiers"], {"high": 2})
+        self.assertEqual(out["notes"]["stamped_round_mismatches"], 0)
+
+    def test_unit_that_fails_is_reported(self):
+        with mock.patch.object(self.rv, "rounds", side_effect=RuntimeError("boom")):
+            out = self.analyze({("s", "1.1"): unit_11(self.shas)})
+        self.assertEqual(out["notes"]["failed_units"], ["s/1.1: RuntimeError"])
+        self.assertEqual(out["tables"]["3.1 Lineage summary"]["rows"]["units"], [0])
+
+
+def session_lines(cwd="/Users/x/Projects/wellmed/kalpa-docs"):
+    base = {"cwd": cwd, "sessionId": "s1"}
+    return [
+        {**base, "type": "permission-mode", "permissionMode": "bypassPermissions", "timestamp": "2026-10-20T00:00:00Z"},
+        {**base, "type": "assistant", "timestamp": "2026-10-20T00:00:00Z",
+         "message": {"model": "claude-opus-5-5", "usage": {"input_tokens": 100, "output_tokens": 10},
+                     "content": [{"type": "tool_use", "name": "Bash", "input": {"command": "python3 review/scripts/review.py prepare"}},
+                                 {"type": "text", "text": "Packet posted."}]}},
+        {**base, "type": "user", "turnOrigin": "human", "timestamp": "2026-10-20T00:05:00Z",
+         "message": {"content": "[lane mba/ws/agent p-7] option B"}},
+        {**base, "type": "assistant", "timestamp": "2026-10-20T00:06:00Z",
+         "message": {"model": "claude-opus-5-5", "usage": {"input_tokens": 50}, "content": [{"type": "text", "text": "ok"}]}},
+        {**base, "type": "user", "turnOrigin": "human", "timestamp": "2026-10-20T00:16:00Z",
+         "message": {"content": f"check the record for {SECRET} before you go on"}},
+        {**base, "type": "user", "turnOrigin": "human", "timestamp": "2026-10-20T00:17:00Z",
+         "message": {"content": "<command-name>/plan</command-name>"}},
+    ]
+
+
+def write_session(logs, lines, name="s1"):
+    d = os.path.join(logs, "mba", "claude-projects", "-proj")
+    os.makedirs(d, exist_ok=True)
+    with open(os.path.join(d, name + ".jsonl"), "w") as fh:
+        for r in lines:
+            fh.write(json.dumps(r) + "\n")
+
+
+class ReplyTaggingTest(unittest.TestCase):
+    def test_category(self):
+        cases = [("[lane homelab2026/w/a p-1] go with A", "queue answer"),
+                 ("  [lane mba/x/y p-2] B", "queue answer"),
+                 ("lane answer [lane mba/x/y p-2]", "substantive"),
+                 ("merge it", "merge/push stamp"),
+                 ("yes", "other stamp"),
+                 ("status?", "status ping"),
+                 ("no, use the other table", "redirect"),
+                 ("why does the SG allow 5432 from the VPC", "substantive")]
+        for text, want in cases:
+            with self.subTest(text=text):
+                self.assertEqual(sessions.category(text), want)
+
+    def test_queue_answer_latency(self):
+        with tempfile.TemporaryDirectory() as logs:
+            write_session(logs, session_lines())
+            out = sessions.scan(logs, ts("2026-10-19T00:00:00Z"), ts("2026-10-21T00:00:00Z"))
+            t = sessions.tables(out)
+        att = t["4 Attention"]["rows"]
+        self.assertEqual(att["typed prompts"], [2])          # the <command-name> turn is not typed
+        self.assertEqual(att["queue answers"], [1])
+        self.assertEqual(att["queue answer latency median min"], [5.0])
+        self.assertEqual(att["wait median min"], [10.0])     # waits 5 and 10 min; median of two = upper
+        self.assertEqual(t["4 Prompt categories"]["rows"]["queue answer"], [1, 50.0])
+        self.assertIn("review", t["2 Activity cost (driver)"]["rows"])
+        self.assertNotIn(SECRET, json.dumps(t))
+
+    def test_non_kalpa_and_out_of_window_skipped(self):
+        with tempfile.TemporaryDirectory() as logs:
+            write_session(logs, session_lines(cwd="/Users/x/Projects/pmg/pmg-docs"))
+            self.assertEqual(sessions.scan(logs, None, None)["sessions"], [])
+            write_session(logs, session_lines(), name="s2")
+            out = sessions.scan(logs, None, ts("2026-10-19T00:00:00Z"))
+        self.assertEqual(out["sessions"], [])
+
+
+class DeltaTest(unittest.TestCase):
+    CUR = {"t": {"cols": ["Reviews", "Share %"], "rows": {"r1": [10, 50.0], "r2": [4, None], "r9": [1, 1.0]}}}
+    PREV = {"t": {"cols": ["Reviews", "Share %"], "rows": {"r1": [8, 55.5], "r2": [4, 20.0]}}}
+
+    def test_delta(self):
+        d = store.delta(self.CUR, self.PREV)["t"]
+        self.assertEqual(d["r1"], [2, -5.5])
+        self.assertEqual(d["r2"], [0, None])
+        self.assertEqual(d["r9"], "new")
+
+    def test_render_adds_delta_column_only_with_previous(self):
+        with_d = store.render("t", self.CUR["t"], store.delta(self.CUR, self.PREV)["t"])
+        self.assertIn("|  | Reviews | Δ | Share % | Δ |", with_d)
+        self.assertIn("| r1 | 10 | +2 | 50.0 | -5.5 |", with_d)
+        self.assertIn("| r9 | 1 | new | 1 | new |", with_d)
+        self.assertNotIn("Δ", store.render("t", self.CUR["t"]))
+
+    def test_save_previous_and_corrupt(self):
+        with tempfile.TemporaryDirectory() as d:
+            self.assertEqual(store.previous(d), (None, None))
+            p = store.save(d, {"window": {}, "tables": self.PREV})
+            self.assertEqual(store.previous(d)[1]["tables"], self.PREV)
+            with open(os.path.join(d, "99999999T999999Z.json"), "w") as fh:
+                fh.write("{not json")
+            path, res = store.previous(d)
+            self.assertTrue(path.endswith("99999999T999999Z.json"))
+            self.assertIsNone(res)
+            self.assertEqual(store.previous(d, before=path)[0], p)
+
+    def test_save_never_overwrites_an_earlier_run(self):
+        # two runs stamped the same instant: the second must fail, not clobber the first
+        now = store.datetime(2026, 10, 27, 1, 2, 3, 456789, tzinfo=store.timezone.utc)
+        with tempfile.TemporaryDirectory() as d:
+            p = store.save(d, {"window": {}, "tables": self.PREV}, now=now)
+            with self.assertRaises(FileExistsError):
+                store.save(d, {"window": {}, "tables": self.CUR}, now=now)
+            with open(p) as fh:
+                self.assertEqual(json.load(fh)["tables"], self.PREV)
+            self.assertEqual([f for f in os.listdir(d) if f.endswith(".tmp")], [])
+
+
+class CliTest(unittest.TestCase):
+    def run_cli(self, *args, env):
+        return subprocess.run([sys.executable, os.path.join(HS, "scorecard.py"), *args],
+                              capture_output=True, text=True, env=env, timeout=120)
+
+    def test_run_twice_prints_delta_and_stores_aggregates_only(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            projects, logs, st = (os.path.join(tmp, n) for n in ("projects", "logs", "store"))
+            shas = make_repo(projects)
+            env = {**os.environ, "VERIFY_PROJECTS": projects}
+            write_log(logs, "s", "1.1", unit_11(shas))
+            write_session(logs, session_lines())
+            args = ["run", "--since", "2026-10-05", "--until", "2026-10-25", "--logs", logs, "--store", st]
+            first = self.run_cli(*args, env=env)
+            self.assertEqual(first.returncode, 0, first.stderr[-800:])
+            self.assertIn("No previous run", first.stdout)
+            self.assertIn("### 3.1 Lineage rounds", first.stdout)
+            write_log(logs, "s", "1.2", unit_12(shas))
+            second = self.run_cli(*args, env=env)
+            self.assertEqual(second.returncode, 0, second.stderr[-800:])
+            self.assertIn("Δ against", second.stdout)
+            self.assertRegex(second.stdout, r"\| r1 \| 3 \| \+1 \|")
+            stored = [os.path.join(st, f) for f in os.listdir(st)]
+            self.assertEqual(len(stored), 2)
+            for p in stored:
+                with open(p) as fh:
+                    self.assertNotIn(SECRET, fh.read())
+            self.assertNotIn(SECRET, second.stdout)
+
+    def test_empty_logs_fail_closed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            r = self.run_cli("run", "--logs", tmp, "--store", os.path.join(tmp, "st"), env=dict(os.environ))
+            self.assertEqual(r.returncode, 1)
+            self.assertIn("no review logs", r.stderr)
+            self.assertFalse(os.path.exists(os.path.join(tmp, "st")))
+
+
+if __name__ == "__main__":
+    unittest.main()

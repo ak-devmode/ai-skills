@@ -64,7 +64,9 @@ real directory, that account's sessions drop out of the scorecard, and the input
 changing then.
 
 3.2 **Store** `~/.cache/harness-scorecard/<UTC stamp>.json`: one file per run, numbers
-only, plus the run's flags (`git`, `sessions`) and window class (its length, `21d` by default).
+only, plus the run's flags (`git`, `sessions`) and window class (its length in calendar days,
+`21d` by default — dates, not elapsed hours, so a `--since` run's class does not move with the
+hour it ran).
 The next run's Δ columns compare against the latest file with the **same flags and window
 class** — a `--no-git` run, a `--no-sessions` run or the ten-month baseline replay is never a
 default run's reference — and the header names the reference's window and flags. A run stored
@@ -100,14 +102,20 @@ The other prompt categories are regex. Treat their shares as ±5 points.
 
 4.5 **Effort trial.** Codex reviews split into trial (lineage rules 2+) and pre-trial, then by
 base tier (`effort_base`, effort_for's tier before the bump), then into round 1 and fix rounds.
-A pre-trial review without a stamp is bucketed by effort_for on its own range; a trial review
-without one is `unstamped`; a range git cannot read is `unresolved`. A lineage takes its root's
-base. The lineage table shows fix rounds per lineage and the share of codex credit-outs (the
-fallback reviewer is the noisy one), over **closed** lineages rooted in the window only:
-closed means the latest review is SHIP, or the unit's outcomes were accepted after it. Open
-lineages are cut mid-loop (the newest, trial ones most) and lineages whose round 1 predates
-`--since` are counted from their tail only, so both are excluded and counted in their own
-columns. The trial is kept per bucket when
+One rule buckets both sides: the stamped `effort_base`, else effort_for on the review's own
+range (review.py stamps codex reviews only, so a fallback or lean review is always recomputed);
+a range git cannot read is `unresolved`; `unstamped` is only a codex trial review that lacks
+the stamp it should carry. A lineage takes its root's base. The lineage table shows fix rounds
+per lineage and the share of codex credit-outs (the fallback reviewer is the noisy one), over
+lineages rooted in the window **at least a maturity horizon before the cut**, closed or not.
+The horizon is the p90 root-to-close time of the window's closed lineages (closed: the latest
+review is SHIP, or the unit's outcomes were accepted after it), pooled across buckets and
+printed with the run. Counting only closed lineages would keep the short ones and drop the long
+— the newest, trial ones most — so the cut is on the root's age, never on the outcome; an open
+lineage past the horizon counts with its current rounds, a lower bound, and is counted beside
+them. With no closed lineage the horizon is unknown and none is counted. Lineages inside the
+horizon, rooted before `--since` (counted from their tail only), or with an unstamped root
+are excluded and counted in their own columns. The trial is kept per bucket when
 findings move earlier without more credit-outs. A stamped `round` that disagrees with the
 recomputed one is counted under `stamped-round mismatches`.
 

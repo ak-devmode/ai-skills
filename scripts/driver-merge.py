@@ -239,6 +239,28 @@ def gh_json(path):
         return None, "output is not JSON"
 
 
+def gh_pages(path, key=None):
+    """Every item of a paginated list endpoint (10.3-r2-06): `--paginate --slurp` wraps each page
+    in an outer array. (items, '') or (None, why). Incomplete is unreadable: a gh error mid-way,
+    or any page that is not a list (or, with `key`, an object carrying a list under it)."""
+    rc, out, err = gh("api", "--paginate", "--slurp", path)
+    if rc:
+        return None, first_err(err, rc)
+    try:
+        pages = json.loads(out)
+    except ValueError:
+        return None, "output is not JSON"
+    if not isinstance(pages, list) or not pages:
+        return None, "no pages read"
+    items = []
+    for i, page in enumerate(pages):
+        page = page.get(key) if key and isinstance(page, dict) else page
+        if not isinstance(page, list):
+            return None, f"page {i + 1} of {len(pages)} unreadable — read incomplete"
+        items += page
+    return items, ""
+
+
 def required_checks(slug, base):
     """(set of required check names, '') or (None, why unreadable). Two sources, both read:
     classic branch protection and repository rulesets. Classic protection answering "not
@@ -255,9 +277,9 @@ def required_checks(slug, base):
         names |= {c.get("context") for c in doc.get("checks") or [] if isinstance(c, dict) and c.get("context")}
     else:
         return None, "branch protection: output is not an object"
-    rules, why = gh_json(f"repos/{slug}/rules/branches/{b}?per_page=100")
-    if not isinstance(rules, list):
-        return None, f"rulesets unreadable ({why or 'output is not a list'})"
+    rules, why = gh_pages(f"repos/{slug}/rules/branches/{b}?per_page=100")
+    if rules is None:
+        return None, f"rulesets unreadable ({why})"
     for r in rules:
         if isinstance(r, dict) and r.get("type") == "required_status_checks":
             for c in (r.get("parameters") or {}).get("required_status_checks") or []:

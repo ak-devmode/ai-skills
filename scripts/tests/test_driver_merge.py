@@ -102,6 +102,12 @@ CASES = [
                                         "rulesets": (0, [RULE_LINT])}, 1, {"merged": False, "says": "lint"}),
     ("BLOCKED: rulesets unreadable", {"state": "BLOCKED", "rulesets": (1, "HTTP 500")}, 1,
      {"merged": False, "says": "rulesets unreadable"}),
+    # a required check on a later rulesets page is still required; an unreadable page refuses (10.3-r2-06)
+    ("BLOCKED: ruleset check on page 2", {"state": "BLOCKED", "protection": (1, "Branch not protected (HTTP 404)"),
+                                          "rulesets": (0, [[], [RULE_LINT]]), "paged": True}, 1,
+     {"merged": False, "says": "lint"}),
+    ("BLOCKED: rulesets page unreadable", {"state": "BLOCKED", "rulesets": (0, [[], {"message": "x"}]), "paged": True},
+     1, {"merged": False, "says": "read incomplete"}),
     ("BLOCKED: nothing required, admin", {"state": "BLOCKED", "protection": (1, "Branch not protected (HTTP 404)")},
      0, {"merged": True, "admin": True}),
     ("dirty refused", {"state": "DIRTY"}, 1, {"merged": False}),
@@ -193,9 +199,17 @@ class DriverMergeTest(unittest.TestCase):
                                           "headRefOid": o.get("readback_head", head)}), ""
                 return 0, json.dumps(pr), ""
             if args[0] == "api":
-                key = "protection" if "/protection/" in args[1] else "rulesets"
+                path = args[-1]
+                key = "protection" if "/protection/" in path else "rulesets"
                 arc, body = o.get(key, (0, {"contexts": ["ci"], "checks": [{"context": "ci"}]} if key == "protection" else []))
-                return (arc, "", body) if arc else (0, json.dumps(body), "")
+                if arc:
+                    return arc, "", body
+                if key == "rulesets":  # served as pages: o["rulesets"] is one page unless "paged"
+                    pages = body if o.get("paged") else [body]
+                    if "--paginate" not in args:
+                        return 0, json.dumps(pages[0]), ""
+                    return 0, json.dumps(pages if "--slurp" in args else pages[0]), ""
+                return 0, json.dumps(body), ""
             if args[:2] == ("pr", "merge"):
                 return o.get("merge_rc", 0), "", "merge failed" if o.get("merge_rc") else ""
             return 1, "", "unexpected gh call"

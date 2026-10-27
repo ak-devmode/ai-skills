@@ -191,3 +191,16 @@ Resumed/restarted phases append a SECOND block:
 ## Phase 2: Review re-pointed at decisions (started 2026-10-26T05:40:28Z)
 
 - base: 10.2 ai-skills ad157978ae5264fe5e78ea73895972860b74c690
+
+---
+
+## Phase 3: Driver merges (started 2026-10-27T03:05:26Z)
+
+- base: 10.3 ai-skills 361ae685b906ef3638bde5fd29e6e537363397b1
+
+---
+
+## Phase 4: UI template, harness scorecard, herdr attention (started 2026-10-27T03:05:26Z)
+
+- base: 10.4 ai-skills 361ae685b906ef3638bde5fd29e6e537363397b1
+- base: 10.4 dev-workbench ef9bae08c8e2ddf77de0d4f43be33b5688e56159

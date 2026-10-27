@@ -10,8 +10,8 @@ Script-owned (`plans-index.py`); PLANS-INDEX.md is rendered from it.
 | 10 | 🚧 In progress (2026-10-26) — 10.1 + 10.2 running as concurrent lanes | `10-decision-queue-harness/` | Re-targets the harness from closing review findings to surfacing decisions: every lane ends done or with a decision in Alex's queue. Adds structured decision packets, a one-way/two-way door rule with a per-repo floor, and a queue page on homelab that both machines write to over the tailnet; Alex answers by pasting an edited prefilled reply into the named pane. Review loops stop on diminishing returns and emit packets instead of patching local maxima, drivers merge their own PRs to develop outside the floor, and the 21-day log analysis becomes a re-runnable scorecard. | Alex |
 | 10.1 | 🚧 In progress (2026-10-26) — lanes A packet/door, B queue service | `10-decision-queue-harness/` | Phase 1 — Decision queue v1, usable today: packet schema, packet.py/door.py, homelab queue service with the data-model template, /plan and /concurrency wiring. | Alex |
 | 10.2 | 🚧 In progress (2026-10-26) — lane C review changes, lineage fix first | `10-decision-queue-harness/` | Phase 2 — Review and verify re-pointed at decisions: diminishing-returns exit rule, lineage fix, --reframed disposition, packets from cascade/convergence/run-cap stops. | Alex |
-| 10.3 | 📝 Draft (2026-10-25) | `10-decision-queue-harness/` | Phase 3 — Driver merges its own PRs (develop for code, main for docs repos) when green with real checks and no floor path; floor hits become packets. | Alex |
-| 10.4 | 📝 Draft (2026-10-25) | `10-decision-queue-harness/` | Phase 4 — UI-change template (old/new screenshots), harness scorecard from the mining scripts, herdr attention filter ignores finished lanes. | Alex |
+| 10.3 | 🚧 In progress (2026-10-27) — lane merges | `10-decision-queue-harness/` | Phase 3 — Driver merges its own PRs (develop for code, main for docs repos) when green with real checks and no floor path; floor hits become packets. | Alex |
+| 10.4 | 🚧 In progress (2026-10-27) — lanes ui-packet, scorecard, attention | `10-decision-queue-harness/` | Phase 4 — UI-change template (old/new screenshots), harness scorecard from the mining scripts, herdr attention filter ignores finished lanes. | Alex |
 <!-- plans-index:end -->
 
 ## Operating Contract (pinned — survives compaction; re-read on every resume)
@@ -26,7 +26,7 @@ Script-owned (`plans-index.py`); PLANS-INDEX.md is rendered from it.
 ## Resume Context
 **Scope:** ~/Projects/ai-skills/plans/10-decision-queue-harness/scope.md
 **Last action:** DECISION_QUEUE_URL live on both machines (dev-workbench ef9bae0 pushed, homelab pulled); paste-back proven (copy → pane → check-reply refuses a foreign tag); acceptance card closed
-**Next action:** Alex restarts the contexts he picks → real packets from one MBA + one homelab session (Task 1.6 acceptance) → /verify 10.1, 10.2 → lane teardown
+**Next action:** lanes merges (10.3), ui-packet / scorecard / attention (10.4) running; 10.1 acceptance waits on Alex's restarted sessions posting packets; then /verify 10.1–10.4
 **Open blockers:** none
 **Key files changed:** None yet
 
@@ -84,8 +84,8 @@ Script-owned (`plans-index.py`); PLANS-INDEX.md is rendered from it.
 |---|-----------|-------|--------|-------|
 | 10.1 | 10.1-decision-queue-harness-PLAN.md | Phase 1 — Decision queue v1 | In progress | gate D then A |
 | 10.2 | 10.2-decision-queue-harness-PLAN.md | Phase 2 — Review/verify re-pointed | In progress | gate C, concurrent with 10.1 |
-| 10.3 | 10.3-decision-queue-harness-PLAN.md | Phase 3 — Driver merges | Draft | gate D, after 10.1 packet tooling |
-| 10.4 | 10.4-decision-queue-harness-PLAN.md | Phase 4 — UI template, scorecard, herdr | Draft | gate A, after 10.1 packet tooling |
+| 10.3 | 10.3-decision-queue-harness-PLAN.md | Phase 3 — Driver merges | In progress | gate D, after 10.1 packet tooling |
+| 10.4 | 10.4-decision-queue-harness-PLAN.md | Phase 4 — UI template, scorecard, herdr | In progress | gate A, after 10.1 packet tooling |
 
 ---
 
@@ -165,3 +165,27 @@ Script-owned (`plans-index.py`); PLANS-INDEX.md is rendered from it.
 - Lanes A + C merged on `feature/10-decision-queue` (95a8b89, 4cdea98), clean merges.
 #### Task 2.5 + review rounds (2026-10-27)
 - D2 (packets from review/verify): r3 4 findings fixed → r4 reopen chain (who decides "Alex's call") → CONSOLIDATED into one function 21be2cd → r5 SHIP, 1 should-fix fixed abfc579 (repeat check looks backwards only). Suites: 440 OK at 95d20ce, 444 OK at 21be2cd.
+
+---
+
+## Plan 10.3: Driver merges
+
+### Resume Context (Plan 10.3)
+**Status:** Phase 0 done; 3.1 + 3.2 dispatched to lane merges
+**Base:** ai-skills 361ae68
+
+### Session: 2026-10-27
+#### Phase 0 — ✅ DONE
+- Ready to execute (Alex: "start 10.3 and 10.4 concurrently"), Executed by stamped, freshness OK (ai-skills dirty = own plan edits). Concurrency plan approved (82).
+
+---
+
+## Plan 10.4: UI template, harness scorecard, herdr attention
+
+### Resume Context (Plan 10.4)
+**Status:** Phase 0 done; 4.1 → lane ui-packet, 4.2 → lane scorecard, 4.3 → lane attention
+**Base:** ai-skills 361ae68 · dev-workbench ef9bae0
+
+### Session: 2026-10-27
+#### Phase 0 — ✅ DONE
+- Same as 10.3. UI-packet skill guidance goes in scripts/README.md (plan/SKILL.md belongs to lane merges).

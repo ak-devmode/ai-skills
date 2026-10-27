@@ -1,6 +1,6 @@
 ---
 name: review
-version: 3.9.2
+version: 3.9.3
 description: |
   Pre-landing code review with codex as the gate: the opposing model family, headless
   and read-only, reviews an explicit revision range against gstack's review checklist,
@@ -404,11 +404,16 @@ it; ids are stable per review and case, so a re-run re-sends and never duplicate
 names the finding ids, the lineage, the options and a recommendation. `record` or
 `reframe-record` prints `PACKET <id>` and a `[PACKET]` / `[REFRAME]` line; the inline numbered
 question stays the path when `DECISION_QUEUE_URL` is unset (the packet is still in the outbox).
-A packet that cannot be written only warns on stderr — the review never stops for it:
+A packet that cannot be written only warns on stderr — the review never stops for it.
+Whether a reframe is the user's call is decided in one place, `verify_lib.reframe_call`, and
+every consumer (the `[REFRAME]` lines, `reframe-prepare`, `dispose --by judge`, the gate, case 2)
+asks it: it reads each reframe's latest verdict only, holds a repeat even after a later accept,
+and holds anything it cannot decide.
 
 1. **An accepted reframe that overturns a recorded decision, or touches a one-way door**
-   (`door.py` over the review's range, a hit on a file of a finding the reframe removes; a
-   `door.py` that fails closed, raises, or has no reviewed checkout to read counts as a hit).
+   (`door.py` over the review's range, a hit on a file of a finding the reframe removes, its
+   anchor made relative to the reviewed checkout first; an anchor outside that checkout, or a
+   `door.py` that fails closed, raises, or has no reviewed checkout to read, counts as a hit).
    Emitted by `reframe-record`. The call is decided before anything prints and logged on the
    verdict as `user_call`: stdout says "do not build until answered" in place of "build it"
    whether or not the packet was written, and `dispose --reframed --by judge` refuses it (it is
@@ -421,8 +426,9 @@ A packet that cannot be written only warns on stderr — the review never stops 
    from a fallback reviewer (`advisory`) never count.
 3. **A rejected reframe proposed again** — the new proposal matches (≥ 0.85 similarity) one the
    judge already rejected in the lineage. Emitted by `record`, which prints the hold in place
-   of the judge-it line; `reframe-prepare` refuses it (exit 1) — a re-judge is never the path.
-   A repeat check that cannot run is held the same way.
+   of the judge-it line; `reframe-prepare` refuses it (exit 1) — a re-judge is never the path,
+   and an accept recorded anyway is still held (`reframe-record` emits this packet, `dispose --by
+   judge` refuses). A repeat check that cannot run is held the same way.
 
 ---
 

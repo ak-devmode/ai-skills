@@ -1536,9 +1536,9 @@ class TestReview(unittest.TestCase):
         new = self.commit(self.repo, "a.sh")
         how = lambda fid, by: run(REVIEW, "dispose", "--scope", self.scope, "--unit", "9.1", "--finding", fid,
                                   "--reframed", "one table", "--commit", new, "--by", by, env=self.env)
-        steps = [(None, "9.1-r1-01", "judge did not accept the reframe of 9.1-r1 (latest verdict: none)"),
+        steps = [(None, "9.1-r1-01", "9.1-r1: unjudged (no judge verdict yet)"),
                  (dict(verdict="reject", reason="it moves the scanner"), "9.1-r1-01",
-                  "(latest verdict: rejected)"),
+                  "9.1-r1: rejected (it moves the scanner)"),
                  (dict(overturns="D7: one writer"), "9.1-r1-01", "overturns a recorded decision: D7: one writer"),
                  (dict(), "9.1-r1-02", "no reframe in 9.1-r1-02's review lineage removes it")]
         for verdict, fid, needle in steps:

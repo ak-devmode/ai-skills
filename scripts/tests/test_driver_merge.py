@@ -43,6 +43,7 @@ def commit(repo, path, text, msg):
 
 
 GREEN = [{"__typename": "CheckRun", "name": "ci", "status": "COMPLETED", "conclusion": "SUCCESS"}]
+RULE_LINT = {"type": "required_status_checks", "parameters": {"required_status_checks": [{"context": "lint"}]}}
 SKIPPED = [{"__typename": "CheckRun", "name": "ci", "status": "COMPLETED", "conclusion": "SKIPPED"},
            {"__typename": "StatusContext", "context": "x", "state": "NEUTRAL"}]
 
@@ -80,6 +81,17 @@ CASES = [
     ("code commit after review", {"after_review": "app/late.go"}, 1, {"merged": False, "says": "past review"}),
     ("plans-only commit after review", {"after_review": "plans/progress.md"}, 0, {"merged": True}),
     ("admin only when protection blocks", {"state": "BLOCKED"}, 0, {"merged": True, "admin": True}),
+    # --admin bypasses required checks too: each one must be SUCCESS on the head (10.3-r1-03)
+    ("BLOCKED: required check never reported", {"state": "BLOCKED", "protection": (0, {"contexts": ["ci", "e2e"]})},
+     1, {"merged": False, "says": "e2e"}),
+    ("BLOCKED: protection unreadable", {"state": "BLOCKED", "protection": (1, "HTTP 403: Forbidden")}, 1,
+     {"merged": False, "says": "branch protection unreadable"}),
+    ("BLOCKED: ruleset check missing", {"state": "BLOCKED", "protection": (1, "Branch not protected (HTTP 404)"),
+                                        "rulesets": (0, [RULE_LINT])}, 1, {"merged": False, "says": "lint"}),
+    ("BLOCKED: rulesets unreadable", {"state": "BLOCKED", "rulesets": (1, "HTTP 500")}, 1,
+     {"merged": False, "says": "rulesets unreadable"}),
+    ("BLOCKED: nothing required, admin", {"state": "BLOCKED", "protection": (1, "Branch not protected (HTTP 404)")},
+     0, {"merged": True, "admin": True}),
     ("dirty refused", {"state": "DIRTY"}, 1, {"merged": False}),
     ("unknown state after retries", {"state": "UNKNOWN"}, 1, {"merged": False}),
     ("draft refused", {"draft": True}, 1, {"merged": False}),
@@ -142,6 +154,10 @@ class DriverMergeTest(unittest.TestCase):
                     st = o.get("readback", "MERGED")
                     return 0, json.dumps({"state": st, "mergeCommit": {"oid": "f" * 40} if st == "MERGED" else None}), ""
                 return 0, json.dumps(pr), ""
+            if args[0] == "api":
+                key = "protection" if "/protection/" in args[1] else "rulesets"
+                arc, body = o.get(key, (0, {"contexts": ["ci"], "checks": [{"context": "ci"}]} if key == "protection" else []))
+                return (arc, "", body) if arc else (0, json.dumps(body), "")
             if args[:2] == ("pr", "merge"):
                 return o.get("merge_rc", 0), "", "merge failed" if o.get("merge_rc") else ""
             return 1, "", "unexpected gh call"

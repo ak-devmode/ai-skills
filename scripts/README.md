@@ -92,7 +92,9 @@ by `test_entrypoint.py`'s compile check.
       touched), every check finished green or skipped/neutral with at least one real green run (an empty or
       skipped-only list is vacuous, refused), the unit's latest review of the repo is SHIP or accepted and
       saw the PR head (later commits plans/-only), verdict-gate.py exit 0, door.py finds no floor path on
-      merge-base..head, mergeStateStatus CLEAN/HAS_HOOKS (BLOCKED → `--admin`; anything else refused).
+      merge-base..head, mergeStateStatus CLEAN/HAS_HOOKS (BLOCKED → `--admin` only when every required
+      check of the base — classic protection and rulesets, both read — is SUCCESS on the head; unreadable
+      protection is no merge; anything else refused).
       `gh pr merge --match-head-commit`, never `--auto`; the merge is read back as MERGED before the
       `merged` event (repo, PR, base, sha; degraded review / admin / gate marker flagged). A failed
       condition writes a packet instead: one-way with the matched paths for a floor hit, else two-way.

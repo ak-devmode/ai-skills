@@ -22,7 +22,11 @@ eligible only when ALL hold:
   * floor    — door.py classifies merge-base..head with no floor path
   * mergeable — mergeStateStatus CLEAN / HAS_HOOKS merges; BLOCKED merges with --admin (branch
                protection is what blocks once every condition above holds — what Alex does by
-               hand); anything else (DIRTY, BEHIND, UNSTABLE, DRAFT, UNKNOWN after retries) refuses
+               hand) ONLY when every required check of the base branch (classic protection AND
+               rulesets) reported SUCCESS on the head: the rollup lists only checks that ran, so
+               a required check that never reported is invisible to `checks`, and --admin
+               would merge past it (10.3-r1-03); anything else (DIRTY, BEHIND, UNSTABLE, DRAFT,
+               UNKNOWN after retries) refuses
 `merge` on an eligible PR runs `gh pr merge --match-head-commit <head>` (never --auto: GitHub
 auto-merge stays off), reads the PR back as MERGED with its merge commit, then posts
 `packet.py event --kind merged` with repo, PR and merge sha (task 3.2). On any failed condition
@@ -31,6 +35,7 @@ and prints why.
 
 Failure stances (fail closed: every one of these is "no merge" with the reason):
   * gh error, unparseable gh JSON, unknown check type/state, mergeStateStatus still UNKNOWN
+  * BLOCKED and the base's protection or rulesets unreadable -> no --admin, no merge
   * origin remote unreadable, git error, PR commits not fetchable (door.py then fails closed)
   * review log missing / malformed, no review of this repo in the unit, verdict-gate exit != 0,
     a verdict other than `pass` (advisory included), or unparseable output
@@ -56,6 +61,7 @@ import re
 import subprocess
 import sys
 import time
+import urllib.parse
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 PACKET = os.path.join(HERE, "packet.py")
@@ -203,12 +209,62 @@ def cond_checks(rollup):
     return True, f"{real} real run(s) green" + (f", {inert} skipped/neutral" if inert else "")
 
 
-def cond_mergeable(state):
+def gh_json(path):
+    rc, out, err = gh("api", path)
+    if rc:
+        return None, first_err(err, rc)
+    try:
+        return json.loads(out), ""
+    except ValueError:
+        return None, "output is not JSON"
+
+
+def required_checks(slug, base):
+    """(set of required check names, '') or (None, why unreadable). Two sources, both read:
+    classic branch protection and repository rulesets. Classic protection answering "not
+    protected" / "not enabled" is a readable empty set; any other error is unreadable, and
+    unreadable is never read as "nothing required"."""
+    b = urllib.parse.quote(base, safe="")
+    names = set()
+    doc, why = gh_json(f"repos/{slug}/branches/{b}/protection/required_status_checks")
+    if doc is None:
+        if not re.search(r"Branch not protected|Required status checks not enabled", why):
+            return None, f"branch protection unreadable ({why})"
+    elif isinstance(doc, dict):
+        names |= {c for c in doc.get("contexts") or [] if isinstance(c, str)}
+        names |= {c.get("context") for c in doc.get("checks") or [] if isinstance(c, dict) and c.get("context")}
+    else:
+        return None, "branch protection: output is not an object"
+    rules, why = gh_json(f"repos/{slug}/rules/branches/{b}?per_page=100")
+    if not isinstance(rules, list):
+        return None, f"rulesets unreadable ({why or 'output is not a list'})"
+    for r in rules:
+        if isinstance(r, dict) and r.get("type") == "required_status_checks":
+            for c in (r.get("parameters") or {}).get("required_status_checks") or []:
+                if not (isinstance(c, dict) and c.get("context")):
+                    return None, "ruleset required check unreadable"
+                names.add(c["context"])
+    return names, ""
+
+
+def cond_mergeable(state, slug=None, base=None, rollup=None):
+    """(ok, detail, admin). BLOCKED earns --admin only when every required check is SUCCESS."""
     if state in MERGE_OK:
         return True, state, False
-    if state == "BLOCKED":
-        return True, "BLOCKED by branch protection — merges with --admin when every other condition holds", True
-    return False, f"mergeStateStatus {state or 'missing'} — not mergeable as is", False
+    if state != "BLOCKED":
+        return False, f"mergeStateStatus {state or 'missing'} — not mergeable as is", False
+    req, why = required_checks(slug, base)
+    if req is None:
+        return False, f"BLOCKED and {why} — no --admin without the required checks", False
+    green = {c.get("name") or c.get("context") for c in rollup if isinstance(c, dict) and
+             str(c.get("conclusion") or c.get("state") or "").upper() == "SUCCESS"} \
+        if isinstance(rollup, list) else set()
+    missing = sorted(req - green)
+    if missing:
+        return False, (f"BLOCKED and required check(s) not SUCCESS on the head: {', '.join(missing[:6])}"
+                       " — missing, pending or failed; no --admin"), False
+    return True, (f"BLOCKED by branch protection — {len(req)} required check(s) SUCCESS; "
+                  "merges with --admin when every other condition holds"), True
 
 
 def ensure_commits(repo, n, base_ref, shas):
@@ -370,7 +426,7 @@ def evaluate(a):
     rows.append(("verdict", vok, vdetail))
     fok, fdetail, hits, rng = cond_floor(a.repo, base_oid, head_oid)
     rows.append(("floor", fok, fdetail))
-    mok, mdetail, admin = cond_mergeable(doc.get("mergeStateStatus"))
+    mok, mdetail, admin = cond_mergeable(doc.get("mergeStateStatus"), slug, base, doc.get("statusCheckRollup"))
     rows.append(("mergeable", mok, mdetail))
     facts = {"slug": slug, "label": f"{slug}#{a.pr}", "base": base, "head": head_oid, "admin": admin,
              "degraded": degraded, "marker": marker, "hits": hits, "range": rng}

@@ -503,7 +503,7 @@ on a direct-to-main repo a branch diff is empty by construction.
    repos) or `main` (kalpa-docs, pmg-docs, ai-skills). A code repo's `main` is prod: it is
    refused and stays behind `prod-merge-gate.py`. A degraded review (fallback or lean)
    still merges, flagged on the ticker; `--admin` is used only when branch protection is
-   all that blocks. Each merge posts a `merged` event (repo, PR, sha).
+   all that blocks and every required check of the base reported SUCCESS on the head. Each merge posts a `merged` event (repo, PR, sha).
    - **`NOT MERGED`** prints why and writes a packet: one-way with the floor paths for a
      floor hit — park on it per §6.9 — two-way otherwise; fix the condition and re-run.
    - **Exit 4** means the merge landed but the ticker event did not: run `packet.py

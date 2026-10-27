@@ -64,20 +64,25 @@ def day(s, end=False):
     return (d + dt.timedelta(days=1) - dt.timedelta(seconds=1)).timestamp() if end else d.timestamp()
 
 
+def _end_date(until):
+    """The UTC date after until's own date: the window's exclusive end. until's DATE, not until+1s —
+    an `--until D` bound (23:59:59) and a default run's mid-day clock on D both end at D+1, so
+    the two windows start on the same day and class the same."""
+    return dt.datetime.fromtimestamp(until, dt.timezone.utc).date() + dt.timedelta(days=1)
+
+
 def window_class(since, until):
-    """`<n>d`: calendar days from since's UTC date to the date just past until (an inclusive bound,
-    so its exclusive end is one second later). Dates, not elapsed time: elapsed time made a
-    no-`--until` run's class depend on the hour it ran, so two runs meant to compare never did."""
-    d = lambda t: dt.datetime.fromtimestamp(t, dt.timezone.utc).date()
-    return f"{(d(until + 1) - d(since)).days}d"
+    """`<n>d`: calendar days from since's UTC date to the day after until's date. Dates, not
+    elapsed time: elapsed time made a no-`--until` run's class depend on the hour it ran, so two
+    runs meant to compare never did."""
+    return f"{(_end_date(until) - dt.datetime.fromtimestamp(since, dt.timezone.utc).date()).days}d"
 
 
 def default_since(until, days=21):
-    """Start of the UTC day `days` before the date just past until — window_class's own end date,
-    so a default run and an `--until`-only run are both `21d`. until − 21×86400 kept until's time
-    of day, which made an `--until D` window (ending 23:59:59) class as 22d."""
-    end = dt.datetime.fromtimestamp(until + 1, dt.timezone.utc).date()
-    start = end - dt.timedelta(days=days)
+    """Start of the UTC day `days` before the day after until's date — window_class's own end
+    date, so a default run and an `--until D` run of the same day are both `21d` and start on
+    the same date."""
+    start = _end_date(until) - dt.timedelta(days=days)
     return dt.datetime(start.year, start.month, start.day, tzinfo=dt.timezone.utc).timestamp()
 
 
@@ -146,6 +151,21 @@ def cmd_pull(a):
     return 0
 
 
+def read_data_end(logs):
+    """(data_end, label): when the rsync'd logs stop, from the `.pulled` stamp. Missing or
+    unparseable → -inf: no lineage can be shown to have had its full follow-up, so none counts
+    as matured (fail closed)."""
+    try:
+        with open(os.path.join(logs, PULLED)) as fh:
+            pulled = fh.read().strip()
+    except OSError:
+        return float("-inf"), "unknown (no .pulled stamp — run `pull`)"
+    try:
+        return dt.datetime.strptime(pulled, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=dt.timezone.utc).timestamp(), pulled
+    except ValueError:
+        return float("-inf"), f"unparseable ({pulled!r})"
+
+
 def cmd_run(a):
     until = day(a.until, end=True) if a.until else time.time()
     since = day(a.since) if a.since else default_since(until)
@@ -153,17 +173,15 @@ def cmd_run(a):
         return die("--since must be before --until")
     if a.follow_up < 1:
         raise UsageError(f"--follow-up must be at least 1 day, not {a.follow_up}")
-    try:
-        with open(os.path.join(a.logs, PULLED)) as fh:
-            pulled = fh.read().strip()
-    except OSError:
-        pulled = "unknown (no .pulled stamp — run `pull`)"
+    data_end, pulled = read_data_end(a.logs)
+    if data_end == float("-inf"):
+        print(f"[scorecard] .pulled stamp {pulled}: no lineage is counted as matured — run `pull`", file=sys.stderr)
     units, lstats = review_loop.load_logs(a.logs, until)
     if not units:
         return die(f"no review logs under {a.logs}/*-plans — run `pull` first")
     print(f"[scorecard] window {fmt(since)} → {fmt(until)} · logs pulled {pulled} · {len(units)} units", file=sys.stderr)
     rv = review_loop.load_review_module()
-    loop = review_loop.analyze(units, rv, since=since, until=until, follow_up=a.follow_up * 86400,
+    loop = review_loop.analyze(units, rv, since=since, until=until, follow_up=a.follow_up * 86400, data_end=data_end,
                                git=review_loop.Git(rv.vl.PROJECTS, enabled=not a.no_git))
     tables = dict()
     if not a.no_sessions:

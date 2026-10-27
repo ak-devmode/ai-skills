@@ -446,17 +446,20 @@ class CliTest(unittest.TestCase):
         # --since with no --until: until is the run's clock; before and after noon must match
         early, late = ts("2026-10-27T01:00:00Z"), ts("2026-10-27T23:00:00Z")
         self.assertEqual(scorecard.window_class(since, early), scorecard.window_class(since, late))
-        self.assertEqual(scorecard.window_class(since, late), "21d")
-        # the default window (until − 21 days) and an explicit inclusive range keep their class
+        self.assertEqual(scorecard.window_class(since, late), "22d")
+        # the default window and an explicit inclusive range keep their class
         for now in (early, late):
-            self.assertEqual(scorecard.window_class(now - 21 * 86400, now), "21d")
+            self.assertEqual(scorecard.window_class(scorecard.default_since(now), now), "21d")
         self.assertEqual(scorecard.window_class(scorecard.day("2026-10-05"), scorecard.day("2026-10-25", end=True)), "21d")
         # with no --since, since is derived from until: a default run and an --until-only run
         # (ending 23:59:59) are both 21d — until − 21×86400 classed the latter as 22d
         for until in (early, late, scorecard.day("2026-10-26", end=True)):
             self.assertEqual(scorecard.window_class(scorecard.default_since(until), until), "21d")
         self.assertEqual(scorecard.default_since(scorecard.day("2026-10-26", end=True)), scorecard.day("2026-10-06"))
-        self.assertEqual(scorecard.default_since(late), scorecard.day("2026-10-06"))
+        self.assertEqual(scorecard.default_since(late), scorecard.day("2026-10-07"))
+        # r13-02: a default run (mid-day clock) and `--until` of the same day start on the SAME date
+        for now in (early, late):
+            self.assertEqual(scorecard.default_since(now), scorecard.default_since(scorecard.day("2026-10-27", end=True)))
 
     def test_run_twice_prints_delta_and_stores_aggregates_only(self):
         with tempfile.TemporaryDirectory() as tmp:

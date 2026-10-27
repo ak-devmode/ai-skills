@@ -48,6 +48,21 @@ mba-plans/, homelab-plans/   Projects/** and .herdr/worktrees/** plans/**/artifa
 Copies are never pruned. Worktrees are deleted after merge, and their review logs survive
 only here.
 
+**Both accounts are already in these inputs.** Each host's two Claude accounts share one
+projects dir through a symlink made on 2026-10-02:
+
+```
+MBA       ~/.claude-int/projects   -> ~/.claude/projects    (integrations -> alex@work's dir)
+homelab   ~/.claude-alex/projects  -> ~/.claude/projects    (alex@work -> integrations' dir;
+                                                             ~/.claude is integrations there)
+```
+
+So `~/.claude/projects` on each host holds every account's sessions, and the default
+inputs count all of them. Do not add the other account's dir as a second input: it is the
+same files, and every session would be counted twice. If a symlink is ever replaced by a
+real directory, that account's sessions drop out of the scorecard, and the inputs need
+changing then.
+
 3.2 **Store** `~/.cache/harness-scorecard/<UTC stamp>.json`: one file per run, numbers
 only, plus the run's flags (`git`, `sessions`) and window class (its length, `21d` by default).
 The next run's Δ columns compare against the latest file with the **same flags and window

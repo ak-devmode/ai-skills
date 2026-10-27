@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "created_at": "2026-10-26T09:00:00Z",
+  "machine": "mba",
+  "workspace": "ai-skills-10",
+  "agent": "packet",
+  "repo": "ai-skills",
+  "branch": "concurrency/10-packet",
+  "head_sha": "14954fc",
+  "unit": "10/1.2",
+  "blocks": "",
+  "continues_on": "door.py tests",
+  "id": "ui0two-way001",
+  "door": "two-way",
+  "type": "ui",
+  "title": "Approve the patient-list banner layout",
+  "reversal_cost": {
+    "commits_stacked": 2,
+    "as_of": "2026-10-26T09:05:00Z"
+  },
+  "options": [
+    {
+      "id": "a",
+      "label": "Stdlib subset validator",
+      "recommended": true
+    },
+    {
+      "id": "b",
+      "label": "Vendor jsonschema",
+      "recommended": false
+    }
+  ],
+  "payload": {
+    "old": {
+      "image": "/Users/x/lane/old.png",
+      "label": "develop (deployed)"
+    },
+    "new": {
+      "image": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAPAAAACWCAIAAABvmpKCAAACB0lEQVR4nO3SsQ3CQAAEwa+CkFqIaZMCaMqIBnAMueOXXl5mdQVcMON6e5plNpY/MJs4oC01oC01oC01oC01oC01oC01oC01oC01oC01oC01oC01oC01oC01oC01oC01oC01oC01oC01oC01oC01oC01oC218X5tsX31xwGtVEArFdBKBbRSAa1UQCsV0EoFtFIBrVRAKxXQSgW0UgGtVEArFdBKBbRSAa1UQCsV0EoFtFIBrVRAKxXQSgW0UgGtVEArFdDHLo+7rR3QQKcGNNCpAQ10akADnRrQQKcGNNCpAQ10akADnRrQQKcGNNCpAQ10akADnRrQQKcGNNCpAQ10akADnRrQQKcGNNCpAQ10akADnRrQQKcGNNCpAQ10akADnRrQQKcGNNCpAQ10akADnRrQM0Hr1AGtVEArFdBKBbRSAa1UQCsV0EoFtFIBrVRAKxXQSgW0UgGtVEArFdBKBbRSAa1UQCsV0EoFtFIBrVRAKxXQSgW0UgGtVEArFdBKBbRSAa1UQCsV0EoFtFIBrVRAKxXQSgW0UgGtVEArFdBKBfSxff/Y2gENdGpAA50a0ECnBjTQqQENdGpAA50a0ECnBjTQqQENdGpAzwStUwe0UgGtVEArFdBKBbRSAa1UQCsV0EoFtFIBrVRAKxXQSgW0UgGtVEArFdBKBbRSAa1UQCvVDyB72mVf1uSmAAAAAElFTkSuQmCC",
+      "label": "lane dev server vs dev gateway"
+    },
+    "route": "/patients/list",
+    "viewport": {
+      "width": 240,
+      "height": 150
+    },
+    "callouts": [
+      "Adds a green status banner above the list",
+      "List rows now zebra-striped"
+    ],
+    "tenant": "demo-tenant"
+  },
+  "reply": "[lane mba/ai-skills-10/packet ui0two-way001] Option a."
+}

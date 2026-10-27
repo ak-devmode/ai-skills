@@ -54,7 +54,7 @@ by `test_entrypoint.py`'s compile check.
       Not atomic — nothing short of a server write is — but closes every gap that
       has bitten. Read the stderr note when local and origin disagree.
 
-    packet.py new --door {one-way|two-way|info} [--type data-model|generic] --title --unit --option LABEL...
+    packet.py new --door {one-way|two-way|info} [--type data-model|generic|ui] --title --unit --option LABEL...
               [--recommended N] [--body|--body-file|--payload-file] [--blocks] [--continues-on]
               [--range BASE..HEAD] [--id ID] [--driver]
     packet.py close|touch ID · stale ID [--force] · event --kind K [--body] [--packet-id ID]
@@ -173,6 +173,43 @@ a row it was not asked to touch.
 Canonical row shape (decided 2026-08-09):
 
     | # | Status | Folder | Description | Created by |
+
+## UI packets (`--type ui`, plan 10.4 task 4.1)
+
+A lane that changes a screen asks Alex to approve it with both shots in the packet. Payload
+(`schemas/packet.schema.json` `$defs/payload_ui`, example `scripts/tests/fixtures/packets/valid/ui-two-way.json`):
+`old` and `new` (`{image, label}`), `route`, `viewport {width,height}`, `callouts` (one string per
+behaviour change), `tenant`. Pass it with `packet.py new --type ui --payload-file F`.
+
+Producing one:
+
+1. **Pick the demo tenant from the environment** — `$DQ_UI_DEMO_TENANT` (the lane's shell / FE dev
+   config). Never hardcode a tenant in a skill, plan or fixture; never use a real-patient tenant.
+   If the variable is unset, stop and ask (a numbered question) — do not guess a tenant.
+2. **Old shot** = deployed `develop`, **new shot** = the lane's FE dev server against the dev
+   gateway, same route, same viewport, same tenant. With gstack `/browse`
+   (`~/.claude/skills/gstack/browse`): `$B goto <url>` then `$B screenshot <file>.png` — PNG only.
+3. **Embed, don't link.** The queue runs on another machine and cannot read lane paths:
+   `"data:image/png;base64," + base64(file)`. Cap: 2,000,000 base64 chars (1.5 MB of PNG) per image,
+   in the schema and again in the queue. Over the cap -> shrink the viewport or crop, never JPEG/SVG
+   (both refused). Scrub the shot of real names/IDs first — no PHI in a packet.
+4. Write callouts for what *behaves* differently, not what looks different.
+
+`DQ_UI_DEMO_TENANT` must be set (declared in `.env.example`). `packet.py new --type ui` refuses when it is
+unset or when the payload's `tenant` differs from it, and refuses any image that is not strict base64 of a
+PNG within the cap. The tenant check is a **declaration** check: the author attests the shots come from the
+demo tenant; nothing ties the pixels to it. The protection against real patient data (WellMed dev and
+staging hold it) is taking the shots on the demo tenant in the first place, and scrubbing them (step 3).
+
+## harness-scorecard/
+
+    scripts/harness-scorecard/scorecard.py pull
+    scripts/harness-scorecard/scorecard.py run [--since D] [--until D] [--follow-up DAYS] [--no-git] [--no-sessions]
+      exit: 0 ok · 1 a step failed (named on stderr) · 2 usage
+
+The scope-10 baseline as a re-runnable scorecard: rounds per lineage through review.py's own
+functions, the effort trial on a fixed follow-up cohort, and a Δ against the last comparable run.
+Aggregates only, never prompt text. Full contract: `scripts/harness-scorecard/README.md`.
 
 ## edit-guard.py
 

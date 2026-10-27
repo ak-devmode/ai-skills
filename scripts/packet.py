@@ -362,6 +362,39 @@ def show(doc, extra=""):
 
 # --- commands -------------------------------------------------------------------
 
+PNG_SIG = b"\x89PNG\r\n\x1a\n"
+PNG_CAP_BYTES = 1_500_000  # 2,000,000 base64 chars; same cap as the schema and the queue
+
+
+def ui_payload_errors(payload):
+    """Fail-closed checks the schema pattern cannot make: strict base64, PNG signature, byte cap,
+    and the real-patient guard (tenant must equal $DQ_UI_DEMO_TENANT; unset -> refuse)."""
+    import base64
+    import binascii
+    errs = []
+    demo = os.environ.get("DQ_UI_DEMO_TENANT", "")
+    if not demo:
+        errs.append("DQ_UI_DEMO_TENANT is not set: no UI packet without a declared demo tenant")
+    elif not isinstance(payload, dict) or payload.get("tenant") != demo:
+        errs.append("payload tenant does not equal $DQ_UI_DEMO_TENANT (real-patient data guard)")
+    for k in ("old", "new"):
+        shot = payload.get(k) if isinstance(payload, dict) else None
+        img = shot.get("image") if isinstance(shot, dict) else None
+        if not isinstance(img, str) or not img.startswith("data:image/png;base64,"):
+            errs.append(f"/payload/{k}/image: not a PNG data URI")
+            continue
+        try:
+            raw = base64.b64decode(img.split(",", 1)[1], validate=True)
+        except (binascii.Error, ValueError):
+            errs.append(f"/payload/{k}/image: invalid base64")
+            continue
+        if not raw.startswith(PNG_SIG):
+            errs.append(f"/payload/{k}/image: decoded bytes are not a PNG")
+        elif len(raw) > PNG_CAP_BYTES:
+            errs.append(f"/payload/{k}/image: {len(raw)} bytes exceeds the {PNG_CAP_BYTES}-byte cap")
+    return errs
+
+
 def cmd_new(args):
     dirs = outboxes(args)
     if args.id:
@@ -419,6 +452,8 @@ def cmd_new(args):
     if door == "two-way":
         doc["reversal_cost"] = {"commits_stacked": 0, "as_of": now()}
     errs = schema_check.validate(doc)
+    if args.type == "ui":
+        errs = errs + ui_payload_errors(payload)
     if errs:
         print("packet.py: refused, packet is invalid:", file=sys.stderr)
         for e in errs:

@@ -195,8 +195,9 @@ Producing one:
    (both refused). Scrub the shot of real names/IDs first — no PHI in a packet.
 4. Write callouts for what *behaves* differently, not what looks different.
 
-Not yet declared in `.env.example` (permission-denied in the lane that wrote this): `DQ_UI_DEMO_TENANT`
-— the driver should add it so `resolve-identifiers.py` can resolve it.
+`DQ_UI_DEMO_TENANT` must be set (the driver declares it in `.env.example`). `packet.py new --type ui`
+refuses when it is unset or when the payload's `tenant` differs from it, and also refuses any image that
+is not strict base64 of a PNG within the cap — WellMed dev/staging hold real patient data.
 
 ## edit-guard.py
 

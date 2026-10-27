@@ -301,6 +301,26 @@ def analyze(units, rv, since=None, git=None, until=None, follow_up=FOLLOW_UP_DAY
                     lm[fa] += 1
                     lm_after.append(maxr[root] - rnd)
                 seen[repo].add(x.get("file"))
+            # effort trial — trial (lineage rules 2+) vs pre-trial, per base tier, then round 1 vs
+            # fix rounds. A codex row takes its own review's base; a lineage its root's.
+            bucket = "trial" if rules.get(rid, 1) >= 2 else "pre-trial"
+            phase = "round 1" if rnd == 1 else "fix rounds"
+            lk = (bucket, base_of(ev_of[root]) if root in ev_of else "unresolved")
+            L = trial_lin.get((scope, unit, root))
+            if L is None:
+                L = trial_lin[(scope, unit, root)] = {"lk": lk, "root_ts": ts_of(root), "in_window": counted(root),
+                                                      "maxr": 0, "all": 0, "out": 0, "ship": False, "unplaced": 0}
+            # the outcome is read over the fixed follow-up only: reviews within `follow_up` of the
+            # root. A review with no stamp cannot be placed in it, so it is left out (fail closed:
+            # counting it would let an unbounded tail back in) and counted under the notes.
+            t, rt = ts_of(rid), L["root_ts"]
+            if t is None or rt is None:
+                L["unplaced"] += rt is not None
+            elif t - rt <= follow_up:
+                L["maxr"] = max(L["maxr"], rnd)
+                L["all"] += 1
+                L["out"] += fa == "fallback" and "out of credits" in reviewer
+                L["ship"] |= m.get("verdict") == "SHIP"
             if not inwin:
                 continue
 
@@ -335,26 +355,6 @@ def analyze(units, rv, since=None, git=None, until=None, follow_up=FOLLOW_UP_DAY
                         fk = "pure fix" if cs and all(sh in fixshas for sh in cs) else "fix + new"
                     fp_rev[fk] += 1; fp_find[fk] += len(fs); fp_lines[fk] += c
 
-            # effort trial — trial (lineage rules 2+) vs pre-trial, per base tier, then round 1 vs
-            # fix rounds. A codex row takes its own review's base; a lineage its root's.
-            bucket = "trial" if rules.get(rid, 1) >= 2 else "pre-trial"
-            phase = "round 1" if rnd == 1 else "fix rounds"
-            lk = (bucket, base_of(ev_of[root]) if root in ev_of else "unresolved")
-            L = trial_lin.get((scope, unit, root))
-            if L is None:
-                L = trial_lin[(scope, unit, root)] = {"lk": lk, "root_ts": ts_of(root), "in_window": counted(root),
-                                                      "maxr": 0, "all": 0, "out": 0, "ship": False, "unplaced": 0}
-            # the outcome is read over the fixed follow-up only: reviews within `follow_up` of the
-            # root. A review with no stamp cannot be placed in it, so it is left out (fail closed:
-            # counting it would let an unbounded tail back in) and counted under the notes.
-            t, rt = ts_of(rid), L["root_ts"]
-            if t is None or rt is None:
-                L["unplaced"] += rt is not None
-            elif t - rt <= follow_up:
-                L["maxr"] = max(L["maxr"], rnd)
-                L["all"] += 1
-                L["out"] += fa == "fallback" and "out of credits" in reviewer
-                L["ship"] |= m.get("verdict") == "SHIP"
             if fa == "codex":
                 ck = (bucket, base_of(e), phase)
                 tr_rev[ck] += 1; tr_find[ck] += len(fs); tr_blk[ck] += nblk

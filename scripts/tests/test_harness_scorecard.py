@@ -235,8 +235,9 @@ class LineageTest(unittest.TestCase):
         s, st = self.shas, {"rules_version": 2, "effort": "medium", "effort_base": "low"}
         u = [review("2.6", 1, s["a"], s["b"], "2026-10-01T00:00:00Z", round=1, **st),
              {k: v for k, v in review("2.6", 2, s["b"], s["c"], "", round=2, continues="2.6-r1", **st).items() if k != "ts"}]
-        # no --since: with one, `counted()` already drops a review with no stamp before this point
-        out = self.analyze({("s", "2.6"): u}, until=ts("2026-10-31T23:59:59Z"))
+        # with --since (every CLI run): counted() drops the stampless review from the window tables,
+        # but the follow-up count must still see it, or the footer is always 0
+        out = self.analyze({("s", "2.6"): u}, since=ts("2026-10-01T00:00:00Z"), until=ts("2026-10-31T23:59:59Z"))
         self.assertEqual(out["tables"]["Effort trial lineages"]["rows"]["trial · base low"][:2], [1, 0.0])
         self.assertEqual(out["notes"]["trial_follow_up"]["unplaced_reviews"], 1)
 

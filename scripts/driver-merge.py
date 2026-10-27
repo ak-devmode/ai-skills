@@ -35,6 +35,8 @@ Failure stances (fail closed: every one of these is "no merge" with the reason):
   * review log missing / malformed, no review of this repo in the unit, verdict-gate exit != 0,
     a verdict other than `pass` (advisory included), or unparseable output
   * merge reported success but the read-back is not MERGED -> not merged, packet written
+  * gh pr merge exited non-zero -> read back anyway: MERGED with a merge commit is merged (the
+    gh error flagged on the event); anything else is not merged
   * packet.py fails to write the refusal packet -> still no merge; the reason is printed
   * merged but the `merged` event did not write -> exit 4: the merge stands (it landed and was
     read back), the ticker gap is reported rather than hidden
@@ -376,20 +378,24 @@ def evaluate(a):
 
 
 def merge(a, facts):
+    """(sha or None, why-not, flag). The read-back decides, not gh's exit code: gh can exit
+    non-zero after GitHub merged (a dropped connection after the mutation, a post-merge step)
+    — that is the merged path with the gh error flagged (10.3-r1-06). Unreadable or not
+    MERGED with a merge commit is not merged, whatever gh said."""
     cmd = ["pr", "merge", str(a.pr), "-R", facts["slug"], f"--{a.method}", "--match-head-commit", facts["head"]]
     if facts["admin"]:
         cmd.append("--admin")
     rc, _, err = gh(*cmd)
-    if rc:
-        return None, f"gh pr merge failed: {first_err(err, rc)}"
+    gh_err = f"gh pr merge failed: {first_err(err, rc)}" if rc else ""
     try:
         back = pr_view(facts["slug"], a.pr, "state,mergeCommit")
     except Refuse as e:
-        return None, f"merge not read back: {e}"
+        return None, (gh_err + "; " if gh_err else "") + f"merge not read back: {e}", ""
     sha = (back.get("mergeCommit") or {}).get("oid") if isinstance(back.get("mergeCommit"), dict) else None
     if back.get("state") != "MERGED" or not sha:
-        return None, f"gh pr merge exited 0 but the PR reads back {back.get('state')} (merge commit {sha or 'none'})"
-    return sha, ""
+        return None, (gh_err or f"gh pr merge exited 0 but the PR reads back {back.get('state')}"
+                      f" (merge commit {sha or 'none'})"), ""
+    return sha, "", (f"⚠ {gh_err} — read back MERGED" if gh_err else "")
 
 
 def main(argv):
@@ -432,9 +438,10 @@ def main(argv):
     if a.cmd == "check":
         return EXIT_REFUSED if failed else EXIT_OK
     if not failed:
-        sha, why = merge(a, facts)
+        sha, why, gh_flag = merge(a, facts)
         if sha:
-            print(f"MERGED {facts['label']} {sha}")
+            flags += [gh_flag] if gh_flag else []
+            print(f"MERGED {facts['label']} {sha}" + (f" · {gh_flag}" if gh_flag else ""))
             body = f"repo={facts['slug']} pr={a.pr} base={facts['base']} sha={sha}" + "".join(f" · {f}" for f in flags)
             return EXIT_OK if post_event(a.repo, body) else EXIT_NO_EVENT
         failed = [("merge", why)]

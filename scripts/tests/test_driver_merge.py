@@ -89,7 +89,10 @@ CASES = [
      {"merged": False, "no_gh": True, "packet": None, "says": "is a lane"}),
     ("herdr driver without flag merges", {"agent": "driver", "driver": False}, 0, {"merged": True}),
     ("gh error -> no merge", {"gh_view_rc": 1}, 1, {"merged": False, "says": "could not evaluate"}),
-    ("merge call fails", {"merge_rc": 1}, 1, {"merged": False, "packet": "two-way"}),
+    ("merge call fails", {"merge_rc": 1, "readback": "OPEN"}, 1, {"merged": False, "packet": "two-way",
+                                                                  "says": "gh pr merge failed"}),
+    # gh can exit non-zero after GitHub merged: the read-back decides (10.3-r1-06)
+    ("merge rc!=0 but landed", {"merge_rc": 1}, 0, {"merged": True, "event": "gh pr merge failed"}),
     ("merge not read back", {"readback": "OPEN"}, 1, {"merged": False, "says": "reads back OPEN"}),
 ]
 

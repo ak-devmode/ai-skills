@@ -174,15 +174,28 @@ def analyze(units, rv, since=None, git=None):
     tiers, round_mismatch = collections.Counter(), 0
     fallback_credit, fallback_total, rejections, rej_alex = 0, 0, 0, 0
 
+    # review_lineage's stderr is captured to keep the report readable, but never dropped: each
+    # `[WARN] lineage of` is a review git could not place, continued rather than restarted at
+    # round 1 — the case that inflates §3.1's late rounds. Counted per unit; any other stderr line
+    # is counted apart, so nothing it said is lost without a number.
+    lin_warns, other_err = collections.Counter(), collections.Counter()
+
     for (scope, unit), recs in sorted(units.items()):
+        err = io.StringIO()
         try:
-            with contextlib.redirect_stderr(io.StringIO()):
+            with contextlib.redirect_stderr(err):
                 revs, lin = rv.rounds(recs, unit)  # once per unit: review_round() per id re-runs this
                 rules = rv.vl.lineage_rules(recs, lin)
             rounds_calls += 1
         except Exception as exc:  # one unreadable unit is reported, never silently dropped
             fails.append(f"{scope}/{unit}: {type(exc).__name__}")
             continue
+        finally:
+            for line in err.getvalue().splitlines():
+                if line.startswith("[WARN] lineage of"):
+                    lin_warns[f"{scope}/{unit}"] += 1
+                elif line.strip():
+                    other_err[f"{scope}/{unit}"] += 1
         meta = {r.get("review_id"): r for r in recs if r.get("record") == "review"}
         fnd = collections.defaultdict(list)
         for r in recs:
@@ -345,5 +358,7 @@ def analyze(units, rv, since=None, git=None):
         "rows": {b: [len(lin_by[b]), _ratio(sum(v - 1 for v in lin_by[b]), len(lin_by[b])), _pct(tr_out[b], tr_all[b])]
                  for b in ("pre-trial", "trial") if lin_by[b]}}
     notes = {"rounds_calls": rounds_calls, "failed_units": fails, "trial_effort_tiers": dict(tiers),
-             "stamped_round_mismatches": round_mismatch}
+             "stamped_round_mismatches": round_mismatch,
+             "lineage_warns": {"total": sum(lin_warns.values()), "units": dict(sorted(lin_warns.items()))},
+             "other_stderr_lines": {"total": sum(other_err.values()), "units": dict(sorted(other_err.items()))}}
     return {"tables": tables, "notes": notes}

@@ -172,6 +172,20 @@ class LineageTest(unittest.TestCase):
         self.assertEqual(out["notes"]["trial_effort_tiers"], {"high": 2})
         self.assertEqual(out["notes"]["stamped_round_mismatches"], 0)
 
+    def test_lineage_warns_are_counted_not_dropped(self):
+        real = self.rv.rounds
+
+        def noisy(recs, unit):
+            print("[WARN] lineage of 1.1-r2: git cannot tell ...", file=sys.stderr)
+            print("[WARN] lineage of 1.1-r3: git cannot tell ...", file=sys.stderr)
+            print("something else", file=sys.stderr)
+            return real(recs, unit)
+        with mock.patch.object(self.rv, "rounds", side_effect=noisy):
+            out = self.analyze({("s", "1.1"): unit_11(self.shas), ("s", "1.2"): unit_12(self.shas)})
+        n = out["notes"]
+        self.assertEqual(n["lineage_warns"], {"total": 4, "units": {"s/1.1": 2, "s/1.2": 2}})
+        self.assertEqual(n["other_stderr_lines"]["total"], 2)
+
     def test_unit_that_fails_is_reported(self):
         with mock.patch.object(self.rv, "rounds", side_effect=RuntimeError("boom")):
             out = self.analyze({("s", "1.1"): unit_11(self.shas)})

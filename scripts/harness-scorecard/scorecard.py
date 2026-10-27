@@ -161,6 +161,14 @@ def cmd_run(a):
         print(store.render(name, t, d.get(name) if d is not None else None) + "\n")
     print(f"effort tiers (trial, codex): {n['trial_effort_tiers'] or 'none'} · stamped-round mismatches "
           f"{n['stamped_round_mismatches']} · rounds() calls {n['rounds_calls']} (one per unit)")
+    for key, what in (("lineage_warns", "lineage WARNs (git could not place a review; continued, not restarted — "
+                                        "§3.1's late rounds may be inflated)"),
+                      ("other_stderr_lines", "other lineage stderr lines")):
+        w = n[key]
+        if w["total"]:
+            units_ = list(w["units"])
+            print(f"{what}: {w['total']} in {len(units_)} unit(s): " + ", ".join(units_[:10])
+                  + (f", … {len(units_) - 10} more" if len(units_) > 10 else ""))
     if not a.no_save:
         try:
             print(f"saved {store.save(a.store, result)}")

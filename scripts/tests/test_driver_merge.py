@@ -108,6 +108,11 @@ CASES = [
      {"merged": False, "says": "lint"}),
     ("BLOCKED: rulesets page unreadable", {"state": "BLOCKED", "rulesets": (0, [[], {"message": "x"}]), "paged": True},
      1, {"merged": False, "says": "read incomplete"}),
+    # GitHub counts a required check skipped by `if:` (SKIPPED/NEUTRAL) as passing; absent still refuses (10.3-r2-05)
+    ("BLOCKED: required check skipped, admin", {"state": "BLOCKED", "protection": (0, {"contexts": ["ci", "e2e"]}),
+                                                "checks": GREEN + [{"__typename": "CheckRun", "name": "e2e",
+                                                                    "status": "COMPLETED", "conclusion": "SKIPPED"}]},
+     0, {"merged": True, "admin": True}),
     ("BLOCKED: nothing required, admin", {"state": "BLOCKED", "protection": (1, "Branch not protected (HTTP 404)")},
      0, {"merged": True, "admin": True}),
     ("dirty refused", {"state": "DIRTY"}, 1, {"merged": False}),

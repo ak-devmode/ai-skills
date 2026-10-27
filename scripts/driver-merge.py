@@ -29,7 +29,8 @@ eligible only when ALL hold:
   * mergeable — mergeStateStatus CLEAN / HAS_HOOKS merges; BLOCKED merges with --admin (branch
                protection is what blocks once every condition above holds — what Alex does by
                hand) ONLY when every required check of the base branch (classic protection AND
-               rulesets) reported SUCCESS on the head: the rollup lists only checks that ran, so
+               rulesets) is in the head's rollup as SUCCESS, or SKIPPED/NEUTRAL (GitHub's own
+               rule, 10.3-r2-05): the rollup lists only checks that ran, so
                a required check that never reported is invisible to `checks`, and --admin
                would merge past it (10.3-r1-03); anything else (DIRTY, BEHIND, UNSTABLE, DRAFT,
                UNKNOWN after retries) refuses
@@ -290,7 +291,9 @@ def required_checks(slug, base):
 
 
 def cond_mergeable(state, slug=None, base=None, rollup=None):
-    """(ok, detail, admin). BLOCKED earns --admin only when every required check is SUCCESS."""
+    """(ok, detail, admin). BLOCKED earns --admin only when every required check is satisfied on
+    the head: present in the rollup as SUCCESS, or as SKIPPED/NEUTRAL — GitHub's own rule for a
+    required job skipped by `if:` (10.3-r2-05). Absent, pending or failed is not satisfied."""
     if state in MERGE_OK:
         return True, state, False
     if state != "BLOCKED":
@@ -299,13 +302,13 @@ def cond_mergeable(state, slug=None, base=None, rollup=None):
     if req is None:
         return False, f"BLOCKED and {why} — no --admin without the required checks", False
     green = {c.get("name") or c.get("context") for c in rollup if isinstance(c, dict) and
-             str(c.get("conclusion") or c.get("state") or "").upper() == "SUCCESS"} \
+             str(c.get("conclusion") or c.get("state") or "").upper() in {"SUCCESS"} | INERT} \
         if isinstance(rollup, list) else set()
     missing = sorted(req - green)
     if missing:
-        return False, (f"BLOCKED and required check(s) not SUCCESS on the head: {', '.join(missing[:6])}"
+        return False, (f"BLOCKED and required check(s) not satisfied on the head: {', '.join(missing[:6])}"
                        " — missing, pending or failed; no --admin"), False
-    return True, (f"BLOCKED by branch protection — {len(req)} required check(s) SUCCESS; "
+    return True, (f"BLOCKED by branch protection — {len(req)} required check(s) satisfied; "
                   "merges with --admin when every other condition holds"), True
 
 

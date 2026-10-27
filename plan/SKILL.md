@@ -505,7 +505,8 @@ on a direct-to-main repo a branch diff is empty by construction.
    repos) or `main` (kalpa-docs, pmg-docs, ai-skills). A code repo's `main` is prod: it is
    refused and stays behind `prod-merge-gate.py`. A degraded review (fallback or lean)
    still merges, flagged on the ticker; `--admin` is used only when branch protection is
-   all that blocks and every required check of the base reported SUCCESS on the head. Each merge posts a `merged` event (repo, PR, sha).
+   all that blocks and every required check of the base reported SUCCESS on the head (a
+   required job skipped by `if:` counts, as on GitHub; one that never reported does not). Each merge posts a `merged` event (repo, PR, sha).
    - **A repo with no CI never auto-merges.** pmg-docs and ai-skills have no workflow
      today, so their PRs always refuse on vacuous green and park as a two-way packet:
      Alex merges by hand. That is by design — an empty check list is never green; do not

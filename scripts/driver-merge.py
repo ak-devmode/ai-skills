@@ -22,9 +22,10 @@ eligible only when ALL hold:
                head says nothing about the PR's start); and verdict-gate.py --blocking reads `pass`. A reviewer other than codex (fallback /
                lean) still merges, flagged; a `none` reviewer is no review
   * floor    — door.py classifies merge-base..head with no floor path
-  * ci       — merge-base..head touches no CI definition (CI_DEFINITIONS: workflows, actions,
-               CODEOWNERS, …). A PR editing the CI that produced its own green never auto-merges,
-               but CI edits are reversible, so this is a two-way "CI change" packet — Alex
+  * ci       — merge-base..head touches no CI definition file (CI_DEFINITIONS: workflows,
+               actions, CODEOWNERS, …). A PR editing one of those files never auto-merges; scripts
+               the workflows invoke (`run: ./scripts/ci.sh`, `make test`) are not on the list —
+               the review range covers those edits, not this condition. CI edits are reversible, so this is a two-way "CI change" packet — Alex
                reviews and merges by hand — not a floor path (10.3-r2-04)
   * mergeable — mergeStateStatus CLEAN / HAS_HOOKS merges; BLOCKED merges with --admin (what
                Alex does by hand) ONLY when GitHub says the missing piece is a review approval
@@ -91,8 +92,9 @@ MERGE_OK = {"CLEAN", "HAS_HOOKS"}
 FIELDS = ("number,state,isDraft,baseRefName,headRefName,baseRefOid,headRefOid,"
           "mergeStateStatus,reviewDecision,url,statusCheckRollup")
 UNKNOWN_RETRIES, UNKNOWN_SLEEP = 3, 2.0
-# Never auto-merged, in door.py's glob syntax (10.3-r2-04): a PR that edits the CI producing its
-# own green runs rides a self-referential green. Reversible, so NOT on the one-way floor (that
+# Never auto-merged, in door.py's glob syntax (10.3-r2-04): a PR editing a CI definition file
+# here rides a self-referential green. Scripts those files invoke are not listed: the review
+# range covers them (10.3-r3-05). Root-anchored, as GitHub runs root workflows only. Reversible, so NOT on the one-way floor (that
 # would park every lane that touches CI) — a two-way packet: Alex reviews and merges by hand.
 CI_DEFINITIONS = """
 .github/workflows/

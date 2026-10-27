@@ -84,7 +84,8 @@ by `test_entrypoint.py`'s compile check.
 
     driver-merge.py check|merge --repo PATH --pr N --scope DIR --unit N.P [--driver] [--method squash|merge|rebase]
       stdout: one `[ok]`/`[FAIL]` line per condition, `verdict: ELIGIBLE|REFUSED …`; merge adds
-      `MERGED <owner/repo>#N <sha>` + `EVENT … merged`, or `PACKET <id>` + `NOT MERGED — <why>`
+      `MERGED <owner/repo>#N <sha>` + `EVENT … merged`, or `PACKET <id>` + `NOT MERGED — <why>`, or
+      `MERGED-ELSEWHERE <owner/repo>#N <sha>` + `PACKET <id>` (merged, but not at the checked head)
       exit: 0 eligible / merged + event written · 1 refused / not merged · 2 usage · 4 merged, event not written
       /plan §6.8 step 4 (scope 10 §4.3). Merges only when ALL hold: caller is a driver
       (packet.py's driver_identity: inside herdr the pane `herdr agent list` names `driver`, --driver
@@ -100,8 +101,8 @@ by `test_entrypoint.py`'s compile check.
       merge-base..head, mergeStateStatus CLEAN/HAS_HOOKS (BLOCKED → `--admin` only when every required
       check of the base — classic protection and rulesets, both read — is SUCCESS on the head; unreadable
       protection is no merge; anything else refused).
-      `gh pr merge --match-head-commit`, never `--auto`; the merge is read back as MERGED before the
-      `merged` event (repo, PR, base, sha; degraded review / admin / gate marker flagged). A failed
+      `gh pr merge --match-head-commit`, never `--auto`; the merge is read back as MERGED at the checked
+      head before the `merged` event (MERGED at another head is someone else's merge: no event, a packet) (repo, PR, base, sha; degraded review / admin / gate marker flagged). A failed
       condition writes a packet instead: one-way with the matched paths for a floor hit, else two-way.
       Fails closed on every gh/git error, unreadable verdict, or unknown check/merge state.
 

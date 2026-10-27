@@ -44,8 +44,10 @@ Failure stances (fail closed: every one of these is "no merge" with the reason):
   * review log missing / malformed, no review of this repo in the unit, verdict-gate exit != 0,
     a verdict other than `pass` (advisory included), or unparseable output
   * merge reported success but the read-back is not MERGED -> not merged, packet written
-  * gh pr merge exited non-zero -> read back anyway: MERGED with a merge commit is merged (the
-    gh error flagged on the event); anything else is not merged
+  * gh pr merge exited non-zero -> read back anyway: MERGED with a merge commit AT the checked
+    head is merged (the gh error flagged on the event); anything else is not merged
+  * read back MERGED at another (or an unreadable) headRefOid -> `MERGED-ELSEWHERE`: not this
+    run's merge, no `merged` event, a two-way packet for Alex, exit 1 (10.3-r2-02)
   * packet.py fails to write the refusal packet -> still no merge; the reason is printed
   * merged but the `merged` event did not write -> exit 4: the merge stands (it landed and was
     read back), the ticker gap is reported rather than hidden
@@ -425,17 +427,19 @@ def covered(repo, seen, head, rid):
 
 # ---------- packet / event ---------------------------------------------------------
 
-def emit_packet(repo, unit, label, failed, hits, rng, head):
+def emit_packet(repo, unit, label, failed, hits, rng, head, title=None, options=None):
     one_way = bool(hits) or any(name == "floor" for name, _ in failed)
     door = "one-way" if one_way else "two-way"
     pid = _load("packet_emit", os.path.join(HERE, "packet_emit.py")).stable_id(
         "merge", label.replace("/", "-").replace("#", "-"), head[:12], door)
     body = "\n".join([f"driver-merge.py did not merge {label}:"] + [f"- {n}: {d}" for n, d in failed]
                      + [f"- floor path: {h['path']} ({h['pattern']}, {h['change']})" for h in hits])
-    options = (["Alex reviews the floor change and merges by hand", "Rework the PR off the floor"] if one_way else
-               ["Driver fixes the failed condition and re-runs driver-merge", "Alex merges by hand"])
+    options = options or (["Alex reviews the floor change and merges by hand", "Rework the PR off the floor"]
+                          if one_way else ["Driver fixes the failed condition and re-runs driver-merge",
+                                           "Alex merges by hand"])
+    title = title or ("Floor path" if one_way else "Not merged")
     cmd = [sys.executable, PACKET, "new", "--door", door, "--type", "generic", "--title",
-           f"{'Floor path' if one_way else 'Not merged'}: {label}", "--unit", unit, "--recommended", "1",
+           f"{title}: {label}", "--unit", unit, "--recommended", "1",
            "--body", body, "--id", pid, "--driver"]
     for o in options:
         cmd += ["--option", o]
@@ -488,24 +492,32 @@ def evaluate(a):
 
 
 def merge(a, facts):
-    """(sha or None, why-not, flag). The read-back decides, not gh's exit code: gh can exit
-    non-zero after GitHub merged (a dropped connection after the mutation, a post-merge step)
-    — that is the merged path with the gh error flagged (10.3-r1-06). Unreadable or not
-    MERGED with a merge commit is not merged, whatever gh said."""
+    """(sha or None, why-not, flag, elsewhere). The read-back decides, not gh's exit code: gh can
+    exit non-zero after GitHub merged (a dropped connection after the mutation, a post-merge
+    step) — that is the merged path with the gh error flagged (10.3-r1-06). It is THIS merge only
+    when the read-back headRefOid is the head every condition checked: a failed gh can also mean
+    the head moved and someone else merged it there (10.3-r2-02). MERGED at another or an
+    unreadable head is `elsewhere` (no `merged` event); unreadable or not MERGED with a merge
+    commit is not merged, whatever gh said."""
     cmd = ["pr", "merge", str(a.pr), "-R", facts["slug"], f"--{a.method}", "--match-head-commit", facts["head"]]
     if facts["admin"]:
         cmd.append("--admin")
     rc, _, err = gh(*cmd)
     gh_err = f"gh pr merge failed: {first_err(err, rc)}" if rc else ""
     try:
-        back = pr_view(facts["slug"], a.pr, "state,mergeCommit")
+        back = pr_view(facts["slug"], a.pr, "state,mergeCommit,headRefOid")
     except Refuse as e:
-        return None, (gh_err + "; " if gh_err else "") + f"merge not read back: {e}", ""
+        return None, (gh_err + "; " if gh_err else "") + f"merge not read back: {e}", "", ""
     sha = (back.get("mergeCommit") or {}).get("oid") if isinstance(back.get("mergeCommit"), dict) else None
     if back.get("state") != "MERGED" or not sha:
         return None, (gh_err or f"gh pr merge exited 0 but the PR reads back {back.get('state')}"
-                      f" (merge commit {sha or 'none'})"), ""
-    return sha, "", (f"⚠ {gh_err} — read back MERGED" if gh_err else "")
+                      f" (merge commit {sha or 'none'})"), "", ""
+    at = back.get("headRefOid")
+    if at != facts["head"]:
+        at = at[:12] if isinstance(at, str) and at else "an unreadable head"
+        return None, (f"{facts['label']} reads back MERGED as {sha} at {at}, not the checked head "
+                      f"{facts['head'][:12]} — not this run's merge" + (f" ({gh_err})" if gh_err else "")), "", sha
+    return sha, "", (f"⚠ {gh_err} — read back MERGED" if gh_err else ""), ""
 
 
 def main(argv):
@@ -548,7 +560,14 @@ def main(argv):
     if a.cmd == "check":
         return EXIT_REFUSED if failed else EXIT_OK
     if not failed:
-        sha, why, gh_flag = merge(a, facts)
+        sha, why, gh_flag, elsewhere = merge(a, facts)
+        if elsewhere:
+            print(f"MERGED-ELSEWHERE {facts['label']} {elsewhere} — {why}; no `merged` event")
+            emit_packet(a.repo, a.unit, facts["label"], [("merge", why)], [], None, facts["head"],
+                        title="Merged past the checked head",
+                        options=["Alex reviews the commits merged past the checked head",
+                                 "Revert the merge and re-run the unit"])
+            return EXIT_REFUSED
         if sha:
             flags += [gh_flag] if gh_flag else []
             print(f"MERGED {facts['label']} {sha}" + (f" · {gh_flag}" if gh_flag else ""))

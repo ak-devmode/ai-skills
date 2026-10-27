@@ -511,6 +511,9 @@ on a direct-to-main repo a branch diff is empty by construction.
      work around it.
    - **`NOT MERGED`** prints why and writes a packet: one-way with the floor paths for a
      floor hit — park on it per §6.9 — two-way otherwise; fix the condition and re-run.
+   - **`MERGED-ELSEWHERE`** means the PR merged, but not at the head this run checked
+     (the head moved, someone else merged): no `merged` event; tell Alex — the packet asks
+     him to review the commits that landed unchecked.
    - **Exit 4** means the merge landed but the ticker event did not: run `packet.py
      flush --driver`, and tell Alex if it still fails.
    - A `/concurrency` lane never merges: inside herdr the script asks `herdr agent list`

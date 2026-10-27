@@ -119,6 +119,14 @@ CASES = [
     # gh can exit non-zero after GitHub merged: the read-back decides (10.3-r1-06)
     ("merge rc!=0 but landed", {"merge_rc": 1}, 0, {"merged": True, "event": "gh pr merge failed"}),
     ("merge not read back", {"readback": "OPEN"}, 1, {"merged": False, "says": "reads back OPEN"}),
+    # only a read-back AT the checked head is this run's merge: a failed gh may mean the head moved
+    # and someone merged it there — no `merged` event for commits no condition checked (10.3-r2-02)
+    ("merge rc!=0, landed at another head", {"merge_rc": 1, "readback_head": "e" * 40}, 1,
+     {"merged": False, "packet": "two-way", "says": "MERGED-ELSEWHERE"}),
+    ("merge rc=0, read back at another head", {"readback_head": "e" * 40}, 1,
+     {"merged": False, "packet": "two-way", "says": "not the checked head"}),
+    ("read-back head unreadable", {"merge_rc": 1, "readback_head": None}, 1,
+     {"merged": False, "packet": "two-way", "says": "an unreadable head"}),
 ]
 
 
@@ -173,9 +181,10 @@ class DriverMergeTest(unittest.TestCase):
             if args[:2] == ("pr", "view"):
                 if o.get("gh_view_rc"):
                     return 1, "", "HTTP 502: bad gateway"
-                if "state,mergeCommit" in args:
+                if "state,mergeCommit,headRefOid" in args:
                     st = o.get("readback", "MERGED")
-                    return 0, json.dumps({"state": st, "mergeCommit": {"oid": "f" * 40} if st == "MERGED" else None}), ""
+                    return 0, json.dumps({"state": st, "mergeCommit": {"oid": "f" * 40} if st == "MERGED" else None,
+                                          "headRefOid": o.get("readback_head", head)}), ""
                 return 0, json.dumps(pr), ""
             if args[0] == "api":
                 key = "protection" if "/protection/" in args[1] else "rulesets"
@@ -241,9 +250,10 @@ class DriverMergeTest(unittest.TestCase):
                     if want.get("event"):
                         self.assertIn(want["event"], events[0]["body"])
                 else:
-                    self.assertIn("NOT MERGED" if not want.get("no_gh") else "refused", out)
+                    self.assertIn("refused" if want.get("no_gh") else
+                                  "MERGED-ELSEWHERE" if "readback_head" in o else "NOT MERGED", out)
                     self.assertEqual(events, [])
-                    if not o.get("merge_rc") and not o.get("readback"):
+                    if not o.get("merge_rc") and not o.get("readback") and "readback_head" not in o:
                         self.assertEqual(merges, [], "a refused PR must never reach gh pr merge")
                     door = want.get("packet", "two-way") if "packet" in want else "two-way"
                     if door is None:
@@ -255,7 +265,7 @@ class DriverMergeTest(unittest.TestCase):
 
     def test_check_never_merges_or_writes(self):
         for name, o, want_rc, _ in CASES:
-            if o.get("merge_rc") or o.get("readback"):
+            if o.get("merge_rc") or o.get("readback") or "readback_head" in o:
                 continue  # merge-only failures: check is eligible there
             with self.subTest(name):
                 rc, out, calls, packets, events = self.run_case("check", o)

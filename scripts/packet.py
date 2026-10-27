@@ -368,7 +368,7 @@ PNG_CAP_BYTES = 1_500_000  # 2,000,000 base64 chars; same cap as the schema and 
 
 def ui_payload_errors(payload):
     """Fail-closed checks the schema pattern cannot make: strict base64, PNG signature, byte cap,
-    and the real-patient guard (tenant must equal $DQ_UI_DEMO_TENANT; unset -> refuse)."""
+    and the demo-tenant declaration check (tenant must equal $DQ_UI_DEMO_TENANT; unset -> refuse). It catches a missing or wrong declaration, not a mislabelled shot."""
     import base64
     import binascii
     errs = []
@@ -376,7 +376,7 @@ def ui_payload_errors(payload):
     if not demo:
         errs.append("DQ_UI_DEMO_TENANT is not set: no UI packet without a declared demo tenant")
     elif not isinstance(payload, dict) or payload.get("tenant") != demo:
-        errs.append("payload tenant does not equal $DQ_UI_DEMO_TENANT (real-patient data guard)")
+        errs.append("payload tenant does not equal $DQ_UI_DEMO_TENANT (shots must be declared from the demo tenant)")
     for k in ("old", "new"):
         shot = payload.get(k) if isinstance(payload, dict) else None
         img = shot.get("image") if isinstance(shot, dict) else None

@@ -195,9 +195,11 @@ Producing one:
    (both refused). Scrub the shot of real names/IDs first — no PHI in a packet.
 4. Write callouts for what *behaves* differently, not what looks different.
 
-`DQ_UI_DEMO_TENANT` must be set (the driver declares it in `.env.example`). `packet.py new --type ui`
-refuses when it is unset or when the payload's `tenant` differs from it, and also refuses any image that
-is not strict base64 of a PNG within the cap — WellMed dev/staging hold real patient data.
+`DQ_UI_DEMO_TENANT` must be set (declared in `.env.example`). `packet.py new --type ui` refuses when it is
+unset or when the payload's `tenant` differs from it, and refuses any image that is not strict base64 of a
+PNG within the cap. The tenant check is a **declaration** check: the author attests the shots come from the
+demo tenant; nothing ties the pixels to it. The protection against real patient data (WellMed dev and
+staging hold it) is taking the shots on the demo tenant in the first place, and scrubbing them (step 3).
 
 ## edit-guard.py
 

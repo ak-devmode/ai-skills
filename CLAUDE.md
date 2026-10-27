@@ -240,7 +240,7 @@ CLAUDE.md
 ## 5. Environment variables
 
 Skills run inside Claude Code's session and inherit its environment. No SSM,
-no API keys managed at this layer. The scripts read seven optional
+no API keys managed at this layer. The scripts read optional
 overrides, declared in `.env.example` (so `resolve-identifiers.py` can resolve
 them): `WORKBENCH_ACCOUNTS` (dev-workbench's accounts map, read by `placement.py`;
 default `~/Projects/dev-workbench/config/accounts/accounts.tsv`), `AI_SKILLS_REVIEW_MODE` (`full` restores the codex gate + full Claude fallback
@@ -249,7 +249,7 @@ for `/review` and `/verify`; unset means `lean`; set it in `~/.claude/settings.j
 `~/Projects`), `VERIFY_CODEX_BIN` (codex binary; tests use fakes),
 `VERIFY_CODEX_MODEL` (codex model family or exact slug, default `sol` — resolved
 from codex's model cache so it tracks new versions), `CODEX_HOME` (codex's own home,
-default `~/.codex`), `VERIFY_EVAL` (`1` runs the live-judge eval tier in `scripts/tests`).
+default `~/.codex`), `VERIFY_EVAL` (`1` runs the live-judge eval tier in `scripts/tests`). Scope 10's packet tools add `DECISION_QUEUE_URL` (the queue; unset = outbox only), `DQ_UI_DEMO_TENANT` (the one tenant a UI packet may show; unset = UI packets refused), `PACKET_MACHINE` / `PACKET_WORKSPACE` / `PACKET_AGENT` (lane identity outside herdr) and `PACKET_POST_TIMEOUT` (tests).
 
 ---
 

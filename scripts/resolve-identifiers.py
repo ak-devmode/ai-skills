@@ -358,7 +358,9 @@ def go_non_proto(text):
     out = set()
     for m in GO_IMPORT.finditer(text):
         path = m.group(2)
-        if re.search(r"/gen/|proto|pb", path):
+        # the protobuf runtime (`proto.MarshalOptions{Deterministic: true}`) is a library
+        # struct, not a message — WellMed scope 197, verify 197.3
+        if re.search(r"/gen/|proto|pb", path) and not path.startswith("google.golang.org/protobuf/"):
             continue
         out.add((m.group(1) or "").strip() or path.rsplit("/", 1)[-1])
     return out

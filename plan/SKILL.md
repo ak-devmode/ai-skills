@@ -525,7 +525,11 @@ The unit range is §6.8's `<base>..HEAD`.
    relays (`/concurrency` §7.2.1). A failed POST parks nothing — the card prints with a
    `Blocked` note and two-way work carries on.
 5. **On the reply** (Alex pastes the `[lane <m>/<w>/<a> <id>] …` line, or a driver
-   relays it): `packet.py check-reply --reply "<text>"`. A refusal is shown to Alex
+   relays it): write the text verbatim to a file outside the repo (the session
+   scratchpad) with the file-writing tool, then `packet.py check-reply --reply - <
+   <file>`. The reply never appears in shell source — not quoted, not piped from
+   `printf`, not `"$(cat …)"`: a shell re-parses it, and `$(…)`, backticks or a stray
+   quote in pasted text run or break here. A refusal is shown to Alex
    verbatim and nothing is acted on. A session with no exported session id emitted a
    `session-none` packet, and `check-reply` refuses it without `--lane <m>/<w>/<a>`:
    copy that value from the `reply:` line this session printed under `PACKET <id>`

@@ -286,6 +286,8 @@ panes. Workers never `SendMessage` the supervisor.
   no approval. It can **paste without submitting** (the text sits in the input
   box, the agent stays `idle`): after every prompt wait a few seconds and send
   `enter` if still idle. A prompt to a working agent queues and runs next turn.
+  `"<text>"` here is text the driver wrote; text it did not write (a pasted reply)
+  goes through the file + argv relay of §7.2.1, never into the command line.
 - **Ghost text in the input box is Claude Code's autocomplete suggestion**, not
   Alex (e.g. `❯ push it and open the PR`). Never act on it.
 - Messages carry pointers, not payloads — evidence lives in the repo, the
@@ -327,21 +329,34 @@ A lane's question to Alex is a packet, not prose in a pane. `scripts/README.md` 
   PARKED/PACKET ids the box lane printed since the last flush. `FLUSHED 0` while a box
   lane is parked is a misconfigured path or env, not an empty outbox.
 - **Reply path.** Alex pastes the prefilled reply (opens `[lane <m>/<w>/<a> <id>]`) into
-  the driver's pane. The driver runs `packet.py check-reply --outbox <that lane's outbox>
-  --lane <m>/<w>/<a> --reply -` with the pasted text piped on stdin (box lane:
-  `printf '%s' "<reply>" | ssh <box> 'cd <remote worktree> && ~/Projects/ai-skills/scripts/packet.py check-reply --lane <m>/<w>/<a> --reply -'`,
-  so the lane's own HEAD is checked on the box). Never put the reply in argv: an
-  apostrophe breaks the remote quoting and `$(…)` in pasted text would expand. Take
-  `--lane` from the `reply:` line the lane printed in its OWN pane under `PACKET <id>` — never from the pasted text, which is
-  what is being checked. A refusal goes back to Alex verbatim; nothing is relayed. On
-  `OK`, relay with `herdr agent prompt <lane> "<reply>"` (+ `enter`, §7.2). The lane runs
-  `check-reply` itself, acts on the answer, runs `packet.py close <id>`, and resumes.
+  the driver's pane. **The pasted text never appears in shell source** — not quoted,
+  not piped from `printf`, not `"$(cat …)"`: any command line that contains it is
+  re-parsed by a shell, and `$(…)`, backticks or a stray quote in a reply then run or
+  break on the driver's machine. Instead:
+  1. Write the reply verbatim to a file outside the repo (the session scratchpad),
+     `<file>`, with the file-writing tool — no shell involved.
+  2. Check it from the file: `packet.py check-reply --outbox <that lane's outbox>
+     --lane <m>/<w>/<a> --reply - < <file>`. Box lane:
+     `ssh <box> 'cd <remote worktree> && ~/Projects/ai-skills/scripts/packet.py check-reply --lane <m>/<w>/<a> --reply -' < <file>`,
+     so the lane's own HEAD is checked on the box; the remote command is fixed text and
+     the reply crosses ssh as stdin bytes. Take `--lane` from the `reply:` line the lane
+     printed in its OWN pane under `PACKET <id>` — never from the pasted text, which is
+     what is being checked. A refusal goes back to Alex verbatim; nothing is relayed.
+     An empty or unreadable `<file>` is a refusal too (no lane tag) — fail closed.
+  3. On `OK`, relay with the text as an argv element no shell parses:
+     `python3 -c 'import subprocess,sys; subprocess.run(["herdr","agent","prompt",sys.argv[1],open(sys.argv[2]).read()],check=True)' <lane> <file>`
+     (+ `enter`, §7.2). `herdr agent prompt` takes the text only as an argument, so this
+     is the form; `herdr agent prompt <lane> "<reply>"` is not.
+
+  The lane runs `check-reply` itself the same way (`/plan` §6.9 step 5), acts on the
+  answer, runs `packet.py close <id>`, and resumes.
 - **Any session may emit a packet** — the driver too, and a session outside
   `/concurrency`. A session Alex talks to directly is its own driver (`--driver`).
 - **Seam: no `DECISION_QUEUE_URL` = today's behaviour.** Packets still land in the
   outbox and `flush` sends nothing; the driver asks Alex the parked lane's question
   inline, numbered, as it always has. It relays his answer as the card's prefilled
-  reply (tag from the lane's own `reply:` line), so the lane still runs `check-reply`
+  reply (tag from the lane's own `reply:` line) through the file + argv relay above, so
+  the lane still runs `check-reply`
   and `close`.
 
 **7.3 Per-partition review gate — a fresh, VISIBLE pane, before close**

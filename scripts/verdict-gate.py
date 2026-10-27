@@ -125,7 +125,7 @@ def coverage_blocks(review_log):
         where = f"{review_log} · {fid} ({f.get('file')}:{f.get('line')})"
         if d is None:
             blocks.append((fid, "review finding has no disposition", "`fixed <sha>`, `rejected <reason>`, "
-                           "`deferred <TO-DO>` or `accepted <process nit>`",
+                           "`deferred <TO-DO>`, `accepted <process nit>` or `reframed <what> --commit <sha>`",
                            "no disposition recorded", where, "code"))
         elif d.get("disposition") == "fixed" and not d.get("sha"):
             blocks.append((fid, "`fixed` disposition without a commit", "the fixing commit's SHA",
@@ -150,8 +150,16 @@ def coverage_blocks(review_log):
             blocks.append((fid, "`accepted` disposition on a blocking finding, or without a reason",
                            "a non-blocking process nit with the reason it stands",
                            f"severity {f.get('severity')}, reason {d.get('reason')!r}", where, "code"))
-        elif d.get("disposition") not in ("fixed", "rejected", "deferred", "accepted"):
-            blocks.append((fid, "unknown disposition", "`fixed`, `rejected`, `deferred` or `accepted`",
+        elif d.get("disposition") == "reframed" and (
+                not d.get("sha") or not str(d.get("reason") or "").strip()
+                or not vl.REFRAMED_BY.match(str(d.get("by") or ""))):
+            # an accepted reframe replaced the code (review/SKILL.md §5.1): counted like a deferral,
+            # never audited as a rejection; its commit is wanted re-reviewed below
+            blocks.append((fid, "`reframed` disposition without its commit, what changed, or who accepted it",
+                           "`reframed \"<what changed>\" --commit <sha> --by judge|user`",
+                           f"sha {d.get('sha')!r}, reason {d.get('reason')!r}, by {d.get('by')!r}", where, "code"))
+        elif d.get("disposition") not in ("fixed", "rejected", "deferred", "accepted", "reframed"):
+            blocks.append((fid, "unknown disposition", "`fixed`, `rejected`, `deferred`, `accepted` or `reframed`",
                            repr(d.get("disposition")), where, "tooling"))
     return blocks, len(findings)
 
@@ -326,7 +334,15 @@ def review_presence_blocks(review_log, base, projects, scope=None, unit=None):
     ordered = sorted(reviews, key=lambda r: round_no(r.get("review_id")))
     lineage = vl.review_lineage(
         [(r.get("review_id"), canon(next(iter(r.get("range") or {}), "")), (r.get("shas") or {}).get("base"),
-          (r.get("shas") or {}).get("head")) for r in ordered], root)
+          (r.get("shas") or {}).get("head")) for r in ordered], root, *vl.lineage_links(recs))
+    rules = vl.lineage_rules(recs, lineage)
+
+    def budgeted_note(f):
+        """review/SKILL.md §5.1 findings budget (rules 2+): a note from round 2 of its lineage is
+        logged with at most one batch fix and never re-reviewed. A lineage rooted before the
+        cutover keeps the old rule (decision 65); an unknown round is not round 2+."""
+        rid = f.get("review_id")
+        return f.get("severity") == "note" and rules.get(rid, 1) >= 2 and (lineage.get(rid) or ("", 0))[1] >= 2
 
     def capped(review_id):
         """The finding's review lineage has reached ROUND_CAP rounds."""
@@ -349,8 +365,20 @@ def review_presence_blocks(review_log, base, projects, scope=None, unit=None):
 
     for f in recs:
         d = latest.get(f.get("finding_id"))
-        if f.get("record") != "finding" or not d or d.get("disposition") != "fixed" or not d.get("sha"):
+        if f.get("record") != "finding" or not d or d.get("disposition") not in ("fixed", "reframed") \
+                or not d.get("sha"):
             continue
+        reframed = d["disposition"] == "reframed"
+        who = vl.REFRAMED_BY.match(str(d.get("by") or "")) if reframed else None
+        why_not = who and who.group(1) == "judge" and vl.judge_took(recs, f["finding_id"], lineage)
+        if why_not:
+            # `--by judge` is checked against the log, as dispose checks it: a hand-written
+            # record, or one from before the check, never clears a finding on the driver's
+            # word (review 10.2-r1-01); `--by user` is the user's call and stands as recorded
+            blocks.append((f"reframe:{f['finding_id']}", "a `reframed --by judge` the judge never took",
+                           "a reframe that vl.reframe_call says is the judge's to take, in the "
+                           "finding's lineage that removes it", why_not, f"{review_log} · {f['finding_id']}",
+                           "code"))
         # the reviewed code is never its own fix: the commit that introduced a finding touches
         # its file (review adhoc-01); dispose refuses it, a hand-written record blocks here
         own, rng = next(iter((f.get("range") or {}).items()), ("", ""))
@@ -359,19 +387,23 @@ def review_presence_blocks(review_log, base, projects, scope=None, unit=None):
         # — squash and rebase merges count when the fix's change arrived (§5.2.2)
         hold = d.get("repo") or own
         if ll.landed(root(hold), d["sha"], known) is None:
-            blocks.append((f"unmerged:{f['finding_id']}", "a `fixed` commit is not in what ships",
+            blocks.append((f"unmerged:{f['finding_id']}", f"a `{d['disposition']}` commit is not in what ships",
                            f"{d['sha'][:10]} on HEAD or the trunk in {hold}: an ancestor, the same patch-id, or "
                            "its change squash-merged",
                            "none of the three (or git cannot tell)", f"{review_log} · {f['finding_id']}", "code"))
         head = rng.partition("..")[2]  # the head this finding's reviewer saw
         if own and head and canon(d.get("repo", own)) == canon(own) \
                 and git_ok(root(own), "merge-base", "--is-ancestor", d["sha"], head):
-            blocks.append((f"predates:{f['finding_id']}", "a `fixed` commit predates the finding",
+            blocks.append((f"predates:{f['finding_id']}", f"a `{d['disposition']}` commit predates the finding",
                            f"a commit made after {head[:10]}, the head {f.get('review_id')} reviewed",
                            f"{d['sha'][:10]} is an ancestor of it", f"{review_log} · {f['finding_id']}", "code"))
         # a scaffolding finding never forces another round, even fixed off-anchor (lenses §7)
-        why = "a blocking finding's fix" if f.get("severity") == "blocking" else \
-            "an off-anchor fix" if d.get("via") == "off-anchor" and f.get("target") != "scaffolding" else None
+        # a reframe's replacing commit, at any severity, is new code: a new lineage reviews it, and
+        # the old lineage's round-cap stop never stands in for that review
+        why = "a reframe's replacing commit" if reframed else \
+            "a blocking finding's fix" if f.get("severity") == "blocking" else \
+            "an off-anchor fix" if d.get("via") == "off-anchor" and f.get("target") != "scaffolding" \
+            and not budgeted_note(f) else None
         if why is None:
             continue
         # a fix recorded in another repo (`dispose --fixed-in`) is re-reviewed THERE, by a review
@@ -385,12 +417,13 @@ def review_presence_blocks(review_log, base, projects, scope=None, unit=None):
                 blocks.append((f"rereview:{f['finding_id']}", "cannot read the fix's history",
                                f"{e} in {repo}", "git failed", f"{path}", "environment"))
                 continue
-            if not seen and not stopped(f["finding_id"], f.get("review_id")):
+            if not seen and (reframed or not stopped(f["finding_id"], f.get("review_id"))):
                 blocks.append((f"rereview:{f['finding_id']}", f"{why} was never reviewed",
                                f"a later /review whose range contains {d['sha'][:10]}" + (
                                    f" — or, its review lineage being at round {vl.ROUND_CAP}+ without SHIP, "
                                    "`review.py accept` to stop the loop here"
-                                   if capped(f.get("review_id")) and unshipped(f.get("review_id")) else ""),
+                                   if capped(f.get("review_id")) and unshipped(f.get("review_id"))
+                                   and not reframed else ""),
                                f"no review record covers it", f"{review_log} · {f['finding_id']}", "code"))
     return blocks
 

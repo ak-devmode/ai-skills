@@ -1,6 +1,6 @@
 ---
 name: review
-version: 3.8.0
+version: 3.9.3
 description: |
   Pre-landing code review with codex as the gate: the opposing model family, headless
   and read-only, reviews an explicit revision range against gstack's review checklist,
@@ -87,10 +87,12 @@ a bad `AI_SKILLS_REVIEW_MODE`) is a stop: report its message and don't pick a mo
 
 ## 2. The Gate — codex
 
-2.1 **Render.** `$RV prepare --repo $REPO --range $RANGE [--kalpa-only|--engine-only]` →
-prints `prompt:`, `schema:`, a `passes:` line, a `range:` line — the range resolved to
-full SHAs, which the prompt uses — and an `effort:` line; keep all five, pass that `range:`
-to §2.4 and that effort to §2.3.
+2.1 **Render.** `$RV prepare --repo $REPO --range $RANGE --scope $SCOPE --unit $UNIT
+[--continues <review id>] [--kalpa-only|--engine-only]` → prints `prompt:`, `schema:`, a
+`passes:` line, a `range:` line — the range resolved to full SHAs, which the prompt uses —
+an `effort:` line and a `round:` line; keep them all, pass that `range:` to §2.4 and that
+effort to §2.3 — under the effort trial it is a tier above the diff-size tier (§5.1). Without
+`--scope`/`--unit` the round is unknown and the prompt is round 1's (§5.1).
 
 2.1.1 **Checks, run for the reviewer.** `prepare` also runs the repo's declared checks and
 puts each one's command, exit status and the end of its output in the prompt; its last
@@ -114,7 +116,8 @@ The prompt's directory is `$WORK`. Last line `codex <model>` → §2.4 with that
 the reviewer. `none <reason>` → §3 with that reason.
 
 2.4 **Record.** `$RV record --repo $REPO --range <the range: line> --reviewer "<line>" --input
-$WORK/answer.json --passes "<passes line>" --mode "$MODE" [--scope $SCOPE --unit $UNIT]`. It assigns
+$WORK/answer.json --passes "<passes line>" --mode "$MODE" --effort $EFFORT [--scope $SCOPE --unit $UNIT]`
+(`--effort`: the tier §2.3 gave codex-exec; a codex record without it is stamped `effort: null`). It assigns
 `<unit>-r<n>-NN` IDs in severity order, appends the raw findings, and writes
 `artifacts/review-<unit>-r<n>.md` — including **what the review did not cover** (codex's
 own `cannot_do` list plus skipped passes). Exit 3 → the answer was malformed and nothing
@@ -168,7 +171,13 @@ rule. (The first real run hit exactly this and moved on because the exit code wa
 
 3.5 **Record through the same writer.** Write the fallback's findings as JSON matching
 `review/schemas/review-output.schema.json` and run §2.4 with the `claude-fallback …`
-reviewer line. The fallback never gets its own log format.
+reviewer line. The fallback never gets its own log format. gstack grades on two levels, not
+this schema's three, so map its output: CRITICAL → `blocking`, INFORMATIONAL →
+`should-fix`, and a finding that is only process (a comment, a stale table, doc wording) →
+`note`. Read §2.1's prompt for the round and the earlier findings, and set `reopens` and
+`reframe` the same way. A fallback's `local-maxima` finding is **advisory**: `record` tags it
+and it is disposed like any other, but it is never a stop and never a packet. 120 such flags
+in 178 fallback reviews would have flooded the queue.
 
 ---
 
@@ -195,6 +204,7 @@ $RV dispose --scope $SCOPE --unit $UNIT --finding <ID> --fixed <sha>          # 
 $RV dispose --scope $SCOPE --unit $UNIT --finding <ID> --fixed <sha> --fixed-in <repo path>   # fixed in another repo
 $RV dispose --scope $SCOPE --unit $UNIT --finding <ID> --rejected "<why the finding is wrong>"
 $RV dispose --scope $SCOPE --unit $UNIT --finding <ID> --accepted "<the process nit, noted>"   # non-blocking only, §5.1
+$RV dispose --scope $SCOPE --unit $UNIT --finding <ID> --reframed "<what changed>" --commit <sha> --by judge|user   # §5.1
 ```
 
 **A fix in another repo** — at the source the finding traces to, or a hand-back file in a
@@ -215,6 +225,17 @@ which directories count: each guess was a new way through (review r1/r2 on this 
 file, so `dispose` refuses an ancestor of the head that review saw (in another repo, a commit
 older than the review), with or without `--off-anchor`, and the gate blocks one — and blocks
 a fix not reachable from HEAD in the repo holding it, until its branch merges.
+**Fix discipline — binds whoever applies the fixes.** Fix code draws about four times the
+findings per line of the change it fixes (scope 10 baseline §3.3), so:
+1. Name the defect class and search for its siblings before fixing the example.
+2. Every new check or guard states what it does when its own input fails — fail closed by
+   default, unless a stated reason makes fail-open the better behaviour.
+3. A regression test must fail with the fix reverted: revert, re-run, restore.
+4. Run the affected tests before the re-review.
+5. A finding that `reopens` one that already reopened another is a chain: `record` prints
+   `[CHAIN] <id> reopens <id> reopens <id>`. Stop patching and take the reframe prompt
+   (§5.2) before another fix.
+
 `--rejected` is refused without a reason — never use it to record a fix the tool refused.
 The latest disposition decides, so a fix logged as a rejection is corrected by disposing it
 again: `$RV misfiled --scope $SCOPE --unit $UNIT` lists every rejection whose reason says
@@ -237,6 +258,28 @@ loops run without a per-round check-in (Alex's standing approval):
 
 - **Rounds 1–3:** fix every finding you do not disagree with, dispose it, review the fix
   commits again, keep going. Reject, with the reason, what you do disagree with.
+- **The findings budget.** Round 1 is uncapped and is where the work goes: the reviewer
+  reports every defect, each `fix` naming the class, not only the example. From round 2,
+  `blocking` and `should-fix` findings are still fixed with no cap (later-round findings are
+  mostly defects in the fixes themselves), but notes get **at most one batch fix and no
+  re-review** — `record` prints `[BUDGET] round <k>: <n> note(s)`, `dispose` warns on a
+  second fix commit for one review's notes, and the gate never wants an off-anchor note fix
+  reviewed again. A note may be `--accepted` at any round.
+- **The prompt knows its round.** Pass `prepare` the same `--scope`/`--unit` (and
+  `--continues`) as `record`: it prints `round: <k>` and fills the lineage round and the
+  earlier findings with their dispositions into the prompt — the previous round's findings
+  and every rejection before it. The reviewer checks each fix resolved its finding, raises a
+  rejection again only with new evidence, and sets `reopens: <finding ID>` on a finding that
+  is an earlier one not fully fixed. `record` keeps a `reopens` naming no finding of the unit
+  as a plain finding, drops the link and warns.
+- **The effort trial.** Every round, round 1 and fix rounds alike, runs codex one tier above
+  `verify_lib.effort_for`'s diff-size tier (`low` → `medium` → `high` → `xhigh`, capped at
+  `xhigh`). `prepare` prints it as `effort trial: <base> → <tier>`. Fix ranges average about
+  350 lines, so the bump is cheap there, and fix code is where defects concentrate. `record`
+  stamps the review record with `round`, `effort` (the `--effort` codex ran at) and `effort_base` (null for a non-codex
+  reviewer) so the scorecard can compare round 1 with fix rounds. The trial stays per bucket
+  only if findings move earlier without more codex credit-outs.
+  `verify_lib.EFFORT_TRIAL = False` ends it.
 - **SHIP proceeds.** A round whose verdict is `SHIP`, once every finding is dispositioned
   and `verdict-gate.py` wants nothing re-reviewed (`rereview:` — an off-anchor fix still
   needs its round), goes straight to `/verify`. Record the outcomes yourself:
@@ -264,15 +307,35 @@ loops run without a per-round check-in (Alex's standing approval):
 4. **An edge-case cascade** — a fix for one edge case raises another, sequential or net
    new. `record` prints `[CASCADE] <file>` when a new finding lands on a line an earlier
    finding's fix commit in the unit last changed. That is a local maximum: a better way to
-   think about the original solution exists. Stop fixing and bring the user a proposed
-   reframe. You may propose a reframe at any time, cascade or not.
+   think about the original solution exists. Stop fixing, and put a reframe to the fresh
+   judge (§5.2). You may propose a reframe at any time, cascade or not. A `reopens` chain
+   (`[CHAIN]`, §5) is the same signal.
+
+**A reframe that is taken** — accepted by the fresh judge (`--by judge`) or by the user at
+a stop (`--by user`) — is recorded on each finding it replaced: `dispose --reframed "<what
+changed>" --commit <the replacing commit>`, at any round and any severity. `--by judge` is
+read from the log, never taken on your word: `dispose` refuses it, and the gate blocks it,
+unless a reframe in the finding's lineage removes that finding and its latest verdict is
+`accepted` without `overturns` — an accept that overturns a decision is `--by user`. Never `--rejected`
+(the finding was not wrong) and never a stale `--fixed` (a reverted fix: `dispose` warns when
+a `--fixed` commit has been reverted on HEAD). The gate counts it like a deferral, `/verify`
+never audits it as a rejection, and the gate wants the replacing commit inside a later
+review's range: review it as its own range (old head..replacing commit), which starts a new
+lineage at round 1.
 
 **Rounds count per review lineage, not per repo.** IDs number every review of the unit
 (`<unit>-r<n>`); `record` prints `round: <k> of <repo>` for this review's lineage. A review
-whose range starts at an earlier review's head (a fix re-review), or shares a commit with
-one, continues that review's count; a range over code no earlier review covered starts at
-round 1 (when git cannot tell, the repo's highest round continues, with a `[WARN]`). A repo is
-its primary checkout, worktrees included.
+whose range shares a commit with an earlier one continues that review's count, and so does a
+fix re-review: a range starting at an earlier review's head that contains a commit a `fixed`
+disposition named for a finding of that lineage — so dispose the fixes before re-reviewing
+them. Starting at a review's head alone is not enough: a lane's next unit starts there too
+(WellMed 171.2 counted new code as round 4–5). `record --continues <review id>` names the
+parent outright when no disposition ties the range to it. Anything else starts at round 1
+(when git cannot tell, the repo's highest round continues, with a `[WARN]`). A repo is its
+primary checkout, worktrees included. **A lineage keeps the rules it started under:** every
+`review` record carries `rules_version`, and the rules here that changed in scope 10 (the
+findings budget, the `reopens` chain stop, the effort trial) apply only to lineages whose root
+was recorded at version 2 or later (`verify-contracts.md` §6.0).
 
 **Round cap.** Past round 3 of a lineage (only on the user's "another round"), only
 `blocking` findings are fixed in the loop. `should-fix` and `note` go to the project's
@@ -300,6 +363,72 @@ the session had added.
 > 171.2 also hit the round-3 cap on a first review of new code, because rounds counted per
 > repo and two lanes shared one. The user is now asked only where their judgment changes
 > the outcome: design, a repeat, no SHIP, a cascade. Process nits stopped earning rounds.
+
+5.2 **Reframes — every round, judged fresh.** Every round, the reviewer answers `reframe`:
+either a simpler design that removes several findings, naming what it deletes, or null.
+Few loops reframe on their own (22 of 4,044 dispositions; 85% of `local-maxima` findings were
+patched), so the question is asked every round. When the answer carries one, `record` prints
+`[REFRAME] <id> proposes …`. Judge it before fixing the findings it removes. A driver never
+judges its own design:
+
+```bash
+$RV reframe-prepare --scope $SCOPE --unit $UNIT --review <id> [--objective "<the plan's objective>"]
+$S/codex-exec.py exec --prompt $PROMPT --schema $SCHEMA --out $WORK/reframe.json --cd $REPO --timeout 900 --effort high
+$RV reframe-record --scope $SCOPE --unit $UNIT --review <id> --judge "<codex-exec.py's last line>" --input $WORK/reframe.json
+```
+
+The judge reads only the objective, the review's findings and the proposal, scope §11, the
+progress file's Decisions Log, and the lineage's earlier rejected reframes. The objective
+defaults to scope.md's `## 1.` section, and `reframe-prepare` exits 3 when there is none. The
+judge accepts only when the design **(i) meets the objective** and **(ii) simplifies by
+deleting something named**. `reframe-record` holds it to that: an accept with either condition
+false, or with nothing in `deletes`, is recorded `rejected` and says what was missing. Every
+verdict is a `reframe-verdict` record with a one-line reason. What each verdict does:
+
+- **Accepted:** build it. Then record each finding it replaced with `dispose --reframed
+  "<what changed>" --commit <sha> --by judge` (§5.1), and review the replacing commit as a
+  new lineage.
+- **Accepted, but it overturns a recorded decision** (`overturns`): bring it to the user
+  before anything is built.
+- **Rejected:** keep fixing the findings. A reframe the reviewer proposes again after a
+  rejection is judged against that rejection, and is the user's call if it recurs.
+- **Not judged** (`--judge "none <reason>"`, codex unavailable): the reframe is not taken.
+  Fix the findings, or bring the reframe to the user.
+
+The same judge lists findings that re-open a recorded decision (`[DECISION] <id> re-opens
+…`). Handle each as stop 1 (a design decision), not as a fix.
+
+**Packets — the three cases that need the user.** Each writes one one-way `generic` packet
+(`scripts/packet_emit.py` → `packet.py new`, outbox in the repo under review; the driver POSTs
+it; ids are stable per review and case, so a re-run re-sends and never duplicates). The body
+names the finding ids, the lineage, the options and a recommendation. `record` or
+`reframe-record` prints `PACKET <id>` and a `[PACKET]` / `[REFRAME]` line; the inline numbered
+question stays the path when `DECISION_QUEUE_URL` is unset (the packet is still in the outbox).
+A packet that cannot be written only warns on stderr — the review never stops for it.
+Whether a reframe is the user's call is decided in one place, `verify_lib.reframe_call`, and
+every consumer (the `[REFRAME]` lines, `reframe-prepare`, `dispose --by judge`, the gate, case 2)
+asks it: it reads each reframe's latest verdict only, holds a repeat even after a later accept,
+and holds anything it cannot decide.
+
+1. **An accepted reframe that overturns a recorded decision, or touches a one-way door**
+   (`door.py` over the review's range, a hit on a file of a finding the reframe removes, its
+   anchor made relative to the reviewed checkout first; an anchor outside that checkout, or a
+   `door.py` that fails closed, raises, or has no reviewed checkout to read, counts as a hit).
+   Emitted by `reframe-record`. The call is decided before anything prints and logged on the
+   verdict as `user_call`: stdout says "do not build until answered" in place of "build it"
+   whether or not the packet was written, and `dispose --reframed --by judge` refuses it (it is
+   `--by user`).
+2. **A blocking finding that survived two rounds with no qualifying reframe** — in round 3 or
+   later with no SHIP, a blocking finding whose file or `reopens` chain carried a blocking
+   finding in an earlier round (one first raised in round 3 survived nothing); or a blocking
+   finding ending a `reopens` chain of three — and no accepted reframe that is the judge's to
+   take (no overturn, no one-way door) anywhere in the lineage. Emitted by `record`. `local-maxima` flags
+   from a fallback reviewer (`advisory`) never count.
+3. **A rejected reframe proposed again** — the new proposal matches (≥ 0.85 similarity) one the
+   judge already rejected in the lineage. Emitted by `record`, which prints the hold in place
+   of the judge-it line; `reframe-prepare` refuses it (exit 1) — a re-judge is never the path,
+   and an accept recorded anyway is still held (`reframe-record` emits this packet, `dispose --by
+   judge` refuses). A repeat check that cannot run is held the same way.
 
 ---
 
@@ -329,8 +458,9 @@ cheap path; when a lean report lists uncovered files that matter, say that `--fu
 Runs when §1.4 printed `mode: lean (…)`. The rules are the same files; what changes is
 who reads them and how much. The reviewer gets one packed file and no tools.
 
-7.1 **Render the bundle.** `$RV prepare --repo $REPO --range $RANGE --lean [--kalpa-only|--engine-only]`
-prints `prompt:` (the bundle), `schema:`, `passes:`, `range:` and an `uncovered:` count;
+7.1 **Render the bundle.** `$RV prepare --repo $REPO --range $RANGE --lean --scope $SCOPE --unit $UNIT
+[--kalpa-only|--engine-only]` prints `prompt:` (the bundle), `schema:`, `passes:`, `range:`,
+`round:` (§5.1) and an `uncovered:` count;
 keep them all. The bundle inlines the commits, the repo's CLAUDE.md and ARCHITECTURE.md at
 the range's head (≤ 24 KB each), gstack's checklist, only this project's `domain.md`
 sections, the lenses, and the diff. The diff is capped at 1,500 changed lines. Files are

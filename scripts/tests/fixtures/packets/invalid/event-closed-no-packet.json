@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "id": "evt0close001",
+  "kind": "closed",
+  "created_at": "2026-10-26T09:10:00Z",
+  "machine": "mba",
+  "workspace": "w",
+  "agent": "a",
+  "body": ""
+}

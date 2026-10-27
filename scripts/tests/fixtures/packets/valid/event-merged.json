@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "id": "evt0merged01",
+  "kind": "merged",
+  "created_at": "2026-10-26T09:10:00Z",
+  "machine": "mba",
+  "workspace": "ai-skills-10",
+  "agent": "packet",
+  "body": "PR merged"
+}

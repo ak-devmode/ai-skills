@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "created_at": "2026-10-26T09:00:00Z",
+  "machine": "mba",
+  "workspace": "ai-skills-10",
+  "agent": "packet",
+  "repo": "ai-skills",
+  "branch": "concurrency/10-packet",
+  "head_sha": "14954fc",
+  "unit": "10/1.2",
+  "blocks": "",
+  "continues_on": "door.py tests",
+  "id": "gen0two-way01",
+  "door": "two-way",
+  "type": "generic",
+  "title": "Use stdlib validator, no jsonschema dep",
+  "reversal_cost": {
+    "commits_stacked": 2,
+    "as_of": "2026-10-26T09:05:00Z"
+  },
+  "options": [
+    {
+      "id": "a",
+      "label": "Stdlib subset validator",
+      "recommended": true
+    },
+    {
+      "id": "b",
+      "label": "Vendor jsonschema",
+      "recommended": false
+    }
+  ],
+  "payload": {
+    "tables": []
+  },
+  "reply": "[lane mba/ai-skills-10/packet gen0two-way01] Option a."
+}

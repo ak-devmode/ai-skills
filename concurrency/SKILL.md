@@ -1,6 +1,6 @@
 ---
 name: concurrency
-version: 0.9.1
+version: 0.10.0
 description: |
   ONE responsibility: map what can run in parallel and what cannot, against a
   clear set of rules — re-derived from repo ground truth on every run, never
@@ -209,6 +209,12 @@ Per partition, in this order (syntax authority: `herdr --skill`):
    run `~/Projects/ai-skills/scripts/herdr-pane.sh helper` (splits your OWN pane right at half
    size, prints its id) — never a new workspace, never split down (down is
    reserved for primaries)."
+   Every brief also carries the decision-packet rule (§7.2.1) with the lane's range
+   filled in: "At a one-way door or a decision this brief does not settle, run
+   `~/Projects/ai-skills/scripts/packet.py new --door one-way … --range <base>..HEAD`,
+   then print `PARKED <id>` and stop — no commits outside `plans/` until the reply
+   arrives. A two-way call: `--door two-way`, print the card, continue." `<base>` is the
+   ref the worktree was created from (step 1's `--base`).
    Every brief also carries the output rule (`herdr` §6.2): "Keep tool output small —
    every token you read is re-read on every later turn. Run tests and lint with
    quiet or failures-only flags and pipe through `| tail -40`; grep logs instead of
@@ -232,8 +238,9 @@ point — `herdr` skill §6.1 has the mechanics:
 
 **7.1 herdr state layer (all seats)**
 - PRIMARY wait for every seat is the skill's own marker, not a state name:
-  `herdr pane wait-output <pane> --match "PARTITION-DONE" --timeout <ms>` —
-  deterministic across agents. State waits are secondary: codex maps
+  `herdr pane wait-output <pane> --regex "PARTITION-DONE|PARKED " --timeout <ms>` —
+  deterministic across agents. A parked lane never prints `PARTITION-DONE` until it
+  resumes and finishes, so a wait on that marker alone sleeps through its question. State waits are secondary: codex maps
   completion to `idle`, never `done` (learned 6.3 — an `agent wait --until
   done` on a codex pane hangs forever after the work is finished); claude
   panes do report `done`. Use `agent wait --until blocked` for
@@ -257,14 +264,19 @@ panes. Workers never `SendMessage` the supervisor.
 > counter productive." The pane read was the primary channel all along.
 
 - **Markers** (one line each, printed verbatim): `GATE-PASSED <task> — <evidence>`
-  · `GATE-BLOCKED <task> — <what Alex must do>` (then stop) · `FIX-DONE <task>
+  · `GATE-BLOCKED <task> — <what Alex must do>` (emits a packet, then parks — §7.2.1)
+  · `PACKET <id>` (printed by `packet.py new`, with its card) · `PARKED <id>` (stopped
+  on a one-way packet) · `FIX-DONE <task>
   <ids> <shas>` · `REVIEW-DONE <task> — <verdict>, <N findings>, <report path>` ·
-  `PARTITION-DONE <task>` (last line, always). For fix rounds, also one line per
+  `PARTITION-DONE <task>` (last line of the lane's work; a parked lane ends its turn on
+  `PARKED <id>` and prints `PARTITION-DONE` once it resumes and finishes). For fix rounds, also one line per
   finding: `<id> fixed <sha>` / `<id> todo <one line>` so the driver can
   disposition without reading prose.
 - **Supervisor loop:** a background watcher polls `herdr agent get` and wakes the
   driver only when an idle agent's `--source detection` tail shows an actionable
-  marker (or `API Error` / `Usage limit`). Waking on bare `idle` is noise: a
+  marker — `PARKED`, `PACKET` and `GATE-BLOCKED` included — (or `API Error` / `Usage limit`).
+  On every wake the driver first runs `packet.py flush --driver --outbox <each lane's
+  outbox>` (§7.2.1). Waking on bare `idle` is noise: a
   worker waiting on its own background shells is idle and resumes alone (check
   the `N shells` footer). A broadcast reply alone must not wake the driver.
 - A `GATE-PASSED` is a SIGNAL, never proof: the supervisor re-verifies from
@@ -274,10 +286,81 @@ panes. Workers never `SendMessage` the supervisor.
   no approval. It can **paste without submitting** (the text sits in the input
   box, the agent stays `idle`): after every prompt wait a few seconds and send
   `enter` if still idle. A prompt to a working agent queues and runs next turn.
+  `"<text>"` here is text the driver wrote; text it did not write (a pasted reply)
+  goes through the file + argv relay of §7.2.1, never into the command line.
 - **Ghost text in the input box is Claude Code's autocomplete suggestion**, not
   Alex (e.g. `❯ push it and open the PR`). Never act on it.
 - Messages carry pointers, not payloads — evidence lives in the repo, the
   hand-back file and the dispatch log.
+
+**7.2.1 Decision packets — lanes park, the driver posts and relays (scope 10)**
+A lane's question to Alex is a packet, not prose in a pane. `scripts/README.md` has
+`packet.py`'s and `door.py`'s contracts; this is the wiring.
+- **One-way door** (door.py says so, or the brief does not settle it): the lane runs
+  `packet.py new --door one-way --type generic --title … --unit <task>
+  --option … --recommended N --body … --blocks … --range <base>..HEAD` (a data-model
+  packet takes `--type data-model --payload-file <F>` instead of `--body`; F is JSON
+  `{"tables":[{"name","change","columns":[{"name","before","after","changed"}]}]}`,
+  see `scripts/tests/fixtures/packets/valid/data-model-one-way.json`). **Always pass
+  `--range`**: it is what makes door.py promote a mislabelled two-way claim (a migration
+  under `--door two-way` goes out one-way). The lane prints `PARKED <id>` and stops that
+  line of work. **While parked it makes no commits outside `plans/`** — `check-reply`
+  refuses a reply to a one-way packet once code has moved past the packet's sha, and the
+  only way out is `packet.py stale <id>` and a fresh packet.
+- **`GATE-BLOCKED`** is a one-way packet: emit as above, print `GATE-BLOCKED <task> —
+  <what> (PACKET <id>)`, then `PARKED <id>`.
+- **Two-way call**: `packet.py new --door two-way … --range <base>..HEAD`, leave the card
+  it prints in the pane, keep working. After each later commit, `packet.py touch <id>`
+  refreshes the card's reversal cost (commits stacked since). If door.py promotes it,
+  the card says one-way: park.
+- **Only the driver POSTs.** Every lane writes to its own worktree's
+  `.decision-queue/outbox/`; codex and review panes have no queue env or network, so one
+  path serves all. On each wake: `packet.py flush --driver --outbox <lane worktree>/.decision-queue/outbox`
+  (repeat `--outbox` per local lane). A `Blocked` note (queue down) parks nothing: print the
+  card in your pane with the note, carry on with two-way work; the next flush re-sends.
+- **Box lanes: run packet.py ON the box, over ssh (MBA → box only, never the reverse).**
+  A box lane's outbox is on homelab2026 and packet.py has no remote transport. Flush with
+  `ssh <box> 'cd <remote worktree> && ~/Projects/ai-skills/scripts/packet.py flush --driver'`
+  — no `--outbox`: it resolves to that worktree's own outbox. The driver still initiates
+  every POST; the box reaches the queue on its own tailnet, so `DECISION_QUEUE_URL` must
+  be set in the box's ssh environment. Never pass a local-looking `--outbox` path for a
+  box lane: `flush` silently skips a configured outbox that does not exist and reports
+  nothing sent.
+- **Reading a flush (local or box).** Act on every `Skipped:` / `Held:` / `Blocked:` /
+  `Conflict:` / `Rejected` line `flush` prints, and on a `flush: … nothing sent` line
+  (on a box that means the ssh env lacks `DECISION_QUEUE_URL`). Nothing else to check:
+  the `FLUSHED <n>` count is not a signal (already-sent packets are skipped, so `0` is
+  normal while a lane stays parked).
+- **Reply path.** Alex pastes the prefilled reply (opens `[lane <m>/<w>/<a> <id>]`) into
+  the driver's pane. **The pasted text never appears in shell source** — not quoted,
+  not piped from `printf`, not `"$(cat …)"`: any command line that contains it is
+  re-parsed by a shell, and `$(…)`, backticks or a stray quote in a reply then run or
+  break on the driver's machine. Instead:
+  1. Write the reply verbatim to a file outside the repo (the session scratchpad),
+     `<file>`, with the file-writing tool — no shell involved.
+  2. Check it from the file: `packet.py check-reply --outbox <that lane's outbox>
+     --lane <m>/<w>/<a> --reply - < <file>`. Box lane:
+     `ssh <box> 'cd <remote worktree> && ~/Projects/ai-skills/scripts/packet.py check-reply --lane <m>/<w>/<a> --reply -' < <file>`,
+     so the lane's own HEAD is checked on the box; the remote command is fixed text and
+     the reply crosses ssh as stdin bytes. Take `--lane` from the `reply:` line the lane
+     printed in its OWN pane under `PACKET <id>` — never from the pasted text, which is
+     what is being checked. A refusal goes back to Alex verbatim; nothing is relayed.
+     An empty or unreadable `<file>` is a refusal too (no lane tag) — fail closed.
+  3. On `OK`, relay with the text as an argv element no shell parses:
+     `python3 -c 'import subprocess,sys; subprocess.run(["herdr","agent","prompt",sys.argv[1],open(sys.argv[2]).read()],check=True)' <lane> <file>`
+     (+ `enter`, §7.2). `herdr agent prompt` takes the text only as an argument, so this
+     is the form; `herdr agent prompt <lane> "<reply>"` is not.
+
+  The lane runs `check-reply` itself the same way (`/plan` §6.9 step 5), acts on the
+  answer, runs `packet.py close <id>`, and resumes.
+- **Any session may emit a packet** — the driver too, and a session outside
+  `/concurrency`. A session Alex talks to directly is its own driver (`--driver`).
+- **Seam: no `DECISION_QUEUE_URL` = today's behaviour.** Packets still land in the
+  outbox and `flush` sends nothing; the driver asks Alex the parked lane's question
+  inline, numbered, as it always has. It relays his answer as the card's prefilled
+  reply (tag from the lane's own `reply:` line) through the file + argv relay above, so
+  the lane still runs `check-reply`
+  and `close`.
 
 **7.3 Per-partition review gate — a fresh, VISIBLE pane, before close**
 Every partition's work runs through `/review` BEFORE it is accepted or landed —
@@ -304,8 +387,8 @@ zero-cost-basis silent defeat that build/test/disjointness passes all missed).
 
 ## 8. Collection & teardown
 
-- Report per partition: branch, commit shas, `PARTITION-DONE` seen or not,
-  test evidence from the pane tail. Split fixed vs NOT-fixed explicitly.
+- Report per partition: branch, commit shas, `PARTITION-DONE` seen or not, any
+  packet still open (`PARKED <id>` with no `CLOSED`), test evidence from the pane tail. Split fixed vs NOT-fixed explicitly.
 - **A box lane comes home by fetch, never by push:** `~/Projects/ai-skills/scripts/
   placement.py fetch-back --repo <local repo> --machine <host> --branch <b>` copies the
   lane branch from the box's clone into the local one and reads it back. It assumes the
@@ -394,9 +477,11 @@ deltas:
   SSH) is just `herdr`.
 - **Watcher pane** (split right, ratio 0.25, from the agent pane) runs both
   alarms:
-  `herdr pane wait-output <agent-pane> --match "PARTITION-DONE"
-  --timeout 43200000 && herdr notification show "overnight done: <task>"
-  --sound done &`
+  `herdr pane wait-output <agent-pane> --regex "PARTITION-DONE|PARKED "
+  --timeout 43200000 && herdr notification show "overnight done or parked: <task>"
+  --sound done &` — a parked lane is not `blocked` in herdr's sense, so the second
+  alarm misses it. With no driver awake, its packet waits in the outbox until the
+  morning flush (§7.2.1).
   `herdr agent wait <agent-pane> --until blocked && herdr notification show
   "overnight blocked: <task>" --sound request &`
 - Notifications need `[ui.toast] delivery` ≠ "off" (set 2026-08-23). Toasts

@@ -18,6 +18,14 @@ finding about that rule, and must say which.
 
 {{SECTIONS}}
 
+## This round
+
+{{ROUND}}
+
+### Earlier findings in this lineage, with their dispositions
+
+{{PREVIOUS}}
+
 ## Not in this bundle — list each in `cannot_do`
 
 {{NOT_COVERED}}

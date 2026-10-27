@@ -1,6 +1,6 @@
 ---
 name: plan
-version: 3.14.0
+version: 3.15.0
 description: |
   Execute tasks from a structured plan document step by step, logging progress and
   stopping at human checkpoints. Plan files follow the naming convention *-PLAN.md
@@ -494,6 +494,55 @@ on a direct-to-main repo a branch diff is empty by construction.
      index row. A skip without a reason is refused.
    Exit 3 means the gate could not evaluate. That is ❌ FAILED, never Done.
 
+**Rules version.** Every review record stamps `rules_version`. A lineage started before
+the scope-10 cutover finishes under the rules it started with (`/review`'s lineage note,
+`verify-contracts.md` §6.0); don't re-run an old lineage to pick up the new ones.
+
+6.9 **Decisions go out as packets.** Whenever this run would stop to ask — a one-way
+door, a decision the plan does not settle, a `GATE-BLOCKED`, any §6.8/§7.5 stop — it
+also emits a packet. `scripts/README.md` has `packet.py`'s and `door.py`'s contracts.
+The unit range is §6.8's `<base>..HEAD`.
+1. **One-way** (door.py classifies the range one-way, or the plan does not settle the
+   call): `~/Projects/ai-skills/scripts/packet.py new --door one-way --type
+   generic --title … --unit {N}.{P} --option … --recommended N --body …
+   --blocks "Task X.Y" --range <base>..HEAD` (a data-model packet takes `--type
+   data-model --payload-file <F>` instead of `--body`; F is JSON `{"tables":[{"name",
+   "change","columns":[{"name","before","after","changed"}]}]}`, see
+   `scripts/tests/fixtures/packets/valid/data-model-one-way.json`). **Always pass `--range`**: door.py then
+   promotes a mislabelled claim, and without it nothing checks the door. Print
+   `PACKET <id>` (the script does) and `PARKED <id>`, then stop that line of work.
+   **While parked, commit nothing outside `plans/` in that repo** — progress and ledger
+   writes are fine; a code commit makes `check-reply` refuse the answer, and the only
+   way out is `packet.py stale <id>` and a new packet.
+2. **`GATE-BLOCKED`** is a one-way packet: emit it as above, print `GATE-BLOCKED <task> —
+   <what> (PACKET <id>)`, then `PARKED <id>`.
+3. **Two-way**: `packet.py new --door two-way … --range <base>..HEAD`, leave the card
+   in the pane, continue. After each later commit, `packet.py touch <id>` refreshes its
+   reversal cost. If door.py promoted it, the card says one-way: park.
+4. **Who posts.** A `/plan` session Alex drives directly is its own driver: add
+   `--driver`, and run `packet.py flush --driver` when you next stop, acting on every
+   `Skipped:` / `Held:` / `Blocked:` / `Conflict:` / `Rejected` line it prints (the
+   count is not a signal). A `/plan` run
+   dispatched as a `/concurrency` lane never passes `--driver`; its driver flushes and
+   relays (`/concurrency` §7.2.1). A failed POST parks nothing — the card prints with a
+   `Blocked` note and two-way work carries on.
+5. **On the reply** (Alex pastes the `[lane <m>/<w>/<a> <id>] …` line, or a driver
+   relays it): write the text verbatim to a file outside the repo (the session
+   scratchpad) with the file-writing tool, then `packet.py check-reply --reply - <
+   <file>`. The reply never appears in shell source — not quoted, not piped from
+   `printf`, not `"$(cat …)"`: a shell re-parses it, and `$(…)`, backticks or a stray
+   quote in pasted text run or break here. A refusal is shown to Alex
+   verbatim and nothing is acted on. A session with no exported session id emitted a
+   `session-none` packet, and `check-reply` refuses it without `--lane <m>/<w>/<a>`:
+   copy that value from the `reply:` line this session printed under `PACKET <id>`
+   when it emitted the packet, never from the incoming reply (that is what is being
+   checked). On `OK`, act on the answer, then
+   `packet.py close <id>`, and resume.
+6. **Seam: no `DECISION_QUEUE_URL` = today's behaviour.** The packet still lands in
+   `.decision-queue/outbox/`, and the run asks the same question inline, numbered, as it
+   always has. Alex may answer by number; record it through step 5 using the card's
+   prefilled reply for that option.
+
 ## 7. Pattern-First Rule
 
 Before writing any new method in a known-extensible area, /plan must search for an existing pattern first. This rule is the single highest-leverage moment in the closeout-skills framework — it prevents Claude from reinventing patterns that already exist in shared infrastructure (e.g., wellmed-infrastructure adapters) and from creating parallel implementations that drift from the source of truth.
@@ -557,7 +606,8 @@ Options:
 Answer by number.
 ```
 
-User answers by number. Loop until decision is final.
+User answers by number. Loop until decision is final. This halt is a decision the plan
+does not settle: emit it as a packet too (§6.9), the four options as `--option`s.
 
 ### 7.6 Don't re-ask the same question
 

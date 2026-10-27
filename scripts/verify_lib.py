@@ -167,15 +167,27 @@ class ContractError(Exception):
 
 # ---------- answer schemas -----------------------------------------------------------
 
-_TYPES = {"object": dict, "array": list, "string": str}
+_TYPES = {"object": dict, "array": list, "string": str, "boolean": bool}
 
 
 def schema_problems(doc, schema, path="answer"):
-    """Problems with `doc` against the JSON Schema subset our answer schemas use — type,
-    required, additionalProperties: false, enum, items. Both answer writers (review.py,
+    """Problems with `doc` against the JSON Schema subset our answer schemas use — type (one, or
+    one plus "null"), required, additionalProperties: false, enum, items. A type outside the
+    subset is a problem, never a pass: an unchecked field would be fail-open. Both answer writers (review.py,
     judge.py) run this before any semantic check, so a wrong container or a missing field
     is exit 3 and never a crash or a partial write (review 5.2-r1-06)."""
     t = schema.get("type")
+    if isinstance(t, list):
+        # a nullable field (`["string", "null"]`): codex's strict output schemas require every
+        # property, so an optional one is written as required-or-null (review-output `reopens`)
+        if doc is None and "null" in t:
+            return []
+        rest = [x for x in t if x != "null"]
+        if len(rest) != 1:
+            return [f"{path}: schema type {t!r} is not supported"]  # fail closed on a schema we can't read
+        return schema_problems(doc, dict(schema, type=rest[0]), path)
+    if t is not None and t != "integer" and t not in _TYPES:
+        return [f"{path}: schema type {t!r} is not supported"]
     if t == "integer":
         if not isinstance(doc, int) or isinstance(doc, bool):
             return [f"{path} is not an integer"]
@@ -427,23 +439,81 @@ def _ranges_share(path, a, b):
     return int(out[0]) > 0 if out and out[0].isdigit() else None
 
 
-def review_lineage(reviews, path_of):
+def _range_holds(path, base, head, shas, cache):
+    """Does base..head contain one of `shas` (full or abbreviated)? None when git cannot tell."""
+    import subprocess
+    if (path, base, head) not in cache:
+        out = subprocess.run(["git", "-C", path, "rev-list", f"{base}..{head}"], capture_output=True, text=True)
+        cache[(path, base, head)] = out.stdout.split() if out.returncode == 0 else None
+    commits = cache[(path, base, head)]
+    if commits is None:
+        return None
+    return any(c.startswith(s) for c in commits for s in shas if s)
+
+
+def lineage_links(recs):
+    """({review_id: {fix shas}}, {review_id: continued review_id}, {stamped review_id}) from
+    review-log records: the commits named by a `fixed` disposition of each review's findings,
+    each review record's explicit `continues` (review.py --continues), and the reviews recorded
+    under rules 2+ (an int `rules_version` >= 2). review_lineage's inputs."""
+    of = {r.get("finding_id"): r.get("review_id") for r in recs if r.get("record") == "finding"}
+    fixes, continues = {}, {}
+    stamped = {r.get("review_id") for r in recs if r.get("record") == "review"
+               and isinstance(r.get("rules_version"), int) and r["rules_version"] >= 2}
+    for r in recs:
+        if r.get("record") == "disposition" and r.get("disposition") == "fixed" and r.get("sha") \
+                and of.get(r.get("finding_id")):
+            fixes.setdefault(of[r["finding_id"]], set()).add(r["sha"])
+        elif r.get("record") == "review" and r.get("continues"):
+            continues[r.get("review_id")] = r["continues"]
+    return fixes, continues, stamped
+
+
+def review_lineage(reviews, path_of, fixes=None, continues=None, stamped=None):
     """{review_id: (root review_id, round)} for `reviews`, [(review_id, repo, base, head)] in
     review order (repo a canonical key; `path_of(repo)` is where git reads it). Rounds follow
     the code, not the repo (WellMed 171.2: two lanes in one repo hit the round cap on a first
-    review of new code). A review continues an earlier review of the same repo whose head is
-    its base (a fix re-review) or whose range shares a commit with its own — the highest-round
-    one when several do; anything else starts a lineage at round 1. When git cannot tell, it
-    fails closed: the review continues the repo's highest round in the unit, with a warning on
-    stderr — a silent round 1 would disable the round-3 STOP."""
-    out, seen = {}, []
+    review of new code). A review continues an earlier review of the same repo when its range
+    shares a commit with it (the same code, read again), or when it starts at that review's head
+    AND contains a commit a `fixed` disposition named for a finding of that review's lineage
+    (`fixes`, {review_id: {sha}} — a fix re-review) — the highest-round one when several do.
+    Starting at a head alone is not enough: a lane's next unit starts there too, and was counted
+    round 4–5 (WellMed 171.2-r15, 171.3-r5). `continues` ({review_id: earlier review_id}, from
+    `--continues`) names the parent outright. Anything else starts a lineage at round 1. When git
+    cannot tell, it fails closed: the review continues the repo's highest round in the unit,
+    with a warning on stderr — a silent round 1 would disable the round-3 STOP.
+    The fix-commit test is versioned like the loop rules (decision 65, review 10.2-r1-02): only a
+    lineage whose ROOT is in `stamped` (recorded under rules 2+) needs it, root-scoped like
+    lineage_rules. A lineage rooted unstamped keeps the rule it was recorded under — starting at a head continues, decided without git — so a closed unit's
+    round-cap stop stands (kalpa-docs 194.1: r6 continued r5, r7 was round 3 and its `accept`
+    stood in for the re-review; under the new rule r7 was round 2 and the gate blocked)."""
+    fixes, continues, stamped = fixes or {}, continues or {}, stamped or set()
+    out, seen, cache = {}, [], {}
     for rid, repo, base, head in reviews:
         parent, unsure = None, False
-        for prid, prepo, pbase, phead in reversed(seen):
+        if continues.get(rid) in out:
+            parent = continues[rid]
+        for prid, prepo, pbase, phead in reversed(seen if parent is None else []):
             if prepo != repo or not (base and head and pbase and phead):
                 continue
-            share = base == phead or (base, head) == (pbase, phead) or \
-                _ranges_share(path_of(repo), (base, head), (pbase, phead))
+            if base == phead and out[prid][0] not in stamped:
+                share = True   # rules 1 (the parent lineage's root predates the stamp): old continuation, never re-decided by git
+            elif base == phead:
+                shas = set().union(*(fixes.get(x, ()) for x, (rt, _) in out.items() if rt == out[prid][0]))
+                held = _range_holds(path_of(repo), base, head, shas, cache) if shas else False
+                # git cannot tell (pruned history, a gone checkout): continue prid, the old rule's
+                # answer. `base == phead` is read without git, so prid is the one review this can
+                # continue, at its round + 1. A restart at round 1 could disable the round-3 STOP;
+                # the `unsure` fallback below (the repo's highest round) could merge an unrelated
+                # lineage into this one and inflate the round (149.2-r36 went 2 -> 8).
+                if held is None:
+                    print(f"[WARN] lineage of {rid}: git cannot tell whether it holds a fix of {prid}'s lineage; "
+                          f"continuing {prid} (round {out[prid][1] + 1}) rather than restarting at round 1",
+                          file=sys.stderr)
+                share = True if held is None else held
+            else:
+                share = (base, head) == (pbase, phead) or \
+                    _ranges_share(path_of(repo), (base, head), (pbase, phead))
             unsure = unsure or share is None
             if share:
                 parent = prid if parent is None or out[prid][1] > out[parent][1] else parent
@@ -455,6 +525,23 @@ def review_lineage(reviews, path_of):
         out[rid] = (out[parent][0], out[parent][1] + 1) if parent else (rid, 1)
         seen.append((rid, repo, base, head))
     return out
+
+
+# review/SKILL.md §5.1 rules a review lineage runs under, stamped on every `review` record (scope 10,
+# decision 65). Skills symlink into the live checkout, so sessions mid-review see new scripts at
+# cutover: a lineage finishes under the version its root was recorded with. 1 = before scope 10
+# (no stamp); 2 = scope 10's findings budget (notes from round 2 log, at most one batch fix, never
+# re-reviewed), `reopens` chain stop, and effort trial.
+RULES_VERSION = 2
+
+
+def lineage_rules(recs, lineage):
+    """{review_id: rules version of its lineage's root} — `lineage` from review_lineage, `recs`
+    the review log. A root without a stamp is version 1; a stamp that is not an int is version
+    1 too (the older, stricter rules), never the newer ones by default."""
+    stamp = {r.get("review_id"): r.get("rules_version") for r in recs if r.get("record") == "review"}
+    v = lambda rid: stamp.get(rid) if isinstance(stamp.get(rid), int) else 1
+    return {rid: v(root) for rid, (root, _) in lineage.items()}
 
 
 def accepted_nits(recs):
@@ -469,6 +556,199 @@ def accepted_nits(recs):
             found[r.get("finding_id")] = r
     return [(found.get(fid, {"finding_id": fid}), d) for fid, d in sorted(latest.items())
             if d.get("disposition") == "accepted"]
+
+
+# who took a reframe (review/SKILL.md §5.1): `judge` (the fresh judge's accepted verdict, §5.2)
+# or `user` (the user's call at a stop) — the first word of a `reframed` disposition's `by`
+REFRAMED_BY = re.compile(r"^(judge|user)\b")
+
+
+# ---------- is this reframe the user's call? (review/SKILL.md §5.2, scope 10 §4.2) ----------
+# ONE owner (review 10.2-r4: rounds 3 and 4 each found a consumer deciding it on its own and
+# disagreeing — the [REFRAME] line, reframe-prepare, `dispose --by judge`, the gate, case 2).
+# Every consumer asks reframe_call and keeps no logic of its own. The decision reads the log:
+#   - the latest `reframe` and the latest `reframe-verdict` per review — an older verdict is
+#     superseded, never consulted (10.2-r4-03);
+#   - a reframe repeating one this lineage's judge rejected is the user's, whatever any later
+#     verdict says (10.2-r4-01) — recomputed from the log on every call;
+#   - an accept that overturns a recorded decision is the user's;
+#   - an accept touching a one-way door is the user's. The door needs the reviewed checkout, so
+#     it is classified once, by reframe-record (`classify_at`), with the finding anchors made
+#     relative to that checkout first (10.2-r4-02), and stamped on the verdict as `user_call`;
+#     every later call reads the stamp. A verdict with no stamp was never classified: the user's.
+# Fails closed: any exception, unknown verdict value, unresolvable anchor or missing checkout is
+# "user" — a wrong hold costs the user one glance; a wrong "judge" builds through a door, or
+# against an answer, nobody looked at.
+REFRAME_CALLS = ("user", "judge", "rejected", "unjudged")
+REPEAT_SIMILARITY = 0.85
+
+
+def _latest(recs, kind):
+    out = {}
+    for r in recs:
+        if r.get("record") == kind:
+            out[r.get("review_id")] = r
+    return out
+
+
+def _root(lineage, rid):
+    return (lineage.get(rid) or (rid,))[0]
+
+
+def norm_text(t):
+    return " ".join(re.sub(r"[^a-z0-9 ]", " ", str(t).lower()).split())
+
+
+def _precedes(recs, lineage, rid, review_id):
+    """Did `rid`'s reframe come before `review_id`'s in one lineage: a lower round, or on a tie the
+    earlier reframe record in the log. Review 10.2-r5-01: "earlier" must look only backwards, or a
+    LATER rejection flips an already-built accept to a repeat. Fails closed: when the order cannot
+    be told (no round, no reframe record) it counts as earlier, so it can only hold, never free."""
+    rounds = [(lineage.get(x) or (None, None))[1] for x in (rid, review_id)]
+    if None not in rounds and rounds[0] != rounds[1]:
+        return rounds[0] < rounds[1]
+    at = {}
+    for i, r in enumerate(recs):
+        if r.get("record") == "reframe":
+            at[r.get("review_id")] = i
+    return at.get(rid, -1) < at.get(review_id, len(recs))
+
+
+def judged_reframes(recs, review_id, lineage, verdict):
+    """[(review_id, proposal, reason)] of the reframes in `review_id`'s lineage that came BEFORE its
+    own (never a later one, never itself) whose LATEST judge verdict is `verdict`."""
+    reframes, root = _latest(recs, "reframe"), _root(lineage, review_id)
+    return [(rid, (reframes.get(rid) or {}).get("proposal", "?"), v.get("reason", ""))
+            for rid, v in _latest(recs, "reframe-verdict").items()
+            if rid != review_id and v.get("verdict") == verdict and _root(lineage, rid) == root
+            and _precedes(recs, lineage, rid, review_id)]
+
+
+def repeated_reframe(recs, review_id, lineage):
+    """[(review_id, proposal, reason)] earlier rejected reframes of this lineage that `review_id`'s
+    reframe proposes again: the same proposal after normalizing case/punctuation, or one that
+    differs only slightly. Not a repeat (no hold) when the proposal has no text — empty text would
+    match every other empty proposal, and `record` refuses an empty one as malformed — or when
+    nothing was rejected, because then there is no answer being repeated."""
+    import difflib
+    me = norm_text((_latest(recs, "reframe").get(review_id) or {}).get("proposal", ""))
+    return [x for x in judged_reframes(recs, review_id, lineage, "rejected")
+            if me and difflib.SequenceMatcher(None, me, norm_text(x[1])).ratio() >= REPEAT_SIMILARITY]
+
+
+def door_classify(path, rng):
+    """scripts/door.py's classify, loaded by path (a module beside this one)."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("door", os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                                                       "door.py"))
+    door = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(door)
+    return door.classify(path, rng)
+
+
+def repo_relative(file, checkout):
+    """A finding's `file` as a path relative to the reviewed `checkout` — door.py's form — or None
+    when it cannot be placed there: empty, leading out of the repo, or absolute outside both the
+    checkout and its primary checkout (the same repo, so the same relative path)."""
+    if not file or not str(file).strip():
+        return None
+    file = str(file).strip()
+    if os.path.isabs(file):
+        roots = [os.path.realpath(checkout)]
+        common = _git_lines(checkout, "rev-parse", "--path-format=absolute", "--git-common-dir")
+        if common:
+            roots.append(os.path.realpath(os.path.dirname(common[0])))
+        rels = [os.path.relpath(os.path.realpath(file), root) for root in roots]
+        file = next((r for r in rels if r != "." and not r.startswith("..")), None)
+        if file is None:
+            return None
+    rel = os.path.normpath(file)
+    return None if rel in (".", "") or rel.startswith("..") else rel.replace(os.sep, "/")
+
+
+def door_hold(recs, review_id, checkout, rng):
+    """None when `review_id`'s reframe touches no one-way door in `checkout` over `rng`, else why
+    it does (or why that cannot be told). The paths are the files of the findings the reframe
+    removes (the code it replaces); a door.py hit on one of them counts, and so does door.py
+    failing closed (one-way with no paths)."""
+    if not checkout or not rng:
+        return "door unknown (no repo or range to classify): treated as one-way"
+    removes = (_latest(recs, "reframe").get(review_id) or {}).get("removes") or []
+    found = {r.get("finding_id"): r for r in recs if r.get("record") == "finding"}
+    files, lost = set(), []
+    for fid in removes:
+        rel = repo_relative((found.get(fid) or {}).get("file"), checkout)
+        (files.add(rel) if rel else lost.append(f"{fid} ({(found.get(fid) or {}).get('file') or 'no file'})"))
+    if lost:
+        return (f"door unknown (finding anchor not in the reviewed checkout: {', '.join(lost)}): "
+                "treated as one-way")
+    res = door_classify(checkout, rng)
+    if res["door"] == "one-way" and not res["paths"]:
+        return res["reason"]
+    hit = sorted(h["path"] for h in res["paths"] if h["path"] in files)
+    return "touches " + ", ".join(hit) if hit else None
+
+
+def reframe_call(recs, review_id, lineage, classify_at=None):
+    """(call, kind, why) for `review_id`'s reframe. call is one of REFRAME_CALLS:
+    `user` (the user's call — hold: do not build, do not re-judge), `judge` (accepted and the
+    judge's to take — build it, `dispose --by judge`), `rejected` (not taken: the judge rejected
+    it, or no judge ran), `unjudged` (no verdict yet: send it to the fresh judge). kind says why
+    in one word (repeat, overturn, door, unknown, rejected, not-judged, unjudged, accepted) and
+    why in a line. `lineage` is {review_id: (root, round)}. `classify_at` = (checkout, range)
+    classifies the door now (reframe-record only); without it the verdict's stamp is read."""
+    try:
+        return _reframe_call(recs, review_id, lineage, classify_at)
+    except Exception as exc:  # noqa: BLE001 — any failure is "cannot tell", held for the user
+        return "user", "unknown", (f"could not decide ({' '.join(str(exc).split())[:160]}): "
+                                   "treated as the user's call")
+
+
+def _reframe_call(recs, review_id, lineage, classify_at):
+    if review_id not in _latest(recs, "reframe"):
+        return "user", "unknown", f"{review_id} has no reframe record: treated as the user's call"
+    again = repeated_reframe(recs, review_id, lineage)
+    if again:
+        return "user", "repeat", ("repeats one this lineage rejected — "
+                                  + "; ".join(f"{rid}: {why}" for rid, _, why in again))
+    v = _latest(recs, "reframe-verdict").get(review_id)
+    if v is None:
+        return "unjudged", "unjudged", "no judge verdict yet"
+    verdict = v.get("verdict")
+    if verdict in ("rejected", "not-judged"):
+        return "rejected", verdict, v.get("reason") or verdict
+    if verdict != "accepted":
+        return "user", "unknown", f"unknown verdict {verdict!r}: treated as the user's call"
+    if v.get("overturns"):
+        return "user", "overturn", f"overturns a recorded decision: {v['overturns']}"
+    if classify_at is not None:
+        why = door_hold(recs, review_id, *classify_at)
+    elif "user_call" not in v:
+        why = "no door classification on the verdict: treated as the user's call"
+    else:
+        why = v["user_call"]
+    return ("user", "door", why) if why else ("judge", "accepted", v.get("reason", ""))
+
+
+def judge_took(recs, finding_id, lineage):
+    """None when a `reframed --by judge` of `finding_id` is backed by the log, else why not.
+    Backed = a review in the finding's lineage (`lineage` from review_lineage) proposed a reframe
+    whose `removes` names the finding, and reframe_call says that reframe is the judge's to take.
+    Review 10.2-r1-01: `--by judge` was the driver's word, so a driver could clear any finding,
+    blocking included, without a judge ever running. Fails closed: a finding whose review has no
+    lineage (unknown, or a log without review records) has nothing to back it."""
+    f = next((r for r in recs if r.get("record") == "finding" and r.get("finding_id") == finding_id), None)
+    froot = (lineage.get((f or {}).get("review_id")) or (None,))[0]
+    if froot is None:
+        return f"{finding_id}'s review has no lineage to find the judge's verdict in"
+    mine = [rid for rid, r in _latest(recs, "reframe").items() if finding_id in (r.get("removes") or [])
+            and (lineage.get(rid) or (None,))[0] == froot]
+    if not mine:
+        return f"no reframe in {finding_id}'s review lineage removes it"
+    calls = {rid: reframe_call(recs, rid, lineage) for rid in mine}
+    if any(c[0] == "judge" for c in calls.values()):
+        return None
+    return "not the judge's to take — " + "; ".join(f"{rid}: {c[0]} ({c[2]})" for rid, c in calls.items())
 
 
 # a judge row the runner decided itself (verify-run.py: zero rejections to audit); the judge never sees it
@@ -492,6 +772,24 @@ def effort_for(stats):
         if lines <= max_lines and files <= max_files:
             return level, why
     return "high", why
+
+
+EFFORT_LEVELS = ("low", "medium", "high", "xhigh")   # codex-exec.py's --effort choices, lowest first
+# The review effort trial (scope 10 §4.2, eng review 2026-10-26): every round of a lineage rooted
+# under rules 2+ runs one tier above effort_for, and the review record keeps tier + round so the
+# scorecard can compare round 1 with fix rounds. False ends the trial; nothing else changes.
+EFFORT_TRIAL = True
+
+
+def review_effort(stats, rules):
+    """(effort, base, why) for a codex review: `base` is effort_for's tier, `effort` the one to
+    run — a tier higher under the trial when the lineage's rules (`rules`, from lineage_rules)
+    are 2+, capped at the top tier. An older lineage keeps its own effort (decision 65)."""
+    base, why = effort_for(stats)
+    if not (EFFORT_TRIAL and rules >= 2):
+        return base, base, why
+    up = EFFORT_LEVELS[min(EFFORT_LEVELS.index(base) + 1, len(EFFORT_LEVELS) - 1)]
+    return up, base, f"{why}; effort trial: {base} → {up}"
 
 
 LEAN_CAP = 1500  # changed lines a lean bundle inlines, across every repo (plan 7, Alex 2026-10-02)

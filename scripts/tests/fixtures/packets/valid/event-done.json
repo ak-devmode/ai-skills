@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "id": "evt0done0001",
+  "kind": "done",
+  "created_at": "2026-10-26T09:10:00Z",
+  "machine": "mba",
+  "workspace": "ai-skills-10",
+  "agent": "packet",
+  "body": "Task 1.1 committed"
+}

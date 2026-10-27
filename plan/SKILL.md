@@ -1,6 +1,6 @@
 ---
 name: plan
-version: 3.15.0
+version: 3.16.0
 description: |
   Execute tasks from a structured plan document step by step, logging progress and
   stopping at human checkpoints. Plan files follow the naming convention *-PLAN.md
@@ -493,6 +493,23 @@ on a direct-to-main repo a branch diff is empty by construction.
      pass it through as `--skip-verify`. The reason goes into the §6.7 header and the
      index row. A skip without a reason is refused.
    Exit 3 means the gate could not evaluate. That is ❌ FAILED, never Done.
+4. **Merge your own PR — drivers only.** Once the unit is Done, a driver (a session Alex
+   drives directly, or a `/concurrency` driver) merges each repo's PR for it without asking:
+   `~/Projects/ai-skills/scripts/driver-merge.py merge --repo <repo> --pr <n> --scope <scope
+   folder> --unit {N}.{P} --driver`. Run `check` first if you want the conditions without
+   acting. The script decides, not you: it merges only when CI is green with real runs (no
+   checks, or skipped-only, is not green), the review is SHIP or accepted and saw the PR's
+   head, the gate passes, `door.py` finds no floor path, and the base is `develop` (code
+   repos) or `main` (kalpa-docs, pmg-docs, ai-skills). A code repo's `main` is prod: it is
+   refused and stays behind `prod-merge-gate.py`. A degraded review (fallback or lean)
+   still merges, flagged on the ticker; `--admin` is used only when branch protection is
+   all that blocks. Each merge posts a `merged` event (repo, PR, sha).
+   - **`NOT MERGED`** prints why and writes a packet: one-way with the floor paths for a
+     floor hit — park on it per §6.9 — two-way otherwise; fix the condition and re-run.
+   - **Exit 4** means the merge landed but the ticker event did not: run `packet.py
+     flush --driver`, and tell Alex if it still fails.
+   - A `/concurrency` lane never merges — the script refuses it — and nobody turns on
+     GitHub auto-merge.
 
 **Rules version.** Every review record stamps `rules_version`. A lineage started before
 the scope-10 cutover finishes under the rules it started with (`/review`'s lineage note,

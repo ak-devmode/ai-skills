@@ -81,6 +81,22 @@ by `test_entrypoint.py`'s compile check.
       closed: bad range, unresolved ref, git error, unreadable defaults/base file = one-way.
       Callers treat a non-zero exit as one-way.
 
+    driver-merge.py check|merge --repo PATH --pr N --scope DIR --unit N.P [--driver] [--method squash|merge|rebase]
+      stdout: one `[ok]`/`[FAIL]` line per condition, `verdict: ELIGIBLE|REFUSED …`; merge adds
+      `MERGED <owner/repo>#N <sha>` + `EVENT … merged`, or `PACKET <id>` + `NOT MERGED — <why>`
+      exit: 0 eligible / merged + event written · 1 refused / not merged · 2 usage · 4 merged, event not written
+      /plan §6.8 step 4 (scope 10 §4.3). Merges only when ALL hold: caller is a driver (packet.py's check;
+      `merge` refuses a lane before any gh call), PR open + not draft, base = `main` for kalpa-docs /
+      pmg-docs / ai-skills else `develop` (anything else — a code repo's prod `main` — is refused, never
+      touched), every check finished green or skipped/neutral with at least one real green run (an empty or
+      skipped-only list is vacuous, refused), the unit's latest review of the repo is SHIP or accepted and
+      saw the PR head (later commits plans/-only), verdict-gate.py exit 0, door.py finds no floor path on
+      merge-base..head, mergeStateStatus CLEAN/HAS_HOOKS (BLOCKED → `--admin`; anything else refused).
+      `gh pr merge --match-head-commit`, never `--auto`; the merge is read back as MERGED before the
+      `merged` event (repo, PR, base, sha; degraded review / admin / gate marker flagged). A failed
+      condition writes a packet instead: one-way with the matched paths for a floor hit, else two-way.
+      Fails closed on every gh/git error, unreadable verdict, or unknown check/merge state.
+
     plans-index.py validate <index>       exit: 0 conformant · 1 issues found
     plans-index.py next-number <index>    stdout: highest whole scope number + 1
     plans-index.py add  <index> --num --status --folder --desc [--creator] [--dry-run]

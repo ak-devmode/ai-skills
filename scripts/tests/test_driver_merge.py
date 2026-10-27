@@ -43,6 +43,17 @@ def commit(repo, path, text, msg):
 
 
 GREEN = [{"__typename": "CheckRun", "name": "ci", "status": "COMPLETED", "conclusion": "SUCCESS"}]
+APP = 15368
+
+
+def run(name, app, conclusion="success"):
+    return {"name": name, "status": "completed", "conclusion": conclusion, "app": {"id": app, "slug": "a"}}
+
+
+BOUND_CI = {"contexts": ["ci"], "checks": [{"context": "ci", "app_id": APP}]}
+BOUND_E2E = {"contexts": ["ci", "e2e"], "checks": [{"context": "ci", "app_id": None}, {"context": "e2e", "app_id": APP}]}
+RULE_CI_BOUND = {"type": "required_status_checks",
+                 "parameters": {"required_status_checks": [{"context": "ci", "integration_id": APP}]}}
 RULE_LINT = {"type": "required_status_checks", "parameters": {"required_status_checks": [{"context": "lint"}]}}
 SKIPPED = [{"__typename": "CheckRun", "name": "ci", "status": "COMPLETED", "conclusion": "SKIPPED"},
            {"__typename": "StatusContext", "context": "x", "state": "NEUTRAL"}]
@@ -112,6 +123,28 @@ CASES = [
     ("BLOCKED: required check skipped, admin", {"state": "BLOCKED", "protection": (0, {"contexts": ["ci", "e2e"]}),
                                                 "checks": GREEN + [{"__typename": "CheckRun", "name": "e2e",
                                                                     "status": "COMPLETED", "conclusion": "SKIPPED"}]},
+     0, {"merged": True, "admin": True}),
+    # a required check bound to an app (classic app_id, ruleset integration_id) is satisfied only by a
+    # check run from THAT app — a same-named commit status anyone can post is not it (10.3-r2-03)
+    ("BLOCKED: bound check from its app, admin", {"state": "BLOCKED", "protection": (0, BOUND_CI),
+                                                  "check_runs": (0, [run("ci", APP)])},
+     0, {"merged": True, "admin": True}),
+    ("BLOCKED: bound check posted as a status", {"state": "BLOCKED", "protection": (0, BOUND_E2E),
+                                                 "checks": GREEN + [{"__typename": "StatusContext", "context": "e2e",
+                                                                     "state": "SUCCESS"}],
+                                                 "check_runs": (0, [run("ci", APP)])},
+     1, {"merged": False, "says": f"e2e (app {APP})"}),
+    ("BLOCKED: bound check from another app", {"state": "BLOCKED", "protection": (0, BOUND_CI),
+                                               "check_runs": (0, [run("ci", 999)])},
+     1, {"merged": False, "says": f"ci (app {APP})"}),
+    ("BLOCKED: ruleset integration_id bound", {"state": "BLOCKED", "protection": (1, "Branch not protected (HTTP 404)"),
+                                               "rulesets": (0, [RULE_CI_BOUND]), "check_runs": (0, [run("ci", 999)])},
+     1, {"merged": False, "says": f"ci (app {APP})"}),
+    ("BLOCKED: check runs unreadable, bound", {"state": "BLOCKED", "protection": (0, BOUND_CI),
+                                               "check_runs": (1, "HTTP 502")},
+     1, {"merged": False, "says": "binding cannot be verified"}),
+    ("BLOCKED: app_id -1 is any source, admin", {"state": "BLOCKED",
+                                                 "protection": (0, {"checks": [{"context": "ci", "app_id": -1}]})},
      0, {"merged": True, "admin": True}),
     ("BLOCKED: nothing required, admin", {"state": "BLOCKED", "protection": (1, "Branch not protected (HTTP 404)")},
      0, {"merged": True, "admin": True}),
@@ -205,6 +238,11 @@ class DriverMergeTest(unittest.TestCase):
                 return 0, json.dumps(pr), ""
             if args[0] == "api":
                 path = args[-1]
+                if "/check-runs" in path:  # one page, as --paginate --slurp serves it
+                    crc, runs = o.get("check_runs", (0, []))
+                    if crc:
+                        return crc, "", runs
+                    return 0, json.dumps([{"total_count": len(runs), "check_runs": runs}]), ""
                 key = "protection" if "/protection/" in path else "rulesets"
                 arc, body = o.get(key, (0, {"contexts": ["ci"], "checks": [{"context": "ci"}]} if key == "protection" else []))
                 if arc:

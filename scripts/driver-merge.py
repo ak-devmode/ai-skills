@@ -30,7 +30,8 @@ eligible only when ALL hold:
                protection is what blocks once every condition above holds — what Alex does by
                hand) ONLY when every required check of the base branch (classic protection AND
                rulesets) is in the head's rollup as SUCCESS, or SKIPPED/NEUTRAL (GitHub's own
-               rule, 10.3-r2-05): the rollup lists only checks that ran, so
+               rule, 10.3-r2-05) — and a check bound to an app (classic app_id, ruleset
+               integration_id) only by a check run from that app (10.3-r2-03): the rollup lists only checks that ran, so
                a required check that never reported is invisible to `checks`, and --admin
                would merge past it (10.3-r1-03); anything else (DIRTY, BEHIND, UNSTABLE, DRAFT,
                UNKNOWN after retries) refuses
@@ -43,6 +44,8 @@ and prints why.
 Failure stances (fail closed: every one of these is "no merge" with the reason):
   * gh error, unparseable gh JSON, unknown check type/state, mergeStateStatus still UNKNOWN
   * BLOCKED and the base's protection or rulesets unreadable -> no --admin, no merge
+  * BLOCKED, a required check bound to an app, and the head's check runs unreadable -> the
+    binding cannot be verified -> no --admin, no merge
   * origin remote unreadable, git error, PR commits not fetchable (door.py then fails closed;
     the ci condition too)
   * a PR commit outside every review range of this repo in the unit, an unparseable or
@@ -262,20 +265,36 @@ def gh_pages(path, key=None):
     return items, ""
 
 
+def app_binding(v):
+    """A required check's app binding: None = any source (unset, null, or -1, GitHub's explicit
+    "any app"), an int = only that GitHub App's check run counts. Anything else is unreadable."""
+    if v is None or v == -1:
+        return None, True
+    return (v, True) if isinstance(v, int) and not isinstance(v, bool) and v > 0 else (None, False)
+
+
 def required_checks(slug, base):
-    """(set of required check names, '') or (None, why unreadable). Two sources, both read:
-    classic branch protection and repository rulesets. Classic protection answering "not
-    protected" / "not enabled" is a readable empty set; any other error is unreadable, and
-    unreadable is never read as "nothing required"."""
+    """({(context, app id or None)}, '') or (None, why unreadable). Two sources, both read:
+    classic branch protection (`checks[].app_id`; `contexts` is its unbound legacy mirror) and
+    repository rulesets (`integration_id`). The app is GitHub's binding of a required check to
+    who must report it, and --admin bypasses GitHub enforcing it, so it is carried (10.3-r2-03).
+    Classic protection answering "not protected" / "not enabled" is a readable empty set; any
+    other error is unreadable, and unreadable is never read as "nothing required"."""
     b = urllib.parse.quote(base, safe="")
-    names = set()
+    req = set()
     doc, why = gh_json(f"repos/{slug}/branches/{b}/protection/required_status_checks")
     if doc is None:
         if not re.search(r"Branch not protected|Required status checks not enabled", why):
             return None, f"branch protection unreadable ({why})"
     elif isinstance(doc, dict):
-        names |= {c for c in doc.get("contexts") or [] if isinstance(c, str)}
-        names |= {c.get("context") for c in doc.get("checks") or [] if isinstance(c, dict) and c.get("context")}
+        checked = set()
+        for c in doc.get("checks") or []:
+            app, ok = app_binding(c.get("app_id")) if isinstance(c, dict) else (None, False)
+            if not (ok and c.get("context")):
+                return None, "branch protection: required check unreadable"
+            req.add((c["context"], app))
+            checked.add(c["context"])
+        req |= {(c, None) for c in doc.get("contexts") or [] if isinstance(c, str) and c not in checked}
     else:
         return None, "branch protection: output is not an object"
     rules, why = gh_pages(f"repos/{slug}/rules/branches/{b}?per_page=100")
@@ -284,16 +303,25 @@ def required_checks(slug, base):
     for r in rules:
         if isinstance(r, dict) and r.get("type") == "required_status_checks":
             for c in (r.get("parameters") or {}).get("required_status_checks") or []:
-                if not (isinstance(c, dict) and c.get("context")):
+                app, ok = app_binding(c.get("integration_id")) if isinstance(c, dict) else (None, False)
+                if not (ok and c.get("context")):
                     return None, "ruleset required check unreadable"
-                names.add(c["context"])
-    return names, ""
+                req.add((c["context"], app))
+    return req, ""
 
 
-def cond_mergeable(state, slug=None, base=None, rollup=None):
+def satisfied(res):
+    return str(res or "").upper() in {"SUCCESS"} | INERT
+
+
+def cond_mergeable(state, slug=None, base=None, rollup=None, head=None):
     """(ok, detail, admin). BLOCKED earns --admin only when every required check is satisfied on
-    the head: present in the rollup as SUCCESS, or as SKIPPED/NEUTRAL — GitHub's own rule for a
-    required job skipped by `if:` (10.3-r2-05). Absent, pending or failed is not satisfied."""
+    the head: SUCCESS, or SKIPPED/NEUTRAL — GitHub's own rule for a required job skipped by `if:`
+    (10.3-r2-05). An unbound check is satisfied by the rollup entry of that name. A check bound
+    to an app is satisfied only by a completed check run of that name FROM that app, read from
+    the head's check-runs (the rollup carries no app): anyone with status-write access can post
+    a same-named commit status (10.3-r2-03). Check-runs unreadable -> the binding cannot be
+    verified -> no --admin. Absent, pending, failed or from another app is not satisfied."""
     if state in MERGE_OK:
         return True, state, False
     if state != "BLOCKED":
@@ -302,12 +330,21 @@ def cond_mergeable(state, slug=None, base=None, rollup=None):
     if req is None:
         return False, f"BLOCKED and {why} — no --admin without the required checks", False
     green = {c.get("name") or c.get("context") for c in rollup if isinstance(c, dict) and
-             str(c.get("conclusion") or c.get("state") or "").upper() in {"SUCCESS"} | INERT} \
-        if isinstance(rollup, list) else set()
-    missing = sorted(req - green)
+             satisfied(c.get("conclusion") or c.get("state"))} if isinstance(rollup, list) else set()
+    by_app = set()
+    if any(app for _, app in req):
+        runs, why = gh_pages(f"repos/{slug}/commits/{head}/check-runs?per_page=100", key="check_runs")
+        if runs is None:
+            return False, (f"BLOCKED and the head's check runs unreadable ({why}) — a required check's app "
+                           "binding cannot be verified; no --admin"), False
+        by_app = {(r.get("name"), (r.get("app") or {}).get("id")) for r in runs
+                  if isinstance(r, dict) and isinstance(r.get("app"), dict)
+                  and r.get("status") == "completed" and satisfied(r.get("conclusion"))}
+    missing = sorted(f"{ctx} (app {app})" if app else ctx for ctx, app in req
+                     if (ctx, app) not in by_app and (app or ctx not in green))
     if missing:
         return False, (f"BLOCKED and required check(s) not satisfied on the head: {', '.join(missing[:6])}"
-                       " — missing, pending or failed; no --admin"), False
+                       " — missing, pending, failed or not from the bound app; no --admin"), False
     return True, (f"BLOCKED by branch protection — {len(req)} required check(s) satisfied; "
                   "merges with --admin when every other condition holds"), True
 
@@ -550,7 +587,8 @@ def evaluate(a):
     fok, fdetail, hits, rng = cond_floor(a.repo, base_oid, head_oid)
     rows.append(("floor", fok, fdetail))
     rows.append(("ci",) + cond_ci(a.repo, rng))
-    mok, mdetail, admin = cond_mergeable(doc.get("mergeStateStatus"), slug, base, doc.get("statusCheckRollup"))
+    mok, mdetail, admin = cond_mergeable(doc.get("mergeStateStatus"), slug, base, doc.get("statusCheckRollup"),
+                                         head_oid)
     rows.append(("mergeable", mok, mdetail))
     facts = {"slug": slug, "label": f"{slug}#{a.pr}", "base": base, "head": head_oid, "admin": admin,
              "degraded": degraded, "marker": marker, "hits": hits, "range": rng}

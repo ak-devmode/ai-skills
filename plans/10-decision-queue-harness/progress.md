@@ -25,8 +25,8 @@ Script-owned (`plans-index.py`); PLANS-INDEX.md is rendered from it.
 
 ## Resume Context
 **Scope:** ~/Projects/ai-skills/plans/10-decision-queue-harness/scope.md
-**Last action:** every lane SHIP with all findings dispositioned; lane fixes merged on `feature/10-decision-queue` (5dd0853); queue service 45 passed against the cutover schema
-**Next action:** final full suite on the cutover branch → Alex lands: ai-skills `feature/10-decision-queue` → main, dev-workbench `concurrency/10-queue` → main, both pushed; homelab pulls → Task 1.6 deploy → /verify 10.1, 10.2
+**Last action:** cutover landed (ai-skills 421216f, dev-workbench c09d155, homelab pulled); queue deployed on homelab and live at https://homelab2026.taild4682e.ts.net (POST 201 from the MBA); DECISION_QUEUE_URL committed in dev-workbench ef9bae0 (local)
+**Next action:** Alex: push dev-workbench ef9bae0, homelab pulls, restart the contexts he picks; check the page (card renders, copy works); real packets from one MBA + one homelab session → /verify 10.1, 10.2
 **Open blockers:** none
 **Key files changed:** None yet
 
@@ -135,6 +135,12 @@ Script-owned (`plans-index.py`); PLANS-INDEX.md is rendered from it.
 - Lane A: 409 contract fix ef078ba → r7 (4xx classes, refused-packet events) fixed 47387a9 → r10 (marker reconcile) 82b5bdc → r12 (cleanup swallowed) 70eb05d, SHIP each round.
 - Wiring (D1): r6 3 findings fixed → r8 2 → r11 round-3 stop, reopen chain → REFRAME (Alex 80): replies via file only, count check dropped (c647fc8, a17353b) → r13 SHIP, its one finding already fixed by 47387a9.
 - Session note: 36 finished panes closed on Alex's ask (machine load); scope 197's lanes are the remaining load.
+
+#### Task 1.6 — 🔄 in review (2026-10-27)
+- Cutover via `~/cc/10-cutover.sh` (Alex): ai-skills main 421216f, dev-workbench main c09d155. Homelab dev-workbench pull hit codex trust-entry churn in `config/codex/config.toml`; pulled with autostash, conflict resolved as the union (TOML-validated), local churn kept uncommitted, stash dropped.
+- Homelab: role + DB `decision_queue` (owner decision_queue, password only in `~/.config/decision-queue/dsn`, 0600 alexk); `install.sh` linked the user unit + `~/.local/share/decision-queue`, enabled active; migrations 001–003 applied; `tailscale serve --bg 8787` → https://homelab2026.taild4682e.ts.net (tailnet only). Backup: `homelab-db-backup` runs `pg_dumpall` in the container ⇒ covers `decision_queue`.
+- Acceptance: curl POST from the MBA → 201, identical retry → 200, /api/stats shows machine mba. Test card `acc-…` on the page.
+- `DECISION_QUEUE_URL` added to `config/claude-code/settings.json` env (shared by both machines), commit ef9bae0, not pushed.
 
 ---
 

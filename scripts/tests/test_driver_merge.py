@@ -80,6 +80,12 @@ CASES = [
      {"merged": True, "event": "⚠ judge: claude"}),
     ("code commit after review", {"after_review": "app/late.go"}, 1, {"merged": False, "says": "past review"}),
     ("plans-only commit after review", {"after_review": "plans/progress.md"}, 0, {"merged": True}),
+    # every PR commit must sit in some review range of this repo in THIS unit (10.3-r1-04)
+    ("code commit before review base", {"pre_base": "app/early.go"}, 1, {"merged": False, "says": "unreviewed commits: 1"}),
+    ("stacked branch: other unit's commit", {"pre_base": "app/other.go", "stacked": True}, 1,
+     {"merged": False, "says": "unreviewed commits: 1"}),
+    ("plans-only commit before review base", {"pre_base": "plans/notes.md"}, 0, {"merged": True}),
+    ("two reviews cover the range", {"split_review": True}, 0, {"merged": True}),
     ("admin only when protection blocks", {"state": "BLOCKED"}, 0, {"merged": True, "admin": True}),
     # --admin bypasses required checks too: each one must be SUCCESS on the head (10.3-r1-03)
     ("BLOCKED: required check never reported", {"state": "BLOCKED", "protection": (0, {"contexts": ["ci", "e2e"]})},
@@ -125,15 +131,25 @@ class DriverMergeTest(unittest.TestCase):
         git(repo, "remote", "add", "origin", f"git@github-alias:Owner/{name}.git")
         base = commit(repo, "README.md", "x\n", "base")
         git(repo, "checkout", "-q", "-b", "feature/x")
+        rbase = commit(repo, o["pre_base"], "p\n", "before the review base") if o.get("pre_base") else base
         head = commit(repo, o.get("path") or ("proto/a.proto" if o.get("floor") else "app/a.go"), "y\n", "change")
+        mid = head
+        if o.get("split_review"):
+            head = commit(repo, "app/b.go", "b\n", "fix round")
         reviewed = head
         if o.get("after_review"):
             head = commit(repo, o["after_review"], "z\n", "later")
         scope = os.path.join(root, "scope")
         os.makedirs(os.path.join(scope, "artifacts"))
-        recs = [{"record": "review", "review_id": "10.3-r1", "reviewer": o.get("reviewer", "codex sol"),
-                 "verdict": o.get("verdict", "SHIP"), "range": {name: f"{base}..{reviewed}"},
-                 "shas": {"base": base, "head": reviewed}}]
+        rv = {"record": "review", "reviewer": o.get("reviewer", "codex sol"), "verdict": o.get("verdict", "SHIP")}
+        recs = ([dict(rv, review_id="10.3-r1", verdict="SHIP AFTER BLOCKING", range={name: f"{rbase}..{mid}"},
+                      shas={"base": rbase, "head": mid})] if o.get("split_review") else []) + \
+            [dict(rv, review_id="10.3-r" + ("2" if o.get("split_review") else "1"),
+                  range={name: f"{mid if o.get('split_review') else rbase}..{reviewed}"},
+                  shas={"base": mid if o.get("split_review") else rbase, "head": reviewed})]
+        if o.get("stacked"):  # the pre-base commit was reviewed — in ANOTHER unit's log
+            with open(os.path.join(scope, "artifacts", "review-10.2.jsonl"), "w") as f:
+                f.write(json.dumps(dict(rv, review_id="10.2-r1", range={name: f"{base}..{rbase}"})) + "\n")
         if o.get("accepted"):
             recs.append({"record": "acceptance", "by": "Alex (standing policy)"})
         with open(os.path.join(scope, "artifacts", "review-10.3.jsonl"), "w") as f:

@@ -91,7 +91,9 @@ by `test_entrypoint.py`'s compile check.
       pmg-docs / ai-skills else `develop` (anything else — a code repo's prod `main` — is refused, never
       touched), every check finished green or skipped/neutral with at least one real green run (an empty or
       skipped-only list is vacuous, refused), the unit's latest review of the repo is SHIP or accepted and
-      saw the PR head (later commits plans/-only), verdict-gate.py exit 0, door.py finds no floor path on
+      saw the PR head (later commits plans/-only), every non-plans/ commit in merge-base..head sits in some
+      review's base..head for the repo in the unit (else "unreviewed commits", named), verdict-gate.py
+      --blocking reads `pass` (advisory, not-judged, predates or unknown = no merge), door.py finds no floor path on
       merge-base..head, mergeStateStatus CLEAN/HAS_HOOKS (BLOCKED → `--admin` only when every required
       check of the base — classic protection and rulesets, both read — is SUCCESS on the head; unreadable
       protection is no merge; anything else refused).

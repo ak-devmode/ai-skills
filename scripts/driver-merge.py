@@ -17,7 +17,9 @@ eligible only when ALL hold:
                get zero checks, so "nothing failed" is not "green"
   * verdict  — the unit's latest review of this repo is SHIP, or an `acceptance` follows it
                (review.py accept); that review saw the PR head (later commits may touch only
-               plans/); and verdict-gate.py --blocking reads `pass`. A reviewer other than codex (fallback /
+               plans/); every non-plans/ commit in merge-base..head sits inside some review's
+               base..head for this repo in the unit (10.3-r1-04: the latest review seeing the
+               head says nothing about the PR's start); and verdict-gate.py --blocking reads `pass`. A reviewer other than codex (fallback /
                lean) still merges, flagged; a `none` reviewer is no review
   * floor    — door.py classifies merge-base..head with no floor path
   * mergeable — mergeStateStatus CLEAN / HAS_HOOKS merges; BLOCKED merges with --admin (branch
@@ -37,6 +39,8 @@ Failure stances (fail closed: every one of these is "no merge" with the reason):
   * gh error, unparseable gh JSON, unknown check type/state, mergeStateStatus still UNKNOWN
   * BLOCKED and the base's protection or rulesets unreadable -> no --admin, no merge
   * origin remote unreadable, git error, PR commits not fetchable (door.py then fails closed)
+  * a PR commit outside every review range of this repo in the unit, an unparseable or
+    unresolvable review range
   * review log missing / malformed, no review of this repo in the unit, verdict-gate exit != 0,
     a verdict other than `pass` (advisory included), or unparseable output
   * merge reported success but the read-back is not MERGED -> not merged, packet written
@@ -307,7 +311,7 @@ def run_gate(scope, unit):
     return True, "gate pass", doc.get("marker") or ""
 
 
-def cond_verdict(repo, scope, unit, pr_head):
+def cond_verdict(repo, scope, unit, pr_base, pr_head):
     """(ok, detail, degraded label or '', gate marker)."""
     rv = _load("review_py", REVIEW_PY)
     log = os.path.join(scope, "artifacts", f"review-{unit}.jsonl")
@@ -338,12 +342,66 @@ def cond_verdict(repo, scope, unit, pr_head):
     ok, cover = covered(repo, seen, pr_head, last.get("review_id"))
     if not ok:
         return False, cover, "", ""
+    uncovered, why = unreviewed(repo, key, [r for _, r in mine], pr_base, pr_head)
+    if why:
+        return False, why, "", ""
+    if uncovered:
+        return False, (f"unreviewed commits: {len(uncovered)} in merge-base..{pr_head[:12]} sit in no review of "
+                       f"{key} in unit {unit}: {', '.join(c[:12] for c in uncovered[:6])}"
+                       + (f" (+{len(uncovered) - 6})" if len(uncovered) > 6 else "")), "", ""
     degraded = "" if reviewer.startswith("codex ") else reviewer.split()[0]
     gok, gdetail, marker = run_gate(scope, unit)
     if not gok:
         return False, gdetail, "", ""
     detail = f"{last.get('review_id')} {how}{cover}; {gdetail}" + (f" · degraded review: {degraded}" if degraded else "")
     return True, detail, degraded, marker
+
+
+def rev_list(repo, rng):
+    rc, out, err = git(repo, "rev-list", rng, "--")
+    return (out.split(), "") if not rc else (None, first_err(err, rc))
+
+
+def commit_paths(repo, c):
+    """Paths a commit changes against its first parent (all of them for a root commit), or None."""
+    rc, out, _ = git(repo, "rev-list", "--parents", "-n", "1", c)
+    if rc or not out.split():
+        return None
+    parents = out.split()[1:]
+    args = ["diff", "--name-only", "--no-renames", parents[0], c, "--"] if parents else \
+        ["diff-tree", "--root", "-r", "--name-only", "--no-commit-id", "--no-renames", c]
+    rc, out, _ = git(repo, *args)
+    return None if rc else [p for p in out.splitlines() if p]
+
+
+def unreviewed(repo, key, reviews, base_oid, head):
+    """(uncovered shas, '') or ([], why it could not be decided). Every commit of the PR
+    (merge-base..head) must sit inside some review record's base..head for this repo; a commit
+    touching plans/ only is bookkeeping and exempt. An empty commit, or one whose paths
+    cannot be read, is not exempt. Any git failure or unparseable review range refuses."""
+    rc, mb, err = git(repo, "merge-base", base_oid, head)
+    if rc or not mb.strip():
+        return [], f"coverage: no merge-base for {base_oid[:12]}..{head[:12]} ({first_err(err, rc)})"
+    pr, why = rev_list(repo, f"{mb.strip()}..{head}")
+    if pr is None:
+        return [], f"coverage: git rev-list of the PR failed ({why})"
+    seen = set()
+    for r in reviews:
+        rng = str((r.get("range") or {}).get(key) or "")
+        if not re.fullmatch(r"[0-9a-fA-F]{7,64}\.\.[0-9a-fA-F]{7,64}", rng):
+            return [], f"coverage: review {r.get('review_id')} range {rng!r} is not base..head"
+        shas, why = rev_list(repo, rng)
+        if shas is None:
+            return [], f"coverage: review {r.get('review_id')} range {rng} unresolvable ({why})"
+        seen.update(shas)
+    out = []
+    for c in pr:
+        if c in seen:
+            continue
+        paths = commit_paths(repo, c)
+        if not paths or any(not p.startswith("plans/") for p in paths):
+            out.append(c)
+    return out, ""
 
 
 def covered(repo, seen, head, rid):
@@ -422,7 +480,7 @@ def evaluate(a):
     rows.append(("base",) + cond_base(name, base))
     rows.append(("checks",) + cond_checks(doc.get("statusCheckRollup")))
     ensure_commits(a.repo, a.pr, base, (base_oid, head_oid))
-    vok, vdetail, degraded, marker = cond_verdict(a.repo, a.scope, a.unit, head_oid)
+    vok, vdetail, degraded, marker = cond_verdict(a.repo, a.scope, a.unit, base_oid, head_oid)
     rows.append(("verdict", vok, vdetail))
     fok, fdetail, hits, rng = cond_floor(a.repo, base_oid, head_oid)
     rows.append(("floor", fok, fdetail))

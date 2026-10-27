@@ -499,7 +499,8 @@ on a direct-to-main repo a branch diff is empty by construction.
    folder> --unit {N}.{P} --driver`. Run `check` first if you want the conditions without
    acting. The script decides, not you: it merges only when CI is green with real runs (no
    checks, or skipped-only, is not green), the review is SHIP or accepted and saw the PR's
-   head, the gate passes, `door.py` finds no floor path, and the base is `develop` (code
+   head, every code commit in the PR sits in one of the unit's review ranges, the gate
+   (run `--blocking`) reads `pass`, `door.py` finds no floor path, and the base is `develop` (code
    repos) or `main` (kalpa-docs, pmg-docs, ai-skills). A code repo's `main` is prod: it is
    refused and stays behind `prod-merge-gate.py`. A degraded review (fallback or lean)
    still merges, flagged on the ticker; `--admin` is used only when branch protection is

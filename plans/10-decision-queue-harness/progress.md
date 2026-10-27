@@ -26,7 +26,7 @@ Script-owned (`plans-index.py`); PLANS-INDEX.md is rendered from it.
 ## Resume Context
 **Scope:** ~/Projects/ai-skills/plans/10-decision-queue-harness/scope.md
 **Last action:** 10.4 lanes review-closed (attention, ui-packet, scorecard incl. fixed-follow-up reframe); 10.3 merge gate at round-3 stop — decisions 83 (--admin) and 84 (lane identity reframe) open with Alex
-**Next action:** lanes merges (10.3), ui-packet / scorecard / attention (10.4) running; 10.1 acceptance waits on Alex's restarted sessions posting packets; then /verify 10.1–10.4
+**Next action:** phase-4 cutover branches ready (`feature/10-phase4` in ai-skills + dev-workbench; suites running) → landing script for Alex; 10.3 waits on 83/84; then homelab DQ_UI_ALLOWED_TENANTS + redeploy, 10.1 live acceptance, /verify 10.1–10.4
 **Open blockers:** decisions 83/84 (merge gate)
 **Key files changed:** None yet
 
@@ -207,3 +207,5 @@ Script-owned (`plans-index.py`); PLANS-INDEX.md is rendered from it.
 - attention: r1 → r2 SHIP, all fixed (24a2418 driver).
 - ui-packet: schema r3 (4 rejected: consumer pinned pre-unit / out-of-unit c1cdafc → TO-DO) → r6, r8 SHIP 0; queue r4 → r7 → r9 → r11 SHIP, last note deferred to TO-DO `[review 10.4-r11-01]`. Real-patient guard: packet.py requires tenant == $DQ_UI_DEMO_TENANT (a declaration check, worded as such); queue refuses ui unless DQ_UI_ALLOWED_TENANTS is set. Env vars declared in .env.example (c9be6d5).
 - scorecard: r5 → r10 (reopen) → r12 (reopen chain) → REFRAME 486a443 fixed follow-up cohort → r13 SHIP, 3 fixed (36af6a5 cut = min(until, pull), e170c7b, 244ccb6). Baseline undercounted: a fresh pull finds 100 units / 683 reviews in the 10-25 window vs 86 / 622.
+#### Phase-4 cutover (2026-10-27)
+- `feature/10-phase4` worktrees: ai-skills merges ui-packet + scorecard (76d1da3, 5384660) + b2cfd26 (herdr driver step runs `herdr-agent-view ensure`; scorecard rows in CLAUDE.md + scripts/README.md); dev-workbench merges attention + ui-packet (253aa71, a25225f). Clean merges. dev-workbench: queue 72 passed (drift guard vs the merged schema), agent-view 30 checks OK.

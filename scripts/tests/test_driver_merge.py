@@ -4,8 +4,9 @@ Approach: table-driven over a stubbed `gh` — the module is loaded by path and 
 entry point replaced with a fake that serves a scenario's PR JSON and records every call, so
 nothing touches the network. Everything else is real: a temp git repo (origin URL set, never
 contacted), a temp scope with a review log, door.py on the real diff, and packet.py writing the
-refusal packet / merged event into the temp repo's outbox. verdict-gate.py is stubbed to its
-exit-0 answer except where a case says otherwise (its own suite covers it).
+refusal packet / merged event into the temp repo's outbox. verdict-gate.py's subprocess is
+stubbed to a (exit, JSON) answer — `pass` unless a case says otherwise (its own suite covers
+it) — so run_gate's own reading of that answer is what the table exercises.
 """
 import contextlib
 import io
@@ -67,9 +68,15 @@ CASES = [
     ("no reviewer is no review", {"reviewer": "none codex down"}, 1, {"merged": False}),
     ("DO NOT SHIP not accepted", {"verdict": "DO NOT SHIP"}, 1, {"merged": False, "packet": "two-way"}),
     ("non-SHIP accepted merges", {"verdict": "SHIP AFTER BLOCKING", "accepted": True}, 0, {"merged": True}),
-    ("gate blocked", {"gate": (False, "verdict-gate.py blocked (exit 1)", "")}, 1, {"merged": False}),
-    ("gate advisory flagged", {"gate": (True, "gate advisory", "⚠ verify advisory: 1 blocked")}, 0,
-     {"merged": True, "event": "verify advisory"}),
+    ("gate blocked", {"gate": (1, {"verdict": "blocked"})}, 1, {"merged": False, "says": "blocked (exit 1)"}),
+    # advisory exits 0 on every block: "reported" is not "passed" (10.3-r1-01)
+    ("gate advisory refused", {"gate": (0, {"verdict": "advisory", "marker": "⚠ verify advisory: 1 blocked"})}, 1,
+     {"merged": False, "says": "advisory (exit 0)"}),
+    ("gate predates refused", {"gate": (0, {"verdict": "predates-gate"})}, 1, {"merged": False}),
+    ("gate unknown verdict refused", {"gate": (0, {"verdict": "mystery"})}, 1, {"merged": False}),
+    ("gate output unreadable", {"gate": (0, "not json")}, 1, {"merged": False, "says": "unreadable"}),
+    ("gate pass marker flagged", {"gate": (0, {"verdict": "pass", "marker": "⚠ judge: claude"})}, 0,
+     {"merged": True, "event": "⚠ judge: claude"}),
     ("code commit after review", {"after_review": "app/late.go"}, 1, {"merged": False, "says": "past review"}),
     ("plans-only commit after review", {"after_review": "plans/progress.md"}, 0, {"merged": True}),
     ("admin only when protection blocks", {"state": "BLOCKED"}, 0, {"merged": True, "admin": True}),
@@ -142,11 +149,20 @@ class DriverMergeTest(unittest.TestCase):
         if o.get("driver", True):
             argv.append("--driver")
         out = io.StringIO()
+        real_sh, gates = dm.sh, []
+
+        def fake_sh(cmd, cwd=None, timeout=120):
+            if dm.VERDICT_GATE not in cmd:
+                return real_sh(cmd, cwd=cwd, timeout=timeout)
+            gates.append(cmd)
+            grc, gdoc = o.get("gate", (0, {"verdict": "pass", "marker": ""}))
+            return grc, gdoc if isinstance(gdoc, str) else json.dumps(gdoc) + "\n", ""
         with mock.patch.dict(os.environ, env, clear=True), \
                 mock.patch.object(dm, "gh", self.fake_gh(o, base, head, calls)), \
-                mock.patch.object(dm, "run_gate", lambda s, u: o.get("gate", (True, "gate pass", ""))), \
+                mock.patch.object(dm, "sh", fake_sh), \
                 contextlib.redirect_stdout(out), contextlib.redirect_stderr(io.StringIO()):
             rc = dm.main(argv)
+        self.assertTrue(all("--blocking" in g for g in gates), gates)
         outbox = os.path.join(repo, ".decision-queue", "outbox")
         files = sorted(os.listdir(outbox)) if os.path.isdir(outbox) else []
         packets = [readj(os.path.join(outbox, f)) for f in files

@@ -15,7 +15,7 @@ eligible only when ALL hold:
                get zero checks, so "nothing failed" is not "green"
   * verdict  — the unit's latest review of this repo is SHIP, or an `acceptance` follows it
                (review.py accept); that review saw the PR head (later commits may touch only
-               plans/); and verdict-gate.py exits 0. A reviewer other than codex (fallback /
+               plans/); and verdict-gate.py --blocking reads `pass`. A reviewer other than codex (fallback /
                lean) still merges, flagged; a `none` reviewer is no review
   * floor    — door.py classifies merge-base..head with no floor path
   * mergeable — mergeStateStatus CLEAN / HAS_HOOKS merges; BLOCKED merges with --admin (branch
@@ -30,8 +30,8 @@ and prints why.
 Failure stances (fail closed: every one of these is "no merge" with the reason):
   * gh error, unparseable gh JSON, unknown check type/state, mergeStateStatus still UNKNOWN
   * origin remote unreadable, git error, PR commits not fetchable (door.py then fails closed)
-  * review log missing / malformed, no review of this repo in the unit, verdict-gate exit != 0
-    or unparseable output
+  * review log missing / malformed, no review of this repo in the unit, verdict-gate exit != 0,
+    a verdict other than `pass` (advisory included), or unparseable output
   * merge reported success but the read-back is not MERGED -> not merged, packet written
   * packet.py fails to write the refusal packet -> still no merge; the reason is printed
   * merged but the `merged` event did not write -> exit 4: the merge stands (it landed and was
@@ -218,16 +218,21 @@ def cond_floor(repo, base_oid, head_oid):
 
 
 def run_gate(scope, unit):
-    """verdict-gate.py's own decision: exit 0 is the go-ahead (pass / advisory / predates)."""
-    rc, out, err = sh([sys.executable, VERDICT_GATE, "--scope", scope, "--unit", unit, "--json"])
+    """verdict-gate.py in --blocking mode, and its JSON verdict must be `pass` with exit 0.
+    Its exit code alone means "reported", not "passed": advisory mode exits 0 on every block
+    (10.3-r1-01). So any other verdict — advisory, not-judged, skipped, predates-gate (a unit
+    Done before the gate existed has no verdict to merge on), or one this script does not
+    know — is no merge."""
+    rc, out, err = sh([sys.executable, VERDICT_GATE, "--scope", scope, "--unit", unit, "--blocking", "--json"])
     line = next((x for x in reversed(out.splitlines()) if x.strip().startswith("{")), "")
     try:
         doc = json.loads(line)
     except ValueError:
         return False, f"verdict-gate.py output unreadable (exit {rc}): {first_err(err, rc)}", ""
-    if rc != 0:
-        return False, f"verdict-gate.py {doc.get('verdict')} (exit {rc})", ""
-    return True, f"gate {doc.get('verdict')}", doc.get("marker") or ""
+    verdict = doc.get("verdict") if isinstance(doc, dict) else None
+    if rc != 0 or verdict != "pass":
+        return False, f"verdict-gate.py --blocking: {verdict or 'no verdict'} (exit {rc}) — only `pass` merges", ""
+    return True, "gate pass", doc.get("marker") or ""
 
 
 def cond_verdict(repo, scope, unit, pr_head):

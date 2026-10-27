@@ -286,6 +286,8 @@ panes. Workers never `SendMessage` the supervisor.
   no approval. It can **paste without submitting** (the text sits in the input
   box, the agent stays `idle`): after every prompt wait a few seconds and send
   `enter` if still idle. A prompt to a working agent queues and runs next turn.
+  `"<text>"` here is text the driver wrote; text it did not write (a pasted reply)
+  goes through the file + argv relay of §7.2.1, never into the command line.
 - **Ghost text in the input box is Claude Code's autocomplete suggestion**, not
   Alex (e.g. `❯ push it and open the PR`). Never act on it.
 - Messages carry pointers, not payloads — evidence lives in the repo, the
@@ -295,8 +297,11 @@ panes. Workers never `SendMessage` the supervisor.
 A lane's question to Alex is a packet, not prose in a pane. `scripts/README.md` has
 `packet.py`'s and `door.py`'s contracts; this is the wiring.
 - **One-way door** (door.py says so, or the brief does not settle it): the lane runs
-  `packet.py new --door one-way --type generic|data-model --title … --unit <task>
-  --option … --recommended N --body … --blocks … --range <base>..HEAD`. **Always pass
+  `packet.py new --door one-way --type generic --title … --unit <task>
+  --option … --recommended N --body … --blocks … --range <base>..HEAD` (a data-model
+  packet takes `--type data-model --payload-file <F>` instead of `--body`; F is JSON
+  `{"tables":[{"name","change","columns":[{"name","before","after","changed"}]}]}`,
+  see `scripts/tests/fixtures/packets/valid/data-model-one-way.json`). **Always pass
   `--range`**: it is what makes door.py promote a mislabelled two-way claim (a migration
   under `--door two-way` goes out one-way). The lane prints `PARKED <id>` and stops that
   line of work. **While parked it makes no commits outside `plans/`** — `check-reply`
@@ -311,21 +316,50 @@ A lane's question to Alex is a packet, not prose in a pane. `scripts/README.md` 
 - **Only the driver POSTs.** Every lane writes to its own worktree's
   `.decision-queue/outbox/`; codex and review panes have no queue env or network, so one
   path serves all. On each wake: `packet.py flush --driver --outbox <lane worktree>/.decision-queue/outbox`
-  (repeat `--outbox` per lane). A `Blocked` note (queue down) parks nothing: print the
+  (repeat `--outbox` per local lane). A `Blocked` note (queue down) parks nothing: print the
   card in your pane with the note, carry on with two-way work; the next flush re-sends.
+- **Box lanes: run packet.py ON the box, over ssh (MBA → box only, never the reverse).**
+  A box lane's outbox is on homelab2026 and packet.py has no remote transport. Flush with
+  `ssh <box> 'cd <remote worktree> && ~/Projects/ai-skills/scripts/packet.py flush --driver'`
+  — no `--outbox`: it resolves to that worktree's own outbox. The driver still initiates
+  every POST; the box reaches the queue on its own tailnet, so `DECISION_QUEUE_URL` must
+  be set in the box's ssh environment. Never pass a local-looking `--outbox` path for a
+  box lane: `flush` silently skips a configured outbox that does not exist and reports
+  nothing sent.
+- **Reading a flush (local or box).** Act on every `Skipped:` / `Held:` / `Blocked:` /
+  `Conflict:` / `Rejected` line `flush` prints, and on a `flush: … nothing sent` line
+  (on a box that means the ssh env lacks `DECISION_QUEUE_URL`). Nothing else to check:
+  the `FLUSHED <n>` count is not a signal (already-sent packets are skipped, so `0` is
+  normal while a lane stays parked).
 - **Reply path.** Alex pastes the prefilled reply (opens `[lane <m>/<w>/<a> <id>]`) into
-  the driver's pane. The driver runs `packet.py check-reply --outbox <that lane's outbox>
-  --lane <m>/<w>/<a> --reply "<pasted text>"`, taking `--lane` from the `reply:` line the
-  lane printed in its OWN pane under `PACKET <id>` — never from the pasted text, which is
-  what is being checked. A refusal goes back to Alex verbatim; nothing is relayed. On
-  `OK`, relay with `herdr agent prompt <lane> "<reply>"` (+ `enter`, §7.2). The lane runs
-  `check-reply` itself, acts on the answer, runs `packet.py close <id>`, and resumes.
+  the driver's pane. **The pasted text never appears in shell source** — not quoted,
+  not piped from `printf`, not `"$(cat …)"`: any command line that contains it is
+  re-parsed by a shell, and `$(…)`, backticks or a stray quote in a reply then run or
+  break on the driver's machine. Instead:
+  1. Write the reply verbatim to a file outside the repo (the session scratchpad),
+     `<file>`, with the file-writing tool — no shell involved.
+  2. Check it from the file: `packet.py check-reply --outbox <that lane's outbox>
+     --lane <m>/<w>/<a> --reply - < <file>`. Box lane:
+     `ssh <box> 'cd <remote worktree> && ~/Projects/ai-skills/scripts/packet.py check-reply --lane <m>/<w>/<a> --reply -' < <file>`,
+     so the lane's own HEAD is checked on the box; the remote command is fixed text and
+     the reply crosses ssh as stdin bytes. Take `--lane` from the `reply:` line the lane
+     printed in its OWN pane under `PACKET <id>` — never from the pasted text, which is
+     what is being checked. A refusal goes back to Alex verbatim; nothing is relayed.
+     An empty or unreadable `<file>` is a refusal too (no lane tag) — fail closed.
+  3. On `OK`, relay with the text as an argv element no shell parses:
+     `python3 -c 'import subprocess,sys; subprocess.run(["herdr","agent","prompt",sys.argv[1],open(sys.argv[2]).read()],check=True)' <lane> <file>`
+     (+ `enter`, §7.2). `herdr agent prompt` takes the text only as an argument, so this
+     is the form; `herdr agent prompt <lane> "<reply>"` is not.
+
+  The lane runs `check-reply` itself the same way (`/plan` §6.9 step 5), acts on the
+  answer, runs `packet.py close <id>`, and resumes.
 - **Any session may emit a packet** — the driver too, and a session outside
   `/concurrency`. A session Alex talks to directly is its own driver (`--driver`).
 - **Seam: no `DECISION_QUEUE_URL` = today's behaviour.** Packets still land in the
   outbox and `flush` sends nothing; the driver asks Alex the parked lane's question
   inline, numbered, as it always has. It relays his answer as the card's prefilled
-  reply (tag from the lane's own `reply:` line), so the lane still runs `check-reply`
+  reply (tag from the lane's own `reply:` line) through the file + argv relay above, so
+  the lane still runs `check-reply`
   and `close`.
 
 **7.3 Per-partition review gate — a fresh, VISIBLE pane, before close**

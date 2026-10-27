@@ -504,8 +504,11 @@ also emits a packet. `scripts/README.md` has `packet.py`'s and `door.py`'s contr
 The unit range is §6.8's `<base>..HEAD`.
 1. **One-way** (door.py classifies the range one-way, or the plan does not settle the
    call): `~/Projects/ai-skills/scripts/packet.py new --door one-way --type
-   generic|data-model --title … --unit {N}.{P} --option … --recommended N --body …
-   --blocks "Task X.Y" --range <base>..HEAD`. **Always pass `--range`**: door.py then
+   generic --title … --unit {N}.{P} --option … --recommended N --body …
+   --blocks "Task X.Y" --range <base>..HEAD` (a data-model packet takes `--type
+   data-model --payload-file <F>` instead of `--body`; F is JSON `{"tables":[{"name",
+   "change","columns":[{"name","before","after","changed"}]}]}`, see
+   `scripts/tests/fixtures/packets/valid/data-model-one-way.json`). **Always pass `--range`**: door.py then
    promotes a mislabelled claim, and without it nothing checks the door. Print
    `PACKET <id>` (the script does) and `PARKED <id>`, then stop that line of work.
    **While parked, commit nothing outside `plans/` in that repo** — progress and ledger
@@ -517,13 +520,23 @@ The unit range is §6.8's `<base>..HEAD`.
    in the pane, continue. After each later commit, `packet.py touch <id>` refreshes its
    reversal cost. If door.py promoted it, the card says one-way: park.
 4. **Who posts.** A `/plan` session Alex drives directly is its own driver: add
-   `--driver`, and run `packet.py flush --driver` when you next stop. A `/plan` run
+   `--driver`, and run `packet.py flush --driver` when you next stop, acting on every
+   `Skipped:` / `Held:` / `Blocked:` / `Conflict:` / `Rejected` line it prints (the
+   count is not a signal). A `/plan` run
    dispatched as a `/concurrency` lane never passes `--driver`; its driver flushes and
    relays (`/concurrency` §7.2.1). A failed POST parks nothing — the card prints with a
    `Blocked` note and two-way work carries on.
 5. **On the reply** (Alex pastes the `[lane <m>/<w>/<a> <id>] …` line, or a driver
-   relays it): `packet.py check-reply --reply "<text>"`. A refusal is shown to Alex
-   verbatim and nothing is acted on. On `OK`, act on the answer, then
+   relays it): write the text verbatim to a file outside the repo (the session
+   scratchpad) with the file-writing tool, then `packet.py check-reply --reply - <
+   <file>`. The reply never appears in shell source — not quoted, not piped from
+   `printf`, not `"$(cat …)"`: a shell re-parses it, and `$(…)`, backticks or a stray
+   quote in pasted text run or break here. A refusal is shown to Alex
+   verbatim and nothing is acted on. A session with no exported session id emitted a
+   `session-none` packet, and `check-reply` refuses it without `--lane <m>/<w>/<a>`:
+   copy that value from the `reply:` line this session printed under `PACKET <id>`
+   when it emitted the packet, never from the incoming reply (that is what is being
+   checked). On `OK`, act on the answer, then
    `packet.py close <id>`, and resume.
 6. **Seam: no `DECISION_QUEUE_URL` = today's behaviour.** The packet still lands in
    `.decision-queue/outbox/`, and the run asks the same question inline, numbered, as it

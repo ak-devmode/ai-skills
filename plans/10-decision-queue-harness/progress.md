@@ -178,6 +178,11 @@ Script-owned (`plans-index.py`); PLANS-INDEX.md is rendered from it.
 #### Phase 0 — ✅ DONE
 - Ready to execute (Alex: "start 10.3 and 10.4 concurrently"), Executed by stamped, freshness OK (ai-skills dirty = own plan edits). Concurrency plan approved (82).
 
+#### Tasks 3.1 + 3.2 — ✅ DONE pending review (lane merges, `concurrency/10-merges`)
+- d36f8ad `scripts/driver-merge.py` (check|merge; vacuous-green / skipped-only / prod base / floor / unreadable verdict / non-driver / gh error = no merge, packet instead), `/plan` §6.8 step 4, `merged` ticker event; 153 tests OK. Dry runs (check only): kalpa-docs #192, backbone #653 (floor hit on *.proto).
+- Floor gap found by the dry run: WellMed migrations live in singular `internal/db/migration/` (7 repos); backbone #658, a tenant migration, passed the floor. Driver fix f7f3d30 adds `migration/` to the defaults; test fails without it; #658 now one-way.
+- Review: pane `merges review` (unit 10.3).
+
 ---
 
 ## Plan 10.4: UI template, harness scorecard, herdr attention
@@ -189,3 +194,7 @@ Script-owned (`plans-index.py`); PLANS-INDEX.md is rendered from it.
 ### Session: 2026-10-27
 #### Phase 0 — ✅ DONE
 - Same as 10.3. UI-packet skill guidance goes in scripts/README.md (plan/SKILL.md belongs to lane merges).
+#### Tasks 4.1–4.3 (2026-10-27)
+- 4.3 attention (dev-workbench `concurrency/10-attention`): 51bc628 → r1 SHIP AFTER BLOCKING (driver set goes stale) fixed 8156f8a (60 s ensure timer, off-anchor), da68dee, 22d954a → r2 SHIP, 2 findings fixed by driver 24a2418 (ensure quiet on a dead socket). Toast per-pane filtering not possible in herdr 0.9.1. TODO at integration: ai-skills herdr/SKILL.md — run `herdr-agent-view ensure` right after renaming to driver.
+- 4.1 ui-packet: ai-skills 1c5531b (schema `ui` payload, packet.py --type ui, README "UI packets", demo tenant from `$DQ_UI_DEMO_TENANT`), dev-workbench b674bfd (side-by-side render, PNG-only + size re-checked server-side, CSP img-src data:, body cap 5 MB); fixture card screenshot `queue/docs/ui-card.png`. TODO at integration: declare `DQ_UI_DEMO_TENANT` (and `DECISION_QUEUE_URL`, `PACKET_POST_TIMEOUT`) in ai-skills `.env.example`. Review running (two repos, one pane).
+- 4.2 scorecard (`concurrency/10-scorecard`): 064d26f..8cbc75c `scripts/harness-scorecard/`; §3.1 lineage table reproduced exactly on the 10-25 logs (291/153/99/43/20/15), suite 466 OK. Driver calls pending: include `~/.claude-int/projects` going forward (baseline layout counted `~/.claude` only); README/CLAUDE.md rows at integration. Review queued after the ui review (same unit log).

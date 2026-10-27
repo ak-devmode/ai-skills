@@ -7,9 +7,14 @@ and compare. A log line that didn't land is exit 1, because /concurrency's hard
 rail 6 ("every dispatch and every outcome lands in the JSONL log") is only as good
 as the write.
 
+--pane is required (and non-blank) for every status: packet.py's driver_identity reads this log
+to tell a lane from the driver — a pane whose latest record is dispatched or blocked is a lane
+and never POSTs or merges (Alex 84). A record with no pane could neither mark a lane nor close
+one, so it is a usage error, not a write.
+
 Usage:
-  dispatch-log.py --scope S --task T --status {dispatched,done,blocked,failed}
-                  [--seat X] [--branch B] [--worktree W] [--pane P] [--tail TEXT]
+  dispatch-log.py --scope S --task T --status {dispatched,done,blocked,failed} --pane P
+                  [--seat X] [--branch B] [--worktree W] [--tail TEXT]
                   [--machine HOST] [--account KEY]   (a box lane: pane ids are per server)
                   [--log PATH]          (default ~/.config/herdr/concurrency-log.jsonl)
 Output: the written JSON line on stdout.
@@ -30,10 +35,13 @@ def main(argv):
     ap.add_argument("--scope", required=True)
     ap.add_argument("--task", required=True)
     ap.add_argument("--status", required=True, choices=STATUSES)
-    for opt in ("seat", "branch", "worktree", "pane", "machine", "account", "tail"):
+    ap.add_argument("--pane", required=True)
+    for opt in ("seat", "branch", "worktree", "machine", "account", "tail"):
         ap.add_argument(f"--{opt}")
     ap.add_argument("--log", default=os.path.expanduser("~/.config/herdr/concurrency-log.jsonl"))
     a = ap.parse_args(argv)
+    if not a.pane.strip():
+        ap.error("--pane must name the lane's herdr pane")
 
     rec = {"ts": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
            "scope": a.scope, "task": a.task, "seat": a.seat, "branch": a.branch,

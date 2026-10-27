@@ -3,9 +3,9 @@
 
 Approach: every packet is written to an outbox in the lane's own worktree
 (<repo>/.decision-queue/outbox/, self-ignoring) and `PACKET <id>` is printed; that is
-the one path for every lane (Claude, codex, review). Only a DRIVER POSTs — inside herdr the
-pane whose agent herdr names `driver` (asked over `herdr agent list`; a failed lookup is not a
-driver), outside herdr `--driver` (driver_identity) — and only when $DECISION_QUEUE_URL is set: packets to
+the one path for every lane (Claude, codex, review). Only a DRIVER POSTs — `--driver`, refused
+inside herdr for a pane with an open record in the driver-written dispatch log (a lane), and
+when that log is unreadable (driver_identity) — and only when $DECISION_QUEUE_URL is set: packets to
 /packets, events to /events, 3 s timeout, idempotent on the client-generated id. A dead
 queue never fails the caller: the packet is printed with a `Blocked` note, exit 0, and
 `flush` re-sends later. A one-way door still stops the lane — that is a decision, not a
@@ -38,6 +38,9 @@ Failure stances (each is fail-closed unless it says otherwise):
     POSTed, marked `evt-<id>.rejected` ("packet refused"). Conflict too: the queue holds
     other content under that id, so a lane's close/stale must not apply to it
   * flush --outbox DIR that does not exist -> `Skipped: outbox DIR does not exist`, exit 0
+  * --driver in a herdr pane with an open dispatch record, or with the dispatch log unreadable
+    -> not a driver (fail closed); `new` names the reason, `flush --driver` prints it, exit 1.
+    A missing log means no lane on this machine: FAIL-OPEN, reason in open_dispatch
   * flush: an unreadable item is reported and skipped, the rest of the outbox still goes
   * stale: git cannot be read -> exit 1 without marking. Fail-open on purpose: marking
     stale discards a pending decision
@@ -57,7 +60,6 @@ Failure stances (each is fail-closed unless it says otherwise):
 """
 import argparse
 import datetime
-import functools
 import hashlib
 import http.client
 import importlib.util
@@ -197,52 +199,69 @@ def repo_of(d):
     return None
 
 
-HERDR_TIMEOUT = 5
+DISPATCH_LOG = "~/.config/herdr/concurrency-log.jsonl"  # dispatch-log.py's default; the driver writes it
+OPEN_LANE = ("dispatched", "blocked")  # a parked (blocked) lane resumes in the same pane
 
 
-@functools.lru_cache(maxsize=None)
-def herdr_agent_name(pane):
-    """(name, '') for this herdr pane's agent — '' when the agent is unnamed — or (None, why).
-    herdr is asked, not the environment: a lane is named after launch (`herdr pane rename`,
-    `herdr agent rename … driver`), and a rename cannot reach a running process's env, so
-    $HERDR_AGENT_NAME is set for nobody (10.3-r2-01)."""
+def this_machine():
+    return socket.gethostname().split(".")[0].lower()
+
+
+def open_dispatch(pane):
+    """(record, '') when this machine's dispatch log has an open lane record for `pane`, ('', '')
+    when it has none, (None, why) when the log cannot be read. The record is written by the
+    driver at dispatch (dispatch-log.py, --pane required), never by the lane, so a lane cannot
+    take it off itself (10.3-r3-02, Alex 84). A pane's LATEST record decides: dispatched or
+    blocked is open, done or failed closes it, any other status is open (fail closed). A record
+    for another machine is skipped (pane ids are per herdr server); one with no machine counts.
+    Missing log = no lane was ever dispatched on this machine, so no lane: fail-open on purpose,
+    or a driver on a machine that never ran /concurrency could not POST (a box lane's record is
+    written on the box too, /concurrency §6 step 4). Any other read or parse failure -> None."""
+    path = os.path.expanduser(DISPATCH_LOG)
+    me, last = this_machine(), None
     try:
-        p = subprocess.run(["herdr", "agent", "list"], capture_output=True, text=True, timeout=HERDR_TIMEOUT)
-    except (OSError, subprocess.SubprocessError) as e:
-        return None, f"herdr agent list failed: {e}"
-    if p.returncode:
-        err = next((x.strip() for x in reversed(p.stderr.splitlines()) if x.strip()), "")
-        return None, f"herdr agent list exited {p.returncode}" + (f": {err[:160]}" if err else "")
-    try:
-        agents = json.loads(p.stdout)["result"]["agents"]
-    except (ValueError, KeyError, TypeError):
-        return None, "herdr agent list: output unreadable"
-    mine = [a for a in agents if isinstance(a, dict) and a.get("pane_id") == pane] \
-        if isinstance(agents, list) else []
-    if len(mine) != 1:
-        return None, f"herdr lists {len(mine)} agents for pane {pane}"
-    name = mine[0].get("name")
-    return (name.strip(), "") if isinstance(name, str) else ("", "")
+        with open(path, encoding="utf-8") as fh:
+            for n, line in enumerate(fh, 1):
+                if not line.strip():
+                    continue
+                rec = json.loads(line)
+                if not isinstance(rec, dict):
+                    return None, f"{path}:{n} is not a record"
+                mach = str(rec.get("machine") or "").lower()
+                if rec.get("pane_id") == pane and (not mach or mach == me):
+                    last = rec
+    except FileNotFoundError:
+        return "", ""
+    except (OSError, ValueError) as e:  # UnicodeDecodeError and JSONDecodeError are ValueErrors
+        return None, f"{path}: {e}"
+    if last is None or last.get("status") in ("done", "failed"):
+        return "", ""
+    return last, ""
 
 
 def driver_identity(args):
     """(is_driver, detail) — the one decision of who is the driver, shared by every POST here
-    and by driver-merge.py's merge (10.3-r2-01). Inside herdr ($HERDR_PANE_ID set) the pane's
-    agent must be named `driver`; --driver is ignored there, because /plan's documented commands
-    carry --driver and lanes run /plan. A failed lookup is not a driver (fail closed: a lane that
-    cannot be told from the driver must not POST or merge). Outside herdr, --driver decides."""
+    and by driver-merge.py's merge. --driver is required; inside herdr ($HERDR_PANE_ID set) a
+    pane with an open record in the driver-written dispatch log is a lane and is refused
+    whatever --driver says (lanes run /plan, whose documented commands carry --driver). An
+    unreadable log is not a driver (fail closed: a lane that cannot be told from the driver
+    must not POST or merge). Alex 84 replaced the herdr agent-name lookup (10.3-r2-01): that
+    name is self-assigned, this record is not (10.3-r3-02)."""
+    if not getattr(args, "driver", False):
+        return False, "not a driver (no --driver)"
     pane = (os.environ.get("HERDR_PANE_ID") or "").strip()
-    if pane:
-        name, why = herdr_agent_name(pane)
-        if name is None:
-            return False, f"herdr pane {pane}: agent name unreadable ({why}) — not a driver (fail closed)"
-        if name == "driver":
-            return True, f"herdr agent `driver` (pane {pane})"
-        return False, (f"herdr pane {pane} is agent {name or '(unnamed)'!r}, a lane — "
-                       "only the pane named `driver` is the driver, whatever --driver says")
-    if getattr(args, "driver", False):
+    if not pane:
         return True, "--driver (outside herdr)"
-    return False, "not a driver (outside herdr: --driver; inside herdr: the pane named `driver`)"
+    rec, why = open_dispatch(pane)
+    if rec is None:
+        return False, (f"--driver refused: dispatch log unreadable ({why}), so herdr pane {pane} "
+                       "cannot be told from a lane — not a driver (fail closed)")
+    if rec:
+        return False, (f"--driver refused: herdr pane {pane} is a /concurrency lane (open dispatch "
+                       f"record: scope {rec.get('scope')} task {rec.get('task')}, {rec.get('status')} "
+                       f"{rec.get('ts')}); if that lane is finished, record it with dispatch-log.py "
+                       "--pane <id> --status done")
+    return True, f"--driver (herdr pane {pane}: no open dispatch record)"
 
 
 def is_driver(args):
@@ -482,6 +501,8 @@ def cmd_new(args):
         note = "queue: DECISION_QUEUE_URL not set (outbox only)"
     elif not note and not is_driver(args):
         note = "queue: lane writes the outbox; the driver POSTs"
+        if args.driver:  # say why --driver did not count (10.3-r3-04)
+            note += f" ({driver_identity(args)[1]})"
     show(doc, " | ".join(x for x in (door_note, note) if x))
     return 0
 
@@ -623,7 +644,11 @@ def cmd_check_reply(args):
 
 
 def cmd_flush(args):
-    if not is_driver(args):
+    ok, why = driver_identity(args)
+    if not ok and args.driver:  # asked to send and cannot: a failure, not a no-op (10.3-r3-04)
+        print(f"flush: {why}; nothing sent", file=sys.stderr)
+        return 1
+    if not ok:
         print("flush: not a driver; nothing sent (lanes write the outbox, the driver POSTs)")
         return 0
     if not queue_url():

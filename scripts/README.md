@@ -61,8 +61,8 @@ by `test_entrypoint.py`'s compile check.
     packet.py check-reply (--reply TEXT|--file F|-) [--lane M/W/A] · flush [--driver]   (all: --outbox DIR…)
       stdout: `PACKET <id>` + the card · exit: 0 ok (a blocked POST is ok) · 1 refused / error · 2 usage
       Every packet lands in `<worktree>/.decision-queue/outbox/` (self-ignoring); only a driver
-      (inside herdr: the pane `herdr agent list` names `driver`, a failed lookup is not one;
-      outside herdr: `--driver`) POSTs, and only with $DECISION_QUEUE_URL set (hard 3 s
+      (`--driver`; inside herdr refused for a pane with an open record in the dispatch log, and
+      when that log is unreadable — `flush --driver` then exits 1 with the reason) POSTs, and only with $DECISION_QUEUE_URL set (hard 3 s
       deadline, redirects refused, /packets and /events, idempotent on id; "sent" is a `<id>.sent` marker). A dead queue prints a `Blocked` note and exits 0;
       `flush` re-sends. Only 400/409/413/415/422 are permanent (`<id>.rejected` / `.conflict`); every other 4xx is Blocked and retried. Events of a refused packet are marked `evt-<id>.rejected`, never POSTed. To clear a marker, delete the `<id>.rejected` / `.conflict` file (and its events' `evt-*.rejected`) from the outbox. `flush --outbox DIR` on a missing DIR prints `Skipped: outbox DIR does not exist` (exit 0). check-reply refuses a missing/other-lane tag, an unknown, closed, stale or
       other lane's packet, two different tags, unreadable state, and a one-way packet whose HEAD moved. `--range` runs door.py and a
@@ -88,8 +88,8 @@ by `test_entrypoint.py`'s compile check.
       `MERGED-ELSEWHERE <owner/repo>#N <sha>` + `PACKET <id>` (merged, but not at the checked head)
       exit: 0 eligible / merged + event written · 1 refused / not merged · 2 usage · 4 merged, event not written
       /plan §6.8 step 4 (scope 10 §4.3). Merges only when ALL hold: caller is a driver
-      (packet.py's driver_identity: inside herdr the pane `herdr agent list` names `driver`, --driver
-      ignored, a failed lookup refused; --driver outside herdr — `merge` refuses a non-driver before any
+      (packet.py's driver_identity: --driver, refused for a herdr pane with an open dispatch-log
+      record or an unreadable log — `merge` refuses a non-driver before any
       gh call), PR open + not draft, base = `main` for kalpa-docs /
       pmg-docs / ai-skills else `develop` (anything else — a code repo's prod `main` — is refused, never
       touched), every check finished green or skipped/neutral with at least one real green run (an empty or
@@ -167,8 +167,9 @@ by `test_entrypoint.py`'s compile check.
     finish-table.py init --scope DIR --phase N.P[=repo,...]... [--rows F] [--test-plan-owner N.P] [--predates N.P,...]
     finish-table.py add  --scope DIR --rows F --change TEXT [--replace]
       exit: 0 written · 2 usage · 3 refused (exists / missing / would not parse — nothing written)
-    dispatch-log.py --scope --task --status {dispatched,done,blocked,failed} [--seat --branch --worktree --pane --tail --log]
-      exit: 0 written + read back · 1 did not land · 2 usage
+    dispatch-log.py --scope --task --status {dispatched,done,blocked,failed} --pane [--seat --branch --worktree --tail --log]
+      exit: 0 written + read back · 1 did not land · 2 usage. --pane is required: the record is how
+      packet.py tells a lane from the driver (a pane whose latest record is dispatched/blocked is a lane)
     herdr-pane.sh name <pane> <name> [--source SKILL]  |  herdr-pane.sh helper [--cwd DIR]
       exit: 0 ok · 1 herdr call failed / label not visible · 2 usage · 3 not in herdr / no server
     repo-survey.sh [repo-dir] [--no-fetch]

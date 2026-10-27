@@ -359,7 +359,8 @@ rows the way `/scope` §5.10.1 does and ask; approve only on the user's yes. A t
 5.8.1 **herdr worktree + driver naming (when running inside a herdr pane)** — if
 `$HERDR_PANE_ID` is set (this `/plan` runs in a herdr pane) AND the parent
 scope's **Primary repo (worktree)** field is not "none":
-- Name this session's agent: `herdr agent rename "$HERDR_PANE_ID" driver`.
+- Name this session's agent: `herdr agent rename "$HERDR_PANE_ID" driver`. A label
+  only — `--driver` authority comes from the dispatch log, not this name.
 - Create the scope's isolated worktree-workspace per the **`herdr` skill** (model
   B, §3): `herdr worktree create --cwd <primary-repo> --base origin/<trunk>
   --branch <scope-branch>` — the scope's space IS the worktree-workspace; work
@@ -518,10 +519,9 @@ on a direct-to-main repo a branch diff is empty by construction.
      him to review the commits that landed unchecked.
    - **Exit 4** means the merge landed but the ticker event did not: run `packet.py
      flush --driver`, and tell Alex if it still fails.
-   - A `/concurrency` lane never merges: inside herdr the script asks `herdr agent list`
-     for this pane's agent and accepts only `driver` (`herdr agent rename $HERDR_PANE_ID
-     driver`), ignoring `--driver`; a failed lookup refuses. `--driver` only counts outside
-     herdr. Nobody turns on GitHub auto-merge.
+   - A `/concurrency` lane never merges: a herdr pane with an open record in the dispatch
+     log `/concurrency` writes at dispatch is a lane, refused whatever `--driver` says; an
+     unreadable log refuses. Nobody turns on GitHub auto-merge.
 
 **Rules version.** Every review record stamps `rules_version`. A lineage started before
 the scope-10 cutover finishes under the rules it started with (`/review`'s lineage note,

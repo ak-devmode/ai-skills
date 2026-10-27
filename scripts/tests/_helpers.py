@@ -10,6 +10,7 @@ and nothing installed.
 import importlib.util
 import json
 import os
+import socket
 import subprocess
 import sys
 import tempfile
@@ -40,17 +41,22 @@ def load(name):
     return mod
 
 
-def fake_herdr(tmp, mode, path):
-    """A `herdr` on PATH answering `agent list` for pane w9:p2: named `driver`, named a lane,
-    unnamed, absent from the list, or failing. Returns the env that puts the pane in herdr."""
-    d = tempfile.mkdtemp(dir=tmp)
-    me = {"agent": "claude", "pane_id": "w9:p2", "workspace_id": "w9"}
-    if mode in ("driver", "lane"):
-        me["name"] = "driver" if mode == "driver" else "lane-x"
-    agents = [{"agent": "claude", "pane_id": "w9:p1", "name": "driver"}] + ([] if mode == "absent" else [me])
-    body = ("echo 'herdr: socket unreachable' >&2; exit 1" if mode == "error" else
-            "cat <<'EOF'\n" + json.dumps({"result": {"agents": agents}}) + "\nEOF")
-    with open(os.path.join(d, "herdr"), "w") as f:
-        f.write("#!/bin/sh\n" + body + "\n")
-    os.chmod(os.path.join(d, "herdr"), 0o755)
-    return {"HERDR_PANE_ID": "w9:p2", "HERDR_WORKSPACE_ID": "w9", "PATH": d + os.pathsep + path}
+def dispatch_env(tmp, mode, pane="w9:p2"):
+    """Env that puts this process in herdr pane `pane` with a fresh $HOME whose dispatch log
+    (~/.config/herdr/concurrency-log.jsonl, what /concurrency writes) holds: "lane" — an open
+    dispatched record for the pane; "closed" — dispatched then done; "other" — open records
+    for another pane and for this pane on another machine; "none" — no log; "unreadable" — a
+    log line that is not JSON."""
+    home = tempfile.mkdtemp(dir=tmp)
+    me = socket.gethostname().split(".")[0].lower()
+    rec = lambda pane_id, status, machine=me: json.dumps(
+        {"scope": "10", "task": "t", "pane_id": pane_id, "status": status, "machine": machine})
+    lines = {"lane": [rec(pane, "dispatched")],
+             "closed": [rec(pane, "dispatched"), rec(pane, "done")],
+             "other": [rec("w9:p1", "dispatched"), rec(pane, "dispatched", "elsewhere-box")],
+             "unreadable": [rec("w9:p1", "done"), "{not json"]}.get(mode)
+    if lines is not None:
+        os.makedirs(os.path.join(home, ".config", "herdr"))
+        with open(os.path.join(home, ".config", "herdr", "concurrency-log.jsonl"), "w") as f:
+            f.write("\n".join(lines) + "\n")
+    return {"HOME": home, "HERDR_PANE_ID": pane, "HERDR_WORKSPACE_ID": "w9"}

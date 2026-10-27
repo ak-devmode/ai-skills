@@ -16,7 +16,7 @@ import time
 import unittest
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
-from _helpers import fake_herdr, run
+from _helpers import dispatch_env, run
 
 SESSION_VARS = ("CLAUDE_CODE_SESSION_ID", "CLAUDE_SESSION_ID", "CODEX_SESSION_ID")
 LANE = {"PACKET_MACHINE": "mba", "PACKET_WORKSPACE": "ws1", "PACKET_AGENT": "laneA"}
@@ -171,17 +171,24 @@ class TestQueue(PacketBase):
         _, out = self.new("--driver", env=env)
         self.assertEqual([p for p, _ in s.posts], ["/packets"])
 
-    def test_herdr_pane_decides_not_the_flag(self):  # 10.3-r2-01: herdr is asked, --driver ignored inside it
-        cases = [("driver", (), 1), ("driver", ("--driver",), 1), ("lane", ("--driver",), 0),
-                 ("unnamed", ("--driver",), 0), ("error", ("--driver",), 0), ("absent", ("--driver",), 0)]
-        for mode, flag, posts in cases:
+    def test_dispatch_log_decides_who_is_a_lane(self):  # Alex 84: a record the lane does not write
+        cases = [("lane", ("--driver",), 0, "is a /concurrency lane"),
+                 ("unreadable", ("--driver",), 0, "fail closed"),
+                 ("closed", ("--driver",), 1, ""), ("other", ("--driver",), 1, ""),
+                 ("none", ("--driver",), 1, ""), ("none", (), 0, "")]
+        for mode, flag, posts, why in cases:
             with self.subTest(mode, flag=flag):
                 s = Stub(); self.addCleanup(s.stop)
-                env = dict(fake_herdr(self.repo, mode, self.env["PATH"]), DECISION_QUEUE_URL=s.url)
-                self.new(*flag, env=env)
+                env = dict(dispatch_env(self.repo, mode), DECISION_QUEUE_URL=s.url,
+                           PACKET_OUTBOX=tempfile.mkdtemp(dir=self.repo))  # no bleed between cases
+                out = self.new(*flag, env=env)[1]
                 self.assertEqual(len(s.posts), posts)
-                out = self.pk("flush", *flag, env=env).stdout
-                self.assertEqual(len(s.posts), posts, out)  # flush: a lane sends nothing either
+                p = self.pk("flush", *flag, env=env)
+                self.assertEqual(len(s.posts), posts, p.stdout)  # flush: a lane sends nothing either
+                if why:  # --driver refused says why, and flush fails instead of a silent no-op (r3-04)
+                    self.assertIn(why, out)
+                    self.assertIn(why, p.stderr)
+                    self.assertEqual(p.returncode, 1)
 
     def test_flush_resends_after_outage_and_is_idempotent(self):
         s = Stub(); self.addCleanup(s.stop)

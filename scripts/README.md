@@ -90,7 +90,8 @@ by `test_entrypoint.py`'s compile check.
       `merge` refuses it before any gh call, whatever --driver says), PR open + not draft, base = `main` for kalpa-docs /
       pmg-docs / ai-skills else `develop` (anything else — a code repo's prod `main` — is refused, never
       touched), every check finished green or skipped/neutral with at least one real green run (an empty or
-      skipped-only list is vacuous, refused), the unit's latest review of the repo is SHIP or accepted and
+      skipped-only list is vacuous, refused — so a repo with no CI, pmg-docs and ai-skills today, always
+      parks as a two-way packet for a hand merge), the unit's latest review of the repo is SHIP or accepted and
       saw the PR head (later commits plans/-only), every non-plans/ commit in merge-base..head sits in some
       review's base..head for the repo in the unit (else "unreviewed commits", named), verdict-gate.py
       --blocking reads `pass` (advisory, not-judged, predates or unknown = no merge), door.py finds no floor path on

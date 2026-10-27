@@ -17,7 +17,7 @@ import tempfile
 import unittest
 from unittest import mock
 
-from _helpers import load
+from _helpers import fake_herdr, load
 
 dm = load("driver-merge.py")
 dm.UNKNOWN_SLEEP = 0
@@ -102,10 +102,17 @@ CASES = [
     ("unknown state after retries", {"state": "UNKNOWN"}, 1, {"merged": False}),
     ("draft refused", {"draft": True}, 1, {"merged": False}),
     ("non-driver refused before gh", {"driver": False}, 1, {"merged": False, "no_gh": True, "packet": None}),
-    # a named herdr agent that is not `driver` is a lane: --driver cannot override it (10.3-r1-02)
-    ("lane with --driver refused before gh", {"agent": "lane-x"}, 1,
-     {"merged": False, "no_gh": True, "packet": None, "says": "is a lane"}),
-    ("herdr driver without flag merges", {"agent": "driver", "driver": False}, 0, {"merged": True}),
+    # inside herdr only the pane herdr names `driver` merges; --driver is ignored there and a
+    # failed lookup refuses (10.3-r2-01: nothing sets $HERDR_AGENT_NAME — herdr is asked)
+    ("herdr lane pane with --driver refused", {"herdr": "lane"}, 1,
+     {"merged": False, "no_gh": True, "packet": None, "says": "a lane"}),
+    ("herdr unnamed pane with --driver refused", {"herdr": "unnamed"}, 1,
+     {"merged": False, "no_gh": True, "packet": None, "says": "(unnamed)"}),
+    ("herdr error with --driver refused", {"herdr": "error"}, 1,
+     {"merged": False, "no_gh": True, "packet": None, "says": "fail closed"}),
+    ("herdr pane not listed refused", {"herdr": "absent"}, 1,
+     {"merged": False, "no_gh": True, "packet": None, "says": "0 agents for pane"}),
+    ("herdr driver pane without flag merges", {"herdr": "driver", "driver": False}, 0, {"merged": True}),
     ("gh error -> no merge", {"gh_view_rc": 1}, 1, {"merged": False, "says": "could not evaluate"}),
     ("merge call fails", {"merge_rc": 1, "readback": "OPEN"}, 1, {"merged": False, "packet": "two-way",
                                                                   "says": "gh pr merge failed"}),
@@ -182,10 +189,10 @@ class DriverMergeTest(unittest.TestCase):
     def run_case(self, cmd, o):
         repo, scope, base, head = self.build(o)
         calls = []
-        env = {k: v for k, v in os.environ.items() if k not in ("DECISION_QUEUE_URL", "HERDR_AGENT_NAME")}
+        env = {k: v for k, v in os.environ.items() if k != "DECISION_QUEUE_URL" and not k.startswith("HERDR_")}
         env["CLAUDE_CODE_SESSION_ID"] = "test-session"
-        if o.get("agent"):
-            env["HERDR_AGENT_NAME"] = o["agent"]
+        if o.get("herdr"):
+            env.update(fake_herdr(self.tmp.name, o["herdr"], env["PATH"]))
         argv = [cmd, "--repo", repo, "--pr", "7", "--scope", scope, "--unit", "10.3"]
         if o.get("driver", True):
             argv.append("--driver")

@@ -61,7 +61,8 @@ by `test_entrypoint.py`'s compile check.
     packet.py check-reply (--reply TEXT|--file F|-) [--lane M/W/A] · flush [--driver]   (all: --outbox DIR…)
       stdout: `PACKET <id>` + the card · exit: 0 ok (a blocked POST is ok) · 1 refused / error · 2 usage
       Every packet lands in `<worktree>/.decision-queue/outbox/` (self-ignoring); only a driver
-      (`--driver` or $HERDR_AGENT_NAME=driver) POSTs, and only with $DECISION_QUEUE_URL set (hard 3 s
+      (inside herdr: the pane `herdr agent list` names `driver`, a failed lookup is not one;
+      outside herdr: `--driver`) POSTs, and only with $DECISION_QUEUE_URL set (hard 3 s
       deadline, redirects refused, /packets and /events, idempotent on id; "sent" is a `<id>.sent` marker). A dead queue prints a `Blocked` note and exits 0;
       `flush` re-sends. Only 400/409/413/415/422 are permanent (`<id>.rejected` / `.conflict`); every other 4xx is Blocked and retried. Events of a refused packet are marked `evt-<id>.rejected`, never POSTed. To clear a marker, delete the `<id>.rejected` / `.conflict` file (and its events' `evt-*.rejected`) from the outbox. `flush --outbox DIR` on a missing DIR prints `Skipped: outbox DIR does not exist` (exit 0). check-reply refuses a missing/other-lane tag, an unknown, closed, stale or
       other lane's packet, two different tags, unreadable state, and a one-way packet whose HEAD moved. `--range` runs door.py and a
@@ -86,8 +87,9 @@ by `test_entrypoint.py`'s compile check.
       `MERGED <owner/repo>#N <sha>` + `EVENT … merged`, or `PACKET <id>` + `NOT MERGED — <why>`
       exit: 0 eligible / merged + event written · 1 refused / not merged · 2 usage · 4 merged, event not written
       /plan §6.8 step 4 (scope 10 §4.3). Merges only when ALL hold: caller is a driver
-      ($HERDR_AGENT_NAME=driver, or --driver outside herdr; any other $HERDR_AGENT_NAME is a lane and
-      `merge` refuses it before any gh call, whatever --driver says), PR open + not draft, base = `main` for kalpa-docs /
+      (packet.py's driver_identity: inside herdr the pane `herdr agent list` names `driver`, --driver
+      ignored, a failed lookup refused; --driver outside herdr — `merge` refuses a non-driver before any
+      gh call), PR open + not draft, base = `main` for kalpa-docs /
       pmg-docs / ai-skills else `develop` (anything else — a code repo's prod `main` — is refused, never
       touched), every check finished green or skipped/neutral with at least one real green run (an empty or
       skipped-only list is vacuous, refused — so a repo with no CI, pmg-docs and ai-skills today, always

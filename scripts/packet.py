@@ -3,8 +3,9 @@
 
 Approach: every packet is written to an outbox in the lane's own worktree
 (<repo>/.decision-queue/outbox/, self-ignoring) and `PACKET <id>` is printed; that is
-the one path for every lane (Claude, codex, review). Only a DRIVER (`--driver`, or
-$HERDR_AGENT_NAME == driver) POSTs, and only when $DECISION_QUEUE_URL is set: packets to
+the one path for every lane (Claude, codex, review). Only a DRIVER POSTs — inside herdr the
+pane whose agent herdr names `driver` (asked over `herdr agent list`; a failed lookup is not a
+driver), outside herdr `--driver` (driver_identity) — and only when $DECISION_QUEUE_URL is set: packets to
 /packets, events to /events, 3 s timeout, idempotent on the client-generated id. A dead
 queue never fails the caller: the packet is printed with a `Blocked` note, exit 0, and
 `flush` re-sends later. A one-way door still stops the lane — that is a decision, not a
@@ -56,6 +57,7 @@ Failure stances (each is fail-closed unless it says otherwise):
 """
 import argparse
 import datetime
+import functools
 import hashlib
 import http.client
 import importlib.util
@@ -195,8 +197,56 @@ def repo_of(d):
     return None
 
 
+HERDR_TIMEOUT = 5
+
+
+@functools.lru_cache(maxsize=None)
+def herdr_agent_name(pane):
+    """(name, '') for this herdr pane's agent — '' when the agent is unnamed — or (None, why).
+    herdr is asked, not the environment: a lane is named after launch (`herdr pane rename`,
+    `herdr agent rename … driver`), and a rename cannot reach a running process's env, so
+    $HERDR_AGENT_NAME is set for nobody (10.3-r2-01)."""
+    try:
+        p = subprocess.run(["herdr", "agent", "list"], capture_output=True, text=True, timeout=HERDR_TIMEOUT)
+    except (OSError, subprocess.SubprocessError) as e:
+        return None, f"herdr agent list failed: {e}"
+    if p.returncode:
+        err = next((x.strip() for x in reversed(p.stderr.splitlines()) if x.strip()), "")
+        return None, f"herdr agent list exited {p.returncode}" + (f": {err[:160]}" if err else "")
+    try:
+        agents = json.loads(p.stdout)["result"]["agents"]
+    except (ValueError, KeyError, TypeError):
+        return None, "herdr agent list: output unreadable"
+    mine = [a for a in agents if isinstance(a, dict) and a.get("pane_id") == pane] \
+        if isinstance(agents, list) else []
+    if len(mine) != 1:
+        return None, f"herdr lists {len(mine)} agents for pane {pane}"
+    name = mine[0].get("name")
+    return (name.strip(), "") if isinstance(name, str) else ("", "")
+
+
+def driver_identity(args):
+    """(is_driver, detail) — the one decision of who is the driver, shared by every POST here
+    and by driver-merge.py's merge (10.3-r2-01). Inside herdr ($HERDR_PANE_ID set) the pane's
+    agent must be named `driver`; --driver is ignored there, because /plan's documented commands
+    carry --driver and lanes run /plan. A failed lookup is not a driver (fail closed: a lane that
+    cannot be told from the driver must not POST or merge). Outside herdr, --driver decides."""
+    pane = (os.environ.get("HERDR_PANE_ID") or "").strip()
+    if pane:
+        name, why = herdr_agent_name(pane)
+        if name is None:
+            return False, f"herdr pane {pane}: agent name unreadable ({why}) — not a driver (fail closed)"
+        if name == "driver":
+            return True, f"herdr agent `driver` (pane {pane})"
+        return False, (f"herdr pane {pane} is agent {name or '(unnamed)'!r}, a lane — "
+                       "only the pane named `driver` is the driver, whatever --driver says")
+    if getattr(args, "driver", False):
+        return True, "--driver (outside herdr)"
+    return False, "not a driver (outside herdr: --driver; inside herdr: the pane named `driver`)"
+
+
 def is_driver(args):
-    return bool(getattr(args, "driver", False)) or os.environ.get("HERDR_AGENT_NAME") == "driver"
+    return driver_identity(args)[0]
 
 
 def queue_url():

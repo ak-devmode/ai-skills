@@ -16,7 +16,7 @@ import time
 import unittest
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
-from _helpers import run
+from _helpers import fake_herdr, run
 
 SESSION_VARS = ("CLAUDE_CODE_SESSION_ID", "CLAUDE_SESSION_ID", "CODEX_SESSION_ID")
 LANE = {"PACKET_MACHINE": "mba", "PACKET_WORKSPACE": "ws1", "PACKET_AGENT": "laneA"}
@@ -171,10 +171,17 @@ class TestQueue(PacketBase):
         _, out = self.new("--driver", env=env)
         self.assertEqual([p for p, _ in s.posts], ["/packets"])
 
-    def test_herdr_driver_name_posts(self):
-        s = Stub(); self.addCleanup(s.stop)
-        self.new(env={"DECISION_QUEUE_URL": s.url, "HERDR_AGENT_NAME": "driver", "PACKET_AGENT": "driver"})
-        self.assertEqual(len(s.posts), 1)
+    def test_herdr_pane_decides_not_the_flag(self):  # 10.3-r2-01: herdr is asked, --driver ignored inside it
+        cases = [("driver", (), 1), ("driver", ("--driver",), 1), ("lane", ("--driver",), 0),
+                 ("unnamed", ("--driver",), 0), ("error", ("--driver",), 0), ("absent", ("--driver",), 0)]
+        for mode, flag, posts in cases:
+            with self.subTest(mode, flag=flag):
+                s = Stub(); self.addCleanup(s.stop)
+                env = dict(fake_herdr(self.repo, mode, self.env["PATH"]), DECISION_QUEUE_URL=s.url)
+                self.new(*flag, env=env)
+                self.assertEqual(len(s.posts), posts)
+                out = self.pk("flush", *flag, env=env).stdout
+                self.assertEqual(len(s.posts), posts, out)  # flush: a lane sends nothing either
 
     def test_flush_resends_after_outage_and_is_idempotent(self):
         s = Stub(); self.addCleanup(s.stop)

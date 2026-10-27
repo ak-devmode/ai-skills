@@ -513,9 +513,10 @@ on a direct-to-main repo a branch diff is empty by construction.
      floor hit — park on it per §6.9 — two-way otherwise; fix the condition and re-run.
    - **Exit 4** means the merge landed but the ticker event did not: run `packet.py
      flush --driver`, and tell Alex if it still fails.
-   - A `/concurrency` lane never merges: the script refuses any session whose
-     `$HERDR_AGENT_NAME` is set to something other than `driver`, even with `--driver`
-     (`--driver` only counts outside herdr). Nobody turns on GitHub auto-merge.
+   - A `/concurrency` lane never merges: inside herdr the script asks `herdr agent list`
+     for this pane's agent and accepts only `driver` (`herdr agent rename $HERDR_PANE_ID
+     driver`), ignoring `--driver`; a failed lookup refuses. `--driver` only counts outside
+     herdr. Nobody turns on GitHub auto-merge.
 
 **Rules version.** Every review record stamps `rules_version`. A lineage started before
 the scope-10 cutover finishes under the rules it started with (`/review`'s lineage note,

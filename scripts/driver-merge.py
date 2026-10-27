@@ -4,10 +4,10 @@ plan 10.3 tasks 3.1 + 3.2).
 
 Approach: every condition is evaluated and printed, one line each, then the verdict. A PR is
 eligible only when ALL hold:
-  * driver   — the caller is a driver: $HERDR_AGENT_NAME=driver, or --driver from a session
-               outside herdr. A named herdr agent that is not `driver` is a lane and is refused
-               whatever --driver says (10.3-r1-02). `check` reports it; `merge` refuses before
-               any gh call
+  * driver   — packet.py's driver_identity: inside herdr ($HERDR_PANE_ID set) the pane's agent,
+               asked of `herdr agent list`, must be named `driver` — --driver is ignored there,
+               and a failed lookup is not a driver; outside herdr, --driver (10.3-r2-01).
+               `check` reports it; `merge` refuses before any gh call
   * pr       — open, not a draft
   * base     — `main` for kalpa-docs / pmg-docs / ai-skills, `develop` for every other repo.
                Any other base is refused and never touched: a code repo's `main` is prod, and
@@ -151,15 +151,11 @@ def pr_view_settled(slug, n):
 # ---------- conditions: each returns (ok, detail) ----------------------------------
 
 def cond_driver(a, pk):
-    """herdr names every agent it launches; a name other than `driver` is a lane, and --driver
-    cannot override it (/plan's documented command carries --driver, and lanes run /plan).
-    An unset or blank name is a session outside herdr: packet.py's --driver test decides."""
-    name = (os.environ.get("HERDR_AGENT_NAME") or "").strip()
-    if name and name != "driver":
-        return False, f"$HERDR_AGENT_NAME={name!r} is a lane — lanes never merge, whatever --driver says"
-    if pk.is_driver(a):
-        return True, "driver"
-    return False, "not a driver (--driver or $HERDR_AGENT_NAME=driver) — lanes never merge"
+    """packet.py's driver_identity decides (10.3-r2-01): inside herdr only the pane herdr names
+    `driver`, whatever --driver says; a failed herdr lookup is not a driver; outside herdr,
+    --driver. One decision for the merge here and every POST packet.py makes."""
+    ok, detail = pk.driver_identity(a)
+    return ok, detail if ok else f"{detail} — lanes never merge"
 
 
 def cond_pr(doc):

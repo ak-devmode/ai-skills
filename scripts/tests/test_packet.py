@@ -288,6 +288,38 @@ class TestQueue(PacketBase):
         self.assertEqual([path for path, _ in s.posts], ["/packets", "/events"])
         self.assertFalse([f for f in os.listdir(self.outbox()) if f.startswith("evt-") and f.endswith(".rejected")])
 
+    def test_marker_unlink_failure_is_reported_and_flush_recovers(self):  # 10.1-r12-01
+        s = Stub(); self.addCleanup(s.stop); s.force = 400
+        env = {"DECISION_QUEUE_URL": s.url}
+        pid, _ = self.new("--driver", env=env)
+        s.force = None
+        self.assertEqual(self.pk("close", pid, "--driver", env=env).returncode, 0)  # event marked refused
+        # sitecustomize makes unlink of evt-*.rejected raise PermissionError until the flag file is gone
+        inj = tempfile.mkdtemp(); self.addCleanup(lambda: __import__("shutil").rmtree(inj, True))
+        flag = os.path.join(inj, "fail")
+        put(flag, "")
+        put(os.path.join(inj, "sitecustomize.py"),
+            "import os, pathlib\n_u = pathlib.Path.unlink\n"
+            "def unlink(self, *a, **k):\n"
+            f"    if self.name.startswith('evt-') and self.name.endswith('.rejected') and os.path.exists({flag!r}):\n"
+            "        raise PermissionError(13, 'injected')\n"
+            "    return _u(self, *a, **k)\n"
+            "pathlib.Path.unlink = unlink\n")
+        bad = dict(env, PYTHONPATH=inj)
+        p = self.pk("new", "--id", pid, "--driver", "--door", "two-way", "--title", "Pick one",
+                    "--unit", "10/1.2", "--option", "alpha", "--option", "beta", "--body", "why", env=bad)
+        self.assertEqual(p.returncode, 0, p.stderr)  # harness error never stops the caller
+        self.assertIn("refusal markers not cleared", p.stderr)
+        self.assertTrue(self.sent(pid))
+        n = len(s.posts)
+        self.pk("flush", "--driver", env=bad)  # still failing: reported again, no event POSTed
+        self.assertEqual(len(s.posts), n)
+        os.remove(flag)  # permissions recover
+        out = self.pk("flush", "--driver", env=bad).stdout
+        self.assertIn("FLUSHED 0 packets, 1 events", out)
+        self.assertEqual([path for path, _ in s.posts][n:], ["/events"])
+        self.assertFalse([f for f in os.listdir(self.outbox()) if f.endswith(".rejected")])
+
     def test_flush_warns_on_missing_outbox(self):  # driver todo
         s = Stub(); self.addCleanup(s.stop)
         gone = os.path.join(self.repo, "nope")

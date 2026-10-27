@@ -289,18 +289,32 @@ def _clear_refusals(d, pid):
     """A delivered packet never coexists with a refusal marker (10.1-r10-01). Every packet POST
     goes through try_send, so clearing here covers `new --id` and flush alike. Events of this
     packet that were only marked "packet refused" are released so flush POSTs them; an event's
-    own refusal (a verdict on its content) is left alone. Failure to unlink is not swallowed:
-    a stale marker would silently drop later events, so let it raise."""
+    own refusal (a verdict on its content) is left alone. Harness errors never stop the caller
+    (10.1-r12-01): an unreadable or undeletable marker is reported in one line and left in place
+    (fail closed: never guess), and flush retries this for every sent packet on each run."""
+    bad = []
+
+    def drop(f):
+        try:
+            f.unlink(missing_ok=True)
+        except OSError as e:
+            bad.append(f"{f.name} ({e})")
+
     for k in ("conflict", "rejected"):
-        (d / f"{pid}.{k}").unlink(missing_ok=True)
-    for f in d.glob("evt-*.rejected"):
+        drop(d / f"{pid}.{k}")
+    for f in sorted(d.glob("evt-*.rejected")):
         try:
             if f.read_text() != "packet refused\n":
                 continue
-            if read_json(f.with_suffix(".json")).get("packet_id") == pid:
-                f.unlink()
-        except (OSError, ValueError):
-            continue  # unreadable event/marker: leave it marked, never guess
+            mine = read_json(f.with_suffix(".json")).get("packet_id") == pid
+        except (OSError, ValueError) as e:
+            bad.append(f"{f.name} unreadable ({e})")
+            continue
+        if mine:
+            drop(f)
+    if bad:
+        print(f"packet.py: warning: packet {pid} delivered but refusal markers not cleared: "
+              f"{'; '.join(bad)}; `packet.py flush` retries", file=sys.stderr)
 
 
 def try_send(args, d, ev=None, pid=None):
@@ -575,6 +589,7 @@ def cmd_flush(args):
         for f in sorted(d.glob("*.state.json")):
             pid = f.name[: -len(".state.json")]
             if is_sent(d, pid):
+                _clear_refusals(d, pid)  # retry a cleanup that failed after the POST (10.1-r12-01)
                 continue
             marked = next((k for k in ("conflict", "rejected") if (d / f"{pid}.{k}").exists()), "")
             if marked:

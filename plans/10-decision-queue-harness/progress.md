@@ -25,9 +25,9 @@ Script-owned (`plans-index.py`); PLANS-INDEX.md is rendered from it.
 
 ## Resume Context
 **Scope:** ~/Projects/ai-skills/plans/10-decision-queue-harness/scope.md
-**Last action:** DECISION_QUEUE_URL live on both machines (dev-workbench ef9bae0 pushed, homelab pulled); paste-back proven (copy → pane → check-reply refuses a foreign tag); acceptance card closed
+**Last action:** 10.4 lanes review-closed (attention, ui-packet, scorecard incl. fixed-follow-up reframe); 10.3 merge gate at round-3 stop — decisions 83 (--admin) and 84 (lane identity reframe) open with Alex
 **Next action:** lanes merges (10.3), ui-packet / scorecard / attention (10.4) running; 10.1 acceptance waits on Alex's restarted sessions posting packets; then /verify 10.1–10.4
-**Open blockers:** none
+**Open blockers:** decisions 83/84 (merge gate)
 **Key files changed:** None yet
 
 ---
@@ -41,6 +41,8 @@ Script-owned (`plans-index.py`); PLANS-INDEX.md is rendered from it.
   per-round reframe prompt judged by a fresh agent, three review cases to the queue, round-1
   effort trial. Harness errors never stop work (dead queue → `Blocked` in pane). Driver merges
   include degraded reviews (flagged) and `--admin`. Details: scope.md §4 and the review report.
+- (2026-10-27) Scorecard reopen chain (10.4-r12-01 → r10-02 → r5-03): reframed by the driver (fix discipline; overturns no decision) — fixed follow-up cohort (`--follow-up`, default 7 d) replaces closed-only filtering and the data-estimated horizon.
+- (2026-10-27) Driver merges (10.3 review, driver calls): merge only when verdict-gate.py --blocking reads pass (advisory/not-judged/unknown never merge, so merged is a stricter bar than Done); a repo with no CI (pmg-docs, ai-skills today) never auto-merges — vacuous green refuses it and it parks as a two-way packet; CI definitions (.github/workflows/, .github/actions/, CODEOWNERS, .circleci/, .gitlab-ci.yml, Jenkinsfile, buildspec*) and singular migration/ are floor paths.
 - (2026-10-27) Wiring round-3 stop (10.1-r11 reopened r8-01/02): reframed on Alex's yes (80) — pasted replies only via a file, never shell source; flush count check dropped. Review-packets lane: "is this reframe Alex's call" consolidated into one function (driver call, reopen chain at round 2).
 - (2026-10-26) Lane B round-3 stop: r5-01 rejected — service never deployed, no older server to upgrade from (Alex, 78); r5-02 fixed with one more review round (Alex, 79).
 - (2026-10-26) /plan start: Alex overrode the Repo Graph drift stop (decision 76); his dev-workbench config committed as-is (75); 10.1 and 10.2 run as concurrent lanes.
@@ -183,6 +185,9 @@ Script-owned (`plans-index.py`); PLANS-INDEX.md is rendered from it.
 - Floor gap found by the dry run: WellMed migrations live in singular `internal/db/migration/` (7 repos); backbone #658, a tenant migration, passed the floor. Driver fix f7f3d30 adds `migration/` to the defaults; test fails without it; #658 now one-way.
 - Review: pane `merges review` (unit 10.3).
 
+#### Review loop (2026-10-27)
+- r1 DO NOT SHIP 7 (advisory gate exit read as pass, lanes could merge, --admin past unreported checks, unreviewed commits before the review base, self-greening CI, gh error after merge, no-CI repos) → all fixed; r2 SHIP AFTER BLOCKING 6 (driver identity read from an env var herdr never sets; read-back head; app-bound checks; CI off the floor → own two-way list; SKIPPED/NEUTRAL; ruleset pagination) → fixed; r3 SHIP AFTER BLOCKING 5 = round-3 stop: --admin re-derivation drew findings 4 rounds running (convergence), lane identity reopened a third time (reframe proposed: identify lanes from dispatch-log, delete the herdr-name lookup) → decisions 83/84 to Alex.
+
 ---
 
 ## Plan 10.4: UI template, harness scorecard, herdr attention
@@ -198,3 +203,7 @@ Script-owned (`plans-index.py`); PLANS-INDEX.md is rendered from it.
 - 4.3 attention (dev-workbench `concurrency/10-attention`): 51bc628 → r1 SHIP AFTER BLOCKING (driver set goes stale) fixed 8156f8a (60 s ensure timer, off-anchor), da68dee, 22d954a → r2 SHIP, 2 findings fixed by driver 24a2418 (ensure quiet on a dead socket). Toast per-pane filtering not possible in herdr 0.9.1. TODO at integration: ai-skills herdr/SKILL.md — run `herdr-agent-view ensure` right after renaming to driver.
 - 4.1 ui-packet: ai-skills 1c5531b (schema `ui` payload, packet.py --type ui, README "UI packets", demo tenant from `$DQ_UI_DEMO_TENANT`), dev-workbench b674bfd (side-by-side render, PNG-only + size re-checked server-side, CSP img-src data:, body cap 5 MB); fixture card screenshot `queue/docs/ui-card.png`. TODO at integration: declare `DQ_UI_DEMO_TENANT` (and `DECISION_QUEUE_URL`, `PACKET_POST_TIMEOUT`) in ai-skills `.env.example`. Review running (two repos, one pane).
 - 4.2 scorecard (`concurrency/10-scorecard`): 064d26f..8cbc75c `scripts/harness-scorecard/`; §3.1 lineage table reproduced exactly on the 10-25 logs (291/153/99/43/20/15), suite 466 OK. Driver calls pending: include `~/.claude-int/projects` going forward (baseline layout counted `~/.claude` only); README/CLAUDE.md rows at integration. Review queued after the ui review (same unit log).
+#### Review loops closed (2026-10-27)
+- attention: r1 → r2 SHIP, all fixed (24a2418 driver).
+- ui-packet: schema r3 (4 rejected: consumer pinned pre-unit / out-of-unit c1cdafc → TO-DO) → r6, r8 SHIP 0; queue r4 → r7 → r9 → r11 SHIP, last note deferred to TO-DO `[review 10.4-r11-01]`. Real-patient guard: packet.py requires tenant == $DQ_UI_DEMO_TENANT (a declaration check, worded as such); queue refuses ui unless DQ_UI_ALLOWED_TENANTS is set. Env vars declared in .env.example (c9be6d5).
+- scorecard: r5 → r10 (reopen) → r12 (reopen chain) → REFRAME 486a443 fixed follow-up cohort → r13 SHIP, 3 fixed (36af6a5 cut = min(until, pull), e170c7b, 244ccb6). Baseline undercounted: a fresh pull finds 100 units / 683 reviews in the 10-25 window vs 86 / 622.

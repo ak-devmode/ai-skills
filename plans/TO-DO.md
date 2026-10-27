@@ -501,3 +501,9 @@ Touches: scripts/plans-index.py · kalpa-docs .github/workflows/plans-index-rend
 Source: plans/10-decision-queue-harness/artifacts/review-10.4-r3.md (finding 10.4-r3-01; outside scope 10's unit)
 Touches: scripts/resolve-identifiers.py · scripts/tests/test_resolve_identifiers.py
 - [ ] **c1cdafc exempts every `google.golang.org/protobuf/` package, generated messages included.** `timestamppb.Timestamp{NonexistentField: 1}` and `descriptorpb.FieldDescriptorProto{NonexistentField: 1}` now resolve as zero references, so `/verify`'s names-resolve rows pass invalid field references. Fix: exempt only runtime packages/structs (e.g. `proto.MarshalOptions`), keep scanning `types/known/*pb`, `descriptorpb`, `pluginpb`; add negative message-field cases beside the runtime-options test. Owner: whoever landed c1cdafc (another session, 2026-10-27).
+
+## Decision queue service follow-ups (scope 10, 2026-10-27)
+Source: plans/10-decision-queue-harness/artifacts/review-10.4-r11.md
+Touches: dev-workbench queue/decision_queue/app.py
+- [ ] [review 10.4-r11-01] **A write timeout after headers appends a second 500 response.** When a reader stalls past SOCKET_TIMEOUT mid-body, `_guard`'s `except Exception` logs `internal error` and writes `_json(500)` on the same socket. Track whether headers were sent; if so, log a client timeout and set `close_connection` instead. Same class: any exception after headers. Pre-existing, found at round 4 of the ui-packet lineage; deferred (note).
+- [ ] **Queue accepts a packet whose reply tag doesn't match its own id/lane.** A hand-built POST showed it (packet.py always builds the tag right). Add a server-side tag check against the packet's machine/workspace/agent/id.

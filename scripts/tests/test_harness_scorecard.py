@@ -393,5 +393,104 @@ class CliTest(unittest.TestCase):
             self.assertFalse(os.path.exists(os.path.join(tmp, "st")))
 
 
+class PullTest(unittest.TestCase):
+    """cmd_pull's safety claims, with platform, subprocess and HOME patched: MBA only, never
+    overwrites a cache link it did not make, fails when homelab lacks a source, reads the
+    destination back, and only ever reads from homelab (the host is on rsync's source side)."""
+
+    HOST = "hl"
+
+    def setUp(self):
+        import scorecard
+        self.sc = scorecard
+        self.tmp = tempfile.TemporaryDirectory()
+        self.home, self.logs = os.path.join(self.tmp.name, "home"), os.path.join(self.tmp.name, "logs")
+        os.makedirs(os.path.join(self.home, ".claude", "projects", "-p"))
+        with open(os.path.join(self.home, ".claude", "projects", "-p", "s.jsonl"), "w") as fh:
+            fh.write("{}\n")
+        os.makedirs(os.path.join(self.home, ".codex", "sessions"))
+        os.makedirs(os.path.join(self.home, "Projects"))
+        self.calls, self.probe_out, self.copy = [], ".claude/projects\n.codex/sessions\nProjects\n", True
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def fake_run(self, cmd, **kw):
+        self.calls.append(cmd)
+        if cmd[0] == "ssh":
+            return subprocess.CompletedProcess(cmd, 0, self.probe_out, "")
+        src, dst = cmd[-2], cmd[-1]
+        if self.copy and src.startswith(self.HOST + ":"):   # what a real pull would land
+            sub = "projects/-p" if src.endswith(".claude/projects/") else "demo/plans/s/artifacts" if "Projects" in src else None
+            if sub:
+                os.makedirs(os.path.join(dst, sub), exist_ok=True)
+                name = "s.jsonl" if "projects" in sub else "review-1.1.jsonl"
+                with open(os.path.join(dst, sub, name), "w") as fh:
+                    fh.write("{}\n")
+        return subprocess.CompletedProcess(cmd, 0, "", "")
+
+    def pull(self, system="Darwin"):
+        a = mock.Mock(logs=self.logs, host=self.HOST)
+        err = __import__("io").StringIO()
+        with mock.patch.object(self.sc, "HOME", self.home), \
+                mock.patch.object(self.sc.platform, "system", return_value=system), \
+                mock.patch.object(self.sc.subprocess, "run", side_effect=self.fake_run), \
+                mock.patch("sys.stderr", err), mock.patch("sys.stdout", __import__("io").StringIO()):
+            code = self.sc.cmd_pull(a)
+        return code, err.getvalue()
+
+    def pulled(self):
+        return os.path.exists(os.path.join(self.logs, self.sc.PULLED))
+
+    def test_refuses_off_the_mba(self):
+        code, err = self.pull(system="Linux")
+        self.assertEqual((code, self.calls), (1, []))
+        self.assertIn("MBA only", err)
+
+    def test_refuses_a_link_pointing_elsewhere(self):
+        link = os.path.join(self.logs, "mba", "claude-projects")
+        os.makedirs(os.path.dirname(link))
+        os.symlink(self.tmp.name, link)
+        code, err = self.pull()
+        self.assertEqual((code, self.calls), (1, []))
+        self.assertIn("not overwritten", err)
+        self.assertEqual(os.readlink(link), self.tmp.name)
+
+    def test_refuses_a_non_symlink(self):
+        os.makedirs(os.path.join(self.logs, "mba", "codex-sessions"))
+        code, err = self.pull()
+        self.assertEqual((code, self.calls), (1, []))
+        self.assertIn("is not a symlink", err)
+
+    def test_missing_homelab_source_fails(self):
+        self.probe_out = ".codex/sessions\nProjects\n"
+        code, err = self.pull()
+        self.assertEqual(code, 1)
+        self.assertIn("hl:~/.claude/projects missing", err)
+        self.assertFalse(self.pulled())
+
+    def test_empty_read_back_fails_without_stamp(self):
+        self.copy = False
+        code, err = self.pull()
+        self.assertEqual(code, 1)
+        self.assertIn("read back empty", err)
+        self.assertFalse(self.pulled())
+
+    def test_pull_reads_homelab_only_and_stamps(self):
+        code, err = self.pull()
+        self.assertEqual(code, 0, err)
+        self.assertTrue(self.pulled())
+        self.assertEqual(os.path.realpath(os.path.join(self.logs, "mba", "claude-projects")),
+                         os.path.realpath(os.path.join(self.home, ".claude", "projects")))
+        rsyncs = [c for c in self.calls if c[0] == "rsync"]
+        self.assertTrue(any(c[-2].startswith("hl:") for c in rsyncs))
+        for c in rsyncs:
+            self.assertNotIn("--delete", c)
+            self.assertNotIn(":", c[-1])                         # destination is always local
+            self.assertTrue(c[-1].startswith(self.logs))
+            self.assertTrue(c[-2].startswith(("hl:", self.home)), c)
+        self.assertEqual([c[0] for c in self.calls if c[0] != "rsync"], ["ssh"])   # one read-only probe
+
+
 if __name__ == "__main__":
     unittest.main()

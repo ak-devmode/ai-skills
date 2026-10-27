@@ -325,9 +325,12 @@ A lane's question to Alex is a packet, not prose in a pane. `scripts/README.md` 
   every POST; the box reaches the queue on its own tailnet, so `DECISION_QUEUE_URL` must
   be set in the box's ssh environment. Never pass a local-looking `--outbox` path for a
   box lane: `flush` silently skips a configured outbox that does not exist and reports
-  nothing sent. `flush` prints a count, not ids: `FLUSHED <n>` must equal the number of
-  PARKED/PACKET ids the box lane printed since the last flush. `FLUSHED 0` while a box
-  lane is parked is a misconfigured path or env, not an empty outbox.
+  nothing sent.
+- **Reading a flush (local or box).** Act on every `Skipped:` / `Held:` / `Blocked:` /
+  `Conflict:` / `Rejected` line `flush` prints, and on a `flush: … nothing sent` line
+  (on a box that means the ssh env lacks `DECISION_QUEUE_URL`). Nothing else to check:
+  the `FLUSHED <n>` count is not a signal (already-sent packets are skipped, so `0` is
+  normal while a lane stays parked).
 - **Reply path.** Alex pastes the prefilled reply (opens `[lane <m>/<w>/<a> <id>]`) into
   the driver's pane. **The pasted text never appears in shell source** — not quoted,
   not piped from `printf`, not `"$(cat …)"`: any command line that contains it is

@@ -520,7 +520,9 @@ The unit range is §6.8's `<base>..HEAD`.
    in the pane, continue. After each later commit, `packet.py touch <id>` refreshes its
    reversal cost. If door.py promoted it, the card says one-way: park.
 4. **Who posts.** A `/plan` session Alex drives directly is its own driver: add
-   `--driver`, and run `packet.py flush --driver` when you next stop. A `/plan` run
+   `--driver`, and run `packet.py flush --driver` when you next stop, acting on every
+   `Skipped:` / `Held:` / `Blocked:` / `Conflict:` / `Rejected` line it prints (the
+   count is not a signal). A `/plan` run
    dispatched as a `/concurrency` lane never passes `--driver`; its driver flushes and
    relays (`/concurrency` §7.2.1). A failed POST parks nothing — the card prints with a
    `Blocked` note and two-way work carries on.

@@ -99,11 +99,11 @@ by `test_entrypoint.py`'s compile check.
       review's base..head for the repo in the unit (else "unreviewed commits", named), verdict-gate.py
       --blocking reads `pass` (advisory, not-judged, predates or unknown = no merge), door.py finds no floor path on
       merge-base..head, no CI definition touched (workflows, actions, CODEOWNERS… — a two-way "CI change"
-      packet, Alex merges by hand; not floor: CI edits are reversible), mergeStateStatus CLEAN/HAS_HOOKS (BLOCKED → `--admin` only when every required
-      check of the base — classic protection and rulesets, both read — is SUCCESS (or present as
-      SKIPPED/NEUTRAL, GitHub's rule) on the head, a check bound to an app (classic app_id, ruleset
-      integration_id) only by a check run from that app — head check-runs unreadable is no --admin; unreadable
-      protection is no merge; anything else refused).
+      packet, Alex merges by hand; not floor: CI edits are reversible), mergeStateStatus CLEAN/HAS_HOOKS (BLOCKED → `--admin` only when
+      reviewDecision is REVIEW_REQUIRED and every required check of the base — classic protection and
+      rulesets, both read — is present on the head (a check bound to an app, classic app_id or ruleset
+      integration_id, by a check run from that app) with EVERY entry of its name SUCCESS or SKIPPED/NEUTRAL —
+      head check-runs unreadable is no --admin; unreadable protection is no merge; any other BLOCKED refused).
       `gh pr merge --match-head-commit`, never `--auto`; the merge is read back as MERGED at the checked
       head before the `merged` event (MERGED at another head is someone else's merge: no event, a packet) (repo, PR, base, sha; degraded review / admin / gate marker flagged). A failed
       condition writes a packet instead: one-way with the matched paths for a floor hit, else two-way.

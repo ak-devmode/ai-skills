@@ -103,7 +103,22 @@ CASES = [
      {"merged": False, "says": "unreviewed commits: 1"}),
     ("plans-only commit before review base", {"pre_base": "plans/notes.md"}, 0, {"merged": True}),
     ("two reviews cover the range", {"split_review": True}, 0, {"merged": True}),
-    ("admin only when protection blocks", {"state": "BLOCKED"}, 0, {"merged": True, "admin": True}),
+    # --admin only when GitHub says a review approval is what is missing (Alex 83, 10.3-r3-01)
+    ("admin: only review missing, checks green", {"state": "BLOCKED"}, 0, {"merged": True, "admin": True}),
+    ("BLOCKED but approved: something else blocks", {"state": "BLOCKED", "review": "APPROVED"}, 1,
+     {"merged": False, "packet": "two-way", "says": "reviewDecision APPROVED"}),
+    ("BLOCKED, no review required", {"state": "BLOCKED", "review": None}, 1,
+     {"merged": False, "says": "reviewDecision none"}),
+    # every entry of a required name must be satisfied: GitHub requires a same-named status AND run
+    ("BLOCKED: green run + failing status, same context", {"state": "BLOCKED", "checks": GREEN + [
+        {"__typename": "StatusContext", "context": "ci", "state": "FAILURE"}]}, 1,
+     {"merged": False, "says": "not satisfied on the head: ci"}),
+    ("BLOCKED: two same-app runs, one failing", {"state": "BLOCKED", "protection": (0, BOUND_CI),
+                                                 "check_runs": (0, [run("ci", APP), run("ci", APP, "failure")])}, 1,
+     {"merged": False, "says": f"not satisfied on the head: ci (app {APP})"}),
+    ("BLOCKED: bound run pending beside a green one", {"state": "BLOCKED", "protection": (0, BOUND_CI),
+                                                       "check_runs": (0, [run("ci", APP), dict(run("ci", APP), status="in_progress", conclusion=None)])}, 1,
+     {"merged": False, "says": f"ci (app {APP})"}),
     # --admin bypasses required checks too: each one must be SUCCESS on the head (10.3-r1-03)
     ("BLOCKED: required check never reported", {"state": "BLOCKED", "protection": (0, {"contexts": ["ci", "e2e"]})},
      1, {"merged": False, "says": "e2e"}),
@@ -223,7 +238,7 @@ class DriverMergeTest(unittest.TestCase):
     def fake_gh(self, o, base, head, calls):
         pr = {"number": 7, "state": "OPEN", "isDraft": o.get("draft", False), "baseRefName": o.get("base", "develop"),
               "headRefName": "feature/x", "baseRefOid": base, "headRefOid": head,
-              "mergeStateStatus": o.get("state", "CLEAN"), "url": "u", "statusCheckRollup": o.get("checks", GREEN)}
+              "mergeStateStatus": o.get("state", "CLEAN"), "reviewDecision": o.get("review", "REVIEW_REQUIRED"), "url": "u", "statusCheckRollup": o.get("checks", GREEN)}
 
         def gh(*args):
             calls.append(args)

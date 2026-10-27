@@ -26,15 +26,16 @@ eligible only when ALL hold:
                CODEOWNERS, …). A PR editing the CI that produced its own green never auto-merges,
                but CI edits are reversible, so this is a two-way "CI change" packet — Alex
                reviews and merges by hand — not a floor path (10.3-r2-04)
-  * mergeable — mergeStateStatus CLEAN / HAS_HOOKS merges; BLOCKED merges with --admin (branch
-               protection is what blocks once every condition above holds — what Alex does by
-               hand) ONLY when every required check of the base branch (classic protection AND
-               rulesets) is in the head's rollup as SUCCESS, or SKIPPED/NEUTRAL (GitHub's own
-               rule, 10.3-r2-05) — and a check bound to an app (classic app_id, ruleset
-               integration_id) only by a check run from that app (10.3-r2-03): the rollup lists only checks that ran, so
-               a required check that never reported is invisible to `checks`, and --admin
-               would merge past it (10.3-r1-03); anything else (DIRTY, BEHIND, UNSTABLE, DRAFT,
-               UNKNOWN after retries) refuses
+  * mergeable — mergeStateStatus CLEAN / HAS_HOOKS merges; BLOCKED merges with --admin (what
+               Alex does by hand) ONLY when GitHub says the missing piece is a review approval
+               (reviewDecision REVIEW_REQUIRED) AND every required check of the base branch
+               (classic protection AND rulesets) is satisfied on the head: present (a check
+               bound to an app by a check run from that app, 10.3-r2-03) and EVERY entry of that
+               name SUCCESS or SKIPPED/NEUTRAL (10.3-r2-05) — a failing status beside a green
+               run is not satisfied (Alex 83, 10.3-r3-01). The rollup lists only checks that
+               ran, so a required check that never reported is invisible to `checks` (10.3-r1-03).
+               Any other BLOCKED, and DIRTY, BEHIND, UNSTABLE, DRAFT, UNKNOWN after retries,
+               refuses: a two-way packet
 `merge` on an eligible PR runs `gh pr merge --match-head-commit <head>` (never --auto: GitHub
 auto-merge stays off), reads the PR back as MERGED with its merge commit, then posts
 `packet.py event --kind merged` with repo, PR and merge sha (task 3.2). On any failed condition
@@ -43,6 +44,7 @@ and prints why.
 
 Failure stances (fail closed: every one of these is "no merge" with the reason):
   * gh error, unparseable gh JSON, unknown check type/state, mergeStateStatus still UNKNOWN
+  * BLOCKED with reviewDecision other than REVIEW_REQUIRED (missing included) -> no --admin
   * BLOCKED and the base's protection or rulesets unreadable -> no --admin, no merge
   * BLOCKED, a required check bound to an app, and the head's check runs unreadable -> the
     binding cannot be verified -> no --admin, no merge
@@ -86,7 +88,7 @@ DOCS_MAIN = {"kalpa-docs", "pmg-docs", "ai-skills"}
 INERT = {"SKIPPED", "NEUTRAL"}
 MERGE_OK = {"CLEAN", "HAS_HOOKS"}
 FIELDS = ("number,state,isDraft,baseRefName,headRefName,baseRefOid,headRefOid,"
-          "mergeStateStatus,url,statusCheckRollup")
+          "mergeStateStatus,reviewDecision,url,statusCheckRollup")
 UNKNOWN_RETRIES, UNKNOWN_SLEEP = 3, 2.0
 # Never auto-merged, in door.py's glob syntax (10.3-r2-04): a PR that edits the CI producing its
 # own green runs rides a self-referential green. Reversible, so NOT on the one-way floor (that
@@ -314,38 +316,62 @@ def satisfied(res):
     return str(res or "").upper() in {"SUCCESS"} | INERT
 
 
-def cond_mergeable(state, slug=None, base=None, rollup=None, head=None):
-    """(ok, detail, admin). BLOCKED earns --admin only when every required check is satisfied on
-    the head: SUCCESS, or SKIPPED/NEUTRAL — GitHub's own rule for a required job skipped by `if:`
-    (10.3-r2-05). An unbound check is satisfied by the rollup entry of that name. A check bound
-    to an app is satisfied only by a completed check run of that name FROM that app, read from
-    the head's check-runs (the rollup carries no app): anyone with status-write access can post
-    a same-named commit status (10.3-r2-03). Check-runs unreadable -> the binding cannot be
-    verified -> no --admin. Absent, pending, failed or from another app is not satisfied."""
+def entry_ok(c, rollup=True):
+    """One check entry satisfied: a completed check run whose conclusion is SUCCESS or
+    SKIPPED/NEUTRAL (GitHub's rule for a required job skipped by `if:`, 10.3-r2-05), or a commit
+    status in those states. Rollup entries are typed (`__typename`, UPPER case); REST check runs
+    are not (lower case). An unknown shape is not satisfied."""
+    if not isinstance(c, dict):
+        return False
+    if rollup and c.get("__typename") == "StatusContext":
+        return satisfied(c.get("state"))
+    if rollup and c.get("__typename") != "CheckRun":
+        return False
+    return str(c.get("status") or "").upper() == "COMPLETED" and satisfied(c.get("conclusion"))
+
+
+def cond_mergeable(state, slug=None, base=None, rollup=None, head=None, review=None):
+    """(ok, detail, admin). BLOCKED earns --admin ONLY when GitHub says a review approval is
+    missing (reviewDecision REVIEW_REQUIRED) AND every required (check, app) of the base
+    (classic protection and rulesets) is satisfied on the head (Alex 83, 10.3-r3-01): at least
+    one entry exists — for a check bound to an app, a check run FROM that app, read from the
+    head's check-runs since the rollup carries no app (10.3-r2-03) — and EVERY entry of that
+    name, rollup or check run, any source, is satisfied. A failing status beside a green check
+    run, or one failing run of two, is not satisfied: GitHub requires both. Any other BLOCKED
+    (reviewDecision APPROVED / none / unreadable) is something this script cannot see: no
+    --admin. Required checks, the rollup or the check runs unreadable -> no --admin."""
     if state in MERGE_OK:
         return True, state, False
     if state != "BLOCKED":
         return False, f"mergeStateStatus {state or 'missing'} — not mergeable as is", False
+    if review != "REVIEW_REQUIRED":
+        return False, (f"BLOCKED with reviewDecision {review or 'none'} — something other than a missing "
+                       "review approval blocks; no --admin"), False
     req, why = required_checks(slug, base)
     if req is None:
         return False, f"BLOCKED and {why} — no --admin without the required checks", False
-    green = {c.get("name") or c.get("context") for c in rollup if isinstance(c, dict) and
-             satisfied(c.get("conclusion") or c.get("state"))} if isinstance(rollup, list) else set()
-    by_app = set()
+    if not (isinstance(rollup, list) and all(isinstance(c, dict) for c in rollup)):
+        return False, "BLOCKED and the head's check list unreadable — no --admin", False
+    runs = []
     if any(app for _, app in req):
         runs, why = gh_pages(f"repos/{slug}/commits/{head}/check-runs?per_page=100", key="check_runs")
-        if runs is None:
-            return False, (f"BLOCKED and the head's check runs unreadable ({why}) — a required check's app "
-                           "binding cannot be verified; no --admin"), False
-        by_app = {(r.get("name"), (r.get("app") or {}).get("id")) for r in runs
-                  if isinstance(r, dict) and isinstance(r.get("app"), dict)
-                  and r.get("status") == "completed" and satisfied(r.get("conclusion"))}
-    missing = sorted(f"{ctx} (app {app})" if app else ctx for ctx, app in req
-                     if (ctx, app) not in by_app and (app or ctx not in green))
-    if missing:
-        return False, (f"BLOCKED and required check(s) not satisfied on the head: {', '.join(missing[:6])}"
-                       " — missing, pending, failed or not from the bound app; no --admin"), False
-    return True, (f"BLOCKED by branch protection — {len(req)} required check(s) satisfied; "
+        if runs is None or not all(isinstance(r, dict) for r in runs):
+            return False, (f"BLOCKED and the head's check runs unreadable ({why or 'bad entry'}) — a required "
+                           "check's app binding cannot be verified; no --admin"), False
+    unmet = []
+    for ctx, app in sorted(req, key=lambda x: (x[0], x[1] or 0)):
+        named = [entry_ok(c) for c in rollup if (c.get("name") or c.get("context")) == ctx]
+        mine = [r for r in runs if r.get("name") == ctx]
+        named += [entry_ok(r, rollup=False) for r in mine]
+        present = (any(entry_ok(r, rollup=False) for r in mine if (r.get("app") or {}).get("id") == app)
+                   if app else bool(named))
+        if not (present and all(named)):
+            unmet.append(f"{ctx} (app {app})" if app else ctx)
+    if unmet:
+        return False, (f"BLOCKED and required check(s) not satisfied on the head: {', '.join(unmet[:6])}"
+                       " — missing, pending, failed, not from the bound app, or one entry of that name"
+                       " not satisfied; no --admin"), False
+    return True, (f"BLOCKED only on a missing review approval — {len(req)} required check(s) satisfied; "
                   "merges with --admin when every other condition holds"), True
 
 
@@ -588,7 +614,7 @@ def evaluate(a):
     rows.append(("floor", fok, fdetail))
     rows.append(("ci",) + cond_ci(a.repo, rng))
     mok, mdetail, admin = cond_mergeable(doc.get("mergeStateStatus"), slug, base, doc.get("statusCheckRollup"),
-                                         head_oid)
+                                         head_oid, doc.get("reviewDecision"))
     rows.append(("mergeable", mok, mdetail))
     facts = {"slug": slug, "label": f"{slug}#{a.pr}", "base": base, "head": head_oid, "admin": admin,
              "degraded": degraded, "marker": marker, "hits": hits, "range": rng}

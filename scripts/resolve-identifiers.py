@@ -78,6 +78,9 @@ SH_BUILTIN = {"HOME", "PATH", "PWD", "OLDPWD", "USER", "LOGNAME", "SHELL", "TMPD
               "LC_ALL", "TERM", "HOSTNAME", "UID", "EUID", "PPID", "RANDOM", "LINENO", "SECONDS",
               "OSTYPE", "BASH_SOURCE", "BASH_VERSION", "BASHPID", "PIPESTATUS", "FUNCNAME", "OPTARG",
               "OPTIND", "REPLY", "COLUMNS", "LINES", "EDITOR", "PAGER"}
+# Set by the runtime or toolchain itself, never declared by the app (Node, Nuxt, Vite and test
+# runners set NODE_ENV) — WellMed scope 197, verify 197.2 (sessionCookies.ts read NODE_ENV).
+RUNTIME_ENV = {"NODE_ENV"}
 SH_NAME = re.compile(r"^[A-Z][A-Z0-9_]*$")
 SH_ASSIGN_WORD = re.compile(r"^([A-Z][A-Z0-9_]*)\+?=")
 SH_KEYWORDS = {"export", "local", "readonly", "declare", "typeset"}
@@ -778,6 +781,8 @@ def resolve(r, idx):
     """Return (status, detail): status in resolved | unresolved; detail = where / why."""
     kind, name = r["kind"], r["name"]
     if kind == "env":
+        if name in RUNTIME_ENV:
+            return "resolved", "set by the runtime"
         use_dir = os.path.dirname(r["file"]) if r.get("file") else None
         hits, ignored = [], 0
         for d, n, where, ign in idx.env():

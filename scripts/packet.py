@@ -643,7 +643,7 @@ def main(argv):
     sub = ap.add_subparsers(dest="cmd", required=True)
     n = sub.add_parser("new", parents=[common])
     n.add_argument("--door", required=True, choices=["one-way", "two-way", "info"])
-    n.add_argument("--type", default="generic", choices=["data-model", "generic"])
+    n.add_argument("--type", default="generic", choices=["data-model", "generic", "ui"])
     n.add_argument("--title", required=True)
     n.add_argument("--unit", required=True)
     n.add_argument("--option", action="append", default=[])

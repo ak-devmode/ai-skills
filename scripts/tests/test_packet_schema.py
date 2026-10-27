@@ -45,6 +45,9 @@ class TestPacketSchema(unittest.TestCase):
         "missing-workspace.json": "missing required 'workspace'",
         "no-recommended.json": "0 items match 'contains'",
         "slash-in-agent.json": "/agent: does not match",
+        "ui-bad-payload.json": "missing required 'callouts'",
+        "ui-non-png-image.json": "/payload/new/image: does not match",
+        "ui-path-image.json": "/payload/old/image: does not match",
         "two-recommended.json": "2 items match 'contains'",
     }
 
@@ -62,6 +65,18 @@ class TestPacketSchema(unittest.TestCase):
                      "event-done.json", "event-touch.json", "generic-two-way.json",
                      "data-model-one-way.json"):
             self.assertIn(want, have)
+
+    def test_ui_image_cap_is_exact(self):
+        # 2,000,000 base64 chars (1.5 MB of PNG) passes; one more fails. Built in-test: no 2 MB fixture.
+        doc = dict(next(d for n, d in fixtures("valid") if n == "ui-two-way.json"))
+        doc["payload"] = dict(doc["payload"])
+        pre = "data:image/png;base64,"
+        for n, ok in ((2000000, True), (2000004, False)):
+            doc["payload"]["old"] = {"label": "x", "image": pre + "A" * n}
+            errs = sc.validate(doc)
+            self.assertEqual(errs == [], ok, errs[:1])
+            if not ok:
+                self.assertTrue(any("/payload/old/image: does not match" in e for e in errs), errs)
 
     def test_trailing_newline_does_not_satisfy_end_anchor(self):
         # ECMA-262 `$` rejects 'x\n'; Python's would accept it (10.1-r1-14)

@@ -128,6 +128,21 @@ class TestNew(PacketBase):
         st = subprocess.run(["git", "-C", self.repo, "status", "--porcelain"], capture_output=True, text=True)
         self.assertEqual(st.stdout.strip(), "")  # outbox never dirties the worktree
 
+    def test_ui_packet_from_payload_file_and_non_png_refused(self):
+        fx = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures", "packets", "valid", "ui-two-way.json")
+        payload = load(fx)["payload"]
+        pf = os.path.join(self.repo, "ui-payload.json")
+        put(pf, json.dumps(payload))
+        args = ("new", "--door", "two-way", "--type", "ui", "--title", "t", "--unit", "u",
+                "--option", "a", "--option", "b", "--payload-file", pf)
+        p = self.pk(*args)
+        self.assertEqual(p.returncode, 0, p.stderr)
+        payload["new"]["image"] = "data:image/jpeg;base64,AAAA"
+        put(pf, json.dumps(payload))
+        p = self.pk(*args)
+        self.assertEqual(p.returncode, 1, p.stdout)  # refused: not a PNG data URI, nothing queued
+        self.assertIn("/payload/new/image", p.stderr + p.stdout)
+
     def test_invalid_packet_refused_and_nothing_written(self):
         p = self.pk("new", "--door", "two-way", "--title", "t", "--unit", "u", "--option", "a",
                     "--recommended", "5", "--body", "b")

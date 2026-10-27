@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://ai-skills.local/schemas/packet.schema.json",
   "title": "Decision-queue packet (scope 10, 10.1 task 1.1)",
-  "$comment": "One packet = one decision from a lane. Root validates a packet; $defs/event validates a ticker event. Uses only keywords scripts/packet.py's stdlib validator implements: type, required, properties, additionalProperties, enum, const, pattern, minLength, minItems, minimum, items, contains/minContains/maxContains, allOf, if/then, $ref (local). Lane tag in reply: '[lane <machine>/<workspace>/<agent> <packet-id>]'; packet.py additionally checks the tag matches the packet's own fields and id (a pattern cannot back-reference). ui type is reserved for 10.4.",
+  "$comment": "One packet = one decision from a lane. Root validates a packet; $defs/event validates a ticker event. Uses only keywords scripts/packet.py's stdlib validator implements: type, required, properties, additionalProperties, enum, const, pattern, minLength, minItems, minimum, items, contains/minContains/maxContains, allOf, if/then, $ref (local). Lane tag in reply: '[lane <machine>/<workspace>/<agent> <packet-id>]'; packet.py additionally checks the tag matches the packet's own fields and id (a pattern cannot back-reference). ui payload (10.4 task 4.1): images travel in the packet as PNG data URIs, capped by a bounded-repeat pattern because maxLength is not a supported keyword.",
   "type": "object",
   "required": ["schema_version", "id", "created_at", "machine", "workspace", "agent", "repo", "branch", "head_sha", "unit", "door", "type", "title", "options", "blocks", "continues_on", "payload", "reply"],
   "additionalProperties": false,
@@ -51,6 +51,10 @@
     {
       "if": {"properties": {"type": {"const": "generic"}}, "required": ["type"]},
       "then": {"properties": {"payload": {"$ref": "#/$defs/payload_generic"}}}
+    },
+    {
+      "if": {"properties": {"type": {"const": "ui"}}, "required": ["type"]},
+      "then": {"properties": {"payload": {"$ref": "#/$defs/payload_ui"}}}
     }
   ],
   "$defs": {
@@ -89,6 +93,42 @@
       "additionalProperties": false,
       "properties": {
         "tables": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/dm_table"}}
+      }
+    },
+    "png_data_uri": {
+      "type": "string",
+      "pattern": "^data:image/png;base64,[A-Za-z0-9+/]{1,2000000}={0,2}$",
+      "$comment": "PNG only. Cap: 2,000,000 base64 chars = 1.5 MB of PNG per image (the queue runs on another machine and cannot read lane paths, so the bytes ride in the packet). The queue enforces the same cap server-side."
+    },
+    "ui_shot": {
+      "type": "object",
+      "required": ["image", "label"],
+      "additionalProperties": false,
+      "properties": {
+        "image": {"$ref": "#/$defs/png_data_uri"},
+        "label": {"type": "string", "minLength": 1, "$comment": "where the shot came from, e.g. 'develop (deployed)' / 'lane dev server'"}
+      }
+    },
+    "ui_viewport": {
+      "type": "object",
+      "required": ["width", "height"],
+      "additionalProperties": false,
+      "properties": {
+        "width": {"type": "integer", "minimum": 1},
+        "height": {"type": "integer", "minimum": 1}
+      }
+    },
+    "payload_ui": {
+      "type": "object",
+      "required": ["old", "new", "route", "viewport", "callouts", "tenant"],
+      "additionalProperties": false,
+      "properties": {
+        "old": {"$ref": "#/$defs/ui_shot", "$comment": "deployed develop"},
+        "new": {"$ref": "#/$defs/ui_shot", "$comment": "lane FE dev server against the dev gateway"},
+        "route": {"type": "string", "minLength": 1, "$comment": "URL path/route shot, e.g. /patients/list; never a URL with a token or a real-patient id"},
+        "viewport": {"$ref": "#/$defs/ui_viewport"},
+        "callouts": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}, "$comment": "behaviour changes, one string each"},
+        "tenant": {"type": "string", "minLength": 1, "$comment": "demo tenant label, read from the lane's env (DQ_UI_DEMO_TENANT); never a real-patient tenant"}
       }
     },
     "dm_table": {

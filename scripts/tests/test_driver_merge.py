@@ -84,6 +84,10 @@ CASES = [
     ("unknown state after retries", {"state": "UNKNOWN"}, 1, {"merged": False}),
     ("draft refused", {"draft": True}, 1, {"merged": False}),
     ("non-driver refused before gh", {"driver": False}, 1, {"merged": False, "no_gh": True, "packet": None}),
+    # a named herdr agent that is not `driver` is a lane: --driver cannot override it (10.3-r1-02)
+    ("lane with --driver refused before gh", {"agent": "lane-x"}, 1,
+     {"merged": False, "no_gh": True, "packet": None, "says": "is a lane"}),
+    ("herdr driver without flag merges", {"agent": "driver", "driver": False}, 0, {"merged": True}),
     ("gh error -> no merge", {"gh_view_rc": 1}, 1, {"merged": False, "says": "could not evaluate"}),
     ("merge call fails", {"merge_rc": 1}, 1, {"merged": False, "packet": "two-way"}),
     ("merge not read back", {"readback": "OPEN"}, 1, {"merged": False, "says": "reads back OPEN"}),
@@ -145,6 +149,8 @@ class DriverMergeTest(unittest.TestCase):
         calls = []
         env = {k: v for k, v in os.environ.items() if k not in ("DECISION_QUEUE_URL", "HERDR_AGENT_NAME")}
         env["CLAUDE_CODE_SESSION_ID"] = "test-session"
+        if o.get("agent"):
+            env["HERDR_AGENT_NAME"] = o["agent"]
         argv = [cmd, "--repo", repo, "--pr", "7", "--scope", scope, "--unit", "10.3"]
         if o.get("driver", True):
             argv.append("--driver")
@@ -211,7 +217,7 @@ class DriverMergeTest(unittest.TestCase):
                 continue  # merge-only failures: check is eligible there
             with self.subTest(name):
                 rc, out, calls, packets, events = self.run_case("check", o)
-                want = 1 if (want_rc or o.get("driver") is False) else 0
+                want = 1 if want_rc else 0
                 self.assertEqual(rc, want, out)
                 self.assertEqual([c for c in calls if c[:2] == ("pr", "merge")], [])
                 self.assertEqual((packets, events), ([], []))

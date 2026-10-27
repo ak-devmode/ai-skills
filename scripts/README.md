@@ -85,8 +85,9 @@ by `test_entrypoint.py`'s compile check.
       stdout: one `[ok]`/`[FAIL]` line per condition, `verdict: ELIGIBLE|REFUSED …`; merge adds
       `MERGED <owner/repo>#N <sha>` + `EVENT … merged`, or `PACKET <id>` + `NOT MERGED — <why>`
       exit: 0 eligible / merged + event written · 1 refused / not merged · 2 usage · 4 merged, event not written
-      /plan §6.8 step 4 (scope 10 §4.3). Merges only when ALL hold: caller is a driver (packet.py's check;
-      `merge` refuses a lane before any gh call), PR open + not draft, base = `main` for kalpa-docs /
+      /plan §6.8 step 4 (scope 10 §4.3). Merges only when ALL hold: caller is a driver
+      ($HERDR_AGENT_NAME=driver, or --driver outside herdr; any other $HERDR_AGENT_NAME is a lane and
+      `merge` refuses it before any gh call, whatever --driver says), PR open + not draft, base = `main` for kalpa-docs /
       pmg-docs / ai-skills else `develop` (anything else — a code repo's prod `main` — is refused, never
       touched), every check finished green or skipped/neutral with at least one real green run (an empty or
       skipped-only list is vacuous, refused), the unit's latest review of the repo is SHIP or accepted and

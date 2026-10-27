@@ -4,8 +4,10 @@ plan 10.3 tasks 3.1 + 3.2).
 
 Approach: every condition is evaluated and printed, one line each, then the verdict. A PR is
 eligible only when ALL hold:
-  * driver   — the caller is a driver (packet.py's own is_driver: --driver or
-               $HERDR_AGENT_NAME=driver). `check` reports it; `merge` refuses a lane outright
+  * driver   — the caller is a driver: $HERDR_AGENT_NAME=driver, or --driver from a session
+               outside herdr. A named herdr agent that is not `driver` is a lane and is refused
+               whatever --driver says (10.3-r1-02). `check` reports it; `merge` refuses before
+               any gh call
   * pr       — open, not a draft
   * base     — `main` for kalpa-docs / pmg-docs / ai-skills, `develop` for every other repo.
                Any other base is refused and never touched: a code repo's `main` is prod, and
@@ -135,6 +137,18 @@ def pr_view_settled(slug, n):
 
 
 # ---------- conditions: each returns (ok, detail) ----------------------------------
+
+def cond_driver(a, pk):
+    """herdr names every agent it launches; a name other than `driver` is a lane, and --driver
+    cannot override it (/plan's documented command carries --driver, and lanes run /plan).
+    An unset or blank name is a session outside herdr: packet.py's --driver test decides."""
+    name = (os.environ.get("HERDR_AGENT_NAME") or "").strip()
+    if name and name != "driver":
+        return False, f"$HERDR_AGENT_NAME={name!r} is a lane — lanes never merge, whatever --driver says"
+    if pk.is_driver(a):
+        return True, "driver"
+    return False, "not a driver (--driver or $HERDR_AGENT_NAME=driver) — lanes never merge"
+
 
 def cond_pr(doc):
     if doc.get("state") != "OPEN":
@@ -345,8 +359,7 @@ def evaluate(a):
     if not (isinstance(base, str) and isinstance(base_oid, str) and isinstance(head_oid, str) and head_oid):
         raise Refuse(f"gh pr view {slug}#{a.pr}: base/head refs missing")
     pk = _load("packet", PACKET)
-    rows = [("driver", pk.is_driver(a), "driver" if pk.is_driver(a) else
-             "not a driver (--driver or $HERDR_AGENT_NAME=driver) — lanes never merge")]
+    rows = [("driver",) + cond_driver(a, pk)]
     rows.append(("pr",) + cond_pr(doc))
     rows.append(("base",) + cond_base(name, base))
     rows.append(("checks",) + cond_checks(doc.get("statusCheckRollup")))
@@ -394,9 +407,9 @@ def main(argv):
         return EXIT_USAGE if e.code else EXIT_OK
     a.repo = os.path.abspath(os.path.expanduser(a.repo))
     pk = _load("packet", PACKET)
-    if a.cmd == "merge" and not pk.is_driver(a):
-        print("driver-merge: refused — merge is driver-only (--driver or $HERDR_AGENT_NAME=driver); "
-              "lanes never merge")
+    dok, ddetail = cond_driver(a, pk)
+    if a.cmd == "merge" and not dok:
+        print(f"driver-merge: refused — merge is driver-only: {ddetail}")
         return EXIT_REFUSED
     try:
         rows, facts = evaluate(a)

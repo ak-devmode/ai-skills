@@ -1431,9 +1431,11 @@ def repeated_reframe(recs, unit, review_id):
     """[(review_id, proposal, reason)] earlier rejected reframes of this lineage that `review_id`'s
     reframe proposes again: the same proposal after normalizing case/punctuation, or one that
     differs only slightly (similarity >= 0.85). A judge's rejection is the lineage's answer; the
-    same idea back again is Alex's to see, not the loop's to re-judge. Fails closed toward a
-    packet: unknown similarity (no proposal text) is not a repeat, but no earlier verdict means no
-    packet — nothing was rejected."""
+    same idea back again is Alex's to see, not the loop's to re-judge. Fails open (not a repeat:
+    no hold, no packet) on a proposal with no text, because empty text would "match" every other
+    empty proposal and `record` already refuses an empty one as malformed; and with no earlier
+    rejected verdict, because then there is no answer being repeated. Raising is not handled
+    here: repeat_of holds on it."""
     rf = reframe_of(recs, review_id)
     if not rf:
         return []
@@ -1523,10 +1525,15 @@ def packet_repeat(recs, unit, review_id):
 
 
 def packet_stuck(recs, unit, review_id):
-    """Case 2: a blocking finding that survived two rounds with no qualifying reframe. `Survived`:
-    the review is round >= 3 of its lineage with no SHIP, or a blocking finding ends a `reopens`
-    chain of >= 3 (two failed fixes). `Qualifying reframe`: an accepted, non-overturning verdict
-    anywhere in the lineage. Fail-closed: an unknown round is round 0, so it never fires early."""
+    """Case 2: a blocking finding that survived two rounds with no qualifying reframe (scope 10
+    §4.2). `Survived`: a blocking finding of a round >= 3 review with no SHIP whose file, or whose
+    `reopens` chain, carried a blocking finding in an earlier round of the lineage; or one ending a
+    `reopens` chain of >= 3 (two failed fixes). A defect first raised in round 3 survived nothing
+    (review 10.2-r3-04) — round 3's [CONVERGENCE] STOP still asks about it inline. `Qualifying
+    reframe`: an accepted verdict that is the judge's to take (no overturn, no user call) anywhere
+    in the lineage. Fails open (no packet) on an unknown round (review_round's 0), because a
+    review its own log cannot place has no earlier round for a finding to have survived; it is
+    reachable only for a review missing from the log it was just appended to."""
     _, rnd = review_round(recs, unit, review_id)
     ids = lineage_ids(recs, unit, review_id)
     if any(r.get("record") == "reframe-verdict" and r.get("verdict") == "accepted" and not r.get("overturns")
@@ -1537,12 +1544,18 @@ def packet_stuck(recs, unit, review_id):
                 and r.get("severity") == "blocking" and not r.get("advisory")]
     review = next((r for r in recs if r.get("record") == "review" and r.get("review_id") == review_id), {})
 
-    def depth(fid):
+    def chain(fid):
         walk = [fid]
         while link.get(walk[-1]) and link[walk[-1]] not in walk:
             walk.append(link[walk[-1]])
-        return len(walk)
-    stuck = [r for r in blocking if depth(r["finding_id"]) >= 3 or (rnd >= ROUND_CAP and review.get("verdict") != "SHIP")]
+        return walk
+    earlier = set(ids[:ids.index(review_id)]) if review_id in ids else set()
+    before = [r for r in recs if r.get("record") == "finding" and r.get("review_id") in earlier
+              and r.get("severity") == "blocking" and not r.get("advisory")]
+    files, prior = {r.get("file") for r in before}, {r.get("finding_id") for r in before}
+    capped = rnd >= ROUND_CAP and review.get("verdict") != "SHIP"
+    stuck = [r for r in blocking if len(chain(r["finding_id"])) >= 3
+             or (capped and (r.get("file") in files or prior & set(chain(r["finding_id"])[1:])))]
     if not stuck:
         return None
     lines = "\n".join(f"- {r['finding_id']} `{r.get('file')}:{r.get('line')}` — {' '.join(str(r.get('text', '')).split())[:200]}"

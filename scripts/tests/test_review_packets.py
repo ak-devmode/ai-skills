@@ -146,6 +146,21 @@ class TestReviewPackets(unittest.TestCase):
         self.assertIn("swallows the curl failure", doc["payload"]["body"])
         self.assertIn("9.1-r1 → 9.1-r2 → 9.1-r3", doc["payload"]["body"])
 
+    def test_case2_a_blocking_finding_first_raised_in_round_3_survived_nothing(self):
+        # review 10.2-r3-04: "survived two rounds" — its file or reopens chain carried a blocking
+        # finding in an earlier round; a new defect in round 3 is the inline STOP's, not a packet
+        self.run_env()
+        self.record()
+        self.record()
+        new = {"file": "c.py", "line": 1, "severity": "blocking", "category": "silent-failure", "group": "",
+               "text": "new defect", "fix": "f"}
+        p = self.record(findings=[new])
+        self.assertIn("round: 3 of", p.stdout)
+        self.assertNotIn("PACKET pk-", p.stdout)
+        self.assertEqual(self.packets(), [])
+        p = self.record(findings=[dict(new, file="d.py", reopens="9.1-r2-01")])   # chain into a.sh's blocking finding
+        self.assertRegex(p.stdout, r"PACKET pk-rv-9-1-9-1-r4-stuck")
+
     def test_a_packet_lands_in_the_reviewed_worktree_not_the_primary_checkout(self):
         # review 10.2-r3-02: a herdr lane reviews a linked worktree outside ~/Projects; its packet
         # belongs in that tree's outbox, on the lane's branch and head, never the primary checkout's

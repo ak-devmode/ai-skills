@@ -413,9 +413,11 @@ A packet that cannot be written only warns on stderr — the review never stops 
    verdict as `user_call`: stdout says "do not build until answered" in place of "build it"
    whether or not the packet was written, and `dispose --reframed --by judge` refuses it (it is
    `--by user`).
-2. **A blocking finding that survived two rounds with no qualifying reframe** — round 3 or
-   later with no SHIP, or a blocking finding ending a `reopens` chain of three — and no accepted,
-   non-overturning reframe anywhere in the lineage. Emitted by `record`. `local-maxima` flags
+2. **A blocking finding that survived two rounds with no qualifying reframe** — in round 3 or
+   later with no SHIP, a blocking finding whose file or `reopens` chain carried a blocking
+   finding in an earlier round (one first raised in round 3 survived nothing); or a blocking
+   finding ending a `reopens` chain of three — and no accepted reframe that is the judge's to
+   take (no overturn, no one-way door) anywhere in the lineage. Emitted by `record`. `local-maxima` flags
    from a fallback reviewer (`advisory`) never count.
 3. **A rejected reframe proposed again** — the new proposal matches (≥ 0.85 similarity) one the
    judge already rejected in the lineage. Emitted by `record`, which prints the hold in place

@@ -239,19 +239,21 @@ def analyze(units, rv, since=None, git=None):
             t = ts_of(rid)
             return since is None or (t is not None and t >= since)
 
+        def reviewer_of(rid):
+            return (meta.get(rid) or {}).get("reviewer") or next((x.get("reviewer") for x in fnd.get(rid, [])), "")
+
         def base_of(e):
             """effort_for's tier for review `e` — the trial's bucket key (it decides per base tier
-            whether the bump pays). review.py stamps `effort_base`; under rules 1 the stamped
-            `effort` is the base, and an unstamped pre-trial review is recomputed with effort_for
-            on its own range. A trial review without a stamp is `unstamped`, never recomputed
-            (review.py's stamp is the tier it ran from); a range git cannot read is `unresolved`."""
+            whether the bump pays). ONE rule for trial and pre-trial alike: review.py's stamped
+            `effort_base` when present, else effort_for on the review's own range (`unresolved`
+            when git cannot read it). review.py stamps only codex reviews, so a fallback or lean
+            review on either side is recomputed. `unstamped` is kept for the one review that
+            should have carried a stamp and did not: a codex review under the trial's rules."""
             m = meta.get(e["id"]) or {}
             if m.get("effort_base"):
                 return m["effort_base"]
-            if rules.get(e["id"], 1) >= 2:
+            if rules.get(e["id"], 1) >= 2 and family(reviewer_of(e["id"])) == "codex":
                 return "unstamped"
-            if m.get("effort"):
-                return m["effort"]
             st = git.stat(e["repo"], f"{e['base']}..{e['head']}") if e.get("base") and e.get("head") else None
             return rv.vl.effort_for([st])[0] if st is not None else "unresolved"
 
@@ -290,7 +292,7 @@ def analyze(units, rv, since=None, git=None):
             rid, repo = e["id"], e["repo"]
             root, rnd = lin[rid]
             m = meta.get(rid) or {}
-            reviewer = m.get("reviewer") or next((x.get("reviewer") for x in fnd.get(rid, [])), "")
+            reviewer = reviewer_of(rid)
             fa, fs = family(reviewer), fnd.get(rid, [])
             nblk = sum(1 for x in fs if x.get("severity") == "blocking")
             inwin = counted(rid)
@@ -352,7 +354,7 @@ def analyze(units, rv, since=None, git=None):
             # fix rounds. A codex row takes its own review's base; a lineage its root's.
             bucket = "trial" if rules.get(rid, 1) >= 2 else "pre-trial"
             phase = "round 1" if rnd == 1 else "fix rounds"
-            lk = (bucket, base_of(ev_of[root]) if root in ev_of else "unstamped")
+            lk = (bucket, base_of(ev_of[root]) if root in ev_of else "unresolved")
             if not counted(root):
                 tr_before[lk].add((scope, unit, root))   # its round 1 predates the window
             elif not closed(root):

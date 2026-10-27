@@ -204,6 +204,23 @@ class LineageTest(unittest.TestCase):
         finally:
             git(d, "reset", "-q", "--hard", base)
 
+    def test_trial_root_on_a_fallback_review_takes_its_range_tier(self):
+        # review.py stamps effort_base on codex reviews only: a trial lineage rooted on a codex
+        # credit-out is recomputed from its range, exactly as a pre-trial one is
+        st, s = {"rules_version": 2}, self.shas
+        fb = "claude-fallback codex out of credits"
+        u = [review("1.3", 1, s["a"], s["b"], "2026-10-20T00:00:00Z", reviewer=fb, round=1, **st),
+             review("1.3", 2, s["b"], s["c"], "2026-10-21T00:00:00Z", effort="medium", effort_base="low",
+                    round=2, continues="1.3-r1", verdict="SHIP", **st)]
+        out = self.analyze({("s", "1.3"): u})
+        lin = out["tables"]["Effort trial lineages"]["rows"]
+        self.assertEqual(list(lin), ["trial · base low"])
+        self.assertEqual(lin["trial · base low"][2], 50.0)   # the credit-out stays in its tier
+        # a codex trial review that should have carried a stamp is still `unstamped`
+        u[1] = {k: v for k, v in u[1].items() if k != "effort_base"}
+        rows = self.analyze({("s", "1.3"): u})["tables"]["Effort trial (codex)"]["rows"]
+        self.assertEqual(list(rows), ["trial · base unstamped · fix rounds"])
+
     def test_effort_base_unreadable_range_is_unresolved(self):
         with mock.patch.object(self.rv.vl, "PROJECTS", self.projects):
             out = review_loop.analyze({("s", "1.1"): unit_11(self.shas)}, self.rv, git=review_loop.Git("", enabled=False))

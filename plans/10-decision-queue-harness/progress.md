@@ -25,8 +25,8 @@ Script-owned (`plans-index.py`); PLANS-INDEX.md is rendered from it.
 
 ## Resume Context
 **Scope:** ~/Projects/ai-skills/plans/10-decision-queue-harness/scope.md
-**Last action:** cutover landed (ai-skills 421216f, dev-workbench c09d155, homelab pulled); queue deployed on homelab and live at https://homelab2026.taild4682e.ts.net (POST 201 from the MBA); DECISION_QUEUE_URL committed in dev-workbench ef9bae0 (local)
-**Next action:** Alex: push dev-workbench ef9bae0, homelab pulls, restart the contexts he picks; check the page (card renders, copy works); real packets from one MBA + one homelab session → /verify 10.1, 10.2
+**Last action:** DECISION_QUEUE_URL live on both machines (dev-workbench ef9bae0 pushed, homelab pulled); paste-back proven (copy → pane → check-reply refuses a foreign tag); acceptance card closed
+**Next action:** Alex restarts the contexts he picks → real packets from one MBA + one homelab session (Task 1.6 acceptance) → /verify 10.1, 10.2 → lane teardown
 **Open blockers:** none
 **Key files changed:** None yet
 
@@ -141,6 +141,8 @@ Script-owned (`plans-index.py`); PLANS-INDEX.md is rendered from it.
 - Homelab: role + DB `decision_queue` (owner decision_queue, password only in `~/.config/decision-queue/dsn`, 0600 alexk); `install.sh` linked the user unit + `~/.local/share/decision-queue`, enabled active; migrations 001–003 applied; `tailscale serve --bg 8787` → https://homelab2026.taild4682e.ts.net (tailnet only). Backup: `homelab-db-backup` runs `pg_dumpall` in the container ⇒ covers `decision_queue`.
 - Acceptance: curl POST from the MBA → 201, identical retry → 200, /api/stats shows machine mba. Test card `acc-…` on the page.
 - `DECISION_QUEUE_URL` added to `config/claude-code/settings.json` env (shared by both machines), commit ef9bae0, not pushed.
+
+- (2026-10-27) URL pushed (ef9bae0) and pulled on homelab (`~/cc/homelab-pull.sh`). Paste-back: Alex copied the test card's reply into the driver pane; `check-reply` refused it (foreign lane tag) — correct. Follow-up (two-way, not built): the queue accepts a packet whose reply tag doesn't match its own id/lane (a hand-built POST showed it; packet.py always builds it right) — add a server-side tag check.
 
 ---
 

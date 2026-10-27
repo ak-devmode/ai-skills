@@ -77,6 +77,9 @@ class Stub:
         self.srv.shutdown(); self.srv.server_close()
 
 
+DEMO = {"DQ_UI_DEMO_TENANT": "demo-tenant"}
+
+
 class PacketBase(unittest.TestCase):
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory()
@@ -127,6 +130,56 @@ class TestNew(PacketBase):
         self.assertIn(f"[lane mba/ws1/laneA {pid}]", out)
         st = subprocess.run(["git", "-C", self.repo, "status", "--porcelain"], capture_output=True, text=True)
         self.assertEqual(st.stdout.strip(), "")  # outbox never dirties the worktree
+
+    def test_ui_packet_from_payload_file_and_non_png_refused(self):
+        fx = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures", "packets", "valid", "ui-two-way.json")
+        payload = load(fx)["payload"]
+        pf = os.path.join(self.repo, "ui-payload.json")
+        put(pf, json.dumps(payload))
+        args = ("new", "--door", "two-way", "--type", "ui", "--title", "t", "--unit", "u",
+                "--option", "a", "--option", "b", "--payload-file", pf)
+        p = self.pk(*args, env=DEMO)
+        self.assertEqual(p.returncode, 0, p.stderr)
+        payload["new"]["image"] = "data:image/jpeg;base64,AAAA"
+        put(pf, json.dumps(payload))
+        p = self.pk(*args, env=DEMO)
+        self.assertEqual(p.returncode, 1, p.stdout)  # refused: not a PNG data URI, nothing queued
+        self.assertIn("/payload/new/image", p.stderr + p.stdout)
+
+    def _ui(self, mutate=None, env=DEMO):
+        fx = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures", "packets", "valid", "ui-two-way.json")
+        payload = load(fx)["payload"]
+        if mutate:
+            mutate(payload)
+        pf = os.path.join(self.repo, "ui-payload.json")
+        put(pf, json.dumps(payload))
+        return self.pk("new", "--door", "two-way", "--type", "ui", "--title", "t", "--unit", "u",
+                       "--option", "a", "--option", "b", "--payload-file", pf, env=env)
+
+    def test_ui_image_content_checks(self):  # 10.4-r3-05
+        import base64
+        def setimg(raw=None, b64=None):
+            def f(p):
+                p["old"]["image"] = "data:image/png;base64," + (b64 if b64 is not None else base64.b64encode(raw).decode())
+            return f
+        cases = [("bad base64", setimg(b64="AAA*AAAA"), "invalid base64"),
+                 ("svg bytes labelled png", setimg(raw=b"<svg xmlns='x'></svg>"), "not a PNG"),
+                 ("oversize", setimg(raw=b"\x89PNG\r\n\x1a\n" + b"0" * 1_500_001), "cap")]
+        for name, mut, want in cases:
+            with self.subTest(name):
+                p = self._ui(mut)
+                self.assertEqual(p.returncode, 1, p.stdout)
+                self.assertIn(want, p.stderr)
+                self.assertFalse(os.path.exists(self.outbox()))
+
+    def test_ui_demo_tenant_guard(self):  # driver call: fail closed on real-patient tenants
+        p = self._ui(env={"DQ_UI_DEMO_TENANT": ""})
+        self.assertEqual(p.returncode, 1, p.stdout)
+        self.assertIn("DQ_UI_DEMO_TENANT is not set", p.stderr)
+        p = self._ui(env={"DQ_UI_DEMO_TENANT": "some-other-tenant"})
+        self.assertEqual(p.returncode, 1, p.stdout)
+        self.assertIn("does not equal", p.stderr)
+        self.assertFalse(os.path.exists(self.outbox()))
 
     def test_invalid_packet_refused_and_nothing_written(self):
         p = self.pk("new", "--door", "two-way", "--title", "t", "--unit", "u", "--option", "a",

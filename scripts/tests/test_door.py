@@ -57,6 +57,9 @@ class TestFloor(DoorBase):
     def test_floor_paths_force_one_way(self):
         cases = [
             ("db/migrations/002_add.sql", "migrations/"),
+            # WellMed keeps migrations in a singular folder (backbone, catalog, consultation, finance,
+            # hq, pharmacy, infrastructure): backbone #658, a tenant migration, passed the floor without it.
+            ("internal/db/migration/000042_tenant.up.sql", "migration/"),
             ("api/service.proto", "*.proto"),
             ("api/openapi.yaml", "openapi*.yaml"),
             ("docs/adrs/0007-x.md", "adrs/"),

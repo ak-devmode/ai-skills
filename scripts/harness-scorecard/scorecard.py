@@ -144,7 +144,8 @@ def cmd_run(a):
         return die(f"no review logs under {a.logs}/*-plans — run `pull` first")
     print(f"[scorecard] window {fmt(since)} → {fmt(until)} · logs pulled {pulled} · {len(units)} units", file=sys.stderr)
     rv = review_loop.load_review_module()
-    loop = review_loop.analyze(units, rv, since=since, git=review_loop.Git(rv.vl.PROJECTS, enabled=not a.no_git))
+    loop = review_loop.analyze(units, rv, since=since, until=until,
+                               git=review_loop.Git(rv.vl.PROJECTS, enabled=not a.no_git))
     tables = dict()
     if not a.no_sessions:
         tables.update(sessions.tables(sessions.scan(a.logs, since, until)))
@@ -175,6 +176,11 @@ def cmd_run(a):
         print(store.render(name, t, d.get(name) if d is not None else None) + "\n")
     print(f"effort tiers (trial, codex): {n['trial_effort_tiers'] or 'none'} · stamped-round mismatches "
           f"{n['stamped_round_mismatches']} · rounds() calls {n['rounds_calls']} (one per unit)")
+    h = n["trial_maturity_horizon"]
+    print(f"effort trial lineages: maturity horizon {h['hours']}h (p90 root-to-close of {h['closed_lineages']} closed "
+          "lineage(s)); a lineage counts when rooted at least that long before the cut, closed or not"
+          if h["hours"] is not None else
+          "effort trial lineages: maturity horizon unknown (no closed lineage in the window) — none counted")
     for key, what in (("lineage_warns", "lineage WARNs (git could not place a review; continued, not restarted — "
                                         "§3.1's late rounds may be inflated)"),
                       ("other_stderr_lines", "other lineage stderr lines")):

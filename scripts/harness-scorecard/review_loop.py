@@ -173,9 +173,16 @@ def _trial_order(k):
     return (b != "pre-trial", TIER_ORDER.index(t) if t in TIER_ORDER else len(TIER_ORDER), t, p != ["round 1"])
 
 
-def analyze(units, rv, since=None, git=None):
+def _p90(xs):
+    """Nearest-rank 90th percentile; None for an empty list."""
+    xs = sorted(xs)
+    return xs[max(0, -(-9 * len(xs) // 10) - 1)] if xs else None
+
+
+def analyze(units, rv, since=None, git=None, until=None):
     """All review-loop tables for `units` (from load_logs). `rv` is the loaded review.py;
-    `git` a Git (None = no hunk/line analyses). Returns {"tables": {...}, "notes": {...}}."""
+    `git` a Git (None = no hunk/line analyses); `until` the cut the logs were read at (None =
+    the latest stamp in them). Returns {"tables": {...}, "notes": {...}}."""
     git = git or Git("", enabled=False)
     rounds_calls = 0
     fails = []
@@ -188,8 +195,7 @@ def analyze(units, rv, since=None, git=None):
     infix_rev, infix_find, infix = collections.Counter(), collections.Counter(), collections.defaultdict(collections.Counter)
     fp_rev, fp_find, fp_lines = collections.Counter(), collections.Counter(), collections.Counter()
     tr_rev, tr_find, tr_blk = collections.Counter(), collections.Counter(), collections.Counter()
-    tr_lin_max, tr_all, tr_out = {}, collections.Counter(), collections.Counter()
-    tr_open, tr_before = collections.defaultdict(set), collections.defaultdict(set)
+    trial_lin = {}   # (scope, unit, root) → the lineage's facts; bucketed after every unit is read
     tiers, round_mismatch = collections.Counter(), 0
     fallback_credit, fallback_total, rejections, rej_alex = 0, 0, 0, 0
 
@@ -258,9 +264,9 @@ def analyze(units, rv, since=None, git=None):
             return rv.vl.effort_for([st])[0] if st is not None else "unresolved"
 
         ev_of = {e["id"]: e for e in revs}
-        # a lineage's fix-round count is final only once it closed: its latest review (highest
-        # round, then latest stamp) is SHIP, or the unit's outcomes were accepted after it. An open
-        # lineage is cut mid-loop — the newest (trial) ones most — so it is excluded and counted.
+        # when a lineage closed: its latest review (highest round, then latest stamp) is SHIP, or
+        # the unit's outcomes were accepted after it. Used for the maturity horizon only — whether
+        # a lineage is counted never depends on it having closed (that is the outcome measured).
         last = {}
         for e in revs:
             root, rnd = lin[e["id"]]
@@ -269,14 +275,16 @@ def analyze(units, rv, since=None, git=None):
                 last[root] = (key, e["id"])
         accepted = [parse_ts(r.get("ts")) for r in recs if r.get("record") == "acceptance"]
 
-        def closed(root):
+        def closure(root):
+            """(closed, close time or None)."""
             rid_ = last[root][1]
-            if (meta.get(rid_) or {}).get("verdict") == "SHIP":
-                return True
             t = ts_of(rid_)
+            if (meta.get(rid_) or {}).get("verdict") == "SHIP":
+                return True, t
             # an acceptance or review with no stamp cannot be ordered: the acceptance counts only
             # when both are stamped and it came at or after the lineage's last review
-            return any(a is not None and t is not None and a >= t for a in accepted)
+            acc = [a for a in accepted if a is not None and t is not None and a >= t]
+            return (True, min(acc)) if acc else (False, None)
         heads, byhead, kind, maxr = collections.defaultdict(set), {}, {}, {}
         for e in revs:
             rid, repo = e["id"], e["repo"]
@@ -355,14 +363,14 @@ def analyze(units, rv, since=None, git=None):
             bucket = "trial" if rules.get(rid, 1) >= 2 else "pre-trial"
             phase = "round 1" if rnd == 1 else "fix rounds"
             lk = (bucket, base_of(ev_of[root]) if root in ev_of else "unresolved")
-            if not counted(root):
-                tr_before[lk].add((scope, unit, root))   # its round 1 predates the window
-            elif not closed(root):
-                tr_open[lk].add((scope, unit, root))
-            else:
-                tr_all[lk] += 1
-                tr_out[lk] += fa == "fallback" and "out of credits" in reviewer
-                tr_lin_max[(scope, unit, root, lk)] = max(tr_lin_max.get((scope, unit, root, lk), 0), rnd)
+            L = trial_lin.get((scope, unit, root))
+            if L is None:
+                c, ct = closure(root)
+                L = trial_lin[(scope, unit, root)] = {"lk": lk, "root_ts": ts_of(root), "in_window": counted(root),
+                                                      "closed": c, "close_ts": ct, "maxr": 0, "all": 0, "out": 0}
+            L["maxr"] = max(L["maxr"], rnd)
+            L["all"] += 1
+            L["out"] += fa == "fallback" and "out of credits" in reviewer
             if fa == "codex":
                 ck = (bucket, base_of(e), phase)
                 tr_rev[ck] += 1; tr_find[ck] += len(fs); tr_blk[ck] += nblk
@@ -415,16 +423,41 @@ def analyze(units, rv, since=None, git=None):
         "cols": ["Reviews", "Findings/rev", "Blocking/rev"],
         "rows": {f"{b} · base {t} · {p}": [tr_rev[k], _ratio(tr_find[k], tr_rev[k]), _ratio(tr_blk[k], tr_rev[k])]
                  for k in sorted(tr_rev, key=_trial_order) for b, t, p in [k]}}
-    lin_by = collections.defaultdict(list)
-    for (_, _, _, lk), mx in tr_lin_max.items():
-        lin_by[lk].append(mx)
-    # closed lineages rooted in the window only; the excluded ones are counted beside them
+    # Maturity horizon: a lineage rooted near the cut is still mid-loop, the newest (trial) ones
+    # most. Dropping the open ones keeps the short lineages and loses the long — the bias the
+    # trial is judged on — so the cut is made on the root's age instead, the same for every
+    # bucket and blind to the outcome: a lineage counts when its root is at least H before the
+    # cut, closed or not (an open one's rounds are a lower bound, counted beside it). H is the
+    # p90 root-to-close time of the window's closed lineages, all buckets pooled. With no closed
+    # lineage to measure, H is unknown and no lineage is counted (fail closed): counting them
+    # all would bring the truncation back.
+    lin_list = list(trial_lin.values())
+    cut = until if until is not None else max((t for recs in units.values() for t in (parse_ts(r.get("ts")) for r in recs)
+                                                if t is not None), default=None)
+    durs = [L["close_ts"] - L["root_ts"] for L in lin_list if L["in_window"] and L["closed"]
+            and L["close_ts"] is not None and L["root_ts"] is not None]
+    H = _p90(durs)
+    lin_by, tr_all, tr_out = collections.defaultdict(list), collections.Counter(), collections.Counter()
+    tr_openc, tr_young, tr_before = collections.Counter(), collections.Counter(), collections.Counter()
+    for L in lin_list:
+        lk = L["lk"]
+        if not L["in_window"] or L["root_ts"] is None:
+            tr_before[lk] += 1   # its round 1 predates the window
+        elif H is None or cut is None or L["root_ts"] > cut - H:
+            tr_young[lk] += 1
+        else:
+            lin_by[lk].append(L["maxr"])
+            tr_all[lk] += L["all"]; tr_out[lk] += L["out"]
+            tr_openc[lk] += not L["closed"]
     tables["Effort trial lineages"] = {
-        "cols": ["Lineages", "Fix rounds/lineage", "Credit-outs %", "Open (excluded)", "Rooted before window (excluded)"],
+        "cols": ["Lineages", "Fix rounds/lineage", "Credit-outs %", "Open at cut (rounds a lower bound)",
+                 "Within horizon (excluded)", "Rooted before window (excluded)"],
         "rows": {f"{b} · base {t}": [len(lin_by[(b, t)]), _ratio(sum(x - 1 for x in lin_by[(b, t)]), len(lin_by[(b, t)])),
-                                     _pct(tr_out[(b, t)], tr_all[(b, t)]), len(tr_open[(b, t)]), len(tr_before[(b, t)])]
-                 for b, t in sorted(set(lin_by) | set(tr_open) | set(tr_before), key=_trial_order)}}
+                                     _pct(tr_out[(b, t)], tr_all[(b, t)]), tr_openc[(b, t)], tr_young[(b, t)],
+                                     tr_before[(b, t)]]
+                 for b, t in sorted({L["lk"] for L in lin_list}, key=_trial_order)}}
     notes = {"rounds_calls": rounds_calls, "failed_units": fails, "trial_effort_tiers": dict(tiers),
+             "trial_maturity_horizon": {"hours": None if H is None else round(H / 3600, 1), "closed_lineages": len(durs)},
              "stamped_round_mismatches": round_mismatch,
              "lineage_warns": {"total": sum(lin_warns.values()), "units": dict(sorted(lin_warns.items()))},
              "other_stderr_lines": {"total": sum(other_err.values()), "units": dict(sorted(other_err.items()))}}

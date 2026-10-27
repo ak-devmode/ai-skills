@@ -272,6 +272,22 @@ class TestQueue(PacketBase):
     def test_event_of_409_packet_is_marked_not_posted(self):  # 10.1-r7-03
         self._event_of_refused_packet(409)
 
+    def test_resend_after_400_clears_marker_and_close_is_posted(self):  # 10.1-r10-01
+        s = Stub(); self.addCleanup(s.stop); s.force = 400
+        env = {"DECISION_QUEUE_URL": s.url}
+        pid, _ = self.new("--driver", env=env)
+        self.assertTrue(self._marker(f"{pid}.rejected"))
+        s.force = None
+        p = self.pk("new", "--id", pid, "--driver", "--door", "two-way", "--title", "Pick one",
+                    "--unit", "10/1.2", "--option", "alpha", "--option", "beta", "--body", "why", env=env)
+        self.assertEqual(p.returncode, 0, p.stderr)
+        self.assertTrue(self.sent(pid))
+        self.assertFalse(self._marker(f"{pid}.rejected"))
+        self.assertEqual(self.pk("close", pid, "--driver", env=env).returncode, 0)
+        self.pk("flush", "--driver", env=env)  # close --driver POSTs at once; flush must not undo it
+        self.assertEqual([path for path, _ in s.posts], ["/packets", "/events"])
+        self.assertFalse([f for f in os.listdir(self.outbox()) if f.startswith("evt-") and f.endswith(".rejected")])
+
     def test_flush_warns_on_missing_outbox(self):  # driver todo
         s = Stub(); self.addCleanup(s.stop)
         gone = os.path.join(self.repo, "nope")

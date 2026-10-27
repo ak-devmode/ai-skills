@@ -285,6 +285,24 @@ def _refuse_event(d, ev):
     return f"Rejected: event {ev['id']} not sent: its packet {ev['packet_id']} was refused by the queue (packet refused); marked {stem}.rejected"
 
 
+def _clear_refusals(d, pid):
+    """A delivered packet never coexists with a refusal marker (10.1-r10-01). Every packet POST
+    goes through try_send, so clearing here covers `new --id` and flush alike. Events of this
+    packet that were only marked "packet refused" are released so flush POSTs them; an event's
+    own refusal (a verdict on its content) is left alone. Failure to unlink is not swallowed:
+    a stale marker would silently drop later events, so let it raise."""
+    for k in ("conflict", "rejected"):
+        (d / f"{pid}.{k}").unlink(missing_ok=True)
+    for f in d.glob("evt-*.rejected"):
+        try:
+            if f.read_text() != "packet refused\n":
+                continue
+            if read_json(f.with_suffix(".json")).get("packet_id") == pid:
+                f.unlink()
+        except (OSError, ValueError):
+            continue  # unreadable event/marker: leave it marked, never guess
+
+
 def try_send(args, d, ev=None, pid=None):
     """POST a stored item if this caller may. Returns a human note ('' when not attempted).
     "sent" lives in a marker file, never in the state file: a concurrent close/stale must not
@@ -311,6 +329,7 @@ def try_send(args, d, ev=None, pid=None):
     kind, note = post("/packets", doc)
     if kind == "ok":
         sent_marker(d, pid).write_text(note + "\n")
+        _clear_refusals(d, pid)
         return ""
     if kind in ("conflict", "rejected"):
         return _refusal(d, pid, kind, note, f"packet {pid}")

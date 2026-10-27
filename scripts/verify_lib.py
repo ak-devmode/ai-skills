@@ -599,13 +599,29 @@ def norm_text(t):
     return " ".join(re.sub(r"[^a-z0-9 ]", " ", str(t).lower()).split())
 
 
+def _precedes(recs, lineage, rid, review_id):
+    """Did `rid`'s reframe come before `review_id`'s in one lineage: a lower round, or on a tie the
+    earlier reframe record in the log. Review 10.2-r5-01: "earlier" must look only backwards, or a
+    LATER rejection flips an already-built accept to a repeat. Fails closed: when the order cannot
+    be told (no round, no reframe record) it counts as earlier, so it can only hold, never free."""
+    rounds = [(lineage.get(x) or (None, None))[1] for x in (rid, review_id)]
+    if None not in rounds and rounds[0] != rounds[1]:
+        return rounds[0] < rounds[1]
+    at = {}
+    for i, r in enumerate(recs):
+        if r.get("record") == "reframe":
+            at[r.get("review_id")] = i
+    return at.get(rid, -1) < at.get(review_id, len(recs))
+
+
 def judged_reframes(recs, review_id, lineage, verdict):
-    """[(review_id, proposal, reason)] of the reframes in `review_id`'s lineage, other than its
-    own, whose LATEST judge verdict is `verdict`."""
+    """[(review_id, proposal, reason)] of the reframes in `review_id`'s lineage that came BEFORE its
+    own (never a later one, never itself) whose LATEST judge verdict is `verdict`."""
     reframes, root = _latest(recs, "reframe"), _root(lineage, review_id)
     return [(rid, (reframes.get(rid) or {}).get("proposal", "?"), v.get("reason", ""))
             for rid, v in _latest(recs, "reframe-verdict").items()
-            if rid != review_id and v.get("verdict") == verdict and _root(lineage, rid) == root]
+            if rid != review_id and v.get("verdict") == verdict and _root(lineage, rid) == root
+            and _precedes(recs, lineage, rid, review_id)]
 
 
 def repeated_reframe(recs, review_id, lineage):

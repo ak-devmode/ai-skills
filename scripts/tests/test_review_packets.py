@@ -322,6 +322,9 @@ class TestReframeCall(unittest.TestCase):
              "9.1-r2", None, two, "user", "repeat", "repeats one this lineage rejected"),
             ("rejection superseded is no repeat", [self.v("9.1-r1", "rejected"), self.v("9.1-r1", user_call=None)],
              "9.1-r2", None, two, "unjudged", "unjudged", ""),
+            # 10.2-r5-01: only an EARLIER rejection is a repeat; a later similar one leaves r1's accept alone
+            ("later similar rejection leaves an earlier accept", [self.v("9.1-r1", user_call=None),
+             self.v("9.1-r2", "rejected")], "9.1-r1", None, two, "judge", "accepted", "accepted reason"),
             ("another lineage's rejection is no repeat", [self.v("9.1-r9", "rejected")], "9.1-r2", None, two,
              "unjudged", "unjudged", ""),
             # classify_at: the door is decided in the reviewed checkout (10.2-r4-02)

@@ -148,6 +148,17 @@ class LineageTest(unittest.TestCase):
         self.assertEqual(len(units), 1)
         self.assertEqual(len(units[("s", "1.1")]), 6)
 
+    def test_worktree_copies_under_hidden_dirs_are_read(self):
+        # worktree copies live under .herdr/worktrees; glob's ** skips dot-directories
+        logs = os.path.join(self.tmp.name, "logs-hidden")
+        d = os.path.join(logs, "homelab-plans", ".herdr", "worktrees", "demo", "lane", "plans", "s", "artifacts")
+        os.makedirs(d)
+        with open(os.path.join(d, "review-1.1.jsonl"), "w") as fh:
+            fh.writelines(json.dumps(r) + "\n" for r in unit_11(self.shas))
+        units, stats = review_loop.load_logs(logs)
+        self.assertEqual(stats["files"], 1)
+        self.assertEqual(len(units[("s", "1.1")]), 6)
+
     def test_effort_trial_splits_round1_and_fix_rounds(self):
         out = self.analyze({("s", "1.1"): unit_11(self.shas), ("s", "1.2"): unit_12(self.shas)})
         rows = out["tables"]["Effort trial (codex)"]["rows"]

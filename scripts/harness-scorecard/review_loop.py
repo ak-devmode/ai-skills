@@ -63,14 +63,22 @@ def family_detail(reviewer):
     return {"fallback": "claude-fallback", "lean": "claude-lean"}.get(family(r), r[:20] or "unknown")
 
 
+def review_logs(logs_root):
+    """Every review log under `<logs_root>/*-plans/`. os.walk, not glob's `**`: glob skips hidden
+    directories, and every worktree copy lives under `.herdr/worktrees/`."""
+    out = []
+    for top in sorted(glob.glob(os.path.join(logs_root, "*-plans"))):
+        for d, _, fs in os.walk(top):
+            out += [os.path.join(d, f) for f in fs if LOG_RE.search(os.path.join(d, f))]
+    return sorted(out)
+
+
 def load_logs(logs_root, until=None):
     """({(scope, unit): [records]}, {"files", "bad_lines", "dropped_after_until"}). Largest copy
     wins, counted after the `until` cut. A line that is not JSON is counted, never guessed at."""
     best, stats = {}, collections.Counter()
-    for f in glob.glob(os.path.join(logs_root, "*-plans", "**", "review-*.jsonl"), recursive=True):
+    for f in review_logs(logs_root):
         m = LOG_RE.search(f)
-        if not m:
-            continue
         stats["files"] += 1
         recs = []
         with open(f, encoding="utf-8", errors="replace") as fh:

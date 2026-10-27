@@ -71,7 +71,9 @@ the window.
 4.3 **The baseline's §3.1 had no lower bound.** It counted every review logged up to 2026-10-25
 (621 reviews, 72 of them before 2026-10-04). To reproduce it, run
 `run --since 2026-01-01 --until 2026-10-25`. The 21-day default is the honest window going
-forward.
+forward. An exact reproduction needs the 2026-10-25 snapshot of the cache. A later pull copies
+logs that snapshot missed: after the 2026-10-27 pull, the same window holds 100 units and 683
+reviews, not 86 and 622.
 
 4.4 **Queue answers.** A typed prompt that starts `[lane ` is a pasted decision-queue reply (the
 packet's prefilled reply). Its latency is the wait since that session's last assistant message.

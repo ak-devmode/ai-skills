@@ -111,8 +111,7 @@ def cmd_pull(a):
     # read the destination back: a pull that copied nothing is a failure, whatever rsync said
     counts = {"mba sessions": count_files(os.path.join(logs, "mba", "claude-projects"), ".jsonl"),
               "homelab sessions": count_files(os.path.join(logs, "homelab", ".claude", "projects"), ".jsonl"),
-              "review logs": sum(1 for p in review_loop.glob.glob(os.path.join(logs, "*-plans", "**", "review-*.jsonl"),
-                                                                   recursive=True))}
+              "review logs": len(review_loop.review_logs(logs))}
     empty = [k for k, v in counts.items() if not v]
     if empty:
         return die(f"pull finished but {', '.join(empty)} read back empty under {logs}")

@@ -64,6 +64,14 @@ def day(s, end=False):
     return (d + dt.timedelta(days=1) - dt.timedelta(seconds=1)).timestamp() if end else d.timestamp()
 
 
+def window_class(since, until):
+    """`<n>d`: calendar days from since's UTC date to the date just past until (an inclusive bound,
+    so its exclusive end is one second later). Dates, not elapsed time: elapsed time made a
+    no-`--until` run's class depend on the hour it ran, so two runs meant to compare never did."""
+    d = lambda t: dt.datetime.fromtimestamp(t, dt.timezone.utc).date()
+    return f"{(d(until + 1) - d(since)).days}d"
+
+
 def count_files(root, suffix):
     n = 0
     for _, _, fs in os.walk(root, followlinks=True):
@@ -154,7 +162,7 @@ def cmd_run(a):
     # run's §3.2 is all `unresolved`, a --no-sessions run has no §1/§2/§4, and the baseline replay
     # spans ten months — against any of them a default run's Δ is configuration, not movement.
     flags = {"git": not a.no_git, "sessions": not a.no_sessions}
-    window = {"since": fmt(since), "until": fmt(until), "class": f"{round((until - since) / 86400)}d"}
+    window = {"since": fmt(since), "until": fmt(until), "class": window_class(since, until)}
     result = {"window": window, "flags": flags, "logs_pulled": pulled,
               "generated": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
               "notes": {**loop["notes"], "review_logs": lstats}, "tables": tables}

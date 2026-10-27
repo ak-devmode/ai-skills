@@ -438,10 +438,12 @@ def analyze(units, rv, since=None, git=None, until=None):
             and L["close_ts"] is not None and L["root_ts"] is not None]
     H = _p90(durs)
     lin_by, tr_all, tr_out = collections.defaultdict(list), collections.Counter(), collections.Counter()
-    tr_openc, tr_young, tr_before = collections.Counter(), collections.Counter(), collections.Counter()
+    tr_openc, tr_young, tr_before, tr_nots = (collections.Counter() for _ in range(4))
     for L in lin_list:
         lk = L["lk"]
-        if not L["in_window"] or L["root_ts"] is None:
+        if L["root_ts"] is None:
+            tr_nots[lk] += 1     # no stamp: neither the window nor the horizon can place it
+        elif not L["in_window"]:
             tr_before[lk] += 1   # its round 1 predates the window
         elif H is None or cut is None or L["root_ts"] > cut - H:
             tr_young[lk] += 1
@@ -451,10 +453,10 @@ def analyze(units, rv, since=None, git=None, until=None):
             tr_openc[lk] += not L["closed"]
     tables["Effort trial lineages"] = {
         "cols": ["Lineages", "Fix rounds/lineage", "Credit-outs %", "Open at cut (rounds a lower bound)",
-                 "Within horizon (excluded)", "Rooted before window (excluded)"],
+                 "Within horizon (excluded)", "Rooted before window (excluded)", "Unstamped root (excluded)"],
         "rows": {f"{b} · base {t}": [len(lin_by[(b, t)]), _ratio(sum(x - 1 for x in lin_by[(b, t)]), len(lin_by[(b, t)])),
                                      _pct(tr_out[(b, t)], tr_all[(b, t)]), tr_openc[(b, t)], tr_young[(b, t)],
-                                     tr_before[(b, t)]]
+                                     tr_before[(b, t)], tr_nots[(b, t)]]
                  for b, t in sorted({L["lk"] for L in lin_list}, key=_trial_order)}}
     notes = {"rounds_calls": rounds_calls, "failed_units": fails, "trial_effort_tiers": dict(tiers),
              "trial_maturity_horizon": {"hours": None if H is None else round(H / 3600, 1), "closed_lineages": len(durs)},

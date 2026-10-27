@@ -172,8 +172,8 @@ class LineageTest(unittest.TestCase):
         lin = out["tables"]["Effort trial lineages"]["rows"]
         # a lineage takes its root's base; none closed, so no horizon can be measured: none
         # is counted (fail closed), each is reported as within the unknown horizon
-        self.assertEqual(lin["trial · base medium"], [0, None, None, 0, 1, 0])
-        self.assertEqual(lin["pre-trial · base low"], [0, None, None, 0, 2, 0])
+        self.assertEqual(lin["trial · base medium"], [0, None, None, 0, 1, 0, 0])
+        self.assertEqual(lin["pre-trial · base low"], [0, None, None, 0, 2, 0, 0])
         self.assertEqual(out["notes"]["trial_maturity_horizon"], {"hours": None, "closed_lineages": 0})
         self.assertEqual(out["notes"]["trial_effort_tiers"], {"high": 2})
         self.assertEqual(out["notes"]["stamped_round_mismatches"], 0)
@@ -186,14 +186,14 @@ class LineageTest(unittest.TestCase):
         lin = out["tables"]["Effort trial lineages"]["rows"]
         # horizon = p90 of {1.2: 1d, 1.1 r3: 0d} = 1d; the cut is the latest stamp, 10-21
         self.assertEqual(out["notes"]["trial_maturity_horizon"], {"hours": 24.0, "closed_lineages": 2})
-        self.assertEqual(lin["trial · base medium"], [1, 1.0, 0.0, 0, 0, 0])
+        self.assertEqual(lin["trial · base medium"], [1, 1.0, 0.0, 0, 0, 0, 0])
         # 1.1: r1's lineage is rooted before `since` (excluded, counted); r3's is counted
-        self.assertEqual(lin["pre-trial · base low"], [1, 0.0, 0.0, 0, 0, 1])
+        self.assertEqual(lin["pre-trial · base low"], [1, 0.0, 0.0, 0, 0, 1, 0])
         # an acceptance before the lineage's last review does not close it: r3's lineage stays
         # open, and is rooted inside the 1.5d horizon (r1–r2 closed in 1.5d), so it is excluded
         u11b = unit_11(self.shas) + [{"record": "acceptance", "by": "t", "ts": "2026-10-11T12:00:00Z"}]
         lin = self.analyze({("s", "1.1"): u11b})["tables"]["Effort trial lineages"]["rows"]
-        self.assertEqual(lin["pre-trial · base low"], [1, 1.0, 50.0, 0, 1, 0])   # r2 fell back
+        self.assertEqual(lin["pre-trial · base low"], [1, 1.0, 50.0, 0, 1, 0, 0])   # r2 fell back
 
     def test_open_long_trial_lineage_still_counts_past_the_horizon(self):
         # closed-only counting kept the short lineages and dropped the long open one, lowering
@@ -212,7 +212,7 @@ class LineageTest(unittest.TestCase):
         out = self.analyze(units, since=ts("2026-10-01T00:00:00Z"), until=ts("2026-10-31T23:59:59Z"))
         self.assertEqual(out["notes"]["trial_maturity_horizon"], {"hours": 24.0, "closed_lineages": 3})
         # 2.1, 2.2, 2.3 counted: (1 + 0 + 2) / 3; 2.3 open (a lower bound); 2.4 too young
-        self.assertEqual(out["tables"]["Effort trial lineages"]["rows"]["trial · base low"], [3, 1.0, 0.0, 1, 1, 0])
+        self.assertEqual(out["tables"]["Effort trial lineages"]["rows"]["trial · base low"], [3, 1.0, 0.0, 1, 1, 0, 0])
 
     def test_git_reads_a_non_utf8_diff(self):
         d = os.path.join(self.projects, "demo")
@@ -244,6 +244,15 @@ class LineageTest(unittest.TestCase):
         u[1] = {k: v for k, v in u[1].items() if k != "effort_base"}
         rows = self.analyze({("s", "1.3"): u})["tables"]["Effort trial (codex)"]["rows"]
         self.assertEqual(list(rows), ["trial · base unstamped · fix rounds"])
+
+    def test_unstamped_root_is_not_reported_as_before_the_window(self):
+        u = unit_12(self.shas)
+        u[0] = {k: v for k, v in u[0].items() if k != "ts"}   # root review with no stamp
+        u[1] = {k: v for k, v in u[1].items() if k != "ts"}   # nor its finding
+        u[2] = {**u[2], "verdict": "SHIP"}
+        lin = self.analyze({("s", "1.2"): u}, since=ts("2026-10-01T00:00:00Z"))["tables"]["Effort trial lineages"]
+        self.assertEqual(lin["cols"][-2:], ["Rooted before window (excluded)", "Unstamped root (excluded)"])
+        self.assertEqual(lin["rows"]["trial · base medium"][-2:], [0, 1])
 
     def test_effort_base_unreadable_range_is_unresolved(self):
         with mock.patch.object(self.rv.vl, "PROJECTS", self.projects):
@@ -396,6 +405,18 @@ class CliTest(unittest.TestCase):
     def run_cli(self, *args, env):
         return subprocess.run([sys.executable, os.path.join(HS, "scorecard.py"), *args],
                               capture_output=True, text=True, env=env, timeout=120)
+
+    def test_window_class_is_calendar_days_not_the_hour_of_the_run(self):
+        import scorecard
+        since = scorecard.day("2026-10-06")
+        # --since with no --until: until is the run's clock; before and after noon must match
+        early, late = ts("2026-10-27T01:00:00Z"), ts("2026-10-27T23:00:00Z")
+        self.assertEqual(scorecard.window_class(since, early), scorecard.window_class(since, late))
+        self.assertEqual(scorecard.window_class(since, late), "21d")
+        # the default window (until − 21 days) and an explicit inclusive range keep their class
+        for now in (early, late):
+            self.assertEqual(scorecard.window_class(now - 21 * 86400, now), "21d")
+        self.assertEqual(scorecard.window_class(scorecard.day("2026-10-05"), scorecard.day("2026-10-25", end=True)), "21d")
 
     def test_run_twice_prints_delta_and_stores_aggregates_only(self):
         with tempfile.TemporaryDirectory() as tmp:

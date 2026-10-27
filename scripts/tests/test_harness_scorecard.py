@@ -204,6 +204,11 @@ class ReplyTaggingTest(unittest.TestCase):
                  ("yes", "other stamp"),
                  ("status?", "status ping"),
                  ("no, use the other table", "redirect"),
+                 ("merged, carry on", "merge/push stamp"),
+                 ("1 yes 2 no", "other stamp"),
+                 ("done", "other stamp"),
+                 ("Read and follow /tmp/briefs/common.md, then execute lane-a.md", "lane brief"),
+                 ("yes but first move the tenant check into the gateway, then rerun the suite on homelab", "substantive"),
                  ("why does the SG allow 5432 from the VPC", "substantive")]
         for text, want in cases:
             with self.subTest(text=text):

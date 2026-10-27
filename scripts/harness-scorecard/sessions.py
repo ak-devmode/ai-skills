@@ -29,14 +29,17 @@ KALPA = re.compile(r"wellmed|kalpa|ai-skills|dev-workbench", re.I)
 NOT = re.compile(r"/pmg|bernard|research-lanes", re.I)
 W = dict(input_tokens=1, cache_creation_input_tokens=1.25, cache_read_input_tokens=0.1, output_tokens=5)
 WAIT_CAP = 2 * 3600
+SHORT_WORDS = 12
 QUEUE = re.compile(r"^\[lane ")
 # Regex categories, first match wins (baseline §4: treat shares as ±5 points).
 CATEGORIES = [
     ("queue answer", QUEUE),
-    ("merge/push stamp", re.compile(r"^\W*(merge|push|land|ship|open (a |the )?pr|pr\b|commit)\b[^\n]{0,60}$", re.I)),
+    ("lane brief", re.compile(r"^read and follow\b", re.I)),  # a driver dispatching a lane, not a decision
+    ("merge/push stamp", re.compile(r"^\W*(merge[sd]?|push(ed)?|land(ed)?|ship|open (a |the )?pr|pr\b|commit)\b|\b(merged|pushed|landed)\b", re.I)),
     ("status ping", re.compile(r"^\W*(status|where are we|what'?s (next|left|the status)|progress|continue|resume|go on)\b[^\n]{0,80}$", re.I)),
     ("redirect", re.compile(r"^\W*(no|stop|wait|actually|instead|don'?t|hold on|revert)\b", re.I)),
-    ("other stamp", re.compile(r"^\W*(y|yes|yep|ok|okay|go|do it|approved?|lgtm|sure|agreed|proceed|\d+[a-d]?)\W*$", re.I)),
+    ("other stamp", re.compile(r"^\W*(y|yes|yep|yeah|ok|okay|go|do it|done|approved?|lgtm|sure|agreed|proceed|great|good|"
+                               r"sounds good|perfect|thanks|\d+[a-d]?)\b", re.I)),
 ]
 SIG = [  # first match wins (mine2.py)
     ("review", re.compile(r"review\.py|review/SKILL|review/rules|gstack/review|codex-exec\.py exec --prompt \S*review|review-\S+-r\d")),
@@ -66,8 +69,10 @@ def category(text):
         return "queue answer"
     if t.count("\n") >= 4 and re.search(r"^\s*(\$ |[\w.-]+@[\w.-]+:|Traceback|\{|\[\d|\d{4}-\d\d-\d\d)", t, re.M):
         return "pasted output"
+    # stamps, pings and redirects are short; a long prompt that opens with "yes" is still a decision
+    short = len(t.split()) <= SHORT_WORDS
     for name, rx in CATEGORIES[1:]:
-        if rx.search(t):
+        if rx.search(t) and (short or name == "lane brief"):
             return name
     return "substantive"
 

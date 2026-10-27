@@ -25,9 +25,9 @@ Script-owned (`plans-index.py`); PLANS-INDEX.md is rendered from it.
 
 ## Resume Context
 **Scope:** ~/Projects/ai-skills/plans/10-decision-queue-harness/scope.md
-**Last action:** lanes A + C review-clean and merged on `feature/10-decision-queue` (ai-skills worktree, local); lane B at review round 3 stop (decisions 78/79 open)
-**Next action:** lanes D1 (1.5 wiring) + D2 (2.5 review packets) off the cutover branch → merge → review cutover range (incl. lane A ef078ba) → Alex cuts over to ai-skills main; lane B per 78/79 → dev-workbench merge → 1.6 deploy
-**Open blockers:** decisions 78 (reject r5-01, never deployed) / 79 (fix r5-02 + one more round) for lane B
+**Last action:** every lane SHIP with all findings dispositioned; lane fixes merged on `feature/10-decision-queue` (5dd0853); queue service 45 passed against the cutover schema
+**Next action:** final full suite on the cutover branch → Alex lands: ai-skills `feature/10-decision-queue` → main, dev-workbench `concurrency/10-queue` → main, both pushed; homelab pulls → Task 1.6 deploy → /verify 10.1, 10.2
+**Open blockers:** none
 **Key files changed:** None yet
 
 ---
@@ -41,6 +41,8 @@ Script-owned (`plans-index.py`); PLANS-INDEX.md is rendered from it.
   per-round reframe prompt judged by a fresh agent, three review cases to the queue, round-1
   effort trial. Harness errors never stop work (dead queue → `Blocked` in pane). Driver merges
   include degraded reviews (flagged) and `--admin`. Details: scope.md §4 and the review report.
+- (2026-10-27) Wiring round-3 stop (10.1-r11 reopened r8-01/02): reframed on Alex's yes (80) — pasted replies only via a file, never shell source; flush count check dropped. Review-packets lane: "is this reframe Alex's call" consolidated into one function (driver call, reopen chain at round 2).
+- (2026-10-26) Lane B round-3 stop: r5-01 rejected — service never deployed, no older server to upgrade from (Alex, 78); r5-02 fixed with one more review round (Alex, 79).
 - (2026-10-26) /plan start: Alex overrode the Repo Graph drift stop (decision 76); his dev-workbench config committed as-is (75); 10.1 and 10.2 run as concurrent lanes.
 - (2026-10-26) Eng review: queue on 127.0.0.1 behind `tailscale serve` (HTTPS MagicDNS URL kept);
   one packet path via lane outboxes, drivers POST; rules-version stamp on review records for
@@ -128,6 +130,12 @@ Script-owned (`plans-index.py`); PLANS-INDEX.md is rendered from it.
 - Lane B: r2 SHIP AFTER BLOCKING 7 → all fixed (+ D1 409 on changed retry, D2 schema drift guard); r4 SHIP AFTER BLOCKING 7 → fixed; event replay REFRAMED (driver call: delete server replay, 404 unknown-packet events, client orders) instead of patched; r5 = round-3 stop + [CONVERGENCE] db.py → decisions 78/79 to Alex.
 - Watcher lesson: markers quoted in a prompt or brief echo in the pane; `~/cc/lane-watch.sh` seeds what's on screen and ignores `<placeholder>` lines.
 
+#### Final review rounds (2026-10-27)
+- Lane B: r5 round-3 stop → r5-01 rejected (Alex 78), r5-02 fixed c09d155 → r9 SHIP 0 findings.
+- Lane A: 409 contract fix ef078ba → r7 (4xx classes, refused-packet events) fixed 47387a9 → r10 (marker reconcile) 82b5bdc → r12 (cleanup swallowed) 70eb05d, SHIP each round.
+- Wiring (D1): r6 3 findings fixed → r8 2 → r11 round-3 stop, reopen chain → REFRAME (Alex 80): replies via file only, count check dropped (c647fc8, a17353b) → r13 SHIP, its one finding already fixed by 47387a9.
+- Session note: 36 finished panes closed on Alex's ask (machine load); scope 197's lanes are the remaining load.
+
 ---
 
 ## Plan 10.2: Review re-pointed at decisions
@@ -147,3 +155,5 @@ Script-owned (`plans-index.py`); PLANS-INDEX.md is rendered from it.
 #### Review loop (2026-10-26)
 - r1 SHIP AFTER BLOCKING 3: judge provenance unenforced (75609c8), lineage fix retroactive on closed units — versioned, sweep 0/300 logs change verdict (f65d635), effort stamp (55da072); r2 SHIP, 1 note (rule keyed on lineage root) batch-fixed aaf63aa. Full suite 346 OK.
 - Lanes A + C merged on `feature/10-decision-queue` (95a8b89, 4cdea98), clean merges.
+#### Task 2.5 + review rounds (2026-10-27)
+- D2 (packets from review/verify): r3 4 findings fixed → r4 reopen chain (who decides "Alex's call") → CONSOLIDATED into one function 21be2cd → r5 SHIP, 1 should-fix fixed abfc579 (repeat check looks backwards only). Suites: 440 OK at 95d20ce, 444 OK at 21be2cd.

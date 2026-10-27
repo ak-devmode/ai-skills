@@ -170,10 +170,25 @@ class LineageTest(unittest.TestCase):
         self.assertFalse([k for k in rows if k.startswith("pre-trial") and k.endswith("fix rounds")])
         self.assertEqual(list(rows)[0], "pre-trial · base low · round 1")
         lin = out["tables"]["Effort trial lineages"]["rows"]
-        self.assertEqual(lin["trial · base medium"][:2], [1, 1.0])   # a lineage takes its root's base
-        self.assertEqual(lin["pre-trial · base low"][0], 2)
+        # a lineage takes its root's base; none of these closed (no SHIP, no acceptance)
+        self.assertEqual(lin["trial · base medium"], [0, None, None, 1, 0])
+        self.assertEqual(lin["pre-trial · base low"], [0, None, None, 2, 0])
         self.assertEqual(out["notes"]["trial_effort_tiers"], {"high": 2})
         self.assertEqual(out["notes"]["stamped_round_mismatches"], 0)
+
+    def test_trial_lineages_count_closed_and_in_window_only(self):
+        u12 = unit_12(self.shas)
+        u12[-1] = {**u12[-1], "verdict": "SHIP"}             # trial lineage closes on SHIP
+        u11 = unit_11(self.shas) + [{"record": "acceptance", "by": "t", "ts": "2026-10-12T00:00:00Z"}]
+        out = self.analyze({("s", "1.1"): u11, ("s", "1.2"): u12}, since=ts("2026-10-11T00:00:00Z"))
+        lin = out["tables"]["Effort trial lineages"]["rows"]
+        self.assertEqual(lin["trial · base medium"], [1, 1.0, 0.0, 0, 0])
+        # 1.1: r1's lineage is rooted before `since` (excluded, counted); r3's closed by the acceptance
+        self.assertEqual(lin["pre-trial · base low"], [1, 0.0, 0.0, 0, 1])
+        # an acceptance before the lineage's last review does not close it
+        u11b = unit_11(self.shas) + [{"record": "acceptance", "by": "t", "ts": "2026-10-11T12:00:00Z"}]
+        lin = self.analyze({("s", "1.1"): u11b})["tables"]["Effort trial lineages"]["rows"]
+        self.assertEqual(lin["pre-trial · base low"], [1, 1.0, 50.0, 1, 0])   # r1–r2 closed (r2 fell back), r3 open
 
     def test_effort_base_unreadable_range_is_unresolved(self):
         with mock.patch.object(self.rv.vl, "PROJECTS", self.projects):

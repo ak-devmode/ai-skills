@@ -79,9 +79,16 @@ reviews, not 86 and 622.
 packet's prefilled reply). Its latency is the wait since that session's last assistant message.
 The other prompt categories are regex. Treat their shares as ±5 points.
 
-4.5 **Effort trial.** Codex reviews split into trial (lineage rules 2+) and pre-trial, then into
-round 1 and fix rounds. The lineage table shows fix rounds per lineage and the share of
-codex credit-outs (the fallback reviewer is the noisy one). The trial is kept per bucket when
+4.5 **Effort trial.** Codex reviews split into trial (lineage rules 2+) and pre-trial, then by
+base tier (`effort_base`, effort_for's tier before the bump), then into round 1 and fix rounds.
+A pre-trial review without a stamp is bucketed by effort_for on its own range; a trial review
+without one is `unstamped`; a range git cannot read is `unresolved`. A lineage takes its root's
+base. The lineage table shows fix rounds per lineage and the share of codex credit-outs (the
+fallback reviewer is the noisy one), over **closed** lineages rooted in the window only:
+closed means the latest review is SHIP, or the unit's outcomes were accepted after it. Open
+lineages are cut mid-loop (the newest, trial ones most) and lineages whose round 1 predates
+`--since` are counted from their tail only, so both are excluded and counted in their own
+columns. The trial is kept per bucket when
 findings move earlier without more credit-outs. A stamped `round` that disagrees with the
 recomputed one is counted under `stamped-round mismatches`.
 

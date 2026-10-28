@@ -90,7 +90,7 @@ HERE = Path(__file__).resolve().parent
 
 
 def post_timeout():
-    """PACKET_POST_TIMEOUT (tests only), read where used; a bad value falls back to 3 so a
+    """PACKET_POST_TIMEOUT (tests only), read where used; a bad, non-finite or >60 s value falls back to 3 so a
     harness setting can never stop the caller."""
     try:
         v = float(os.environ.get("PACKET_POST_TIMEOUT") or 3)
@@ -385,9 +385,21 @@ def is_sent(d, pid):
     return sent_marker(d, pid).exists()
 
 
+def _mark(path, text):
+    """Write a send-path marker. A harness error never stops the caller (10.1-r22-01,
+    10.3-r9-01): returns None, or the OSError text for the caller's Skipped note."""
+    try:
+        path.write_text(text)
+    except OSError as e:
+        return str(e)
+    return None
+
+
 def _refusal(d, stem, kind, note, what):
     """Write <stem>.conflict / <stem>.rejected so the item is never retried forever."""
-    (d / f"{stem}.{kind}").write_text(note + "\n")
+    err = _mark(d / f"{stem}.{kind}", note + "\n")
+    if err:
+        return f"{SKIP}queue refused {what} ({note}); not sent, and the {kind} marker could not be written ({err})"
     if kind == "conflict":
         return f"Conflict: {what} id was reused with different content ({note}); not sent, marked {stem}.conflict"
     return f"Rejected: queue refused {what} ({note}); not sent, marked {stem}.rejected"
@@ -396,10 +408,9 @@ def _refusal(d, stem, kind, note, what):
 def _refuse_event(d, ev):
     """An event of a packet the queue refused is never POSTed (10.1-r7-02/03)."""
     stem = f"evt-{ev['id']}"
-    try:
-        (d / f"{stem}.rejected").write_text("packet refused\n")
-    except OSError as e:  # a harness error never stops the caller (10.1-r22-01)
-        return f"Skipped: event {ev['id']} not sent: its packet {ev['packet_id']} was refused, and the marker could not be written ({e})"
+    err = _mark(d / f"{stem}.rejected", "packet refused\n")
+    if err:
+        return f"{SKIP}event {ev['id']} not sent: its packet {ev['packet_id']} was refused, and the marker could not be written ({err})"
     return f"Rejected: event {ev['id']} not sent: its packet {ev['packet_id']} was refused by the queue (packet refused); marked {stem}.rejected"
 
 
@@ -447,8 +458,8 @@ def try_send(args, d, ev=None, pid=None):
             return _refuse_event(d, ev)
         kind, note = post("/events", ev)
         if kind == "ok":
-            (d / f"evt-{ev['id']}.sent").write_text(note + "\n")
-            return ""
+            err = _mark(d / f"evt-{ev['id']}.sent", note + "\n")
+            return f"{SKIP}event {ev['id']} sent, but its sent marker could not be written ({err}); `packet.py flush` re-sends it" if err else ""
         if kind in ("conflict", "rejected"):
             return _refusal(d, f"evt-{ev['id']}", kind, note, f"event {ev['id']}")
         if kind == "missing":
@@ -460,9 +471,9 @@ def try_send(args, d, ev=None, pid=None):
         return f"{SKIP}packet {pid} unreadable ({e}); not sent"
     kind, note = post("/packets", doc)
     if kind == "ok":
-        sent_marker(d, pid).write_text(note + "\n")
+        err = _mark(sent_marker(d, pid), note + "\n")
         _clear_refusals(d, pid)
-        return ""
+        return f"{SKIP}packet {pid} sent, but its sent marker could not be written ({err}); `packet.py flush` re-sends it" if err else ""
     if kind in ("conflict", "rejected"):
         return _refusal(d, pid, kind, note, f"packet {pid}")
     return f"Blocked: queue unreachable ({note}); packet kept in outbox, `packet.py flush` re-sends"

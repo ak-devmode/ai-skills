@@ -379,6 +379,15 @@ Touches: scripts/{resolve-identifiers,verdict-gate,finish-table,lever-candidates
       (`GRAFANA_BASE/FROM/TO/TOKEN/TOKEN_SSM`, `ALARM_CW_HEARTBEAT/CW_NAMESPACE/HEARTBEAT_LOG/WT_MAX_AGE_S/WT_ROOT`, `FROM`),
       `GEMINI_API_KEY`, and herdr's `HERDR_ENV`/`HERDR_WORKSPACE_ID`. Declare them in `.env.example`, or mark them as
       provided by the platform. `python3 scripts/resolve-identifiers.py --repo . --range <root>..HEAD` lists them.
+- [ ] **Shell env scan: eight false alarms on kalpa-iris 9.1** (`/verify 9.1` run `9.1-20261028T123251-e451`, `p1-names-resolve`
+      red; Alex 2026-10-28: accept at the gate, fix here). Each name is set inside its own script or by the platform:
+      `BASH_REMATCH` (bash builtin, missing from `SH_BUILTIN`); `PGPASSFILE` (libpq's, exported by the same script and read
+      by an inline Python heredoc via `os.environ`); `IRIS_DB_MASTER` (same: exported, then read by Python); `APP_HOST`,
+      `CHECK_ENV` (assigned in a function or a sourced `lib.sh`, read in another); `IRIS_TEST_WORK` (passed to a child of
+      the same script as an env prefix, `X=1 "$@"`); `IP` (assigned and read inside an escaped `\$` remote-command string);
+      `IRIS_SMOKE_PROJECT` (an optional override read as `${X:-default}`). Fix the first two outright (builtin and libpq
+      lists); for the rest decide what counts as "the script's own": a sourced file's assignments, an exported name read by
+      its own heredoc, a `${X:-default}` override. Repro: `python3 scripts/resolve-identifiers.py --repo <kalpa-iris> --range 7727665c..70954536`.
 
 ## Lever candidates
 

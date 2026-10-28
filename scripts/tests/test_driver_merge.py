@@ -400,7 +400,8 @@ class DriverMergeTest(unittest.TestCase):
         self.assertEqual(len(p1), 1)
         self.assertEqual(len(p2), 2, out2)
         new = [p for p in p2 if p["id"] != p1[0]["id"]][0]
-        self.assertIn("Merged past the checked head", new["title"])
+        self.assertIn("merge past the checked head", new["title"])
+        self.assertIn("was merged at", new["context"])  # 10.3-r5-01: not "did not merge"
         self.assertIn("f" * 12, new["id"])  # keyed on the merge commit that landed
 
     def test_refusal_id_tracks_the_case(self):  # 10.3-r3-03 siblings: what differs must reach the id
@@ -426,6 +427,23 @@ class DriverMergeTest(unittest.TestCase):
             back = dm.emit_packet(repo, "10.3", label, [("checks", "pending")], [], None, "a" * 40)
         self.assertNotIn(back, ids)
         self.assertEqual((status(back), status(ids[2])), ("open", "stale"))
+
+    def test_card_fields_stay_within_caps(self):  # 10.3-r5-02/03
+        repo = self.build({})[0]
+        label = "Some-Very-Long-Organisation-Name/an-exceptionally-long-repository-name-for-caps#123456"
+        failed = [(f"cond{i}", "x" * 1500) for i in range(4)]
+        hits = [{"path": "db/migration/001_floor.sql", "pattern": "migration/", "change": "M"}]
+        with contextlib.redirect_stdout(io.StringIO()):
+            pid = dm.emit_packet(repo, "10.3", label, failed, hits, None, "c" * 40)
+        self.assertTrue(pid, "a capped card must still be written, not refused by packet.py")
+        outbox = os.path.join(repo, ".decision-queue", "outbox")
+        card = readj(os.path.join(outbox, f"{pid}.json"))
+        self.assertLessEqual(len(card["title"]), 100)
+        self.assertLessEqual(len(card["context"]), 400)
+        self.assertLessEqual(len(card["evidence"]), 4000)
+        self.assertIn("db/migration/001_floor.sql", card["evidence"])  # floor paths survive the cut
+        self.assertTrue(card["evidence"].endswith("(truncated)"))
+        self.assertTrue(card["title"].endswith("?") or "?" in card["title"])
 
     def test_event_failure_exits_4(self):
         o = {}

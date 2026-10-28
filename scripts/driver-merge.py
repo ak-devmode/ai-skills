@@ -617,7 +617,8 @@ def covered(repo, seen, head, rid):
 
 # ---------- packet / event ---------------------------------------------------------
 
-def emit_packet(repo, unit, label, failed, hits, rng, head, title=None, options=None, kind="merge"):
+def emit_packet(repo, unit, label, failed, hits, rng, head, title=None, options=None, kind="merge",
+                context=None):
     """Write the refusal packet. Its id must change whenever the case does, or packet.py `new
     --id` re-sends the OLD card (10.3-r3-03): it carries the kind (`merge-elsewhere` is keyed on
     the merge commit that landed, passed as `head`), the head, the door and the failed condition
@@ -635,8 +636,12 @@ def emit_packet(repo, unit, label, failed, hits, rng, head, title=None, options=
         pid = stable_id(kind, head[:12], door, conds, label.replace("/", "-").replace("#", "-"))
         if packet_status(dirs, pid) != "stale":
             break
-    body = "\n".join([f"driver-merge.py did not merge {label}:"] + [f"- {n}: {d}" for n, d in failed]
-                     + [f"- floor path: {h['path']} ({h['pattern']}, {h['change']})" for h in hits])
+    # floor paths first: a one-way card rests on them, so a cut never drops them before the detail
+    body = "\n".join([f"driver-merge.py on {label}:"]
+                     + [f"- floor path: {h['path']} ({h['pattern']}, {h['change']})" for h in hits]
+                     + [f"- {n}: {d}" for n, d in failed])
+    if len(body) > 4000:
+        body = body[:4000 - len("\n… (truncated)")] + "\n… (truncated)"
     ci = any(name == "ci" for name, _ in failed)
     # Cards v2 (10.4 cards lane): title = the question, short context, option label + one-line why,
     # the per-condition detail goes to evidence (collapsed on the card).
@@ -648,11 +653,15 @@ def emit_packet(repo, unit, label, failed, hits, rng, head, title=None, options=
                           if ci else
                           [("Driver fixes it and re-runs", "The driver fixes the failed condition and re-runs driver-merge."),
                            ("Merge it by hand", "You merge it yourself now.")])
-    title = title or ("Floor path" if one_way else "CI change" if ci else "Not merged")
-    context = (f"driver-merge did not merge {label}: " + ", ".join(n for n, _ in failed))[:400]
+    # question first, label last: a clip at 100 chars cuts the label, never the question
+    title = title or (f"Merge by hand? It touches a floor path: {label}" if one_way
+                      else f"Merge by hand? It edits CI: {label}" if ci
+                      else f"Fix and re-run, or merge by hand? Not merged: {label}")
+    context = context or (f"driver-merge did not merge {label}. Failed: " + ", ".join(n for n, _ in failed) + ".")
+    clip = lambda s, n: s if len(s) <= n else s[:n - 1] + "…"
     cmd = [sys.executable, PACKET, "new", "--door", door, "--type", "generic", "--title",
-           f"{title}: {label}"[:100], "--unit", unit, "--recommended", "1",
-           "--context", context, "--evidence", body[:4000], "--id", pid, "--driver"]
+           clip(title, 100), "--unit", unit, "--recommended", "1",
+           "--context", clip(context, 400), "--evidence", body, "--id", pid, "--driver"]
     for lbl, why in options:
         cmd += ["--option", f"{lbl}::{why}"]
     if one_way and rng:
@@ -691,7 +700,8 @@ def supersede(repo, kind, head, label, pid):
     """Mark stale every OPEN outbox packet for the same kind + head + label under another id
     (10.3-r4-06): a new failure set on the same head mints a new card, and the earlier one is
     superseded, not a second open card for one PR. Matched on the id's `pk-<kind>-<head12>-`
-    prefix and the title's `: <label>` tail (the label may be cut off the id at 64 chars).
+    prefix and the evidence's first line `driver-merge.py on <label>:` (the title is clipped at
+    100 chars and the id at 64, so neither holds the whole label).
     Fail-open on purpose, warned on stderr: marking stale discards a pending decision, so an
     unreadable outbox, packet or a failed `stale` leaves the earlier card open — an extra card
     is the safe failure, a wrongly closed one is not."""
@@ -712,7 +722,8 @@ def supersede(repo, kind, head, label, pid):
         except (OSError, ValueError, AttributeError) as e:
             print(f"driver-merge: warning: {old} unreadable ({e}); not superseded", file=sys.stderr)
             continue
-        if status != "open" or not str(doc.get("title") or "").endswith(f": {label}"):
+        first = str(doc.get("evidence") or doc.get("title") or "").split("\n", 1)[0]
+        if status != "open" or first != f"driver-merge.py on {label}:":
             continue
         src, out, err = sh([sys.executable, PACKET, "stale", old, "--force", "--reason", f"superseded by {pid}",
                             "--outbox", d, "--driver"], cwd=repo, timeout=60)
@@ -832,7 +843,8 @@ def main(argv):
         if elsewhere:
             print(f"MERGED-ELSEWHERE {facts['label']} {elsewhere} — {why}; no `merged` event")
             emit_packet(a.repo, a.unit, facts["label"], [("merge", why)], [], None, elsewhere,
-                        title="Merged past the checked head",
+                        title=f"Keep a merge past the checked head? {facts['label']}",
+                        context=f"{facts['label']} was merged at {elsewhere}, past the head the gate checked: {why}",
                         options=[("Review the unchecked commits", "You read what merged past the checked head and keep it."),
                                  ("Revert and re-run the unit", "The merge is reverted and the unit goes through the gate again.")],
                         kind="merge-elsewhere")

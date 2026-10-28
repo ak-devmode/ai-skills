@@ -344,7 +344,10 @@ class TestQueue(PacketBase):
                  # 10.3-r4-03: only this host's normalized name counts
                  ("alias", ("--driver",), 0, unreg), ("blank-host", ("--driver",), 0, unreg),
                  ("other-host", ("--driver",), 0, unreg),
-                 ("unreadable", ("--driver",), 0, "fail closed")]
+                 ("unreadable", ("--driver",), 0, "fail closed"),
+                 # Alex 97: the registration is bound to the session that made it (10.3-r6-03)
+                 ("new-session", ("--driver",), 0, "a reused pane is not the driver"),
+                 ("no-session", ("--driver",), 0, "a reused pane is not the driver")]
         for mode, flag, posts, why in cases:
             with self.subTest(mode, flag=flag):
                 s = Stub(); self.addCleanup(s.stop)
@@ -358,9 +361,10 @@ class TestQueue(PacketBase):
                     self.assertIn(why, out)
                     self.assertIn(why, p.stderr)
                     self.assertEqual(p.returncode, 1)
-                    if why == unreg:  # r4-02: a lane is told to stop, not handed a way through
-                        self.assertIn("never registers: stop, do not re-run", p.stderr)
-                        self.assertNotIn("--status done", p.stderr)
+                    if why != "fail closed":  # r4-02 / r6-05: a lane is told to stop, never handed the registration
+                        self.assertIn("A lane never merges or POSTs: stop, do not re-run.", p.stderr)
+                        self.assertNotIn("--status", p.stderr)
+                        self.assertNotIn("dispatch-log", p.stderr)
 
     def test_flush_resends_after_outage_and_is_idempotent(self):
         s = Stub(); self.addCleanup(s.stop)
@@ -878,6 +882,47 @@ class TestSessionIdentity(PacketBase):  # 10.1-r1-01
         lane = tag[len("[lane "):].split(" ")[0]
         p = run("packet.py", "check-reply", "--reply", tag, "--lane", lane, cwd=self.repo, env=env)
         self.assertEqual(p.returncode, 0, p.stderr)
+
+
+class TestHarnessErrorsNeverStop(unittest.TestCase):
+    """A bad harness setting or an unwritable outbox never stops the caller."""
+
+    def setUp(self):
+        self.packet = load_script("packet.py")
+
+    def test_non_finite_or_huge_post_timeout_falls_back(self):
+        from unittest import mock
+        for v in ("inf", "nan", "1e30", "61", "-1", "x"):
+            with mock.patch.dict(os.environ, {"PACKET_POST_TIMEOUT": v}):  # 10.1-r21-01, 10.3-r9-03
+                self.assertEqual(self.packet.post_timeout(), 3.0, v)
+
+    def test_unwritable_refusal_and_sent_markers_are_skipped_not_raised(self):  # 10.3-r9-01
+        from pathlib import Path
+        with tempfile.TemporaryDirectory() as t:
+            d = Path(t) / "missing"
+            out = self.packet._refusal(d, "pk-1", "rejected", "422", "packet pk-1")
+            self.assertTrue(out.startswith("Skipped: "), out)
+            self.assertIsNotNone(self.packet._mark(d / "x.sent", "ok\n"))
+
+    def test_unwritable_event_marker_is_skipped_not_raised(self):
+        from pathlib import Path
+        with tempfile.TemporaryDirectory() as t:
+            d = Path(t) / "missing"  # write_text raises FileNotFoundError (an OSError)
+            out = self.packet._refuse_event(d, {"id": "ev-1", "packet_id": "pk-1"})
+        self.assertTrue(out.startswith("Skipped: "), out)  # 10.1-r22-01
+
+    def test_unreadable_event_marker_is_not_reported_against_a_packet(self):
+        import contextlib, io
+        from pathlib import Path
+        with tempfile.TemporaryDirectory() as t:
+            d = Path(t)
+            (d / "evt-ev-1.rejected").write_text("packet refused\n")
+            (d / "evt-ev-1.json").write_text("{not json")
+            err = io.StringIO()
+            with contextlib.redirect_stderr(err):
+                self.packet._clear_refusals(d, "pk-1")
+            self.assertTrue((d / "evt-ev-1.rejected").exists())
+        self.assertEqual(err.getvalue(), "")  # 10.1-r20-01
 
 
 if __name__ == "__main__":

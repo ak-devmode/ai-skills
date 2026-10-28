@@ -113,9 +113,10 @@ by `test_entrypoint.py`'s compile check.
       --blocking reads `pass` (advisory, not-judged, predates or unknown = no merge), door.py finds no floor path on
       merge-base..head, no CI definition touched (workflows, actions, CODEOWNERS… — a two-way "CI change"
       packet, Alex merges by hand; not floor: CI edits are reversible), mergeStateStatus CLEAN/HAS_HOOKS (BLOCKED → `--admin` only when
-      reviewDecision is REVIEW_REQUIRED, the base requires nothing beyond required checks and reviews (any
-      other classic requirement or unmodelled field, any ruleset rule but required_status_checks /
-      pull_request, or review-thread resolution refuses it), and every required check of the base — classic protection and
+      reviewDecision is REVIEW_REQUIRED, the base's protection is EXACTLY the modelled shape — an allowlist
+      (Alex 97): required checks with strict off + required reviews, every other classic setting off or
+      absent, no ruleset rule but a non-strict required_status_checks or a pull_request without thread
+      resolution; an unknown key, a mistyped value or no review / no required check read refuses it — and every required check of the base — classic protection and
       rulesets, both read — is present on the head (a check bound to an app, classic app_id or ruleset
       integration_id, by a check run from that app) with EVERY entry of its name SUCCESS or SKIPPED/NEUTRAL —
       head check-runs unreadable is no --admin; unreadable protection is no merge; any other BLOCKED refused).
@@ -182,10 +183,16 @@ by `test_entrypoint.py`'s compile check.
     finish-table.py init --scope DIR --phase N.P[=repo,...]... [--rows F] [--test-plan-owner N.P] [--predates N.P,...]
     finish-table.py add  --scope DIR --rows F --change TEXT [--replace]
       exit: 0 written · 2 usage · 3 refused (exists / missing / would not parse — nothing written)
-    dispatch-log.py --scope --task --status {dispatched,done,blocked,failed} --pane [--seat --branch --worktree --tail --log]
-    dispatch-log.py --scope --status driver --pane "$HERDR_PANE_ID"   (the driver registers itself; machine = this host)
-      exit: 0 written + read back · 1 did not land · 2 usage. --pane is required: the record is how
-      packet.py tells a lane from the driver (a pane whose latest record is dispatched/blocked is a lane)
+    dispatch-log.py --scope --task --status {dispatched,done,blocked,failed} --pane [--machine --seat --branch --worktree --tail --log]
+    dispatch-log.py --scope --status driver --pane "$HERDR_PANE_ID"   (/plan §5.8.2: the driver registers itself)
+    dispatch-log.py --scope --task driver --status done --pane "$HERDR_PANE_ID"   (/plan §11.9: closes it)
+      exit: 0 written + read back · 1 did not land · 2 usage · 3 driver registration refused.
+      --pane is required; machine defaults to this host. A pane's latest record on this host decides
+      who it is: `driver` (with this session id) is the driver, anything later closes the registration.
+      The driver writes a lane's record BEFORE launching it, so `--status driver` refuses (exit 3) a
+      pane whose latest record is an open lane (dispatched/blocked), and also refuses with no session
+      id or an unreadable log. The registration records the session id; packet.py --driver requires
+      the current session to match, so a stale registration on a reused pane id is harmless
     herdr-pane.sh name <pane> <name> [--source SKILL]  |  herdr-pane.sh helper [--cwd DIR]
       exit: 0 ok · 1 herdr call failed / label not visible · 2 usage · 3 not in herdr / no server
     repo-survey.sh [repo-dir] [--no-fetch]

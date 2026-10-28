@@ -1,6 +1,6 @@
 ---
 name: herdr
-version: 0.5.1
+version: 0.5.2
 description: |
   Alex's herdr WORKFLOW layer — the single source of truth for how we drive
   herdr (terminal workspace manager for AI agents) for agent work: naming, the
@@ -71,8 +71,9 @@ level *lies* about every other seat in it (learned live: a codex pane displayed
   `herdr pane rename` **plus** `herdr pane report-metadata --display-agent`, both in
   one call, read back: `~/Projects/ai-skills/scripts/herdr-pane.sh name <pane> "<name>" --source <skill>`.
 - **Driver** (a `/plan` session's own agent): `herdr agent rename $HERDR_PANE_ID driver`
-  (a label), plus the registration that makes it the driver: `dispatch-log.py --scope <scope>
-  --status driver --pane "$HERDR_PANE_ID"` (`/plan` §5.8.1). Lanes never register. Then run
+  (a label), after the registration that makes it the driver (`/plan` §5.8.2, every herdr
+  driver at Phase 0; bound to the session, refused for a pane `/concurrency` logged as a lane).
+  Lanes never register. Then run
   `herdr-agent-view ensure`, so the attention view picks up this driver's pane at once (its 60 s
   timer is only the backstop).
 - Auto-name from context when inside a pane via `$HERDR_PANE_ID` / `$HERDR_WORKSPACE_ID`.
@@ -263,7 +264,7 @@ weighted spend; output was negligible. Context size × turn count is the bill, s
   only when the lane needs judgment. When Claude headroom is low, push mechanical
   lanes to `codex` or `glm`, which bill elsewhere.
 - **Small tool output.** Bash output was 83% of tool-result bytes. Every brief
-  carries the output rule in `/concurrency` §6 step 3.
+  carries the output rule in `/concurrency` §6 step 4.
 
 **Env-leak rule:** provider overrides live ONLY in the seat's launch command,
 inline. Secrets resolve from Keychain at spawn — never via herdr `--env`

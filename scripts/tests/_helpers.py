@@ -48,6 +48,9 @@ def load(name):
     return mod
 
 
+SESSION = "sess-driver"  # the agent session dispatch_env runs as
+
+
 def dispatch_env(tmp, mode, pane="w9:p2"):
     """Env that puts this process in herdr pane `pane` with a fresh $HOME whose dispatch log
     (~/.config/herdr/concurrency-log.jsonl) holds, for the inverted rule (Alex 86) —
@@ -56,14 +59,17 @@ def dispatch_env(tmp, mode, pane="w9:p2"):
     pane registered, then a lane dispatched into the same id; "alias": this pane registered under
     this host's FQDN form, not the normalized name (10.3-r4-03); "blank-host": registered with no machine;
     "other-host": registered on another server; "other-pane": another pane registered; "none":
-    no log; "unreadable": a log line that is not JSON."""
+    no log; "unreadable": a log line that is not JSON; "new-session": this pane registered by
+    another session, never closed — herdr reused the id (Alex 97, 10.3-r6-03); "no-session": a
+    registration that carries no session id. The env is session SESSION."""
     home = tempfile.mkdtemp(dir=tmp)
     me = load("placement.py").this_host()
     lane = lambda pane_id, status="dispatched", machine=me: json.dumps(
         {"scope": "10", "task": "t", "pane_id": pane_id, "status": status, "machine": machine})
-    drv = lambda pane_id, machine=me: json.dumps(
+    drv = lambda pane_id, machine=me, session=SESSION: json.dumps(
         {"kind": "driver", "scope": "10", "task": "driver", "pane_id": pane_id, "status": "driver",
-         **({"machine": machine} if machine is not None else {})})
+         **({"machine": machine} if machine is not None else {}),
+         **({"session": session} if session is not None else {})})
     lines = {"driver": [lane("w9:p1"), drv(pane)],
              "lane": [drv("w9:p1"), lane(pane)],
              "unregistered": [drv("w9:p1"), lane("w9:p3"), lane("w9:p4", "done")],
@@ -72,9 +78,11 @@ def dispatch_env(tmp, mode, pane="w9:p2"):
              "blank-host": [drv(pane, None)],
              "other-host": [drv(pane, "elsewhere-box")],
              "other-pane": [drv("w9:p1")],
-             "unreadable": [drv(pane), "{not json"]}.get(mode)
+             "unreadable": [drv(pane), "{not json"],
+             "new-session": [drv(pane, session="sess-gone")],
+             "no-session": [drv(pane, session=None)]}.get(mode)
     if lines is not None:
         os.makedirs(os.path.join(home, ".config", "herdr"))
         with open(os.path.join(home, ".config", "herdr", "concurrency-log.jsonl"), "w") as f:
             f.write("\n".join(lines) + "\n")
-    return {"HOME": home, "HERDR_PANE_ID": pane, "HERDR_WORKSPACE_ID": "w9"}
+    return {"HOME": home, "HERDR_PANE_ID": pane, "HERDR_WORKSPACE_ID": "w9", "CLAUDE_CODE_SESSION_ID": SESSION}

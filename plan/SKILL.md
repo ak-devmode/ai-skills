@@ -1,6 +1,6 @@
 ---
 name: plan
-version: 3.16.0
+version: 3.17.0
 description: |
   Execute tasks from a structured plan document step by step, logging progress and
   stopping at human checkpoints. Plan files follow the naming convention *-PLAN.md
@@ -356,14 +356,9 @@ rows the way `/scope` §5.10.1 does and ask; approve only on the user's yes. A t
 - **Never execute tasks on `main` or `master`** UNLESS the repo's recent commit history shows main is the active development branch (e.g., solo-dev repos where all features land directly on main). When uncertain, halt and ask. Working on the user's current branch is preferred over creating new ones.
 - Log the branch name in the progress file under Phase 0.
 
-5.8.1 **herdr worktree + driver naming (when running inside a herdr pane)** — if
+5.8.1 **herdr worktree (when running inside a herdr pane)** — if
 `$HERDR_PANE_ID` is set (this `/plan` runs in a herdr pane) AND the parent
 scope's **Primary repo (worktree)** field is not "none":
-- Name this session's agent: `herdr agent rename "$HERDR_PANE_ID" driver`, and register
-  this pane as the driver: `~/Projects/ai-skills/scripts/dispatch-log.py --scope <scope>
-  --status driver --pane "$HERDR_PANE_ID"`. The name is a label; the registration is the
-  `--driver` authority — inside herdr, `packet.py` and `driver-merge.py` treat every
-  unregistered pane as a lane. Only the driver registers; a lane never does.
 - Create the scope's isolated worktree-workspace per the **`herdr` skill** (model
   B, §3): `herdr worktree create --cwd <primary-repo> --base origin/<trunk>
   --branch <scope-branch>` — the scope's space IS the worktree-workspace; work
@@ -372,6 +367,22 @@ scope's **Primary repo (worktree)** field is not "none":
   **optional** for a solo driver (honor a scope note, else ask once).
 - Outside a herdr pane, or Primary repo "none": skip this — the plain branch
   checkout (§5.8) stands.
+
+5.8.2 **Driver registration (every `/plan` inside a herdr pane)** — if `$HERDR_PANE_ID`
+is set, whatever the scope's Primary repo (Alex 97, 10.3-r6-04): run
+`~/Projects/ai-skills/scripts/dispatch-log.py --scope <scope> --status driver --pane "$HERDR_PANE_ID"`.
+Inside herdr, `packet.py` and `driver-merge.py` honour `--driver` only from the pane the
+driver registered, in the session that registered it (the record carries
+`$CLAUDE_CODE_SESSION_ID`; a pane id herdr reuses for a new session is not the driver).
+- **Exit 0** — this session is the driver. Name the pane as a label: `herdr agent rename
+  "$HERDR_PANE_ID" driver`.
+- **Exit 3, the pane is a lane** — `/concurrency` logged this pane as a lane before
+  launching it. Carry on with the plan as a lane: never pass `--driver`, never merge or
+  post; report by printing in the pane.
+- **Exit 3, any other reason** (no session id, unreadable log) — tell Alex; until it
+  registers, this driver's packets stay in its outbox and it cannot merge.
+The registration ends at §11.9. A registration nobody closed is harmless: the session
+binding means no later session in that pane id inherits it.
 
 5.9 **Read agent-load-bearing context files** — at session start, read whichever of these exist in the repo root:
 - `CLAUDE.md` — project-specific Claude instructions (always read if present)
@@ -509,10 +520,10 @@ on a direct-to-main repo a branch diff is empty by construction.
    repos) or `main` (kalpa-docs, pmg-docs, ai-skills). A code repo's `main` is prod: it is
    refused and stays behind `prod-merge-gate.py`. A degraded review (fallback or lean)
    still merges, flagged on the ticker; `--admin` is used only when GitHub says a review
-   approval is missing (`reviewDecision` REVIEW_REQUIRED), the base's protection requires
-   nothing beyond required checks and reviews (a signature, conversation-resolution,
-   deployment, lock or any rule the script does not model refuses it — `--admin` would bypass
-   it unread), and every required check of the base is present on the head with every entry of its name SUCCESS (a required job
+   approval is missing (`reviewDecision` REVIEW_REQUIRED), the base's protection is exactly
+   the modelled shape — an allowlist (Alex 97): non-strict required checks plus required
+   reviews, everything else off; any other setting, strict checks, or a key the script does
+   not know refuses it (`--admin` would bypass it unread), and every required check of the base is present on the head with every entry of its name SUCCESS (a required job
    skipped by `if:` counts, as on GitHub; one that never reported does not). Any other
    BLOCKED is a two-way packet. Each merge posts a `merged` event (repo, PR, sha).
    - **A repo with no CI never auto-merges.** pmg-docs and ai-skills have no workflow
@@ -528,9 +539,10 @@ on a direct-to-main repo a branch diff is empty by construction.
    - **Exit 4** means the merge landed but the ticker event did not: run `packet.py
      flush --driver`, and tell Alex if it still fails.
    - Only the registered driver merges: inside herdr, a pane without an open driver
-     registration on this host (§5.8.1) is a lane — `/concurrency` lanes, review and fix
-     panes, helpers — refused whatever `--driver` says; an unreadable log refuses. Nobody
-     turns on GitHub auto-merge.
+     registration on this host by this session (§5.8.2) is refused whatever `--driver` says; an
+     unreadable log refuses. Accepted gap for the testing phase (Alex 98): only logged
+     `/concurrency` lanes are refused registration, so an unlogged helper, review or fix pane
+     that runs `/plan` can register. Nobody turns on GitHub auto-merge.
 
 **Rules version.** Every review record stamps `rules_version`. A lineage started before
 the scope-10 cutover finishes under the rules it started with (`/review`'s lineage note,
@@ -546,8 +558,8 @@ The unit range is §6.8's `<base>..HEAD`.
    "<label>::<what changes for Alex>" … --recommended N [--evidence "<file:line, refs>"]
    --blocks "Task X.Y" --range <base>..HEAD` — one decision per packet; writing rules in
    `scripts/README.md` (a data-model packet adds `--type data-model --payload-file <F>`; F is JSON `{"tables":[{"name",
-   "change","columns":[{"name","before","after","changed"}]}]}`, see
-   `scripts/tests/fixtures/packets/valid/data-model-one-way.json`). **Always pass `--range`**: door.py then
+   "change","columns":[{"name","before","after","changed"}]}]}` — the payload only, not a whole
+   packet; `change` is added, changed, removed or unchanged). **Always pass `--range`**: door.py then
    promotes a mislabelled claim, and without it nothing checks the door. Print
    `PACKET <id>` (the script does) and `PARKED <id>`, then stop that line of work.
    **While parked, commit nothing outside `plans/` in that repo** — progress and ledger
@@ -1011,3 +1023,13 @@ and hand off to `/scope` Step 8 (post-flight cleanup):
 
 > All plans in this scope are complete. Run scope post-flight cleanup?
 > (archive scope, update index, update CLAUDE.md, clear context)
+
+### 11.9 Close the driver registration (inside herdr)
+
+When this session stops driving — the scope is complete (§11.8.5) or the user stops at
+§11.8.3 — and §5.8.2 registered this pane, close the registration:
+`~/Projects/ai-skills/scripts/dispatch-log.py --scope <scope> --task driver --status done --pane "$HERDR_PANE_ID"`.
+Skip it when continuing to a sibling plan in this session (its Phase 0 registers again),
+and when §5.8.2 refused this pane (a lane has nothing to close). A missed close is
+harmless — the registration is bound to this session, so no later session in this pane
+id inherits it (10.3-r6-03) — but the log should say when a driver stopped.

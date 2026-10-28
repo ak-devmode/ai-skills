@@ -29,10 +29,11 @@ eligible only when ALL hold:
                reviews and merges by hand — not a floor path (10.3-r2-04)
   * mergeable — mergeStateStatus CLEAN / HAS_HOOKS merges; BLOCKED merges with --admin (what
                Alex does by hand) ONLY when GitHub says a review approval is missing
-               (reviewDecision REVIEW_REQUIRED), the base requires nothing beyond required checks
-               and reviews — no classic signatures, conversation resolution, deployments, lock,
-               linear history or unmodelled field, no ruleset rule but required_status_checks /
-               pull_request, no review-thread resolution (10.3-r4-01) — AND every required check of the base branch
+               (reviewDecision REVIEW_REQUIRED), the base's protection is EXACTLY the modelled
+               shape (Alex 97 allowlist): required checks with strict off + required reviews,
+               every other classic setting off or absent, no ruleset rule but a non-strict
+               required_status_checks or a pull_request without thread resolution, no unknown
+               key at any level — AND every required check of the base branch
                (classic protection AND rulesets) is satisfied on the head: present (a check
                bound to an app by a check run from that app, 10.3-r2-03) and EVERY entry of that
                name SUCCESS or SKIPPED/NEUTRAL (10.3-r2-05) — a failing status beside a green
@@ -50,9 +51,10 @@ Failure stances (fail closed: every one of these is "no merge" with the reason):
   * gh error, unparseable gh JSON, unknown check type/state, mergeStateStatus still UNKNOWN
   * BLOCKED with reviewDecision other than REVIEW_REQUIRED (missing included) -> no --admin
   * BLOCKED and the base's protection or rulesets unreadable -> no --admin, no merge
-  * BLOCKED and the base requires anything beyond checks + reviews, or a protection field or
-    ruleset rule type this script does not model -> no --admin (a requirement it cannot evaluate
-    is one --admin would bypass unread)
+  * BLOCKED and the base's protection is not exactly the modelled shape — a setting on, strict
+    checks, an unknown key or mistyped value at any level, another ruleset rule type, or no
+    review / no required check read -> no --admin (a requirement it cannot evaluate is one
+    --admin would bypass unread)
   * BLOCKED, a required check bound to an app, and the head's check runs unreadable -> the
     binding cannot be verified -> no --admin, no merge
   * origin remote unreadable, git error, PR commits not fetchable (door.py then fails closed;
@@ -284,92 +286,148 @@ def app_binding(v):
     return (v, True) if isinstance(v, int) and not isinstance(v, bool) and v > 0 else (None, False)
 
 
-# Classic protection fields --admin may pass: the two modelled requirements (checks, reviews) and
-# settings that are not a merge requirement. A field outside this set and REQUIREMENTS is not
-# modelled, so it refuses --admin (10.3-r4-01: fail closed on what this script cannot evaluate).
-CLASSIC_OK = {"url", "required_status_checks", "required_pull_request_reviews", "enforce_admins",
-              "allow_force_pushes", "allow_deletions", "block_creations", "allow_fork_syncing",
-              "restrictions"}
-# Classic requirements beyond checks + reviews: enabled -> GitHub may block on it, --admin would
-# bypass it unread -> no --admin (10.3-r4-01)
-REQUIREMENTS = ("required_signatures", "required_conversation_resolution", "required_deployments",
-                "lock_branch", "required_linear_history")
-RULES_OK = {"required_status_checks", "pull_request"}
+# --admin ALLOWLIST (Alex 97, replaces the 10.3-r4-01 denylist): --admin passes only when the
+# base's protection is exactly the modelled shape — required checks (not strict) + required
+# reviews, every other classic setting off or absent, and any ruleset rule exactly a
+# non-strict required_status_checks rule or a pull_request rule without thread resolution.
+# Every key at every level is named here with the value it must have; an unknown key, an
+# unexpected value or a malformed shape is outside the shape and refuses --admin. Nothing is
+# inferred from a key's name: a setting GitHub adds tomorrow refuses until it is modelled.
+#
+# Classic settings that must be off: absent, null, or {"enabled": false} (+ url).
+CLASSIC_OFF = {"required_signatures", "enforce_admins", "required_linear_history", "allow_force_pushes",
+               "allow_deletions", "block_creations", "required_conversation_resolution", "lock_branch",
+               "allow_fork_syncing", "required_deployments", "restrictions"}
+URLS = {"url", "contexts_url"}
+# required_status_checks: strict (require the head up to date with the base) is a requirement
+# --admin would bypass unread (10.3-r6-01), so it must be present and false
+CLASSIC_CHECKS = {"strict", "contexts", "checks"} | URLS
+# required_pull_request_reviews: every key is part of the one requirement --admin is for (the
+# missing approval), so any well-typed value passes; the value types are the modelled part
+CLASSIC_REVIEWS = {"url": str, "dismiss_stale_reviews": bool, "require_code_owner_reviews": bool,
+                   "require_last_push_approval": bool, "required_approving_review_count": int,
+                   "dismissal_restrictions": dict, "bypass_pull_request_allowances": dict}
+RULE_KEYS = {"type", "parameters", "ruleset_source_type", "ruleset_source", "ruleset_id"}
+# required_status_checks rule: strict policy must be present and false; do_not_enforce_on_create
+# only relaxes the rule when the branch is created, never a merge into it
+RULE_CHECKS = {"required_status_checks": list, "strict_required_status_checks_policy": bool,
+               "do_not_enforce_on_create": bool}
+# pull_request rule: review settings (the requirement --admin is for) plus thread resolution, which
+# must be present and false — an unresolved conversation also holds BLOCKED; allowed_merge_methods
+# only narrows how GitHub lets the merge land (a refused method fails the merge, read back as not merged)
+RULE_REVIEWS = {"required_approving_review_count": int, "dismiss_stale_reviews_on_push": bool,
+                "require_code_owner_review": bool, "require_last_push_approval": bool,
+                "required_review_thread_resolution": bool, "allowed_merge_methods": list,
+                "automatic_copilot_code_review_enabled": bool, "required_reviewers": list}
 
 
-def flag_on(v):
-    """A classic protection flag: (on, readable). {"enabled": bool} is the documented shape; an
-    absent / null field is off; a list or other object (required_deployments' environments) is on
-    when non-empty. Anything else is unreadable."""
-    if v is None:
-        return False, True
-    if isinstance(v, dict) and "enabled" in v:
-        return (v["enabled"], True) if isinstance(v["enabled"], bool) else (False, False)
-    if isinstance(v, (list, dict)):
-        return bool(v), True
-    return (v, True) if isinstance(v, bool) else (False, False)
+def typed(params, model):
+    """Keys of `params` outside `model`, or whose value is not the modelled type (bool is not int)."""
+    return [k for k, v in params.items()
+            if k not in model or not isinstance(v, model[k]) or (model[k] is int and isinstance(v, bool))]
+
+
+def off(v):
+    """A classic setting that must be off: absent / null, or {"enabled": false} with only a url."""
+    return v is None or (isinstance(v, dict) and v.get("enabled") is False and set(v) <= {"enabled", "url"})
+
+
+def required_checks(entries, app_key):
+    """{(context, app)} from a list of required-check entries, or None when any entry is outside
+    {context, app_key} or unreadable."""
+    out = set()
+    for c in entries if isinstance(entries, list) else [None]:
+        if not (isinstance(c, dict) and set(c) <= {"context", app_key} and isinstance(c.get("context"), str)
+                and c["context"]):
+            return None
+        app, ok = app_binding(c.get(app_key))
+        if not ok:
+            return None
+        out.add((c["context"], app))
+    return out
 
 
 def protection(slug, base):
-    """(required, extra, '') or (None, None, why unreadable).
+    """(required, outside, '') or (None, None, why unreadable).
 
     required = {(context, app id or None)} from both sources: classic branch protection
     (`checks[].app_id`; `contexts` is its unbound legacy mirror) and repository rulesets
     (`integration_id`). The app is GitHub's binding of a required check to who must report it,
     and --admin bypasses GitHub enforcing it, so it is carried (10.3-r2-03).
-    extra = every requirement beyond required checks and reviews (10.3-r4-01, Alex 83): classic
-    REQUIREMENTS enabled, a classic field not modelled, a ruleset rule of a type other than
-    required_status_checks / pull_request, or a pull_request rule with
-    required_review_thread_resolution. --admin bypasses all of them unread, so any one refuses it.
-    Classic protection answering "not protected" is a readable empty set; any other error is
+    outside = every way the base differs from the modelled shape (Alex 97 allowlist, above): a
+    classic setting on or not modelled, strict checks, an unknown key or a mistyped value at any
+    level, a ruleset rule of another type, thread resolution, and no review requirement or no
+    required check at all (the shape is checks AND reviews; REVIEW_REQUIRED from anything else is
+    a requirement this script did not read). --admin would bypass any of them unread.
+    Classic protection answering "not protected" is a readable empty document; any other error is
     unreadable, and unreadable is never read as "nothing required"."""
     b = urllib.parse.quote(base, safe="")
-    req, extra = set(), []
+    req, outside, reviews = set(), [], False
     doc, why = gh_json(f"repos/{slug}/branches/{b}/protection")
     if doc is None:
         if "Branch not protected" not in why:
             return None, None, f"branch protection unreadable ({why})"
-    elif isinstance(doc, dict):
-        for k in sorted(doc):
-            if k in REQUIREMENTS:
-                on, ok = flag_on(doc[k])
-                if not ok:
-                    return None, None, f"branch protection: {k} unreadable"
-                if on:
-                    extra.append(k)
-            elif k not in CLASSIC_OK:
-                extra.append(f"{k} (not modelled)")
-        rsc = doc.get("required_status_checks")
-        if rsc is not None and not isinstance(rsc, dict):
-            return None, None, "branch protection: required_status_checks unreadable"
-        checked = set()
-        for c in (rsc or {}).get("checks") or []:
-            app, ok = app_binding(c.get("app_id")) if isinstance(c, dict) else (None, False)
-            if not (ok and c.get("context")):
-                return None, None, "branch protection: required check unreadable"
-            req.add((c["context"], app))
-            checked.add(c["context"])
-        req |= {(c, None) for c in (rsc or {}).get("contexts") or [] if isinstance(c, str) and c not in checked}
-    else:
+        doc = {}
+    if not isinstance(doc, dict):
         return None, None, "branch protection: output is not an object"
+    for k in sorted(doc):
+        v = doc[k]
+        if k == "url":
+            continue
+        if k in CLASSIC_OFF:
+            if not off(v):
+                outside.append(f"{k} on")
+        elif k == "required_status_checks":
+            got = required_checks((v.get("checks") or []) if isinstance(v, dict) else None, "app_id")
+            if not isinstance(v, dict) or got is None or set(v) - CLASSIC_CHECKS:
+                outside.append(f"{k} not the modelled shape")
+                continue
+            if v.get("strict") is not False:
+                outside.append(f"{k}.strict {v.get('strict')!r} (head must be up to date)")
+            ctx = v.get("contexts") or []
+            if not (isinstance(ctx, list) and all(isinstance(c, str) for c in ctx)):
+                outside.append(f"{k}.contexts unreadable")
+                continue
+            named = {c for c, _ in got}
+            req |= got | {(c, None) for c in ctx if c not in named}
+        elif k == "required_pull_request_reviews":
+            bad = typed(v, CLASSIC_REVIEWS) if isinstance(v, dict) else [k]
+            outside += [f"{k}.{x} not modelled" for x in bad]
+            reviews = reviews or not bad
+        else:
+            outside.append(f"{k} not modelled")
     rules, why = gh_pages(f"repos/{slug}/rules/branches/{b}?per_page=100")
     if rules is None:
         return None, None, f"rulesets unreadable ({why})"
     for r in rules:
-        if not isinstance(r, dict) or not isinstance(r.get("parameters") or {}, dict):
-            return None, None, "ruleset rule unreadable"
-        kind, params = r.get("type"), r.get("parameters") or {}
-        if kind not in RULES_OK:
-            extra.append(f"ruleset {kind}")
-        elif kind == "pull_request" and params.get("required_review_thread_resolution"):
-            extra.append("ruleset required_review_thread_resolution")  # unset is off, anything set is on
+        kind = r.get("type") if isinstance(r, dict) else None
+        params = r.get("parameters") if isinstance(r, dict) else None
+        if not isinstance(params, dict) or set(r) - RULE_KEYS:
+            outside.append(f"ruleset {kind or 'rule'} not the modelled shape")
         elif kind == "required_status_checks":
-            for c in params.get("required_status_checks") or []:
-                app, ok = app_binding(c.get("integration_id")) if isinstance(c, dict) else (None, False)
-                if not (ok and c.get("context")):
-                    return None, None, "ruleset required check unreadable"
-                req.add((c["context"], app))
-    return req, extra, ""
+            got = required_checks(params.get("required_status_checks"), "integration_id")
+            bad = typed(params, RULE_CHECKS)
+            if bad or got is None:
+                outside.append(f"ruleset required_status_checks: {', '.join(bad) or 'a required check'} not modelled")
+            elif params.get("strict_required_status_checks_policy") is not False:
+                outside.append("ruleset strict_required_status_checks_policy not false (head must be up to date)")
+            else:
+                req |= got
+        elif kind == "pull_request":
+            bad = typed(params, RULE_REVIEWS)
+            if bad:
+                outside.append(f"ruleset pull_request: {', '.join(bad)} not modelled")
+            elif params.get("required_review_thread_resolution") is not False:
+                outside.append("ruleset required_review_thread_resolution not false")
+            else:
+                reviews = True
+        else:
+            outside.append(f"ruleset {kind}")
+    if not outside and not reviews:
+        outside.append("no review requirement read (REVIEW_REQUIRED from something not modelled)")
+    if not outside and not req:
+        outside.append("no required check read (the modelled shape is checks and reviews)")
+    return req, outside, ""
 
 
 def satisfied(res):
@@ -392,9 +450,9 @@ def entry_ok(c, rollup=True):
 
 def cond_mergeable(state, slug=None, base=None, rollup=None, head=None, review=None):
     """(ok, detail, admin). BLOCKED earns --admin ONLY when GitHub says a review approval is
-    missing (reviewDecision REVIEW_REQUIRED), the base requires nothing beyond required checks
-    and reviews (10.3-r4-01: REVIEW_REQUIRED does not say the review is the ONLY thing missing —
-    an unresolved conversation or a signature rule also holds BLOCKED), AND every required (check, app) of the base
+    missing (reviewDecision REVIEW_REQUIRED), the base's protection is exactly the modelled
+    shape (Alex 97 allowlist — REVIEW_REQUIRED does not say the review is the ONLY thing missing:
+    strict checks, an unresolved conversation or a signature rule also hold BLOCKED), AND every required (check, app) of the base
     (classic protection and rulesets) is satisfied on the head (Alex 83, 10.3-r3-01): at least
     one entry exists — for a check bound to an app, a check run FROM that app, read from the
     head's check-runs since the rollup carries no app (10.3-r2-03) — and EVERY entry of that
@@ -409,11 +467,11 @@ def cond_mergeable(state, slug=None, base=None, rollup=None, head=None, review=N
     if review != "REVIEW_REQUIRED":
         return False, (f"BLOCKED with reviewDecision {review or 'none'} — something other than a missing "
                        "review approval blocks; no --admin"), False
-    req, extra, why = protection(slug, base)
+    req, outside, why = protection(slug, base)
     if req is None:
         return False, f"BLOCKED and {why} — no --admin without the base's protection", False
-    if extra:
-        return False, (f"BLOCKED and the base requires more than checks and a review: {', '.join(extra[:6])}"
+    if outside:
+        return False, (f"BLOCKED and the base's protection is not the modelled shape: {', '.join(outside[:6])}"
                        " — --admin would bypass it unread; no --admin"), False
     if not (isinstance(rollup, list) and all(isinstance(c, dict) for c in rollup)):
         return False, "BLOCKED and the head's check list unreadable — no --admin", False
@@ -722,7 +780,8 @@ def supersede(repo, kind, head, label, pid):
         except (OSError, ValueError, AttributeError) as e:
             print(f"driver-merge: warning: {old} unreadable ({e}); not superseded", file=sys.stderr)
             continue
-        first = str(doc.get("evidence") or doc.get("title") or "").split("\n", 1)[0]
+        # evidence's first line is the only marker: no title is ever `driver-merge.py on <label>:`
+        first = str(doc.get("evidence") or "").split("\n", 1)[0]
         if status != "open" or first != f"driver-merge.py on {label}:":
             continue
         src, out, err = sh([sys.executable, PACKET, "stale", old, "--force", "--reason", f"superseded by {pid}",

@@ -54,19 +54,33 @@ by `test_entrypoint.py`'s compile check.
       Not atomic — nothing short of a server write is — but closes every gap that
       has bitten. Read the stderr note when local and origin disagree.
 
-    packet.py new --door {one-way|two-way|info} [--type data-model|generic|ui] --title --unit --option LABEL...
-              [--recommended N] [--body|--body-file|--payload-file] [--blocks] [--continues-on]
-              [--range BASE..HEAD] [--id ID] [--driver]
+    packet.py new --door {one-way|two-way|info} [--type data-model|generic|ui] --title QUESTION --unit
+              --context S --option "LABEL::WHY"... [--recommended N] [--evidence S|--evidence-file F]
+              [--payload-file F] [--blocks] [--continues-on] [--range BASE..HEAD] [--id ID] [--driver]
+              (--schema-version 1 --option LABEL --body|--body-file: the legacy card)
     packet.py close|touch ID · stale ID [--force] · event --kind K [--body] [--packet-id ID]
     packet.py check-reply (--reply TEXT|--file F|-) [--lane M/W/A] · flush [--driver]   (all: --outbox DIR…)
       stdout: `PACKET <id>` + the card · exit: 0 ok (a blocked POST is ok) · 1 refused / error · 2 usage
       Every packet lands in `<worktree>/.decision-queue/outbox/` (self-ignoring); only a driver
-      (`--driver` or $HERDR_AGENT_NAME=driver) POSTs, and only with $DECISION_QUEUE_URL set (hard 3 s
+      (`--driver`; inside herdr refused for a pane with an open record in the dispatch log, and
+      when that log is unreadable — `flush --driver` then exits 1 with the reason) POSTs, and only with $DECISION_QUEUE_URL set (hard 3 s
       deadline, redirects refused, /packets and /events, idempotent on id; "sent" is a `<id>.sent` marker). A dead queue prints a `Blocked` note and exits 0;
       `flush` re-sends. Only 400/409/413/415/422 are permanent (`<id>.rejected` / `.conflict`); every other 4xx is Blocked and retried. Events of a refused packet are marked `evt-<id>.rejected`, never POSTed. To clear a marker, delete the `<id>.rejected` / `.conflict` file (and its events' `evt-*.rejected`) from the outbox. `flush --outbox DIR` on a missing DIR prints `Skipped: outbox DIR does not exist` (exit 0). check-reply refuses a missing/other-lane tag, an unknown, closed, stale or
       other lane's packet, two different tags, unreadable state, and a one-way packet whose HEAD moved. `--range` runs door.py and a
       floor hit promotes the door. Lane identity: machine/workspace/agent from herdr env, else
       machine/repo-hash/session id ($CLAUDE_CODE_SESSION_ID); with none, check-reply needs --lane. Schema: schemas/packet.schema.json, checked by schema_check.py.
+      Schema v2 is the default: title (the question) <= 100 chars, --context <= 400 (required), each
+      option label <= 60 + why <= 140, --evidence <= 4000; over a cap packet.py refuses with
+      "cut <field> to N chars (now M)". --body on v2 is refused; "(recommended)" in a label is refused
+      (--recommended marks it). v1 still validates and renders (packet_emit pins it).
+      **Writing a card** — it must read faster than the terminal (Alex, on the first live v1 card):
+      - One decision per packet. Two questions are two packets.
+      - The title is the question. Lead with it; no repo, branch, sha or unit in it (the card shows them).
+      - Plain words. No document-internal labels — task ids, doc section numbers, finding ids — outside
+        --evidence. file:line, ADR refs and SHAs go in --evidence too (collapsed on the card).
+      - Each option's why is what changes for Alex if he picks it, not how it is built.
+      - Every sentence carries a fact or a judgment; cut set-up sentences.
+      - Calls already made go out as their own `--door info` packet, never inside a decision card.
 
     packet_emit.py (importable)   emit(repo, unit, title, options, body, door, range_, blocks, pid) -> id | None
       Review + verify's packet writer (scope 10 §4.2): runs `packet.py new` with cwd = the repo under review,
@@ -80,6 +94,35 @@ by `test_entrypoint.py`'s compile check.
       `.one-way-doors` is one-way. Promote-only: a `two-way` claim never lowers a hit (an `info` claim with no hit is kept). Fails
       closed: bad range, unresolved ref, git error, unreadable defaults/base file = one-way.
       Callers treat a non-zero exit as one-way.
+
+    driver-merge.py check|merge --repo PATH --pr N --scope DIR --unit N.P [--driver] [--method squash|merge|rebase]
+      stdout: one `[ok]`/`[FAIL]` line per condition, `verdict: ELIGIBLE|REFUSED …`; merge adds
+      `MERGED <owner/repo>#N <sha>` + `EVENT … merged`, or `PACKET <id>` + `NOT MERGED — <why>`, or
+      `MERGED-ELSEWHERE <owner/repo>#N <sha>` + `PACKET <id>` (merged, but not at the checked head)
+      exit: 0 eligible / merged + event written · 1 refused / not merged · 2 usage · 4 merged, event not written
+      /plan §6.8 step 4 (scope 10 §4.3). Merges only when ALL hold: caller is a driver
+      (packet.py's driver_identity: --driver, and inside herdr only a pane with an open driver
+      registration on this host — every other pane is a lane; an unreadable log refuses — `merge` refuses a non-driver before any
+      gh call), PR open + not draft, base = `main` for kalpa-docs /
+      pmg-docs / ai-skills else `develop` (anything else — a code repo's prod `main` — is refused, never
+      touched), every check finished green or skipped/neutral with at least one real green run (an empty or
+      skipped-only list is vacuous, refused — so a repo with no CI, pmg-docs and ai-skills today, always
+      parks as a two-way packet for a hand merge), the unit's latest review of the repo is SHIP or accepted and
+      saw the PR head (later commits plans/-only), every non-plans/ commit in merge-base..head sits in some
+      review's base..head for the repo in the unit (else "unreviewed commits", named), verdict-gate.py
+      --blocking reads `pass` (advisory, not-judged, predates or unknown = no merge), door.py finds no floor path on
+      merge-base..head, no CI definition touched (workflows, actions, CODEOWNERS… — a two-way "CI change"
+      packet, Alex merges by hand; not floor: CI edits are reversible), mergeStateStatus CLEAN/HAS_HOOKS (BLOCKED → `--admin` only when
+      reviewDecision is REVIEW_REQUIRED, the base requires nothing beyond required checks and reviews (any
+      other classic requirement or unmodelled field, any ruleset rule but required_status_checks /
+      pull_request, or review-thread resolution refuses it), and every required check of the base — classic protection and
+      rulesets, both read — is present on the head (a check bound to an app, classic app_id or ruleset
+      integration_id, by a check run from that app) with EVERY entry of its name SUCCESS or SKIPPED/NEUTRAL —
+      head check-runs unreadable is no --admin; unreadable protection is no merge; any other BLOCKED refused).
+      `gh pr merge --match-head-commit`, never `--auto`; the merge is read back as MERGED at the checked
+      head before the `merged` event (MERGED at another head is someone else's merge: no event, a packet) (repo, PR, base, sha; degraded review / admin / gate marker flagged). A failed
+      condition writes a packet instead: one-way with the matched paths for a floor hit, else two-way.
+      Fails closed on every gh/git error, unreadable verdict, or unknown check/merge state.
 
     plans-index.py validate <index>       exit: 0 conformant · 1 issues found
     plans-index.py next-number <index>    stdout: highest whole scope number + 1
@@ -139,8 +182,10 @@ by `test_entrypoint.py`'s compile check.
     finish-table.py init --scope DIR --phase N.P[=repo,...]... [--rows F] [--test-plan-owner N.P] [--predates N.P,...]
     finish-table.py add  --scope DIR --rows F --change TEXT [--replace]
       exit: 0 written · 2 usage · 3 refused (exists / missing / would not parse — nothing written)
-    dispatch-log.py --scope --task --status {dispatched,done,blocked,failed} [--seat --branch --worktree --pane --tail --log]
-      exit: 0 written + read back · 1 did not land · 2 usage
+    dispatch-log.py --scope --task --status {dispatched,done,blocked,failed} --pane [--seat --branch --worktree --tail --log]
+    dispatch-log.py --scope --status driver --pane "$HERDR_PANE_ID"   (the driver registers itself; machine = this host)
+      exit: 0 written + read back · 1 did not land · 2 usage. --pane is required: the record is how
+      packet.py tells a lane from the driver (a pane whose latest record is dispatched/blocked is a lane)
     herdr-pane.sh name <pane> <name> [--source SKILL]  |  herdr-pane.sh helper [--cwd DIR]
       exit: 0 ok · 1 herdr call failed / label not visible · 2 usage · 3 not in herdr / no server
     repo-survey.sh [repo-dir] [--no-fetch]

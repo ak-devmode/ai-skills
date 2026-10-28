@@ -1,6 +1,6 @@
 ---
 name: concurrency
-version: 0.10.0
+version: 0.10.1
 description: |
   ONE responsibility: map what can run in parallel and what cannot, against a
   clear set of rules — re-derived from repo ground truth on every run, never
@@ -222,7 +222,11 @@ Per partition, in this order (syntax authority: `herdr --skill`):
    report."
 4. Log it — `~/Projects/ai-skills/scripts/dispatch-log.py --scope <scope> --task <task> --seat <seat>
    --branch <b> --worktree <w> --pane <id> --machine <host> --account <key> --status dispatched`
-   (appends to `~/.config/herdr/concurrency-log.jsonl` and reads the line back).
+   (appends to `~/.config/herdr/concurrency-log.jsonl` and reads the line back). `--pane`
+   is required. Lane identity no longer depends on this record: only the pane the driver
+   registered as itself (`--status driver`, `/plan` §5.8.1) passes `--driver`, so every
+   other pane — logged or not, review and fix rounds included — is a lane (Alex 86). A
+   record for a pane id closes any earlier driver registration of that id.
 
 **Placed on the box** (`machine=homelab2026`), steps 1–3 change only in where they
 point — `herdr` skill §6.1 has the mechanics:
@@ -230,6 +234,10 @@ point — `herdr` skill §6.1 has the mechanics:
   from that server's JSON (ids are per server: the box has its own `w1:p1`);
 - `--cwd ~/<repo path under $HOME>` (remote worktree paths must start with `~/`) and
   `--base` = the origin ref §5.1 step 3 checked, not always `origin/<trunk>`;
+- log every record of a box lane on the box too (`ssh <host>
+  ~/Projects/ai-skills/scripts/dispatch-log.py …`, same flags): a box lane's record
+  closes any stale driver registration of that pane id there. No box pane is a driver
+  unless a driver registered it on the box;
 - the box runs its own clones at the same `$HOME`-relative paths, ai-skills included
   (`~/Projects/ai-skills`, which the brief's `herdr-pane.sh helper` line calls) — pull
   it there when this skill changes.
@@ -249,7 +257,7 @@ point — `herdr` skill §6.1 has the mechanics:
   lines; do not answer another agent's permission prompts on its behalf.
 - Read output with `pane read --source detection` (or `visible`) — never
   `recent` (`herdr` §7).
-- Record every terminal state with `dispatch-log.py … --status done|blocked|failed
+- Record every terminal state with `dispatch-log.py … --pane <id> --status done|blocked|failed
   --tail "<lines that prove it>"`.
 
 **7.2 In-pane status markers (all seats) — no SendMessage**
@@ -297,9 +305,9 @@ panes. Workers never `SendMessage` the supervisor.
 A lane's question to Alex is a packet, not prose in a pane. `scripts/README.md` has
 `packet.py`'s and `door.py`'s contracts; this is the wiring.
 - **One-way door** (door.py says so, or the brief does not settle it): the lane runs
-  `packet.py new --door one-way --type generic --title … --unit <task>
-  --option … --recommended N --body … --blocks … --range <base>..HEAD` (a data-model
-  packet takes `--type data-model --payload-file <F>` instead of `--body`; F is JSON
+  `packet.py new --door one-way --type generic --title "<the question>" --unit <task>
+  --context … --option "label::why" … --recommended N --evidence … --blocks …
+  --range <base>..HEAD` (a data-model packet adds `--type data-model --payload-file <F>`; F is JSON
   `{"tables":[{"name","change","columns":[{"name","before","after","changed"}]}]}`,
   see `scripts/tests/fixtures/packets/valid/data-model-one-way.json`). **Always pass
   `--range`**: it is what makes door.py promote a mislabelled two-way claim (a migration
@@ -307,6 +315,11 @@ A lane's question to Alex is a packet, not prose in a pane. `scripts/README.md` 
   line of work. **While parked it makes no commits outside `plans/`** — `check-reply`
   refuses a reply to a one-way packet once code has moved past the packet's sha, and the
   only way out is `packet.py stale <id>` and a fresh packet.
+- **Write the card short** (packet.py enforces the caps; `scripts/README.md` has the
+  rules): one decision per packet — two questions are two packets; the title is the
+  question; `--context` is the situation in plain words; each option's why says what
+  changes for Alex. Task ids, doc section numbers, finding ids, file:line and SHAs go in
+  `--evidence` only. Calls already made go out as a separate `--door info` packet.
 - **`GATE-BLOCKED`** is a one-way packet: emit as above, print `GATE-BLOCKED <task> —
   <what> (PACKET <id>)`, then `PARKED <id>`.
 - **Two-way call**: `packet.py new --door two-way … --range <base>..HEAD`, leave the card

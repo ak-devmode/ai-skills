@@ -57,6 +57,9 @@ class TestFloor(DoorBase):
     def test_floor_paths_force_one_way(self):
         cases = [
             ("db/migrations/002_add.sql", "migrations/"),
+            # WellMed keeps migrations in a singular folder (backbone, catalog, consultation, finance,
+            # hq, pharmacy, infrastructure): backbone #658, a tenant migration, passed the floor without it.
+            ("internal/db/migration/000042_tenant.up.sql", "migration/"),
             ("api/service.proto", "*.proto"),
             ("api/openapi.yaml", "openapi*.yaml"),
             ("docs/adrs/0007-x.md", "adrs/"),
@@ -72,6 +75,13 @@ class TestFloor(DoorBase):
                 self.assertEqual(r["door"], "one-way", r)
                 self.assertEqual(r["paths"][0]["path"], path)
                 self.assertEqual(r["paths"][0]["pattern"], pattern)
+
+    def test_ci_definitions_are_not_floor(self):
+        # CI edits are reversible: driver-merge.py refuses to auto-merge them (two-way packet), but
+        # the floor would park every lane that touches a workflow (10.3-r2-04)
+        write(self.repo, ".github/workflows/ci.yml")
+        self.commit("add ci")
+        self.assertEqual(self.classify()["door"], "two-way")
 
     def test_case_insensitive_match(self):
         # ADRS/ has no lowercase twin in the repo, so core.ignorecase cannot fold the path

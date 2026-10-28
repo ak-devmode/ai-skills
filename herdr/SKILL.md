@@ -70,7 +70,11 @@ level *lies* about every other seat in it (learned live: a codex pane displayed
   seat (row 2 shows the model). Row 1 truncates, so shorter is better. Set with
   `herdr pane rename` **plus** `herdr pane report-metadata --display-agent`, both in
   one call, read back: `~/Projects/ai-skills/scripts/herdr-pane.sh name <pane> "<name>" --source <skill>`.
-- **Driver** (a `/plan` session's own agent): `herdr agent rename $HERDR_PANE_ID driver`. Then run `herdr-agent-view ensure`, so the attention view picks up this driver's pane at once (its 60 s timer is only the backstop).
+- **Driver** (a `/plan` session's own agent): `herdr agent rename $HERDR_PANE_ID driver`
+  (a label), plus the registration that makes it the driver: `dispatch-log.py --scope <scope>
+  --status driver --pane "$HERDR_PANE_ID"` (`/plan` §5.8.1). Lanes never register. Then run
+  `herdr-agent-view ensure`, so the attention view picks up this driver's pane at once (its 60 s
+  timer is only the backstop).
 - Auto-name from context when inside a pane via `$HERDR_PANE_ID` / `$HERDR_WORKSPACE_ID`.
 
 ## 3. Worktree-per-scope lifecycle (model B)

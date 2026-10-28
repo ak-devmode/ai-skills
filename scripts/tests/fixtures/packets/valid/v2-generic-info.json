@@ -1,0 +1,21 @@
+{
+  "schema_version": 2,
+  "created_at": "2026-10-28T09:00:00Z",
+  "machine": "mba",
+  "workspace": "wellmed-188",
+  "agent": "consult",
+  "repo": "wellmed-consultation",
+  "branch": "concurrency/188-release",
+  "head_sha": "3f2a9c1",
+  "unit": "188/1.7",
+  "blocks": "",
+  "continues_on": "next task",
+  "id": "v2gen-info0001",
+  "door": "info",
+  "type": "generic",
+  "title": "Decided: release time gets its own column",
+  "context": "Two-way calls already made: a released_at column, two new events, and lab orders reuse an open registration only while it is a draft.",
+  "options": [],
+  "payload": {},
+  "reply": "[lane mba/wellmed-188/consult v2gen-info0001] ack"
+}

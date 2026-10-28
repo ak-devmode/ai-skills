@@ -52,11 +52,17 @@ def run(name, app, conclusion="success"):
 
 BOUND_CI = {"contexts": ["ci"], "checks": [{"context": "ci", "app_id": APP}]}
 BOUND_E2E = {"contexts": ["ci", "e2e"], "checks": [{"context": "ci", "app_id": None}, {"context": "e2e", "app_id": APP}]}
-RULE_CI_BOUND = {"type": "required_status_checks",
-                 "parameters": {"required_status_checks": [{"context": "ci", "integration_id": APP}]}}
-RULE_LINT = {"type": "required_status_checks", "parameters": {"required_status_checks": [{"context": "lint"}]}}
-# the classic protection document as GitHub serves it for wellmed-backbone `develop` (2026-10-28)
-LIVE_CLASSIC = {"url": "u", "required_pull_request_reviews": {"required_approving_review_count": 1},
+RULE_CI_BOUND = {"type": "required_status_checks", "parameters": {
+    "required_status_checks": [{"context": "ci", "integration_id": APP}], "strict_required_status_checks_policy": False}}
+RULE_LINT = {"type": "required_status_checks", "parameters": {
+    "required_status_checks": [{"context": "lint"}], "strict_required_status_checks_policy": False}}
+RULE_REVIEW = {"type": "pull_request", "ruleset_source_type": "Repository", "ruleset_id": 1, "parameters": {
+    "required_approving_review_count": 1, "required_review_thread_resolution": False}}
+# the classic protection document as GitHub serves it for wellmed-backbone `develop` (2026-10-28);
+# its required_status_checks comes from the case (strict false unless the case says otherwise)
+LIVE_CLASSIC = {"url": "u", "required_pull_request_reviews": {
+                    "url": "u", "dismiss_stale_reviews": False, "require_code_owner_reviews": False,
+                    "require_last_push_approval": False, "required_approving_review_count": 0},
                 "required_signatures": {"url": "u", "enabled": False}, "enforce_admins": {"enabled": False},
                 "required_linear_history": {"enabled": False}, "allow_force_pushes": {"enabled": False},
                 "allow_deletions": {"enabled": False}, "block_creations": {"enabled": False},
@@ -133,12 +139,12 @@ CASES = [
     ("BLOCKED: protection unreadable", {"state": "BLOCKED", "protection": (1, "HTTP 403: Forbidden")}, 1,
      {"merged": False, "says": "branch protection unreadable"}),
     ("BLOCKED: ruleset check missing", {"state": "BLOCKED", "protection": (1, "Branch not protected (HTTP 404)"),
-                                        "rulesets": (0, [RULE_LINT])}, 1, {"merged": False, "says": "lint"}),
+                                        "rulesets": (0, [RULE_REVIEW, RULE_LINT])}, 1, {"merged": False, "says": "lint"}),
     ("BLOCKED: rulesets unreadable", {"state": "BLOCKED", "rulesets": (1, "HTTP 500")}, 1,
      {"merged": False, "says": "rulesets unreadable"}),
     # a required check on a later rulesets page is still required; an unreadable page refuses (10.3-r2-06)
     ("BLOCKED: ruleset check on page 2", {"state": "BLOCKED", "protection": (1, "Branch not protected (HTTP 404)"),
-                                          "rulesets": (0, [[], [RULE_LINT]]), "paged": True}, 1,
+                                          "rulesets": (0, [[RULE_REVIEW], [RULE_LINT]]), "paged": True}, 1,
      {"merged": False, "says": "lint"}),
     ("BLOCKED: rulesets page unreadable", {"state": "BLOCKED", "rulesets": (0, [[], {"message": "x"}]), "paged": True},
      1, {"merged": False, "says": "read incomplete"}),
@@ -161,7 +167,7 @@ CASES = [
                                                "check_runs": (0, [run("ci", 999)])},
      1, {"merged": False, "says": f"ci (app {APP})"}),
     ("BLOCKED: ruleset integration_id bound", {"state": "BLOCKED", "protection": (1, "Branch not protected (HTTP 404)"),
-                                               "rulesets": (0, [RULE_CI_BOUND]), "check_runs": (0, [run("ci", 999)])},
+                                               "rulesets": (0, [RULE_REVIEW, RULE_CI_BOUND]), "check_runs": (0, [run("ci", 999)])},
      1, {"merged": False, "says": f"ci (app {APP})"}),
     ("BLOCKED: check runs unreadable, bound", {"state": "BLOCKED", "protection": (0, BOUND_CI),
                                                "check_runs": (1, "HTTP 502")},
@@ -169,31 +175,69 @@ CASES = [
     ("BLOCKED: app_id -1 is any source, admin", {"state": "BLOCKED",
                                                  "protection": (0, {"checks": [{"context": "ci", "app_id": -1}]})},
      0, {"merged": True, "admin": True}),
-    # --admin bypasses EVERY protection requirement, not just reviews and checks: any other one,
-    # or one this script does not model, refuses it (10.3-r4-01, Alex 83)
-    *[(f"BLOCKED: classic {k} enabled", {"state": "BLOCKED", "classic": {k: {"enabled": True}}}, 1,
-       {"merged": False, "says": f"more than checks and a review: {k}"})
-      for k in ("required_signatures", "required_conversation_resolution", "lock_branch", "required_linear_history")],
+    # --admin is an ALLOWLIST (Alex 97): only the modelled shape — non-strict required checks +
+    # required reviews, every other setting off — earns it. Anything else, a new key GitHub adds
+    # included, refuses (the r4-01 denylist leaked a field per round; r6-01 was `strict`)
+    ("BLOCKED: live develop shape, strict off, admin", {"state": "BLOCKED", "protection": (0, BOUND_CI),
+                                                        "check_runs": (0, [run("ci", APP)])},
+     0, {"merged": True, "admin": True}),
+    ("BLOCKED: live develop as served (strict on)", {"state": "BLOCKED",
+                                                     "protection": (0, dict(BOUND_CI, strict=True)),
+                                                     "check_runs": (0, [run("ci", APP)])},
+     1, {"merged": False, "says": "required_status_checks.strict True"}),
+    *[(f"BLOCKED: classic {k} on", {"state": "BLOCKED", "classic": {k: {"enabled": True}}}, 1,
+       {"merged": False, "says": f"not the modelled shape: {k} on"})
+      for k in ("required_signatures", "required_conversation_resolution", "lock_branch", "required_linear_history",
+                "enforce_admins", "allow_force_pushes", "allow_deletions", "block_creations", "allow_fork_syncing")],
+    ("BLOCKED: classic restrictions set", {"state": "BLOCKED", "classic": {"restrictions": {"users": [], "teams": []}}},
+     1, {"merged": False, "says": "restrictions on"}),
     ("BLOCKED: classic required_deployments", {"state": "BLOCKED", "classic": {"required_deployments":
                                                                               {"required_deployment_environments": ["staging"]}}},
-     1, {"merged": False, "says": "required_deployments"}),
-    ("BLOCKED: classic field not modelled", {"state": "BLOCKED", "classic": {"required_merge_queue": {"enabled": False}}},
-     1, {"merged": False, "says": "required_merge_queue (not modelled)"}),
-    ("BLOCKED: classic flag unreadable", {"state": "BLOCKED", "classic": {"lock_branch": {"enabled": "yes"}}},
-     1, {"merged": False, "says": "lock_branch unreadable"}),
-    *[(f"BLOCKED: ruleset {t}", {"state": "BLOCKED", "protection": NOT_PROTECTED, "rulesets": (0, [{"type": t}])}, 1,
+     1, {"merged": False, "says": "required_deployments on"}),
+    ("BLOCKED: classic unknown new key", {"state": "BLOCKED", "classic": {"required_merge_queue": {"enabled": False}}},
+     1, {"merged": False, "says": "required_merge_queue not modelled"}),
+    ("BLOCKED: classic flag mistyped", {"state": "BLOCKED", "classic": {"lock_branch": {"enabled": "no"}}},
+     1, {"merged": False, "says": "lock_branch on"}),
+    ("BLOCKED: unknown key in required_status_checks", {"state": "BLOCKED",
+                                                       "protection": (0, {"contexts": ["ci"], "enforcement_level": "x"})},
+     1, {"merged": False, "says": "required_status_checks not the modelled shape"}),
+    ("BLOCKED: strict missing", {"state": "BLOCKED", "protection": (0, {"contexts": ["ci"], "strict": None})},
+     1, {"merged": False, "says": "strict None"}),
+    ("BLOCKED: unknown key in reviews", {"state": "BLOCKED", "classic": {"required_pull_request_reviews": {
+        "required_approving_review_count": 1, "require_signed_reviews": True}}},
+     1, {"merged": False, "says": "required_pull_request_reviews.require_signed_reviews not modelled"}),
+    ("BLOCKED: no review requirement read", {"state": "BLOCKED", "protection": NOT_PROTECTED,
+                                             "rulesets": (0, [RULE_LINT])},
+     1, {"merged": False, "says": "no review requirement read"}),
+    ("BLOCKED: nothing required", {"state": "BLOCKED", "protection": NOT_PROTECTED},
+     1, {"merged": False, "says": "no review requirement read"}),
+    ("BLOCKED: reviews but no required check", {"state": "BLOCKED", "protection": NOT_PROTECTED,
+                                                "rulesets": (0, [RULE_REVIEW])},
+     1, {"merged": False, "says": "no required check read"}),
+    *[(f"BLOCKED: ruleset {t}", {"state": "BLOCKED", "protection": NOT_PROTECTED,
+                                 "rulesets": (0, [RULE_REVIEW, RULE_LINT, {"type": t, "parameters": {}}])}, 1,
        {"merged": False, "says": f"ruleset {t}"})
       for t in ("required_signatures", "code_scanning", "workflows", "merge_queue", "required_deployments", "deletion")],
+    ("BLOCKED: ruleset rule without parameters", {"state": "BLOCKED", "rulesets": (0, [{"type": "creation"}])},
+     1, {"merged": False, "says": "ruleset creation not the modelled shape"}),
+    ("BLOCKED: ruleset rule unknown key", {"state": "BLOCKED", "rulesets": (0, [dict(RULE_REVIEW, bypass="x")])},
+     1, {"merged": False, "says": "ruleset pull_request not the modelled shape"}),
+    ("BLOCKED: ruleset strict checks", {"state": "BLOCKED", "rulesets": (0, [
+        {"type": "required_status_checks", "parameters": dict(RULE_LINT["parameters"], strict_required_status_checks_policy=True)}])},
+     1, {"merged": False, "says": "strict_required_status_checks_policy not false"}),
+    ("BLOCKED: ruleset checks param unknown", {"state": "BLOCKED", "rulesets": (0, [
+        {"type": "required_status_checks", "parameters": dict(RULE_LINT["parameters"], merge_queue=True)}])},
+     1, {"merged": False, "says": "merge_queue not modelled"}),
     ("BLOCKED: ruleset thread resolution", {"state": "BLOCKED", "protection": NOT_PROTECTED, "rulesets": (0, [
         {"type": "pull_request", "parameters": {"required_approving_review_count": 1,
                                                 "required_review_thread_resolution": True}}])},
-     1, {"merged": False, "says": "ruleset required_review_thread_resolution"}),
+     1, {"merged": False, "says": "ruleset required_review_thread_resolution not false"}),
+    ("BLOCKED: ruleset review param unknown", {"state": "BLOCKED", "rulesets": (0, [
+        {"type": "pull_request", "parameters": dict(RULE_REVIEW["parameters"], require_signed=True)}])},
+     1, {"merged": False, "says": "ruleset pull_request: require_signed not modelled"}),
     ("BLOCKED: ruleset review + checks only, admin", {"state": "BLOCKED", "protection": NOT_PROTECTED, "rulesets": (0, [
-        {"type": "pull_request", "parameters": {"required_approving_review_count": 1,
-                                                "required_review_thread_resolution": False}},
-        {"type": "required_status_checks", "parameters": {"required_status_checks": [{"context": "ci"}]}}])},
-     0, {"merged": True, "admin": True}),
-    ("BLOCKED: nothing required, admin", {"state": "BLOCKED", "protection": (1, "Branch not protected (HTTP 404)")},
+        RULE_REVIEW, {"type": "required_status_checks", "parameters": dict(RULE_LINT["parameters"],
+                                                                          required_status_checks=[{"context": "ci"}])}])},
      0, {"merged": True, "admin": True}),
     ("dirty refused", {"state": "DIRTY"}, 1, {"merged": False}),
     ("unknown state after retries", {"state": "UNKNOWN"}, 1, {"merged": False}),
@@ -294,7 +338,8 @@ class DriverMergeTest(unittest.TestCase):
                 if arc:
                     return arc, "", body
                 if key == "protection":  # the full classic document: o["protection"] is its checks part
-                    body = dict(LIVE_CLASSIC, required_status_checks=body, **o.get("classic", {}))
+                    body = dict(LIVE_CLASSIC, required_status_checks=dict({"url": "u", "contexts_url": "u", "strict": False}, **body),
+                                **o.get("classic", {}))
                 if key == "rulesets":  # served as pages: o["rulesets"] is one page unless "paged"
                     pages = body if o.get("paged") else [body]
                     if "--paginate" not in args:

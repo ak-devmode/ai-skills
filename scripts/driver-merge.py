@@ -780,7 +780,8 @@ def supersede(repo, kind, head, label, pid):
         except (OSError, ValueError, AttributeError) as e:
             print(f"driver-merge: warning: {old} unreadable ({e}); not superseded", file=sys.stderr)
             continue
-        first = str(doc.get("evidence") or doc.get("title") or "").split("\n", 1)[0]
+        # evidence's first line is the only marker: no title is ever `driver-merge.py on <label>:`
+        first = str(doc.get("evidence") or "").split("\n", 1)[0]
         if status != "open" or first != f"driver-merge.py on {label}:":
             continue
         src, out, err = sh([sys.executable, PACKET, "stale", old, "--force", "--reason", f"superseded by {pid}",

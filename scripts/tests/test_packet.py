@@ -344,7 +344,10 @@ class TestQueue(PacketBase):
                  # 10.3-r4-03: only this host's normalized name counts
                  ("alias", ("--driver",), 0, unreg), ("blank-host", ("--driver",), 0, unreg),
                  ("other-host", ("--driver",), 0, unreg),
-                 ("unreadable", ("--driver",), 0, "fail closed")]
+                 ("unreadable", ("--driver",), 0, "fail closed"),
+                 # Alex 97: the registration is bound to the session that made it (10.3-r6-03)
+                 ("new-session", ("--driver",), 0, "a reused pane is not the driver"),
+                 ("no-session", ("--driver",), 0, "a reused pane is not the driver")]
         for mode, flag, posts, why in cases:
             with self.subTest(mode, flag=flag):
                 s = Stub(); self.addCleanup(s.stop)
@@ -358,9 +361,10 @@ class TestQueue(PacketBase):
                     self.assertIn(why, out)
                     self.assertIn(why, p.stderr)
                     self.assertEqual(p.returncode, 1)
-                    if why == unreg:  # r4-02: a lane is told to stop, not handed a way through
-                        self.assertIn("never registers: stop, do not re-run", p.stderr)
-                        self.assertNotIn("--status done", p.stderr)
+                    if why != "fail closed":  # r4-02 / r6-05: a lane is told to stop, never handed the registration
+                        self.assertIn("A lane never merges or POSTs: stop, do not re-run.", p.stderr)
+                        self.assertNotIn("--status", p.stderr)
+                        self.assertNotIn("dispatch-log", p.stderr)
 
     def test_flush_resends_after_outage_and_is_idempotent(self):
         s = Stub(); self.addCleanup(s.stop)

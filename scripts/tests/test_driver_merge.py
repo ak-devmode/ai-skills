@@ -249,6 +249,10 @@ CASES = [
     *[(f"herdr pane {m} refused", {"herdr": m}, 1,
        {"merged": False, "no_gh": True, "packet": None, "says": "no driver registration on this host"})
       for m in ("lane", "unregistered", "reused", "none", "alias", "blank-host", "other-host")],
+    # the registration is bound to the session that made it: a reused pane id is not the driver (Alex 97)
+    *[(f"herdr pane {m} refused", {"herdr": m}, 1,
+       {"merged": False, "no_gh": True, "packet": None, "says": "a reused pane is not the driver"})
+      for m in ("new-session", "no-session")],
     ("dispatch log unreadable refused", {"herdr": "unreadable"}, 1,
      {"merged": False, "no_gh": True, "packet": None, "says": "fail closed"}),
     ("herdr pane without --driver refused", {"herdr": "none", "driver": False}, 1,

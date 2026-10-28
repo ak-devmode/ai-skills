@@ -1,6 +1,6 @@
 ---
 name: concurrency
-version: 0.10.1
+version: 0.11.0
 description: |
   ONE responsibility: map what can run in parallel and what cannot, against a
   clear set of rules — re-derived from repo ground truth on every run, never
@@ -196,12 +196,21 @@ Per partition, in this order (syntax authority: `herdr --skill`):
    in the worktree's own workspace: move the created root pane into its slot. Pane identity in one call
    (rename + sidebar metadata, read back): `~/Projects/ai-skills/scripts/herdr-pane.sh name <pane> <task>`
    (`--machine <host>` for a box pane).
-2. Launch the seat's command (§3) in the created pane via `pane run` — under the placed
+2. Log it BEFORE the lane runs (Alex 97) — `~/Projects/ai-skills/scripts/dispatch-log.py --scope <scope>
+   --task <task> --seat <seat> --branch <b> --worktree <w> --pane <id> --machine <host> --account <key>
+   --status dispatched` (appends to `~/.config/herdr/concurrency-log.jsonl` and reads the line back).
+   `--pane` is required. This open lane record is what makes the pane a lane: a lane that follows
+   `/plan` Phase 0 tries to register as the driver, and `dispatch-log.py` refuses a pane whose latest
+   record is an open lane record (exit 3). Written after launch, the lane could register first. Only
+   the pane the driver registered as itself, in its own session (`--status driver`, `/plan` §5.8.2),
+   passes `--driver`, so every other pane — logged or not, review and fix rounds included — is a lane
+   (Alex 86). A record for a pane id closes any earlier driver registration of that id.
+3. Launch the seat's command (§3) in the created pane via `pane run` — under the placed
    account: `claude-<account>` / `codex-<account>` (`herdr` skill §6), on either machine.
    claude/glm workers append `--dangerously-skip-permissions` (`herdr` skill §4: clears the
    fresh-worktree trust dialog + tool prompts; safe via worktree +
    no-push isolation). Never on the driver.
-3. First instruction in every dispatched prompt: the task brief, then: commit locally when done; NEVER push,
+4. First instruction in every dispatched prompt: the task brief, then: commit locally when done; NEVER push,
    NEVER open a PR, NEVER merge; end by printing `PARTITION-DONE <task>`.
    Every seat additionally gets the §7.2 in-pane reporting instruction
    (`GATE-PASSED` / `GATE-BLOCKED` / `FIX-DONE` printed in its own pane, **never
@@ -220,15 +229,10 @@ Per partition, in this order (syntax authority: `herdr --skill`):
    quiet or failures-only flags and pipe through `| tail -40`; grep logs instead of
    printing them; read files by line range; never dump a full suite, diff or lint
    report."
-4. Log it — `~/Projects/ai-skills/scripts/dispatch-log.py --scope <scope> --task <task> --seat <seat>
-   --branch <b> --worktree <w> --pane <id> --machine <host> --account <key> --status dispatched`
-   (appends to `~/.config/herdr/concurrency-log.jsonl` and reads the line back). `--pane`
-   is required. Lane identity no longer depends on this record: only the pane the driver
-   registered as itself (`--status driver`, `/plan` §5.8.1) passes `--driver`, so every
-   other pane — logged or not, review and fix rounds included — is a lane (Alex 86). A
-   record for a pane id closes any earlier driver registration of that id.
+   A brief never contains the driver registration (`dispatch-log.py --status driver`) or
+   `--driver`: a lane neither registers, merges nor posts (Alex 97).
 
-**Placed on the box** (`machine=homelab2026`), steps 1–3 change only in where they
+**Placed on the box** (`machine=homelab2026`), steps 1–4 change only in where they
 point — `herdr` skill §6.1 has the mechanics:
 - every herdr command carries `herdr --machine <host>`, and every pane/workspace id comes
   from that server's JSON (ids are per server: the box has its own `w1:p1`);

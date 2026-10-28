@@ -9,24 +9,36 @@ as the write.
 
 --status driver is the driver registering its OWN pane (Alex 86): a record of kind `driver`,
 --task defaulting to `driver`, machine always this host (placement.this_host — `hostname -s`,
-lowercased). packet.py's driver_identity reads this log, and inside herdr only a pane whose
-latest record on this host is that registration is the driver; every other pane is a lane.
+lowercased) and `session` = this agent session's id (packet.session_id: $CLAUDE_CODE_SESSION_ID,
+$CLAUDE_SESSION_ID, $CODEX_SESSION_ID). packet.py's driver_identity reads this log, and inside
+herdr only a pane whose latest record on this host is that registration, made by the same
+session, is the driver; every other pane is a lane (Alex 97: a pane id reused by a new session
+is not the driver, so a registration nobody closed is harmless). A registration is REFUSED
+(exit 3, nothing written) when:
+  * the pane's latest record (this host, or naming no machine) is an open lane record —
+    dispatched or blocked. /concurrency writes a lane's record with --pane BEFORE the lane
+    runs (Alex 97), so a lane that follows /plan Phase 0 is refused here, not registered
+  * no session id is in the environment — an unbound registration could be inherited by
+    whatever session herdr later puts in the pane id
+  * the log cannot be read — an open lane record cannot be ruled out (fail closed)
 A --machine naming another host is a usage error for a registration: a driver registers where
 it runs; placement.py unloadable raises and writes nothing (fail closed — a registration under
-a name packet.py would not match is no registration). Lanes never write this status. Any later record for the pane id closes the
-registration.
+a name packet.py would not match is no registration). Any later record for the pane id closes
+the registration; the driver closes its own with --status done at scope end (/plan).
 
---pane is required (and non-blank) for every status: a record with no pane could neither
-register a driver nor close a registration, so it is a usage error, not a write.
+--pane is required (and non-blank) for every status: a `driver` record registers the driver,
+and any later record for the pane id — a lane dispatched into it, the driver's `done` — closes
+it; a record with no pane could do neither, so it is a usage error, not a write.
 
 Usage:
   dispatch-log.py --scope S --status driver --pane "$HERDR_PANE_ID"   (the driver, /plan Phase 0)
   dispatch-log.py --scope S --task T --status {dispatched,done,blocked,failed} --pane P
                   [--seat X] [--branch B] [--worktree W] [--tail TEXT]
-                  [--machine HOST] [--account KEY]   (a box lane: pane ids are per server)
+                  [--machine HOST] [--account KEY]   (default this host; a box lane names the box:
+                                                       pane ids are per server)
                   [--log PATH]          (default ~/.config/herdr/concurrency-log.jsonl)
 Output: the written JSON line on stdout.
-Exit:   0 written + verified · 1 write did not land · 2 usage
+Exit:   0 written + verified · 1 write did not land · 2 usage · 3 driver registration refused
 """
 
 import argparse
@@ -49,6 +61,31 @@ def this_host():
     return mod.this_host()
 
 
+def packet():
+    """packet.py, for session_id and latest_record — the one log scan packet.py also decides by."""
+    path = pathlib.Path(__file__).resolve().parent / "packet.py"
+    spec = importlib.util.spec_from_file_location("packet", path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def refuse_registration(pane, log):
+    """'' when `pane` may register as the driver, else why not (module docstring). The message
+    a lane sees names no way through: a lane stops."""
+    pk = packet()
+    if not pk.session_id():
+        return ("no session id in the environment ($CLAUDE_CODE_SESSION_ID / $CLAUDE_SESSION_ID / "
+                "$CODEX_SESSION_ID) — a registration binds to the session")
+    rec, why = pk.latest_record(pane, blank_is_here=True, path=log)
+    if why:
+        return f"dispatch log unreadable ({why}) — an open lane record cannot be ruled out"
+    if rec and rec.get("kind") != "driver" and rec.get("status") in pk.OPEN_LANE:
+        return (f"pane {pane} is a lane (task {rec.get('task')}, {rec.get('status')} {rec.get('ts') or ''}). "
+                "A lane never registers, merges or posts: stop.")
+    return ""
+
+
 def main(argv):
     ap = argparse.ArgumentParser(description="Append a /concurrency dispatch-log record.")
     ap.add_argument("--scope", required=True)
@@ -66,13 +103,21 @@ def main(argv):
         if a.machine and a.machine.strip().lower() != host:
             ap.error(f"--status driver registers this host ({host}); --machine {a.machine} is another")
         a.machine, a.task = host, a.task or "driver"
+        why = refuse_registration(a.pane, a.log)
+        if why:
+            print(f"dispatch-log: driver registration refused: {why}", file=sys.stderr)
+            return 3
     elif not a.task:
         ap.error("--task is required for a lane record")
+    else:  # a record with no machine is invisible to packet.py, so it would close no registration
+        a.machine = a.machine or this_host()
 
     rec = {"ts": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
            **({"kind": "driver"} if a.status == "driver" else {}), "scope": a.scope, "task": a.task, "seat": a.seat, "branch": a.branch,
            "worktree": a.worktree, "pane_id": a.pane, "status": a.status}
     # pane ids are per herdr server, so a box lane's record says which machine (scope 3, plan 3.4)
+    if a.status == "driver":
+        rec["session"] = packet().session_id()
     for key in ("machine", "account"):
         if getattr(a, key):
             rec[key] = getattr(a, key)

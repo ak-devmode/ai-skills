@@ -7,7 +7,7 @@
   "required": ["schema_version", "id", "created_at", "machine", "workspace", "agent", "repo", "branch", "head_sha", "unit", "door", "type", "title", "options", "blocks", "continues_on", "payload", "reply"],
   "additionalProperties": false,
   "properties": {
-    "schema_version": {"enum": [1, 2]},
+    "schema_version": {"type": "integer", "enum": [1, 2], "$comment": "the v1/v2 discriminator: integer-typed so true/\"2\"/2.0 cannot select neither branch and skip its checks (10.4-r14-03)"},
     "id": {"$ref": "#/$defs/id"},
     "created_at": {"$ref": "#/$defs/timestamp"},
     "machine": {"$ref": "#/$defs/identity_part"},
@@ -199,7 +199,7 @@
       "required": ["schema_version", "id", "kind", "created_at", "machine", "workspace", "agent", "body"],
       "additionalProperties": false,
       "properties": {
-        "schema_version": {"const": 1},
+        "schema_version": {"type": "integer", "const": 1},
         "id": {"$ref": "#/$defs/id"},
         "kind": {"enum": ["done", "merged", "closed", "stale", "touch"]},
         "created_at": {"$ref": "#/$defs/timestamp"},

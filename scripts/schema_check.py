@@ -61,6 +61,11 @@ def _ecma_end(pattern):
     return pattern
 
 
+def _same(a, b):
+    """JSON equality: Python's `True == 1` and `True in [1, 2]` hold, JSON Schema's do not (10.4-r14-03)."""
+    return a == b and isinstance(a, bool) == isinstance(b, bool)
+
+
 def _valid(value, schema, root):
     return not _errors(value, schema, root, "")
 
@@ -80,9 +85,9 @@ def _errors(value, schema, root, path):
         names = schema["type"] if isinstance(schema["type"], list) else [schema["type"]]
         if not any(_type_ok(value, n) for n in names):
             return errs + [f"{here}: expected {'|'.join(names)}"]
-    if "const" in schema and (value != schema["const"] or isinstance(value, bool) != isinstance(schema["const"], bool)):
+    if "const" in schema and not _same(value, schema["const"]):
         errs.append(f"{here}: must equal {schema['const']!r}")
-    if "enum" in schema and value not in schema["enum"]:
+    if "enum" in schema and not any(_same(value, e) for e in schema["enum"]):
         errs.append(f"{here}: must be one of {schema['enum']}")
     if isinstance(value, str):
         if "minLength" in schema and len(value) < schema["minLength"]:

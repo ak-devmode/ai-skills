@@ -116,6 +116,25 @@ class TestPacketSchema(unittest.TestCase):
         self.assertEqual(sc.validate("abc", schema=schema), [])
         self.assertTrue(sc.validate("abc\n", schema=schema))
 
+    def test_schema_version_must_be_an_integer_discriminator(self):
+        # 10.4-r14-03: true matched enum [1, 2] by Python membership but neither branch's const,
+        # so a packet skipped option, payload and cap checks. Every non-integer version is refused.
+        base = next(d for n, d in fixtures("valid") if n == "v2-generic-one-way.json")
+        for bad in (True, False, "2", 2.0, 1.0):
+            with self.subTest(version=bad):
+                doc = json.loads(json.dumps(base))
+                doc.update(schema_version=bad, options=[{"recommended": True}],
+                           payload={"anything": 1}, context="x" * 401)
+                errs = sc.validate(doc)
+                self.assertTrue(any(e.startswith("/schema_version:") for e in errs), errs)
+
+    def test_enum_and_const_distinguish_booleans_from_numbers(self):
+        for value, schema in ((True, {"enum": [1, 2]}), (1, {"enum": [True]}),
+                              (True, {"const": 1}), (0, {"const": False})):
+            with self.subTest(value=value, schema=schema):
+                self.assertTrue(sc.validate(value, schema=schema))
+        self.assertEqual(sc.validate(2, schema={"enum": [1, 2]}), [])
+
     def test_additional_properties_other_than_false_fails_closed(self):
         for val in (True, {"type": "string"}):
             with self.subTest(val=val), self.assertRaises(sc.SchemaError):

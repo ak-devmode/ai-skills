@@ -884,5 +884,40 @@ class TestSessionIdentity(PacketBase):  # 10.1-r1-01
         self.assertEqual(p.returncode, 0, p.stderr)
 
 
+class TestHarnessErrorsNeverStop(unittest.TestCase):
+    """A bad harness setting or an unwritable outbox never stops the caller."""
+
+    def setUp(self):
+        self.packet = load_script("packet.py")
+
+    def test_non_finite_or_huge_post_timeout_falls_back(self):
+        for v in ("inf", "nan", "1e30", "-1", "x"):
+            os.environ["PACKET_POST_TIMEOUT"] = v
+            try:
+                self.assertEqual(self.packet.post_timeout(), 3.0, v)
+            finally:
+                del os.environ["PACKET_POST_TIMEOUT"]  # 10.1-r21-01
+
+    def test_unwritable_event_marker_is_skipped_not_raised(self):
+        from pathlib import Path
+        with tempfile.TemporaryDirectory() as t:
+            d = Path(t) / "missing"  # write_text raises FileNotFoundError (an OSError)
+            out = self.packet._refuse_event(d, {"id": "ev-1", "packet_id": "pk-1"})
+        self.assertTrue(out.startswith("Skipped: "), out)  # 10.1-r22-01
+
+    def test_unreadable_event_marker_is_not_reported_against_a_packet(self):
+        import contextlib, io
+        from pathlib import Path
+        with tempfile.TemporaryDirectory() as t:
+            d = Path(t)
+            (d / "evt-ev-1.rejected").write_text("packet refused\n")
+            (d / "evt-ev-1.json").write_text("{not json")
+            err = io.StringIO()
+            with contextlib.redirect_stderr(err):
+                self.packet._clear_refusals(d, "pk-1")
+            self.assertTrue((d / "evt-ev-1.rejected").exists())
+        self.assertEqual(err.getvalue(), "")  # 10.1-r20-01
+
+
 if __name__ == "__main__":
     unittest.main()

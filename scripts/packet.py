@@ -74,6 +74,7 @@ import hashlib
 import http.client
 import importlib.util
 import json
+import math
 import os
 import re
 import secrets
@@ -95,7 +96,7 @@ def post_timeout():
         v = float(os.environ.get("PACKET_POST_TIMEOUT") or 3)
     except ValueError:
         return 3.0
-    return v if v > 0 else 3.0
+    return v if math.isfinite(v) and 0 < v <= 60 else 3.0  # inf would overflow t.join (10.1-r21-01)
 REFUSED = (400, 413, 415, 422)  # 4xx that mean "this content is refused"; all other 4xx retry
 SKIP = "Skipped: "
 HELD = "Held: "
@@ -282,9 +283,10 @@ def driver_identity(args):
     not the driver, so a registration nobody closed is harmless (10.3-r6-03). Fails closed: no
     log, no registration, an unreadable log, a registration with no session, or no session id
     here are all "not a driver". The refusal tells a lane to stop and never names the
-    registration command (10.3-r6-05). Residual (10.3-r4-02): the log is a same-user file, so it
-    cannot stop a session that deliberately registers itself from a pane with no open lane
-    record; only an OS or account boundary could."""
+    registration command (10.3-r6-05). Accepted gap (10.3-r4-02, 10.3-r8-01; Alex 98, testing
+    phase): registration admits any pane with no open lane record, and helper, review and fix
+    panes are not logged, so a /plan run in one of them registers by following its Phase 0 and
+    passes --driver. Closing it needs a lane record written at pane creation."""
     if not getattr(args, "driver", False):
         return False, "not a driver (no --driver)"
     pane = (os.environ.get("HERDR_PANE_ID") or "").strip()
@@ -394,7 +396,10 @@ def _refusal(d, stem, kind, note, what):
 def _refuse_event(d, ev):
     """An event of a packet the queue refused is never POSTed (10.1-r7-02/03)."""
     stem = f"evt-{ev['id']}"
-    (d / f"{stem}.rejected").write_text("packet refused\n")
+    try:
+        (d / f"{stem}.rejected").write_text("packet refused\n")
+    except OSError as e:  # a harness error never stops the caller (10.1-r22-01)
+        return f"Skipped: event {ev['id']} not sent: its packet {ev['packet_id']} was refused, and the marker could not be written ({e})"
     return f"Rejected: event {ev['id']} not sent: its packet {ev['packet_id']} was refused by the queue (packet refused); marked {stem}.rejected"
 
 
@@ -403,7 +408,8 @@ def _clear_refusals(d, pid):
     goes through try_send, so clearing here covers `new --id` and flush alike. Events of this
     packet that were only marked "packet refused" are released so flush POSTs them; an event's
     own refusal (a verdict on its content) is left alone. Harness errors never stop the caller
-    (10.1-r12-01): an unreadable or undeletable marker is reported in one line and left in place
+    (10.1-r12-01): an undeletable marker is reported in one line and left in place, and an
+    unreadable event marker is left in place silently, since it cannot be tied to this packet
     (fail closed: never guess), and flush retries this for every sent packet on each run."""
     bad = []
 
@@ -420,9 +426,8 @@ def _clear_refusals(d, pid):
             if f.read_text() != "packet refused\n":
                 continue
             mine = read_json(f.with_suffix(".json")).get("packet_id") == pid
-        except (OSError, ValueError) as e:
-            bad.append(f"{f.name} unreadable ({e})")
-            continue
+        except (OSError, ValueError):
+            continue  # not attributable to this packet: never reported against it (10.1-r20-01)
         if mine:
             drop(f)
     if bad:

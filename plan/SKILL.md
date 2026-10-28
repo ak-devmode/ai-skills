@@ -539,9 +539,10 @@ on a direct-to-main repo a branch diff is empty by construction.
    - **Exit 4** means the merge landed but the ticker event did not: run `packet.py
      flush --driver`, and tell Alex if it still fails.
    - Only the registered driver merges: inside herdr, a pane without an open driver
-     registration on this host by this session (§5.8.2) is a lane — `/concurrency` lanes, review and fix
-     panes, helpers — refused whatever `--driver` says; an unreadable log refuses. Nobody
-     turns on GitHub auto-merge.
+     registration on this host by this session (§5.8.2) is refused whatever `--driver` says; an
+     unreadable log refuses. Accepted gap for the testing phase (Alex 98): only logged
+     `/concurrency` lanes are refused registration, so an unlogged helper, review or fix pane
+     that runs `/plan` can register. Nobody turns on GitHub auto-merge.
 
 **Rules version.** Every review record stamps `rules_version`. A lineage started before
 the scope-10 cutover finishes under the rules it started with (`/review`'s lineage note,

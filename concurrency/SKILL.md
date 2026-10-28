@@ -203,8 +203,8 @@ Per partition, in this order (syntax authority: `herdr --skill`):
    `/plan` Phase 0 tries to register as the driver, and `dispatch-log.py` refuses a pane whose latest
    record is an open lane record (exit 3). Written after launch, the lane could register first. Only
    the pane the driver registered as itself, in its own session (`--status driver`, `/plan` §5.8.2),
-   passes `--driver`, so every other pane — logged or not, review and fix rounds included — is a lane
-   (Alex 86). A record for a pane id closes any earlier driver registration of that id.
+   passes `--driver` (Alex 86). Known gap, accepted for the testing phase (Alex 98): helper, review
+   and fix panes are not logged, so a `/plan` run in one of them can register and merge. A record for a pane id closes any earlier driver registration of that id.
 3. Launch the seat's command (§3) in the created pane via `pane run` — under the placed
    account: `claude-<account>` / `codex-<account>` (`herdr` skill §6), on either machine.
    claude/glm workers append `--dangerously-skip-permissions` (`herdr` skill §4: clears the

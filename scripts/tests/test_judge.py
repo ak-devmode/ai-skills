@@ -64,7 +64,10 @@ class TestJudge(unittest.TestCase):
             fh.write(f"## Phase 1: x\n\n- base: 9.1 svc {sha}\n")
 
     def judge(self, cmd, *extra):
-        return run(JUDGE, cmd, "--scope", self.scope, "--unit", "9.1", "--run-id", self.rid, *extra, env=self.env)
+        # cwd = the temp dir: judge.py writes its run-cap packet into the cwd's outbox, and a test
+        # run from a real checkout left one-way "verify run cap reached" cards there (2026-10-28)
+        return run(JUDGE, cmd, "--scope", self.scope, "--unit", "9.1", "--run-id", self.rid, *extra,
+                   env=self.env, cwd=self.tmp.name)
 
     def answer(self, **over):
         doc = {"verdicts": [{"check_id": c, "verdict": "pass", "rung_reached": r, "reason": f"checked {c}"}

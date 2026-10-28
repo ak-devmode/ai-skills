@@ -494,7 +494,10 @@ class DriverMergeTest(unittest.TestCase):
         self.assertTrue(card["evidence"].endswith("(truncated)"))
         self.assertFalse([f for f in os.listdir(outbox) if f.endswith(".sent")],
                          "a test must never POST: _helpers scrubs DECISION_QUEUE_URL and HERDR_*")
-        self.assertTrue(card["title"].endswith("?") or "?" in card["title"])
+        # the question leads, the label goes last and takes the cut (10.3-r7-03)
+        self.assertTrue(card["title"].startswith("Merge by hand? It touches a floor path: Some-Very"), card["title"])
+        self.assertTrue(card["title"].endswith("…"), card["title"])
+
 
     def test_event_failure_exits_4(self):
         o = {}

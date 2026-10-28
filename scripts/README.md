@@ -100,7 +100,9 @@ by `test_entrypoint.py`'s compile check.
       --blocking reads `pass` (advisory, not-judged, predates or unknown = no merge), door.py finds no floor path on
       merge-base..head, no CI definition touched (workflows, actions, CODEOWNERS… — a two-way "CI change"
       packet, Alex merges by hand; not floor: CI edits are reversible), mergeStateStatus CLEAN/HAS_HOOKS (BLOCKED → `--admin` only when
-      reviewDecision is REVIEW_REQUIRED and every required check of the base — classic protection and
+      reviewDecision is REVIEW_REQUIRED, the base requires nothing beyond required checks and reviews (any
+      other classic requirement or unmodelled field, any ruleset rule but required_status_checks /
+      pull_request, or review-thread resolution refuses it), and every required check of the base — classic protection and
       rulesets, both read — is present on the head (a check bound to an app, classic app_id or ruleset
       integration_id, by a check run from that app) with EVERY entry of its name SUCCESS or SKIPPED/NEUTRAL —
       head check-runs unreadable is no --admin; unreadable protection is no merge; any other BLOCKED refused).

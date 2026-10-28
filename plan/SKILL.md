@@ -505,9 +505,11 @@ on a direct-to-main repo a branch diff is empty by construction.
    (a CI edit is a two-way "CI change" packet: Alex reviews and merges by hand), and the base is `develop` (code
    repos) or `main` (kalpa-docs, pmg-docs, ai-skills). A code repo's `main` is prod: it is
    refused and stays behind `prod-merge-gate.py`. A degraded review (fallback or lean)
-   still merges, flagged on the ticker; `--admin` is used only when GitHub says the missing
-   piece is a review approval (`reviewDecision` REVIEW_REQUIRED) and every required check of
-   the base is present on the head with every entry of its name SUCCESS (a required job
+   still merges, flagged on the ticker; `--admin` is used only when GitHub says a review
+   approval is missing (`reviewDecision` REVIEW_REQUIRED), the base's protection requires
+   nothing beyond required checks and reviews (a signature, conversation-resolution,
+   deployment, lock or any rule the script does not model refuses it — `--admin` would bypass
+   it unread), and every required check of the base is present on the head with every entry of its name SUCCESS (a required job
    skipped by `if:` counts, as on GitHub; one that never reported does not). Any other
    BLOCKED is a two-way packet. Each merge posts a `merged` event (repo, PR, sha).
    - **A repo with no CI never auto-merges.** pmg-docs and ai-skills have no workflow

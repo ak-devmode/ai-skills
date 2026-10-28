@@ -55,6 +55,14 @@ BOUND_E2E = {"contexts": ["ci", "e2e"], "checks": [{"context": "ci", "app_id": N
 RULE_CI_BOUND = {"type": "required_status_checks",
                  "parameters": {"required_status_checks": [{"context": "ci", "integration_id": APP}]}}
 RULE_LINT = {"type": "required_status_checks", "parameters": {"required_status_checks": [{"context": "lint"}]}}
+# the classic protection document as GitHub serves it for wellmed-backbone `develop` (2026-10-28)
+LIVE_CLASSIC = {"url": "u", "required_pull_request_reviews": {"required_approving_review_count": 1},
+                "required_signatures": {"url": "u", "enabled": False}, "enforce_admins": {"enabled": False},
+                "required_linear_history": {"enabled": False}, "allow_force_pushes": {"enabled": False},
+                "allow_deletions": {"enabled": False}, "block_creations": {"enabled": False},
+                "required_conversation_resolution": {"enabled": False}, "lock_branch": {"enabled": False},
+                "allow_fork_syncing": {"enabled": False}}
+NOT_PROTECTED = (1, "Branch not protected (HTTP 404)")
 SKIPPED = [{"__typename": "CheckRun", "name": "ci", "status": "COMPLETED", "conclusion": "SKIPPED"},
            {"__typename": "StatusContext", "context": "x", "state": "NEUTRAL"}]
 
@@ -161,6 +169,30 @@ CASES = [
     ("BLOCKED: app_id -1 is any source, admin", {"state": "BLOCKED",
                                                  "protection": (0, {"checks": [{"context": "ci", "app_id": -1}]})},
      0, {"merged": True, "admin": True}),
+    # --admin bypasses EVERY protection requirement, not just reviews and checks: any other one,
+    # or one this script does not model, refuses it (10.3-r4-01, Alex 83)
+    *[(f"BLOCKED: classic {k} enabled", {"state": "BLOCKED", "classic": {k: {"enabled": True}}}, 1,
+       {"merged": False, "says": f"more than checks and a review: {k}"})
+      for k in ("required_signatures", "required_conversation_resolution", "lock_branch", "required_linear_history")],
+    ("BLOCKED: classic required_deployments", {"state": "BLOCKED", "classic": {"required_deployments":
+                                                                              {"required_deployment_environments": ["staging"]}}},
+     1, {"merged": False, "says": "required_deployments"}),
+    ("BLOCKED: classic field not modelled", {"state": "BLOCKED", "classic": {"required_merge_queue": {"enabled": False}}},
+     1, {"merged": False, "says": "required_merge_queue (not modelled)"}),
+    ("BLOCKED: classic flag unreadable", {"state": "BLOCKED", "classic": {"lock_branch": {"enabled": "yes"}}},
+     1, {"merged": False, "says": "lock_branch unreadable"}),
+    *[(f"BLOCKED: ruleset {t}", {"state": "BLOCKED", "protection": NOT_PROTECTED, "rulesets": (0, [{"type": t}])}, 1,
+       {"merged": False, "says": f"ruleset {t}"})
+      for t in ("required_signatures", "code_scanning", "workflows", "merge_queue", "required_deployments", "deletion")],
+    ("BLOCKED: ruleset thread resolution", {"state": "BLOCKED", "protection": NOT_PROTECTED, "rulesets": (0, [
+        {"type": "pull_request", "parameters": {"required_approving_review_count": 1,
+                                                "required_review_thread_resolution": True}}])},
+     1, {"merged": False, "says": "ruleset required_review_thread_resolution"}),
+    ("BLOCKED: ruleset review + checks only, admin", {"state": "BLOCKED", "protection": NOT_PROTECTED, "rulesets": (0, [
+        {"type": "pull_request", "parameters": {"required_approving_review_count": 1,
+                                                "required_review_thread_resolution": False}},
+        {"type": "required_status_checks", "parameters": {"required_status_checks": [{"context": "ci"}]}}])},
+     0, {"merged": True, "admin": True}),
     ("BLOCKED: nothing required, admin", {"state": "BLOCKED", "protection": (1, "Branch not protected (HTTP 404)")},
      0, {"merged": True, "admin": True}),
     ("dirty refused", {"state": "DIRTY"}, 1, {"merged": False}),
@@ -257,10 +289,12 @@ class DriverMergeTest(unittest.TestCase):
                     if crc:
                         return crc, "", runs
                     return 0, json.dumps([{"total_count": len(runs), "check_runs": runs}]), ""
-                key = "protection" if "/protection/" in path else "rulesets"
+                key = "protection" if path.endswith("/protection") else "rulesets"
                 arc, body = o.get(key, (0, {"contexts": ["ci"], "checks": [{"context": "ci"}]} if key == "protection" else []))
                 if arc:
                     return arc, "", body
+                if key == "protection":  # the full classic document: o["protection"] is its checks part
+                    body = dict(LIVE_CLASSIC, required_status_checks=body, **o.get("classic", {}))
                 if key == "rulesets":  # served as pages: o["rulesets"] is one page unless "paged"
                     pages = body if o.get("paged") else [body]
                     if "--paginate" not in args:

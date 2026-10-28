@@ -183,10 +183,16 @@ by `test_entrypoint.py`'s compile check.
     finish-table.py init --scope DIR --phase N.P[=repo,...]... [--rows F] [--test-plan-owner N.P] [--predates N.P,...]
     finish-table.py add  --scope DIR --rows F --change TEXT [--replace]
       exit: 0 written · 2 usage · 3 refused (exists / missing / would not parse — nothing written)
-    dispatch-log.py --scope --task --status {dispatched,done,blocked,failed} --pane [--seat --branch --worktree --tail --log]
-    dispatch-log.py --scope --status driver --pane "$HERDR_PANE_ID"   (the driver registers itself; machine = this host)
-      exit: 0 written + read back · 1 did not land · 2 usage. --pane is required: the record is how
-      packet.py tells a lane from the driver (a pane whose latest record is dispatched/blocked is a lane)
+    dispatch-log.py --scope --task --status {dispatched,done,blocked,failed} --pane [--machine --seat --branch --worktree --tail --log]
+    dispatch-log.py --scope --status driver --pane "$HERDR_PANE_ID"   (/plan §5.8.2: the driver registers itself)
+    dispatch-log.py --scope --task driver --status done --pane "$HERDR_PANE_ID"   (/plan §11.9: closes it)
+      exit: 0 written + read back · 1 did not land · 2 usage · 3 driver registration refused.
+      --pane is required; machine defaults to this host. A pane's latest record on this host decides
+      who it is: `driver` (with this session id) is the driver, anything later closes the registration.
+      The driver writes a lane's record BEFORE launching it, so `--status driver` refuses (exit 3) a
+      pane whose latest record is an open lane (dispatched/blocked), and also refuses with no session
+      id or an unreadable log. The registration records the session id; packet.py --driver requires
+      the current session to match, so a stale registration on a reused pane id is harmless
     herdr-pane.sh name <pane> <name> [--source SKILL]  |  herdr-pane.sh helper [--cwd DIR]
       exit: 0 ok · 1 herdr call failed / label not visible · 2 usage · 3 not in herdr / no server
     repo-survey.sh [repo-dir] [--no-fetch]

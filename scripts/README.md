@@ -88,8 +88,8 @@ by `test_entrypoint.py`'s compile check.
       `MERGED-ELSEWHERE <owner/repo>#N <sha>` + `PACKET <id>` (merged, but not at the checked head)
       exit: 0 eligible / merged + event written · 1 refused / not merged · 2 usage · 4 merged, event not written
       /plan §6.8 step 4 (scope 10 §4.3). Merges only when ALL hold: caller is a driver
-      (packet.py's driver_identity: --driver, refused for a herdr pane with an open dispatch-log
-      record or an unreadable log — `merge` refuses a non-driver before any
+      (packet.py's driver_identity: --driver, and inside herdr only a pane with an open driver
+      registration on this host — every other pane is a lane; an unreadable log refuses — `merge` refuses a non-driver before any
       gh call), PR open + not draft, base = `main` for kalpa-docs /
       pmg-docs / ai-skills else `develop` (anything else — a code repo's prod `main` — is refused, never
       touched), every check finished green or skipped/neutral with at least one real green run (an empty or
@@ -170,6 +170,7 @@ by `test_entrypoint.py`'s compile check.
     finish-table.py add  --scope DIR --rows F --change TEXT [--replace]
       exit: 0 written · 2 usage · 3 refused (exists / missing / would not parse — nothing written)
     dispatch-log.py --scope --task --status {dispatched,done,blocked,failed} --pane [--seat --branch --worktree --tail --log]
+    dispatch-log.py --scope --status driver --pane "$HERDR_PANE_ID"   (the driver registers itself; machine = this host)
       exit: 0 written + read back · 1 did not land · 2 usage. --pane is required: the record is how
       packet.py tells a lane from the driver (a pane whose latest record is dispatched/blocked is a lane)
     herdr-pane.sh name <pane> <name> [--source SKILL]  |  herdr-pane.sh helper [--cwd DIR]

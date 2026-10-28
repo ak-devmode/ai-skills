@@ -199,14 +199,14 @@ CASES = [
     ("unknown state after retries", {"state": "UNKNOWN"}, 1, {"merged": False}),
     ("draft refused", {"draft": True}, 1, {"merged": False}),
     ("non-driver refused before gh", {"driver": False}, 1, {"merged": False, "no_gh": True, "packet": None}),
-    # a herdr pane with an open record in the driver-written dispatch log is a lane, whatever
-    # --driver says; an unreadable log refuses; otherwise --driver decides (Alex 84, 10.3-r3-02)
-    ("dispatched lane pane with --driver refused", {"herdr": "lane"}, 1,
-     {"merged": False, "no_gh": True, "packet": None, "says": "is a /concurrency lane"}),
+    # inside herdr only a pane registered as the driver on this host merges; every other pane is a
+    # lane, refused before any gh call; an unreadable log refuses (Alex 86, 10.3-r4-03)
+    ("registered driver pane merges", {"herdr": "driver"}, 0, {"merged": True}),
+    *[(f"herdr pane {m} refused", {"herdr": m}, 1,
+       {"merged": False, "no_gh": True, "packet": None, "says": "no driver registration on this host"})
+      for m in ("lane", "unregistered", "reused", "none", "alias", "blank-host", "other-host")],
     ("dispatch log unreadable refused", {"herdr": "unreadable"}, 1,
      {"merged": False, "no_gh": True, "packet": None, "says": "fail closed"}),
-    ("driver pane not in the log merges", {"herdr": "other"}, 0, {"merged": True}),
-    ("lane record closed: pane merges", {"herdr": "closed"}, 0, {"merged": True}),
     ("herdr pane without --driver refused", {"herdr": "none", "driver": False}, 1,
      {"merged": False, "no_gh": True, "packet": None, "says": "no --driver"}),
     ("gh error -> no merge", {"gh_view_rc": 1}, 1, {"merged": False, "says": "could not evaluate"}),

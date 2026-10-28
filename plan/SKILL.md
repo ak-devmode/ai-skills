@@ -359,8 +359,11 @@ rows the way `/scope` §5.10.1 does and ask; approve only on the user's yes. A t
 5.8.1 **herdr worktree + driver naming (when running inside a herdr pane)** — if
 `$HERDR_PANE_ID` is set (this `/plan` runs in a herdr pane) AND the parent
 scope's **Primary repo (worktree)** field is not "none":
-- Name this session's agent: `herdr agent rename "$HERDR_PANE_ID" driver`. A label
-  only — `--driver` authority comes from the dispatch log, not this name.
+- Name this session's agent: `herdr agent rename "$HERDR_PANE_ID" driver`, and register
+  this pane as the driver: `~/Projects/ai-skills/scripts/dispatch-log.py --scope <scope>
+  --status driver --pane "$HERDR_PANE_ID"`. The name is a label; the registration is the
+  `--driver` authority — inside herdr, `packet.py` and `driver-merge.py` treat every
+  unregistered pane as a lane. Only the driver registers; a lane never does.
 - Create the scope's isolated worktree-workspace per the **`herdr` skill** (model
   B, §3): `herdr worktree create --cwd <primary-repo> --base origin/<trunk>
   --branch <scope-branch>` — the scope's space IS the worktree-workspace; work
@@ -517,15 +520,17 @@ on a direct-to-main repo a branch diff is empty by construction.
      Alex merges by hand. That is by design — an empty check list is never green; do not
      work around it.
    - **`NOT MERGED`** prints why and writes a packet: one-way with the floor paths for a
-     floor hit — park on it per §6.9 — two-way otherwise; fix the condition and re-run.
+     floor hit — park on it per §6.9 — two-way otherwise; fix the condition and re-run —
+     except the `driver` condition: a refused pane is a lane, which never merges; stop.
    - **`MERGED-ELSEWHERE`** means the PR merged, but not at the head this run checked
      (the head moved, someone else merged): no `merged` event; tell Alex — the packet asks
      him to review the commits that landed unchecked.
    - **Exit 4** means the merge landed but the ticker event did not: run `packet.py
      flush --driver`, and tell Alex if it still fails.
-   - A `/concurrency` lane never merges: a herdr pane with an open record in the dispatch
-     log `/concurrency` writes at dispatch is a lane, refused whatever `--driver` says; an
-     unreadable log refuses. Nobody turns on GitHub auto-merge.
+   - Only the registered driver merges: inside herdr, a pane without an open driver
+     registration on this host (§5.8.1) is a lane — `/concurrency` lanes, review and fix
+     panes, helpers — refused whatever `--driver` says; an unreadable log refuses. Nobody
+     turns on GitHub auto-merge.
 
 **Rules version.** Every review record stamps `rules_version`. A lineage started before
 the scope-10 cutover finishes under the rules it started with (`/review`'s lineage note,

@@ -223,10 +223,10 @@ Per partition, in this order (syntax authority: `herdr --skill`):
 4. Log it — `~/Projects/ai-skills/scripts/dispatch-log.py --scope <scope> --task <task> --seat <seat>
    --branch <b> --worktree <w> --pane <id> --machine <host> --account <key> --status dispatched`
    (appends to `~/.config/herdr/concurrency-log.jsonl` and reads the line back). `--pane`
-   is required: this record is what makes the pane a lane — `packet.py` and
-   `driver-merge.py` refuse `--driver` from a pane whose latest record is `dispatched` or
-   `blocked`. A lane you launch without logging it (a fix or review round included) can
-   POST and merge as a driver.
+   is required. Lane identity no longer depends on this record: only the pane the driver
+   registered as itself (`--status driver`, `/plan` §5.8.1) passes `--driver`, so every
+   other pane — logged or not, review and fix rounds included — is a lane (Alex 86). A
+   record for a pane id closes any earlier driver registration of that id.
 
 **Placed on the box** (`machine=homelab2026`), steps 1–3 change only in where they
 point — `herdr` skill §6.1 has the mechanics:
@@ -235,8 +235,9 @@ point — `herdr` skill §6.1 has the mechanics:
 - `--cwd ~/<repo path under $HOME>` (remote worktree paths must start with `~/`) and
   `--base` = the origin ref §5.1 step 3 checked, not always `origin/<trunk>`;
 - log every record of a box lane on the box too (`ssh <host>
-  ~/Projects/ai-skills/scripts/dispatch-log.py …`, same flags): the lane checks its own
-  machine's log, so a record only on this machine leaves it a driver there;
+  ~/Projects/ai-skills/scripts/dispatch-log.py …`, same flags): a box lane's record
+  closes any stale driver registration of that pane id there. No box pane is a driver
+  unless a driver registered it on the box;
 - the box runs its own clones at the same `$HOME`-relative paths, ai-skills included
   (`~/Projects/ai-skills`, which the brief's `herdr-pane.sh helper` line calls) — pull
   it there when this skill changes.
@@ -257,8 +258,7 @@ point — `herdr` skill §6.1 has the mechanics:
 - Read output with `pane read --source detection` (or `visible`) — never
   `recent` (`herdr` §7).
 - Record every terminal state with `dispatch-log.py … --pane <id> --status done|blocked|failed
-  --tail "<lines that prove it>"`. Until `done` or `failed` lands, that pane id is a lane
-  and a driver later reusing it is refused.
+  --tail "<lines that prove it>"`.
 
 **7.2 In-pane status markers (all seats) — no SendMessage**
 Workers report by PRINTING a marker line in their own pane; the supervisor reads

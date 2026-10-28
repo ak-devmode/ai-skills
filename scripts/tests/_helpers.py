@@ -10,7 +10,6 @@ and nothing installed.
 import importlib.util
 import json
 import os
-import socket
 import subprocess
 import sys
 import tempfile
@@ -43,18 +42,29 @@ def load(name):
 
 def dispatch_env(tmp, mode, pane="w9:p2"):
     """Env that puts this process in herdr pane `pane` with a fresh $HOME whose dispatch log
-    (~/.config/herdr/concurrency-log.jsonl, what /concurrency writes) holds: "lane" — an open
-    dispatched record for the pane; "closed" — dispatched then done; "other" — open records
-    for another pane and for this pane on another machine; "none" — no log; "unreadable" — a
-    log line that is not JSON."""
+    (~/.config/herdr/concurrency-log.jsonl) holds, for the inverted rule (Alex 86) —
+    "driver": this pane registered as the driver on this host; "lane": this pane dispatched as a
+    lane; "unregistered": records for other panes only (a helper / review pane); "reused": this
+    pane registered, then a lane dispatched into the same id; "alias": this pane registered under
+    this host's FQDN form, not the normalized name (10.3-r4-03); "blank-host": registered with no machine;
+    "other-host": registered on another server; "other-pane": another pane registered; "none":
+    no log; "unreadable": a log line that is not JSON."""
     home = tempfile.mkdtemp(dir=tmp)
-    me = socket.gethostname().split(".")[0].lower()
-    rec = lambda pane_id, status, machine=me: json.dumps(
+    me = load("placement.py").this_host()
+    lane = lambda pane_id, status="dispatched", machine=me: json.dumps(
         {"scope": "10", "task": "t", "pane_id": pane_id, "status": status, "machine": machine})
-    lines = {"lane": [rec(pane, "dispatched")],
-             "closed": [rec(pane, "dispatched"), rec(pane, "done")],
-             "other": [rec("w9:p1", "dispatched"), rec(pane, "dispatched", "elsewhere-box")],
-             "unreadable": [rec("w9:p1", "done"), "{not json"]}.get(mode)
+    drv = lambda pane_id, machine=me: json.dumps(
+        {"kind": "driver", "scope": "10", "task": "driver", "pane_id": pane_id, "status": "driver",
+         **({"machine": machine} if machine is not None else {})})
+    lines = {"driver": [lane("w9:p1"), drv(pane)],
+             "lane": [drv("w9:p1"), lane(pane)],
+             "unregistered": [drv("w9:p1"), lane("w9:p3"), lane("w9:p4", "done")],
+             "reused": [drv(pane), lane(pane)],
+             "alias": [drv(pane, me + ".lan")],
+             "blank-host": [drv(pane, None)],
+             "other-host": [drv(pane, "elsewhere-box")],
+             "other-pane": [drv("w9:p1")],
+             "unreadable": [drv(pane), "{not json"]}.get(mode)
     if lines is not None:
         os.makedirs(os.path.join(home, ".config", "herdr"))
         with open(os.path.join(home, ".config", "herdr", "concurrency-log.jsonl"), "w") as f:

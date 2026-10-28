@@ -171,11 +171,16 @@ class TestQueue(PacketBase):
         _, out = self.new("--driver", env=env)
         self.assertEqual([p for p, _ in s.posts], ["/packets"])
 
-    def test_dispatch_log_decides_who_is_a_lane(self):  # Alex 84: a record the lane does not write
-        cases = [("lane", ("--driver",), 0, "is a /concurrency lane"),
-                 ("unreadable", ("--driver",), 0, "fail closed"),
-                 ("closed", ("--driver",), 1, ""), ("other", ("--driver",), 1, ""),
-                 ("none", ("--driver",), 1, ""), ("none", (), 0, "")]
+    def test_only_a_registered_pane_is_the_driver(self):  # Alex 86: every unregistered pane is a lane
+        unreg = "no driver registration on this host"
+        cases = [("driver", ("--driver",), 1, ""), ("driver", (), 0, ""),
+                 ("lane", ("--driver",), 0, unreg), ("unregistered", ("--driver",), 0, unreg),
+                 ("reused", ("--driver",), 0, unreg), ("other-pane", ("--driver",), 0, unreg),
+                 ("none", ("--driver",), 0, unreg),
+                 # 10.3-r4-03: only this host's normalized name counts
+                 ("alias", ("--driver",), 0, unreg), ("blank-host", ("--driver",), 0, unreg),
+                 ("other-host", ("--driver",), 0, unreg),
+                 ("unreadable", ("--driver",), 0, "fail closed")]
         for mode, flag, posts, why in cases:
             with self.subTest(mode, flag=flag):
                 s = Stub(); self.addCleanup(s.stop)
@@ -189,6 +194,9 @@ class TestQueue(PacketBase):
                     self.assertIn(why, out)
                     self.assertIn(why, p.stderr)
                     self.assertEqual(p.returncode, 1)
+                    if why == unreg:  # r4-02: a lane is told to stop, not handed a way through
+                        self.assertIn("never registers: stop, do not re-run", p.stderr)
+                        self.assertNotIn("--status done", p.stderr)
 
     def test_flush_resends_after_outage_and_is_idempotent(self):
         s = Stub(); self.addCleanup(s.stop)

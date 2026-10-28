@@ -3,9 +3,9 @@
 
 Approach: every packet is written to an outbox in the lane's own worktree
 (<repo>/.decision-queue/outbox/, self-ignoring) and `PACKET <id>` is printed; that is
-the one path for every lane (Claude, codex, review). Only a DRIVER POSTs — `--driver`, refused
-inside herdr for a pane with an open record in the driver-written dispatch log (a lane), and
-when that log is unreadable (driver_identity) — and only when $DECISION_QUEUE_URL is set: packets to
+the one path for every lane (Claude, codex, review). Only a DRIVER POSTs — `--driver`, and inside
+herdr only from a pane with an open driver registration on this host in the dispatch log
+(driver_identity, Alex 86) — and only when $DECISION_QUEUE_URL is set: packets to
 /packets, events to /events, 3 s timeout, idempotent on the client-generated id. A dead
 queue never fails the caller: the packet is printed with a `Blocked` note, exit 0, and
 `flush` re-sends later. A one-way door still stops the lane — that is a decision, not a
@@ -38,9 +38,9 @@ Failure stances (each is fail-closed unless it says otherwise):
     POSTed, marked `evt-<id>.rejected` ("packet refused"). Conflict too: the queue holds
     other content under that id, so a lane's close/stale must not apply to it
   * flush --outbox DIR that does not exist -> `Skipped: outbox DIR does not exist`, exit 0
-  * --driver in a herdr pane with an open dispatch record, or with the dispatch log unreadable
-    -> not a driver (fail closed); `new` names the reason, `flush --driver` prints it, exit 1.
-    A missing log means no lane on this machine: FAIL-OPEN, reason in open_dispatch
+  * --driver in a herdr pane with no open driver registration on this host (missing log,
+    unreadable log, registration for another machine or none) -> not a driver (fail closed);
+    `new` names the reason, `flush --driver` prints it, exit 1
   * flush: an unreadable item is reported and skipped, the rest of the outbox still goes
   * stale: git cannot be read -> exit 1 without marking. Fail-open on purpose: marking
     stale discards a pending decision
@@ -199,24 +199,28 @@ def repo_of(d):
     return None
 
 
-DISPATCH_LOG = "~/.config/herdr/concurrency-log.jsonl"  # dispatch-log.py's default; the driver writes it
-OPEN_LANE = ("dispatched", "blocked")  # a parked (blocked) lane resumes in the same pane
+DISPATCH_LOG = "~/.config/herdr/concurrency-log.jsonl"  # dispatch-log.py's default
+REGISTER = 'dispatch-log.py --scope <scope> --status driver --pane "$HERDR_PANE_ID"'
 
 
 def this_machine():
-    return socket.gethostname().split(".")[0].lower()
+    """This host as the dispatch log records it: placement.this_host (`hostname -s`, lowercased —
+    the key the accounts map and launchers use), else socket's short name lowercased."""
+    try:
+        return _load("placement").this_host()
+    except Exception:  # placement.py missing or broken: same normalization, no subprocess
+        return socket.gethostname().split(".")[0].lower()
 
 
-def open_dispatch(pane):
-    """(record, '') when this machine's dispatch log has an open lane record for `pane`, ('', '')
-    when it has none, (None, why) when the log cannot be read. The record is written by the
-    driver at dispatch (dispatch-log.py, --pane required), never by the lane, so a lane cannot
-    take it off itself (10.3-r3-02, Alex 84). A pane's LATEST record decides: dispatched or
-    blocked is open, done or failed closes it, any other status is open (fail closed). A record
-    for another machine is skipped (pane ids are per herdr server); one with no machine counts.
-    Missing log = no lane was ever dispatched on this machine, so no lane: fail-open on purpose,
-    or a driver on a machine that never ran /concurrency could not POST (a box lane's record is
-    written on the box too, /concurrency §6 step 4). Any other read or parse failure -> None."""
+def driver_registration(pane):
+    """(record, '') when `pane` has an open driver registration on this host, ('', latest) when
+    it has none (latest = the pane's latest record here, or None), (None, why) when the log
+    cannot be read. The driver registers its own pane (dispatch-log.py --status driver, /plan
+    Phase 0; Alex 86). A pane's LATEST record on this host decides: a `driver` record is open;
+    any later record for that pane id (a lane dispatched into a reused id, the driver's own
+    `done`) closes it. A record counts only when its machine is this host (10.3-r4-03): blank, an
+    alias or another server's name is not registered here — fail closed, since pane ids are per
+    herdr server. A missing log is no registration (fail closed)."""
     path = os.path.expanduser(DISPATCH_LOG)
     me, last = this_machine(), None
     try:
@@ -227,41 +231,43 @@ def open_dispatch(pane):
                 rec = json.loads(line)
                 if not isinstance(rec, dict):
                     return None, f"{path}:{n} is not a record"
-                mach = str(rec.get("machine") or "").lower()
-                if rec.get("pane_id") == pane and (not mach or mach == me):
+                if rec.get("pane_id") == pane and str(rec.get("machine") or "").strip().lower() == me:
                     last = rec
     except FileNotFoundError:
-        return "", ""
+        return "", None
     except (OSError, ValueError) as e:  # UnicodeDecodeError and JSONDecodeError are ValueErrors
         return None, f"{path}: {e}"
-    if last is None or last.get("status") in ("done", "failed"):
-        return "", ""
-    return last, ""
+    if last is not None and last.get("kind") == "driver" and last.get("status") == "driver":
+        return last, ""
+    return "", last
 
 
 def driver_identity(args):
     """(is_driver, detail) — the one decision of who is the driver, shared by every POST here
-    and by driver-merge.py's merge. --driver is required; inside herdr ($HERDR_PANE_ID set) a
-    pane with an open record in the driver-written dispatch log is a lane and is refused
-    whatever --driver says (lanes run /plan, whose documented commands carry --driver). An
-    unreadable log is not a driver (fail closed: a lane that cannot be told from the driver
-    must not POST or merge). Alex 84 replaced the herdr agent-name lookup (10.3-r2-01): that
-    name is self-assigned, this record is not (10.3-r3-02)."""
+    and by driver-merge.py's merge. --driver is required. Inside herdr ($HERDR_PANE_ID set) ONLY
+    a pane with an open driver registration on this host is the driver (Alex 86): every other
+    pane — a /concurrency lane, a review or fix pane, a helper, a research lane — is a lane,
+    whatever --driver says (lanes run /plan, whose documented commands carry --driver). Fails
+    closed: no log, no registration, an unreadable log are all "not a driver". The refusal tells
+    a lane to stop and never to register, and gives the driver's one registration line.
+    Residual (10.3-r4-02): the log is a same-user file, so it cannot stop a lane that
+    deliberately registers itself; only an OS or account boundary could."""
     if not getattr(args, "driver", False):
         return False, "not a driver (no --driver)"
     pane = (os.environ.get("HERDR_PANE_ID") or "").strip()
     if not pane:
         return True, "--driver (outside herdr)"
-    rec, why = open_dispatch(pane)
+    rec, why = driver_registration(pane)
     if rec is None:
         return False, (f"--driver refused: dispatch log unreadable ({why}), so herdr pane {pane} "
                        "cannot be told from a lane — not a driver (fail closed)")
     if rec:
-        return False, (f"--driver refused: herdr pane {pane} is a /concurrency lane (open dispatch "
-                       f"record: scope {rec.get('scope')} task {rec.get('task')}, {rec.get('status')} "
-                       f"{rec.get('ts')}); if that lane is finished, record it with dispatch-log.py "
-                       "--pane <id> --status done")
-    return True, f"--driver (herdr pane {pane}: no open dispatch record)"
+        return True, f"--driver (herdr pane {pane}: driver registered {rec.get('ts')})"
+    seen = (f"; its latest record here is {why.get('kind') or 'lane'} {why.get('status')} "
+            f"{why.get('ts')}" if why else "")
+    return False, (f"--driver refused: herdr pane {pane} has no driver registration on this host "
+                   f"({this_machine()}){seen}. A lane never merges or POSTs and never registers: "
+                   f"stop, do not re-run. Only the /plan driver registers, once at Phase 0: {REGISTER}")
 
 
 def is_driver(args):

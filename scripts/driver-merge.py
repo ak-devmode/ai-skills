@@ -4,10 +4,10 @@ plan 10.3 tasks 3.1 + 3.2).
 
 Approach: every condition is evaluated and printed, one line each, then the verdict. A PR is
 eligible only when ALL hold:
-  * driver   — packet.py's driver_identity: --driver, refused inside herdr for a pane with an
-               open record in the dispatch log the driver writes (a lane), and when that log is
-               unreadable (Alex 84, 10.3-r3-02). `check` reports it; `merge` refuses before any
-               gh call
+  * driver   — packet.py's driver_identity: --driver, and inside herdr only from a pane the
+               driver registered as itself on this host in the dispatch log; every unregistered
+               pane is a lane, and an unreadable log refuses (Alex 86). `check` reports it;
+               `merge` refuses before any gh call
   * pr       — open, not a draft
   * base     — `main` for kalpa-docs / pmg-docs / ai-skills, `develop` for every other repo.
                Any other base is refused and never touched: a code repo's `main` is prod, and
@@ -186,9 +186,9 @@ def pr_view_settled(slug, n):
 # ---------- conditions: each returns (ok, detail) ----------------------------------
 
 def cond_driver(a, pk):
-    """packet.py's driver_identity decides (Alex 84): --driver, unless this herdr pane has an
-    open dispatch record (a lane) or the dispatch log is unreadable. One decision for the merge
-    here and every POST packet.py makes."""
+    """packet.py's driver_identity decides (Alex 86): --driver, and inside herdr an open driver
+    registration for this pane on this host. One decision for the merge here and every POST
+    packet.py makes."""
     ok, detail = pk.driver_identity(a)
     return ok, detail if ok else f"{detail} — lanes never merge"
 

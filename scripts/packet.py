@@ -52,7 +52,7 @@ Failure stances (each is fail-closed unless it says otherwise):
   packet.py new --door D --type T --title S --unit U --option LABEL [--option ...]
                 [--recommended N] (--body TEXT|--body-file F | --payload-file F) [--blocks S]
                 [--continues-on S] [--range BASE..HEAD] [--id ID] [--driver]
-  packet.py close ID | stale ID [--force] | touch ID | event --kind K --body S [--packet-id ID]
+  packet.py close ID | stale ID [--force] [--reason TEXT] | touch ID | event --kind K --body S [--packet-id ID]
   packet.py check-reply (--reply TEXT | --file F | -) [--lane M/W/A]
   packet.py flush [--driver]
   common: --outbox DIR (repeatable; first is where this lane writes)
@@ -552,7 +552,7 @@ def cmd_stale(args):
         if head.startswith(doc["head_sha"]) or doc["head_sha"].startswith(head):
             print(f"packet {args.id} current (head unchanged)")
             return 0
-    return _set_status(args, args.id, "stale", "stale", f"head moved past {doc['head_sha'][:7]}")
+    return _set_status(args, args.id, "stale", "stale", args.reason or f"head moved past {doc['head_sha'][:7]}")
 
 
 def cmd_touch(args):
@@ -741,6 +741,7 @@ def main(argv):
     s = sub.add_parser("stale", parents=[common])
     s.add_argument("id")
     s.add_argument("--force", action="store_true")
+    s.add_argument("--reason")  # the stale event's body, e.g. "superseded by <id>" (driver-merge)
     e = sub.add_parser("event", parents=[common])
     e.add_argument("--kind", required=True, choices=["done", "merged", "closed", "stale", "touch"])
     e.add_argument("--body", default="")

@@ -413,6 +413,19 @@ class DriverMergeTest(unittest.TestCase):
         self.assertTrue(all(ids), ids)
         self.assertEqual(ids[0], ids[1], "same failed conditions, same head: idempotent")
         self.assertEqual(len({ids[0], ids[2], ids[3]}), 3, ids)  # another condition / head: a new card
+        # 10.3-r4-06: the new card for the same head supersedes the open one; another head's stays open
+        outbox = os.path.join(repo, ".decision-queue", "outbox")
+        status = lambda pid: readj(os.path.join(outbox, f"{pid}.state.json"))["status"]
+        self.assertEqual([status(i) for i in (ids[0], ids[2], ids[3])], ["stale", "open", "open"])
+        stale_ev = [readj(os.path.join(outbox, f)) for f in os.listdir(outbox) if f.startswith("evt-")]
+        self.assertIn(f"superseded by {ids[2]}", [e["body"] for e in stale_ev if e.get("packet_id") == ids[0]])
+        with contextlib.redirect_stdout(io.StringIO()):  # another PR on the same head is not superseded
+            other = dm.emit_packet(repo, "10.3", label + "5", [("checks", "y")], [], None, "b" * 40)
+        self.assertEqual((status(ids[3]), status(other)), ("open", "open"))
+        with contextlib.redirect_stdout(io.StringIO()):  # the first case comes back: a fresh open card
+            back = dm.emit_packet(repo, "10.3", label, [("checks", "pending")], [], None, "a" * 40)
+        self.assertNotIn(back, ids)
+        self.assertEqual((status(back), status(ids[2])), ("open", "stale"))
 
     def test_event_failure_exits_4(self):
         o = {}

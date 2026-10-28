@@ -622,12 +622,19 @@ def emit_packet(repo, unit, label, failed, hits, rng, head, title=None, options=
     --id` re-sends the OLD card (10.3-r3-03): it carries the kind (`merge-elsewhere` is keyed on
     the merge commit that landed, passed as `head`), the head, the door and the failed condition
     names. Those lead the id because stable_id cuts at 64 chars and a long owner/repo label
-    would otherwise cut them off; the label goes last."""
+    would otherwise cut them off; the label goes last. A new id for a kind + head + label that
+    already has an open card marks that card stale (supersede, 10.3-r4-06); a case whose card
+    supersede already made stale (pending -> UNSTABLE -> pending) bumps a generation into the
+    id, or the re-send would revive nothing and leave no open card."""
     one_way = bool(hits) or any(name == "floor" for name, _ in failed)
     door = "one-way" if one_way else "two-way"
-    conds = hashlib.sha1("+".join(sorted({n for n, _ in failed})).encode()).hexdigest()[:6]
-    pid = _load("packet_emit", os.path.join(HERE, "packet_emit.py")).stable_id(
-        kind, head[:12], door, conds, label.replace("/", "-").replace("#", "-"))
+    names, dirs = "+".join(sorted({n for n, _ in failed})), outbox_dirs(repo)
+    stable_id = _load("packet_emit", os.path.join(HERE, "packet_emit.py")).stable_id
+    for gen in range(32):  # a case that comes back after supersede made its card stale gets a new id
+        conds = hashlib.sha1((names + (f"#{gen}" if gen else "")).encode()).hexdigest()[:6]
+        pid = stable_id(kind, head[:12], door, conds, label.replace("/", "-").replace("#", "-"))
+        if packet_status(dirs, pid) != "stale":
+            break
     body = "\n".join([f"driver-merge.py did not merge {label}:"] + [f"- {n}: {d}" for n, d in failed]
                      + [f"- floor path: {h['path']} ({h['pattern']}, {h['change']})" for h in hits])
     ci = any(name == "ci" for name, _ in failed)
@@ -650,7 +657,61 @@ def emit_packet(repo, unit, label, failed, hits, rng, head, title=None, options=
         print(f"driver-merge: warning: refusal packet not written ({first_err(err, rc)})", file=sys.stderr)
         return None
     print(out.rstrip())
-    return first.split()[1]
+    pid = first.split()[1]
+    supersede(repo, kind, head, label, pid)
+    return pid
+
+
+def outbox_dirs(repo):
+    """Where packet.py writes for `repo`: $PACKET_OUTBOX, else <toplevel>/.decision-queue/outbox."""
+    rc, top, _ = sh(["git", "-C", repo, "rev-parse", "--show-toplevel"], timeout=30)
+    return [d for d in (os.environ.get("PACKET_OUTBOX"),
+                        os.path.join(top.strip(), ".decision-queue", "outbox") if rc == 0 else None) if d]
+
+
+def packet_status(dirs, pid):
+    """The outbox status of `pid` — None when absent, 'unreadable' when its state cannot be read."""
+    for d in dirs:
+        if os.path.exists(os.path.join(d, f"{pid}.json")):
+            try:
+                with open(os.path.join(d, f"{pid}.state.json"), encoding="utf-8") as fh:
+                    return json.load(fh).get("status")
+            except (OSError, ValueError, AttributeError):
+                return "unreadable"
+    return None
+
+
+def supersede(repo, kind, head, label, pid):
+    """Mark stale every OPEN outbox packet for the same kind + head + label under another id
+    (10.3-r4-06): a new failure set on the same head mints a new card, and the earlier one is
+    superseded, not a second open card for one PR. Matched on the id's `pk-<kind>-<head12>-`
+    prefix and the title's `: <label>` tail (the label may be cut off the id at 64 chars).
+    Fail-open on purpose, warned on stderr: marking stale discards a pending decision, so an
+    unreadable outbox, packet or a failed `stale` leaves the earlier card open — an extra card
+    is the safe failure, a wrongly closed one is not."""
+    d = next((x for x in outbox_dirs(repo) if os.path.exists(os.path.join(x, f"{pid}.json"))), None)
+    if d is None:
+        print(f"driver-merge: warning: outbox of {pid} not found; earlier cards not superseded", file=sys.stderr)
+        return
+    prefix = f"pk-{kind}-{head[:12]}-"
+    for f in sorted(os.listdir(d)):
+        old = f[:-len(".json")]
+        if not (f.startswith(prefix) and f.endswith(".json")) or f.endswith(".state.json") or old == pid:
+            continue
+        try:
+            with open(os.path.join(d, f), encoding="utf-8") as fh:
+                doc = json.load(fh)
+            with open(os.path.join(d, f"{old}.state.json"), encoding="utf-8") as fh:
+                status = json.load(fh).get("status")
+        except (OSError, ValueError, AttributeError) as e:
+            print(f"driver-merge: warning: {old} unreadable ({e}); not superseded", file=sys.stderr)
+            continue
+        if status != "open" or not str(doc.get("title") or "").endswith(f": {label}"):
+            continue
+        src, out, err = sh([sys.executable, PACKET, "stale", old, "--force", "--reason", f"superseded by {pid}",
+                            "--outbox", d, "--driver"], cwd=repo, timeout=60)
+        print(out.rstrip() if src == 0 else
+              f"driver-merge: warning: {old} not marked stale ({first_err(err, src)})", file=sys.stdout if src == 0 else sys.stderr)
 
 
 def post_event(repo, body):

@@ -557,8 +557,8 @@ The unit range is §6.8's `<base>..HEAD`.
    "<label>::<what changes for Alex>" … --recommended N [--evidence "<file:line, refs>"]
    --blocks "Task X.Y" --range <base>..HEAD` — one decision per packet; writing rules in
    `scripts/README.md` (a data-model packet adds `--type data-model --payload-file <F>`; F is JSON `{"tables":[{"name",
-   "change","columns":[{"name","before","after","changed"}]}]}`, see
-   `scripts/tests/fixtures/packets/valid/data-model-one-way.json`). **Always pass `--range`**: door.py then
+   "change","columns":[{"name","before","after","changed"}]}]}` — the payload only, not a whole
+   packet; `change` is added, changed, removed or unchanged). **Always pass `--range`**: door.py then
    promotes a mislabelled claim, and without it nothing checks the door. Print
    `PACKET <id>` (the script does) and `PARKED <id>`, then stop that line of work.
    **While parked, commit nothing outside `plans/` in that repo** — progress and ledger

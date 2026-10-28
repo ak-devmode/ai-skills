@@ -49,6 +49,18 @@ class TestPacketSchema(unittest.TestCase):
         "ui-non-png-image.json": "/payload/new/image: does not match",
         "ui-path-image.json": "/payload/old/image: does not match",
         "two-recommended.json": "2 items match 'contains'",
+        # v2 caps (10.4 cards lane): each over-cap field is refused on its own
+        "v1-with-context.json": "/context: must be one of []",
+        "v2-body-in-payload.json": "/payload: unexpected property 'body'",
+        "v2-context-missing.json": "missing required 'context'",
+        "v2-context-too-long.json": "/context: does not match",
+        "v2-evidence-too-long.json": "/evidence: does not match",
+        "v2-label-says-recommended.json": "/options/0/label: does not match",
+        "v2-label-too-long.json": "/options/0/label: does not match",
+        "v2-option-detail.json": "/options/1: unexpected property 'detail'",
+        "v2-title-too-long.json": "/title: does not match",
+        "v2-why-missing.json": "/options/1: missing required 'why'",
+        "v2-why-too-long.json": "/options/1/why: does not match",
     }
 
     def test_invalid_fixtures_refused_for_the_right_reason(self):
@@ -63,8 +75,28 @@ class TestPacketSchema(unittest.TestCase):
         have = {n for n, _ in fixtures("valid")}
         for want in ("ui-two-way.json", "event-merged.json", "event-stale.json",
                      "event-done.json", "event-touch.json", "generic-two-way.json",
-                     "data-model-one-way.json"):
+                     "data-model-one-way.json", "v2-generic-one-way.json", "v2-generic-info.json"):
             self.assertIn(want, have)
+
+    def test_v2_caps_are_exact(self):
+        # each v2 cap passes at N chars and fails at N+1 (an off-by-one would let a long card through)
+        base = next(d for n, d in fixtures("valid") if n == "v2-generic-one-way.json")
+        cases = [("title", 100, lambda d, s: d.update(title=s)),
+                 ("context", 400, lambda d, s: d.update(context=s)),
+                 ("evidence", 4000, lambda d, s: d.update(evidence=s)),
+                 ("label", 60, lambda d, s: d["options"][0].update(label=s)),
+                 ("why", 140, lambda d, s: d["options"][0].update(why=s))]
+        for field, cap, put in cases:
+            for n, ok in ((cap, True), (cap + 1, False)):
+                with self.subTest(field=field, n=n):
+                    doc = json.loads(json.dumps(base))
+                    put(doc, "x" * n)
+                    self.assertEqual(sc.validate(doc) == [], ok, sc.validate(doc)[:1])
+
+    def test_v2_info_packet_needs_no_options(self):
+        doc = next(d for n, d in fixtures("valid") if n == "v2-generic-info.json")
+        self.assertEqual(doc["options"], [])
+        self.assertEqual(sc.validate(doc), [])
 
     def test_ui_image_cap_is_exact(self):
         # 2,000,000 base64 chars (1.5 MB of PNG) passes; one more fails. Built in-test: no 2 MB fixture.

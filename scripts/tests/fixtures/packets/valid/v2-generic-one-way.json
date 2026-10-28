@@ -1,0 +1,35 @@
+{
+  "schema_version": 2,
+  "created_at": "2026-10-28T09:00:00Z",
+  "machine": "mba",
+  "workspace": "wellmed-188",
+  "agent": "consult",
+  "repo": "wellmed-consultation",
+  "branch": "concurrency/188-release",
+  "head_sha": "3f2a9c1",
+  "unit": "188/1.7",
+  "blocks": "releasing visits that owe nothing",
+  "continues_on": "",
+  "id": "v2gen-one-way1",
+  "door": "one-way",
+  "type": "generic",
+  "title": "Who tells consultation that a visit owes nothing?",
+  "context": "A visit can owe nothing: a zero bill, or the payer covers it. Consultation only hears 'done paying' after a cashier payment or deferral, so these visits never move on.",
+  "evidence": "- `backbone/saga/payment.go:212` calls MarkWaiting after payment or deferral only\n- lifecycle doc: a zero bill must not stay DRAFT",
+  "options": [
+    {
+      "id": "1",
+      "label": "Backbone sends a reason with the 'waiting' signal",
+      "why": "One signal path for every case; needs a small backbone follow-up.",
+      "recommended": true
+    },
+    {
+      "id": "2",
+      "label": "Consultation reads the cashier's live bill",
+      "why": "No backbone change, but consultation depends on cashier's tables.",
+      "recommended": false
+    }
+  ],
+  "payload": {},
+  "reply": "[lane mba/wellmed-188/consult v2gen-one-way1] Option 1: Backbone sends a reason with the 'waiting' signal."
+}

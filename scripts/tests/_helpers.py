@@ -8,9 +8,11 @@ and nothing installed.
 """
 
 import importlib.util
+import json
 import os
 import subprocess
 import sys
+import tempfile
 
 SCRIPTS = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 REPO = os.path.dirname(SCRIPTS)
@@ -36,3 +38,35 @@ def load(name):
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
+
+
+def dispatch_env(tmp, mode, pane="w9:p2"):
+    """Env that puts this process in herdr pane `pane` with a fresh $HOME whose dispatch log
+    (~/.config/herdr/concurrency-log.jsonl) holds, for the inverted rule (Alex 86) —
+    "driver": this pane registered as the driver on this host; "lane": this pane dispatched as a
+    lane; "unregistered": records for other panes only (a helper / review pane); "reused": this
+    pane registered, then a lane dispatched into the same id; "alias": this pane registered under
+    this host's FQDN form, not the normalized name (10.3-r4-03); "blank-host": registered with no machine;
+    "other-host": registered on another server; "other-pane": another pane registered; "none":
+    no log; "unreadable": a log line that is not JSON."""
+    home = tempfile.mkdtemp(dir=tmp)
+    me = load("placement.py").this_host()
+    lane = lambda pane_id, status="dispatched", machine=me: json.dumps(
+        {"scope": "10", "task": "t", "pane_id": pane_id, "status": status, "machine": machine})
+    drv = lambda pane_id, machine=me: json.dumps(
+        {"kind": "driver", "scope": "10", "task": "driver", "pane_id": pane_id, "status": "driver",
+         **({"machine": machine} if machine is not None else {})})
+    lines = {"driver": [lane("w9:p1"), drv(pane)],
+             "lane": [drv("w9:p1"), lane(pane)],
+             "unregistered": [drv("w9:p1"), lane("w9:p3"), lane("w9:p4", "done")],
+             "reused": [drv(pane), lane(pane)],
+             "alias": [drv(pane, me + ".lan")],
+             "blank-host": [drv(pane, None)],
+             "other-host": [drv(pane, "elsewhere-box")],
+             "other-pane": [drv("w9:p1")],
+             "unreadable": [drv(pane), "{not json"]}.get(mode)
+    if lines is not None:
+        os.makedirs(os.path.join(home, ".config", "herdr"))
+        with open(os.path.join(home, ".config", "herdr", "concurrency-log.jsonl"), "w") as f:
+            f.write("\n".join(lines) + "\n")
+    return {"HOME": home, "HERDR_PANE_ID": pane, "HERDR_WORKSPACE_ID": "w9"}

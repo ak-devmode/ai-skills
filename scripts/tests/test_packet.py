@@ -16,7 +16,7 @@ import time
 import unittest
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
-from _helpers import run, script, load as load_script
+from _helpers import dispatch_env, run, script, load as load_script
 
 SESSION_VARS = ("CLAUDE_CODE_SESSION_ID", "CLAUDE_SESSION_ID", "CODEX_SESSION_ID")
 LANE = {"PACKET_MACHINE": "mba", "PACKET_WORKSPACE": "ws1", "PACKET_AGENT": "laneA"}
@@ -335,10 +335,32 @@ class TestQueue(PacketBase):
         _, out = self.new("--driver", env=env)
         self.assertEqual([p for p, _ in s.posts], ["/packets"])
 
-    def test_herdr_driver_name_posts(self):
-        s = Stub(); self.addCleanup(s.stop)
-        self.new(env={"DECISION_QUEUE_URL": s.url, "HERDR_AGENT_NAME": "driver", "PACKET_AGENT": "driver"})
-        self.assertEqual(len(s.posts), 1)
+    def test_only_a_registered_pane_is_the_driver(self):  # Alex 86: every unregistered pane is a lane
+        unreg = "no driver registration on this host"
+        cases = [("driver", ("--driver",), 1, ""), ("driver", (), 0, ""),
+                 ("lane", ("--driver",), 0, unreg), ("unregistered", ("--driver",), 0, unreg),
+                 ("reused", ("--driver",), 0, unreg), ("other-pane", ("--driver",), 0, unreg),
+                 ("none", ("--driver",), 0, unreg),
+                 # 10.3-r4-03: only this host's normalized name counts
+                 ("alias", ("--driver",), 0, unreg), ("blank-host", ("--driver",), 0, unreg),
+                 ("other-host", ("--driver",), 0, unreg),
+                 ("unreadable", ("--driver",), 0, "fail closed")]
+        for mode, flag, posts, why in cases:
+            with self.subTest(mode, flag=flag):
+                s = Stub(); self.addCleanup(s.stop)
+                env = dict(dispatch_env(self.repo, mode), DECISION_QUEUE_URL=s.url,
+                           PACKET_OUTBOX=tempfile.mkdtemp(dir=self.repo))  # no bleed between cases
+                out = self.new(*flag, env=env)[1]
+                self.assertEqual(len(s.posts), posts)
+                p = self.pk("flush", *flag, env=env)
+                self.assertEqual(len(s.posts), posts, p.stdout)  # flush: a lane sends nothing either
+                if why:  # --driver refused says why, and flush fails instead of a silent no-op (r3-04)
+                    self.assertIn(why, out)
+                    self.assertIn(why, p.stderr)
+                    self.assertEqual(p.returncode, 1)
+                    if why == unreg:  # r4-02: a lane is told to stop, not handed a way through
+                        self.assertIn("never registers: stop, do not re-run", p.stderr)
+                        self.assertNotIn("--status done", p.stderr)
 
     def test_flush_resends_after_outage_and_is_idempotent(self):
         s = Stub(); self.addCleanup(s.stop)

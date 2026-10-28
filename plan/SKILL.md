@@ -1,6 +1,6 @@
 ---
 name: plan
-version: 3.15.0
+version: 3.16.0
 description: |
   Execute tasks from a structured plan document step by step, logging progress and
   stopping at human checkpoints. Plan files follow the naming convention *-PLAN.md
@@ -359,7 +359,11 @@ rows the way `/scope` §5.10.1 does and ask; approve only on the user's yes. A t
 5.8.1 **herdr worktree + driver naming (when running inside a herdr pane)** — if
 `$HERDR_PANE_ID` is set (this `/plan` runs in a herdr pane) AND the parent
 scope's **Primary repo (worktree)** field is not "none":
-- Name this session's agent: `herdr agent rename "$HERDR_PANE_ID" driver`.
+- Name this session's agent: `herdr agent rename "$HERDR_PANE_ID" driver`, and register
+  this pane as the driver: `~/Projects/ai-skills/scripts/dispatch-log.py --scope <scope>
+  --status driver --pane "$HERDR_PANE_ID"`. The name is a label; the registration is the
+  `--driver` authority — inside herdr, `packet.py` and `driver-merge.py` treat every
+  unregistered pane as a lane. Only the driver registers; a lane never does.
 - Create the scope's isolated worktree-workspace per the **`herdr` skill** (model
   B, §3): `herdr worktree create --cwd <primary-repo> --base origin/<trunk>
   --branch <scope-branch>` — the scope's space IS the worktree-workspace; work
@@ -493,6 +497,40 @@ on a direct-to-main repo a branch diff is empty by construction.
      pass it through as `--skip-verify`. The reason goes into the §6.7 header and the
      index row. A skip without a reason is refused.
    Exit 3 means the gate could not evaluate. That is ❌ FAILED, never Done.
+4. **Merge your own PR — drivers only.** Once the unit is Done, a driver (a session Alex
+   drives directly, or a `/concurrency` driver) merges each repo's PR for it without asking:
+   `~/Projects/ai-skills/scripts/driver-merge.py merge --repo <repo> --pr <n> --scope <scope
+   folder> --unit {N}.{P} --driver`. Run `check` first if you want the conditions without
+   acting. The script decides, not you: it merges only when CI is green with real runs (no
+   checks, or skipped-only, is not green), the review is SHIP or accepted and saw the PR's
+   head, every code commit in the PR sits in one of the unit's review ranges, the gate
+   (run `--blocking`) reads `pass`, `door.py` finds no floor path, no CI definition is touched
+   (a CI edit is a two-way "CI change" packet: Alex reviews and merges by hand), and the base is `develop` (code
+   repos) or `main` (kalpa-docs, pmg-docs, ai-skills). A code repo's `main` is prod: it is
+   refused and stays behind `prod-merge-gate.py`. A degraded review (fallback or lean)
+   still merges, flagged on the ticker; `--admin` is used only when GitHub says a review
+   approval is missing (`reviewDecision` REVIEW_REQUIRED), the base's protection requires
+   nothing beyond required checks and reviews (a signature, conversation-resolution,
+   deployment, lock or any rule the script does not model refuses it — `--admin` would bypass
+   it unread), and every required check of the base is present on the head with every entry of its name SUCCESS (a required job
+   skipped by `if:` counts, as on GitHub; one that never reported does not). Any other
+   BLOCKED is a two-way packet. Each merge posts a `merged` event (repo, PR, sha).
+   - **A repo with no CI never auto-merges.** pmg-docs and ai-skills have no workflow
+     today, so their PRs always refuse on vacuous green and park as a two-way packet:
+     Alex merges by hand. That is by design — an empty check list is never green; do not
+     work around it.
+   - **`NOT MERGED`** prints why and writes a packet: one-way with the floor paths for a
+     floor hit — park on it per §6.9 — two-way otherwise; fix the condition and re-run —
+     except the `driver` condition: a refused pane is a lane, which never merges; stop.
+   - **`MERGED-ELSEWHERE`** means the PR merged, but not at the head this run checked
+     (the head moved, someone else merged): no `merged` event; tell Alex — the packet asks
+     him to review the commits that landed unchecked.
+   - **Exit 4** means the merge landed but the ticker event did not: run `packet.py
+     flush --driver`, and tell Alex if it still fails.
+   - Only the registered driver merges: inside herdr, a pane without an open driver
+     registration on this host (§5.8.1) is a lane — `/concurrency` lanes, review and fix
+     panes, helpers — refused whatever `--driver` says; an unreadable log refuses. Nobody
+     turns on GitHub auto-merge.
 
 **Rules version.** Every review record stamps `rules_version`. A lineage started before
 the scope-10 cutover finishes under the rules it started with (`/review`'s lineage note,
@@ -504,9 +542,10 @@ also emits a packet. `scripts/README.md` has `packet.py`'s and `door.py`'s contr
 The unit range is §6.8's `<base>..HEAD`.
 1. **One-way** (door.py classifies the range one-way, or the plan does not settle the
    call): `~/Projects/ai-skills/scripts/packet.py new --door one-way --type
-   generic --title … --unit {N}.{P} --option … --recommended N --body …
-   --blocks "Task X.Y" --range <base>..HEAD` (a data-model packet takes `--type
-   data-model --payload-file <F>` instead of `--body`; F is JSON `{"tables":[{"name",
+   generic --title "<the question>" --unit {N}.{P} --context "<≤400 chars>" --option
+   "<label>::<what changes for Alex>" … --recommended N [--evidence "<file:line, refs>"]
+   --blocks "Task X.Y" --range <base>..HEAD` — one decision per packet; writing rules in
+   `scripts/README.md` (a data-model packet adds `--type data-model --payload-file <F>`; F is JSON `{"tables":[{"name",
    "change","columns":[{"name","before","after","changed"}]}]}`, see
    `scripts/tests/fixtures/packets/valid/data-model-one-way.json`). **Always pass `--range`**: door.py then
    promotes a mislabelled claim, and without it nothing checks the door. Print

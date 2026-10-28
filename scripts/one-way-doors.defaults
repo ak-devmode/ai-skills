@@ -6,6 +6,7 @@
 
 # migrations
 migrations/
+migration/
 migrate/
 db/migrate/
 # protos / OpenAPI

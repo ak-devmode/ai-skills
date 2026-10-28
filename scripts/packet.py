@@ -3,8 +3,9 @@
 
 Approach: every packet is written to an outbox in the lane's own worktree
 (<repo>/.decision-queue/outbox/, self-ignoring) and `PACKET <id>` is printed; that is
-the one path for every lane (Claude, codex, review). Only a DRIVER (`--driver`, or
-$HERDR_AGENT_NAME == driver) POSTs, and only when $DECISION_QUEUE_URL is set: packets to
+the one path for every lane (Claude, codex, review). Only a DRIVER POSTs — `--driver`, and inside
+herdr only from a pane with an open driver registration on this host in the dispatch log
+(driver_identity, Alex 86) — and only when $DECISION_QUEUE_URL is set: packets to
 /packets, events to /events, 3 s timeout, idempotent on the client-generated id. A dead
 queue never fails the caller: the packet is printed with a `Blocked` note, exit 0, and
 `flush` re-sends later. A one-way door still stops the lane — that is a decision, not a
@@ -37,6 +38,9 @@ Failure stances (each is fail-closed unless it says otherwise):
     POSTed, marked `evt-<id>.rejected` ("packet refused"). Conflict too: the queue holds
     other content under that id, so a lane's close/stale must not apply to it
   * flush --outbox DIR that does not exist -> `Skipped: outbox DIR does not exist`, exit 0
+  * --driver in a herdr pane with no open driver registration on this host (missing log,
+    unreadable log, registration for another machine or none) -> not a driver (fail closed);
+    `new` names the reason, `flush --driver` prints it, exit 1
   * flush: an unreadable item is reported and skipped, the rest of the outbox still goes
   * stale: git cannot be read -> exit 1 without marking. Fail-open on purpose: marking
     stale discards a pending decision
@@ -56,7 +60,7 @@ Failure stances (each is fail-closed unless it says otherwise):
   "(recommended)" text: --recommended marks it) + why <= 140, --evidence <= 4000 (file:line, ADR
   refs, SHAs — collapsed on the card). Over a cap -> refused, "cut <field> to N chars (now M)".
   --body on v2 is refused (v2 has no body), as are --context/--evidence on v1.
-  packet.py close ID | stale ID [--force] | touch ID | event --kind K --body S [--packet-id ID]
+  packet.py close ID | stale ID [--force] [--reason TEXT] | touch ID | event --kind K --body S [--packet-id ID]
   packet.py check-reply (--reply TEXT | --file F | -) [--lane M/W/A]
   packet.py flush [--driver]
   common: --outbox DIR (repeatable; first is where this lane writes)
@@ -203,8 +207,79 @@ def repo_of(d):
     return None
 
 
+DISPATCH_LOG = "~/.config/herdr/concurrency-log.jsonl"  # dispatch-log.py's default
+REGISTER = 'dispatch-log.py --scope <scope> --status driver --pane "$HERDR_PANE_ID"'
+
+
+def this_machine():
+    """This host as the dispatch log records it: placement.this_host (`hostname -s`, lowercased —
+    the key the accounts map and launchers use), else socket's short name lowercased."""
+    try:
+        return _load("placement").this_host()
+    except Exception:  # placement.py missing or broken: same normalization, no subprocess
+        return socket.gethostname().split(".")[0].lower()
+
+
+def driver_registration(pane):
+    """(record, '') when `pane` has an open driver registration on this host, ('', latest) when
+    it has none (latest = the pane's latest record here, or None), (None, why) when the log
+    cannot be read. The driver registers its own pane (dispatch-log.py --status driver, /plan
+    Phase 0; Alex 86). A pane's LATEST record on this host decides: a `driver` record is open;
+    any later record for that pane id (a lane dispatched into a reused id, the driver's own
+    `done`) closes it. A record counts only when its machine is this host (10.3-r4-03): blank, an
+    alias or another server's name is not registered here — fail closed, since pane ids are per
+    herdr server. A missing log is no registration (fail closed)."""
+    path = os.path.expanduser(DISPATCH_LOG)
+    me, last = this_machine(), None
+    try:
+        with open(path, encoding="utf-8") as fh:
+            for n, line in enumerate(fh, 1):
+                if not line.strip():
+                    continue
+                rec = json.loads(line)
+                if not isinstance(rec, dict):
+                    return None, f"{path}:{n} is not a record"
+                if rec.get("pane_id") == pane and str(rec.get("machine") or "").strip().lower() == me:
+                    last = rec
+    except FileNotFoundError:
+        return "", None
+    except (OSError, ValueError) as e:  # UnicodeDecodeError and JSONDecodeError are ValueErrors
+        return None, f"{path}: {e}"
+    if last is not None and last.get("kind") == "driver" and last.get("status") == "driver":
+        return last, ""
+    return "", last
+
+
+def driver_identity(args):
+    """(is_driver, detail) — the one decision of who is the driver, shared by every POST here
+    and by driver-merge.py's merge. --driver is required. Inside herdr ($HERDR_PANE_ID set) ONLY
+    a pane with an open driver registration on this host is the driver (Alex 86): every other
+    pane — a /concurrency lane, a review or fix pane, a helper, a research lane — is a lane,
+    whatever --driver says (lanes run /plan, whose documented commands carry --driver). Fails
+    closed: no log, no registration, an unreadable log are all "not a driver". The refusal tells
+    a lane to stop and never to register, and gives the driver's one registration line.
+    Residual (10.3-r4-02): the log is a same-user file, so it cannot stop a lane that
+    deliberately registers itself; only an OS or account boundary could."""
+    if not getattr(args, "driver", False):
+        return False, "not a driver (no --driver)"
+    pane = (os.environ.get("HERDR_PANE_ID") or "").strip()
+    if not pane:
+        return True, "--driver (outside herdr)"
+    rec, why = driver_registration(pane)
+    if rec is None:
+        return False, (f"--driver refused: dispatch log unreadable ({why}), so herdr pane {pane} "
+                       "cannot be told from a lane — not a driver (fail closed)")
+    if rec:
+        return True, f"--driver (herdr pane {pane}: driver registered {rec.get('ts')})"
+    seen = (f"; its latest record here is {why.get('kind') or 'lane'} {why.get('status')} "
+            f"{why.get('ts')}" if why else "")
+    return False, (f"--driver refused: herdr pane {pane} has no driver registration on this host "
+                   f"({this_machine()}){seen}. A lane never merges or POSTs and never registers: "
+                   f"stop, do not re-run. Only the /plan driver registers, once at Phase 0: {REGISTER}")
+
+
 def is_driver(args):
-    return bool(getattr(args, "driver", False)) or os.environ.get("HERDR_AGENT_NAME") == "driver"
+    return driver_identity(args)[0]
 
 
 def queue_url():
@@ -553,6 +628,8 @@ def cmd_new(args):
         note = "queue: DECISION_QUEUE_URL not set (outbox only)"
     elif not note and not is_driver(args):
         note = "queue: lane writes the outbox; the driver POSTs"
+        if args.driver:  # say why --driver did not count (10.3-r3-04)
+            note += f" ({driver_identity(args)[1]})"
     show(doc, " | ".join(x for x in (door_note, note) if x))
     return 0
 
@@ -596,7 +673,7 @@ def cmd_stale(args):
         if head.startswith(doc["head_sha"]) or doc["head_sha"].startswith(head):
             print(f"packet {args.id} current (head unchanged)")
             return 0
-    return _set_status(args, args.id, "stale", "stale", f"head moved past {doc['head_sha'][:7]}")
+    return _set_status(args, args.id, "stale", "stale", args.reason or f"head moved past {doc['head_sha'][:7]}")
 
 
 def cmd_touch(args):
@@ -694,7 +771,11 @@ def cmd_check_reply(args):
 
 
 def cmd_flush(args):
-    if not is_driver(args):
+    ok, why = driver_identity(args)
+    if not ok and args.driver:  # asked to send and cannot: a failure, not a no-op (10.3-r3-04)
+        print(f"flush: {why}; nothing sent", file=sys.stderr)
+        return 1
+    if not ok:
         print("flush: not a driver; nothing sent (lanes write the outbox, the driver POSTs)")
         return 0
     if not queue_url():
@@ -785,6 +866,7 @@ def main(argv):
     s = sub.add_parser("stale", parents=[common])
     s.add_argument("id")
     s.add_argument("--force", action="store_true")
+    s.add_argument("--reason")  # the stale event's body, e.g. "superseded by <id>" (driver-merge)
     e = sub.add_parser("event", parents=[common])
     e.add_argument("--kind", required=True, choices=["done", "merged", "closed", "stale", "touch"])
     e.add_argument("--body", default="")

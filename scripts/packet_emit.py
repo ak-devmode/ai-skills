@@ -26,7 +26,9 @@ def stable_id(*parts):
 def emit(repo, unit, title, options, body, door="one-way", range_=None, blocks="", pid=None, timeout=30):
     """Write a `generic` packet into `repo`'s outbox. `options` is [label, ...]; the first is the
     recommendation. Returns the packet id, or None (warned on stderr) on any failure."""
-    cmd = [sys.executable, PACKET, "new", "--door", door, "--type", "generic", "--title", title,
+    # v1 on purpose: these titles, options and bodies are machine-built and longer than v2's caps;
+    # packet.py defaults to v2 and refuses --body there. Moving them to v2 needs real short copy.
+    cmd = [sys.executable, PACKET, "new", "--schema-version", "1", "--door", door, "--type", "generic", "--title", title,
            "--unit", unit, "--recommended", "1", "--body", body]
     for label in options:
         cmd += ["--option", label]

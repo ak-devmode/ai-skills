@@ -16,7 +16,7 @@ import time
 import unittest
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
-from _helpers import run
+from _helpers import run, script, load as load_script
 
 SESSION_VARS = ("CLAUDE_CODE_SESSION_ID", "CLAUDE_SESSION_ID", "CODEX_SESSION_ID")
 LANE = {"PACKET_MACHINE": "mba", "PACKET_WORKSPACE": "ws1", "PACKET_AGENT": "laneA"}
@@ -107,7 +107,7 @@ class PacketBase(unittest.TestCase):
 
     def new(self, *extra, env=None, door="two-way"):
         p = self.pk("new", "--door", door, "--title", "Pick one", "--unit", "10/1.2",
-                    "--option", "alpha", "--option", "beta", "--body", "why", *extra, env=env)
+                    "--option", "alpha::first", "--option", "beta::second", "--context", "why", *extra, env=env)
         self.assertEqual(p.returncode, 0, p.stderr)
         pid = next(l.split()[1] for l in p.stdout.splitlines() if l.startswith("PACKET "))
         return pid, p.stdout
@@ -137,7 +137,7 @@ class TestNew(PacketBase):
         pf = os.path.join(self.repo, "ui-payload.json")
         put(pf, json.dumps(payload))
         args = ("new", "--door", "two-way", "--type", "ui", "--title", "t", "--unit", "u",
-                "--option", "a", "--option", "b", "--payload-file", pf)
+                "--option", "a::x", "--option", "b::y", "--context", "c", "--payload-file", pf)
         p = self.pk(*args, env=DEMO)
         self.assertEqual(p.returncode, 0, p.stderr)
         payload["new"]["image"] = "data:image/jpeg;base64,AAAA"
@@ -154,7 +154,7 @@ class TestNew(PacketBase):
         pf = os.path.join(self.repo, "ui-payload.json")
         put(pf, json.dumps(payload))
         return self.pk("new", "--door", "two-way", "--type", "ui", "--title", "t", "--unit", "u",
-                       "--option", "a", "--option", "b", "--payload-file", pf, env=env)
+                       "--option", "a::x", "--option", "b::y", "--context", "c", "--payload-file", pf, env=env)
 
     def test_ui_image_content_checks(self):  # 10.4-r3-05
         import base64
@@ -182,13 +182,84 @@ class TestNew(PacketBase):
         self.assertFalse(os.path.exists(self.outbox()))
 
     def test_invalid_packet_refused_and_nothing_written(self):
-        p = self.pk("new", "--door", "two-way", "--title", "t", "--unit", "u", "--option", "a",
-                    "--recommended", "5", "--body", "b")
+        p = self.pk("new", "--door", "two-way", "--title", "t", "--unit", "u", "--option", "a::x",
+                    "--recommended", "5", "--context", "b")
         self.assertEqual(p.returncode, 1)
         self.assertFalse(os.path.exists(self.outbox()))
 
+    # --- schema v2 (10.4 cards lane): the card is capped, the refusal says what to cut ---
+    def v2(self, *extra, title="Who pays?", context="A visit can owe nothing.", options=("a::x", "b::y")):
+        args = ["new", "--door", "two-way", "--title", title, "--unit", "u", "--context", context]
+        for o in options:
+            args += ["--option", o]
+        return self.pk(*args, *extra)
+
+    def test_v2_writes_context_evidence_why_and_no_body(self):
+        p = self.v2("--evidence", "`a.go:12`", options=("Signal from backbone::one path", "Read bill::ties schemas"))
+        self.assertEqual(p.returncode, 0, p.stderr)
+        pid = p.stdout.split()[1]
+        doc = load(os.path.join(self.outbox(), f"{pid}.json"))
+        self.assertEqual((doc["schema_version"], doc["context"], doc["evidence"], doc["payload"]),
+                         (2, "A visit can owe nothing.", "`a.go:12`", {}))
+        self.assertEqual(doc["options"][0], {"id": "1", "label": "Signal from backbone", "why": "one path",
+                                             "recommended": True})
+        self.assertIn("     one path", p.stdout)  # the why prints under its option
+
+    def test_v2_caps_refused_with_the_cut_message(self):
+        cases = [("title", dict(title="q" * 101), "cut title to 100 chars (now 101)"),
+                 ("context", dict(context="c" * 401), "cut context to 400 chars (now 401)"),
+                 ("label", dict(options=("l" * 61 + "::w",)), "cut option 1 label to 60 chars (now 61)"),
+                 ("why", dict(options=("a::x", "b::" + "w" * 141)), "cut option 2 why to 140 chars (now 141)")]
+        for name, kw, want in cases:
+            with self.subTest(name):
+                p = self.v2(**kw)
+                self.assertEqual(p.returncode, 1, p.stdout)
+                self.assertIn(want, p.stderr)
+                self.assertFalse(os.path.exists(self.outbox()))
+        p = self.v2("--evidence", "e" * 4001)
+        self.assertIn("cut evidence to 4000 chars (now 4001)", p.stderr)
+        p = self.v2(title="q" * 100, context="c" * 400, options=("l" * 60 + "::" + "w" * 140,))
+        self.assertEqual(p.returncode, 0, p.stderr)  # at the cap is fine
+
+    def test_v2_refusals_name_the_fix(self):
+        cases = [("body", ("--body", "long prose"), {}, "v2 has no body"),
+                 ("no why", (), dict(options=("a",)), "option 1 needs a why"),
+                 ("recommended text", (), dict(options=("a (Recommended)::x",)), 'drop "(recommended)"'),
+                 ("two-line title", (), dict(title="a\nb"), "title must be one line"),
+                 ("no context", (), dict(context=""), "--context is required")]
+        for name, extra, kw, want in cases:
+            with self.subTest(name):
+                p = self.v2(*extra, **kw)
+                self.assertEqual(p.returncode, 1, p.stdout)
+                self.assertIn(want, p.stderr)
+        self.assertFalse(os.path.exists(self.outbox()))
+
+    def test_v1_still_written_on_request_and_refuses_v2_fields(self):
+        base = ("new", "--schema-version", "1", "--door", "two-way", "--title", "t", "--unit", "u",
+                "--option", "alpha (recommended)", "--option", "beta", "--body", "b")
+        p = self.pk(*base)
+        self.assertEqual(p.returncode, 0, p.stderr)
+        doc = load(os.path.join(self.outbox(), f"{p.stdout.split()[1]}.json"))
+        self.assertEqual((doc["schema_version"], doc["payload"]), (1, {"body": "b"}))
+        self.assertEqual(p.stdout.count("(recommended)"), 1, p.stdout)  # a v1 label saying it is not doubled
+        p = self.pk(*base, "--context", "c")
+        self.assertEqual(p.returncode, 1)
+        self.assertIn("v1 has no --context/--evidence", p.stderr)
+
+    def test_v2_caps_match_the_schema(self):
+        import re as _re
+        schema = load(os.path.join(os.path.dirname(script("packet.py")), "..", "schemas", "packet.schema.json"))
+        v2 = next(b["then"] for b in schema["allOf"]
+                  if b["if"]["properties"].get("schema_version", {}).get("const") == 2 and "required" in b["then"])
+        opt = schema["$defs"]["option_v2"]["properties"]
+        pats = {"title": v2["properties"]["title"], "context": v2["properties"]["context"],
+                "evidence": v2["properties"]["evidence"], "label": opt["label"], "why": opt["why"]}
+        packet = load_script("packet.py")
+        for field, sch in pats.items():
+            self.assertEqual(int(_re.search(r"\{1,(\d+)\}", sch["pattern"]).group(1)), packet.V2_CAPS[field], field)
+
     def test_one_way_info_needs_options_rule(self):
-        p = self.pk("new", "--door", "one-way", "--title", "t", "--unit", "u", "--body", "b")
+        p = self.pk("new", "--door", "one-way", "--title", "t", "--unit", "u", "--context", "b")
         self.assertEqual(p.returncode, 2)
 
     def test_range_promotes_door(self):
@@ -259,7 +330,7 @@ class TestQueue(PacketBase):
         doc = load(path); doc["title"] = "changed"; put(path, json.dumps(doc))
         os.remove(os.path.join(self.outbox(), f"{pid}.sent"))
         p = self.pk("new", "--driver", "--id", pid, "--door", "two-way", "--title", "Other",
-                    "--unit", "10/1.2", "--option", "a", "--option", "b", "--body", "x", env=env)
+                    "--unit", "10/1.2", "--option", "a::x", "--option", "b::y", "--context", "x", env=env)
         self.assertEqual(p.returncode, 0, p.stderr)
         self.assertIn("Conflict:", p.stdout)
         self.assertFalse(self.sent(pid))
@@ -332,7 +403,7 @@ class TestQueue(PacketBase):
         self.assertTrue(self._marker(f"{pid}.rejected"))
         s.force = None
         p = self.pk("new", "--id", pid, "--driver", "--door", "two-way", "--title", "Pick one",
-                    "--unit", "10/1.2", "--option", "alpha", "--option", "beta", "--body", "why", env=env)
+                    "--unit", "10/1.2", "--option", "alpha::first", "--option", "beta::second", "--context", "why", env=env)
         self.assertEqual(p.returncode, 0, p.stderr)
         self.assertTrue(self.sent(pid))
         self.assertFalse(self._marker(f"{pid}.rejected"))
@@ -360,7 +431,7 @@ class TestQueue(PacketBase):
             "pathlib.Path.unlink = unlink\n")
         bad = dict(env, PYTHONPATH=inj)
         p = self.pk("new", "--id", pid, "--driver", "--door", "two-way", "--title", "Pick one",
-                    "--unit", "10/1.2", "--option", "alpha", "--option", "beta", "--body", "why", env=bad)
+                    "--unit", "10/1.2", "--option", "alpha::first", "--option", "beta::second", "--context", "why", env=bad)
         self.assertEqual(p.returncode, 0, p.stderr)  # harness error never stops the caller
         self.assertIn("refusal markers not cleared", p.stderr)
         self.assertTrue(self.sent(pid))
@@ -491,7 +562,7 @@ class TestCheckReply(PacketBase):
         env = {k: v for k, v in self.env.items() if not k.startswith("PACKET_")}
         env.update(PACKET_MACHINE="mba", CLAUDE_SESSION_ID="sess1234abcd")
         p = run("packet.py", "new", "--door", "two-way", "--title", "t", "--unit", "u",
-                "--option", "a", "--body", "b", cwd=self.repo, env=env)
+                "--option", "a::x", "--context", "b", cwd=self.repo, env=env)
         self.assertEqual(p.returncode, 0, p.stderr)
         self.assertRegex(p.stdout, r"\[lane mba/cwd-[^/]+-[0-9a-f]{6}/session-sess1234abcd pk")
 
@@ -568,7 +639,7 @@ class TestSendPath(PacketBase):
         proc = subprocess.Popen(
             ["python3", os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "packet.py"),
              "new", "--driver", "--door", "two-way", "--title", "t", "--unit", "u",
-             "--option", "a", "--body", "b"],
+             "--option", "a::x", "--context", "b"],
             cwd=self.repo, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         self.addCleanup(proc.kill)
         deadline = time.time() + 5
@@ -618,7 +689,7 @@ class TestSendPath(PacketBase):
         self.assertIn("FLUSHED 1 packets", p.stdout)
 
     def test_unreadable_files_are_exit_one_not_a_traceback(self):
-        p = self.pk("new", "--door", "two-way", "--title", "t", "--unit", "u", "--option", "a",
+        p = self.pk("new", "--door", "two-way", "--title", "t", "--unit", "u", "--option", "a::x",
                     "--body-file", os.path.join(self.repo, "missing.txt"))
         self.assertEqual(p.returncode, 1)
         self.assertNotIn("Traceback", p.stderr)
@@ -630,7 +701,7 @@ class TestSendPath(PacketBase):
 class TestInfoAndOneWayHead(PacketBase):
     def test_info_packet_with_range_stays_info(self):  # 10.1-r1-03
         self.commit("second")  # HEAD~1 must resolve, else the range fails closed
-        p = self.pk("new", "--door", "info", "--title", "FYI", "--unit", "u", "--option", "ack", "--body", "b",
+        p = self.pk("new", "--door", "info", "--title", "FYI", "--unit", "u", "--option", "ack::ok", "--context", "b",
                     "--range", "HEAD~1..HEAD")
         self.assertEqual(p.returncode, 0, p.stderr)
         pid = next(l.split()[1] for l in p.stdout.splitlines() if l.startswith("PACKET "))
@@ -707,7 +778,7 @@ class TestSessionIdentity(PacketBase):  # 10.1-r1-01
 
     def newp(self, env, cwd=None):
         return run("packet.py", "new", "--door", "two-way", "--title", "t", "--unit", "u",
-                   "--option", "a", "--body", "b", cwd=cwd or self.repo, env=env)
+                   "--option", "a::x", "--context", "b", cwd=cwd or self.repo, env=env)
 
     def test_claude_code_session_id_is_read(self):
         p = self.newp(self.env_no_lane(CLAUDE_CODE_SESSION_ID="abcd1234efgh"))

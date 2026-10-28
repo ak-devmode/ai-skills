@@ -234,6 +234,23 @@ class TestNew(PacketBase):
                 self.assertIn(want, p.stderr)
         self.assertFalse(os.path.exists(self.outbox()))
 
+    def test_terminal_card_prints_context_and_evidence(self):
+        # 10.4-r14-04: with no queue the terminal is the card; it dropped context and evidence
+        p = self.v2("--evidence", "payment.go:212\nADR-007", context="A visit can owe nothing.")
+        self.assertEqual(p.returncode, 0, p.stderr)
+        pid = p.stdout.split()[1]
+        reprint = self.v2("--id", pid, context="ignored on a reprint")
+        self.assertEqual(reprint.returncode, 0, reprint.stderr)
+        info = self.pk("new", "--door", "info", "--title", "FYI: merged", "--unit", "u",
+                       "--context", "Phase 4 landed; nothing to decide.")
+        self.assertEqual(info.returncode, 0, info.stderr)
+        for name, out, want in (("new", p.stdout, ("A visit can owe nothing.", "payment.go:212", "ADR-007")),
+                                ("--id reprint", reprint.stdout, ("A visit can owe nothing.", "payment.go:212")),
+                                ("info, no options", info.stdout, ("Phase 4 landed; nothing to decide.",))):
+            for s in want:
+                with self.subTest(name, s=s):
+                    self.assertIn(s, out)
+
     def test_recommended_marker_refused_in_any_case_on_any_option(self):
         # 10.4-r14-05: the flag is the only marker; a mixed-case one on either option is refused
         for marker in ("(RECOMMENDED)", "(ReCoMmEnDeD)", "(recommended)"):

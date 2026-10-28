@@ -369,6 +369,13 @@ def show(doc, extra=""):
         print(f"  {i}. {label}{'  (recommended)' if o['recommended'] else ''}")
         if o.get("why"):
             print(f"     {o['why']}")
+    # v2: the terminal is the card when the queue is unset or down, so it carries the same
+    # decision-order text as the queue's detail page — context, then evidence (10.4-r14-04)
+    for head, text in (("context", doc.get("context")), ("evidence", doc.get("evidence"))):
+        if text:
+            print(f"  {head}:")
+            for line in str(text).splitlines():
+                print(f"    {line}")
     print(f"  reply: {doc['reply']}")
     if extra:
         print(f"  {extra}")

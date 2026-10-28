@@ -507,3 +507,8 @@ Source: plans/10-decision-queue-harness/artifacts/review-10.4-r11.md
 Touches: dev-workbench queue/decision_queue/app.py
 - [ ] [review 10.4-r11-01] **A write timeout after headers appends a second 500 response.** When a reader stalls past SOCKET_TIMEOUT mid-body, `_guard`'s `except Exception` logs `internal error` and writes `_json(500)` on the same socket. Track whether headers were sent; if so, log a client timeout and set `close_connection` instead. Same class: any exception after headers. Pre-existing, found at round 4 of the ui-packet lineage; deferred (note).
 - [x] **Queue accepts a packet whose reply tag doesn't match its own id/lane.** Done: dev-workbench ccccc5d (ingest refuses a v2 reply that isn't lane tag + the recommended prefill). A hand-built POST showed it (packet.py always builds the tag right). Add a server-side tag check against the packet's machine/workspace/agent/id.
+
+## Finish-table placement guard (scope 10 verify, 2026-10-28)
+Source: plans/10-decision-queue-harness/progress.md (verify 10.1)
+Touches: scripts/finish-table.py · templates/verify-contracts.md §7.2
+- [ ] **`finish-table.py init/add` accepts a row targeting a private repo in a public scope.** Scope 10's table (ai-skills, public) carried five dev-workbench (private) rows; `verify-run.py` refused them only at /verify time (§7.2). Refuse at write time, naming the row and offering the pointer-row + private-evidence shape (rev 4 of scope 10's table).

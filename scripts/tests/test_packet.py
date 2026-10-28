@@ -723,10 +723,20 @@ class TestSendPath(PacketBase):
         self.assertIn("FLUSHED 1 packets", p.stdout)
 
     def test_unreadable_files_are_exit_one_not_a_traceback(self):
-        p = self.pk("new", "--door", "two-way", "--title", "t", "--unit", "u", "--option", "a::x",
-                    "--body-file", os.path.join(self.repo, "missing.txt"))
-        self.assertEqual(p.returncode, 1)
-        self.assertNotIn("Traceback", p.stderr)
+        # 10.4-r14-06: each path must reach its own file read — v1 for --body-file (v2 refuses a body
+        # before reading it), v2 for --evidence-file — and say that file is unreadable
+        missing = os.path.join(self.repo, "missing.txt")
+        for name, args, want in (
+                ("v1 --body-file", ("--schema-version", "1", "--option", "a", "--body-file", missing),
+                 "body file unreadable"),
+                ("v2 --evidence-file", ("--option", "a::x", "--context", "c", "--evidence-file", missing),
+                 "evidence file unreadable")):
+            with self.subTest(name):
+                p = self.pk("new", "--door", "two-way", "--title", "t", "--unit", "u", *args)
+                self.assertEqual(p.returncode, 1, p.stdout)
+                self.assertIn(f"packet.py: {want}", p.stderr)
+                self.assertNotIn("Traceback", p.stderr)
+        self.assertFalse(os.path.exists(self.outbox()))
         p = self.pk("check-reply", "--file", os.path.join(self.repo, "missing.txt"))
         self.assertEqual(p.returncode, 1)
         self.assertNotIn("Traceback", p.stderr)

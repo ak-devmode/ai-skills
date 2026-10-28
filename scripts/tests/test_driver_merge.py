@@ -498,6 +498,16 @@ class DriverMergeTest(unittest.TestCase):
         self.assertTrue(card["title"].startswith("Merge by hand? It touches a floor path: Some-Very"), card["title"])
         self.assertTrue(card["title"].endswith("…"), card["title"])
 
+    def test_context_cap_cuts_a_long_caller_context(self):  # 10.3-r7-01
+        # the merged-elsewhere path passes its own context with a free-text `why`: nothing else bounds it
+        repo = self.build({})[0]
+        with contextlib.redirect_stdout(io.StringIO()):
+            pid = dm.emit_packet(repo, "10.3", "o/r#1", [("merged-elsewhere", "x")], [], None, "c" * 40,
+                                 kind="merge-elsewhere", context="o/r#1 was merged elsewhere: " + "y" * 1000)
+        self.assertTrue(pid, "a long context is cut, not refused by packet.py")
+        card = readj(os.path.join(repo, ".decision-queue", "outbox", f"{pid}.json"))
+        self.assertEqual(len(card["context"]), 400)
+        self.assertTrue(card["context"].startswith("o/r#1 was merged elsewhere: ") and card["context"].endswith("…"))
 
     def test_event_failure_exits_4(self):
         o = {}

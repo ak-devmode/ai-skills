@@ -7,5 +7,5 @@ Working record moved to the private workbench repo; see `README.md` in this fold
 <!-- plans-index:begin -->
 | # | Status | Folder | Description | Created by |
 |---|---|---|---|---|
-| 10 | 🔄 In progress (2026-10-28) — tracked in the private workbench plans | `10-decision-queue-harness/` | Decision-queue harness. Working record moved to the private workbench repo (see this folder's README). | Alex |
+| 10 | ⏸️ Paused (2026-10-28) — tracked in the private workbench plans | `10-decision-queue-harness/` | Decision-queue harness. Working record moved to the private workbench repo (see this folder's README). | Alex |
 <!-- plans-index:end -->

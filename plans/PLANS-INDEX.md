@@ -9,4 +9,4 @@ Completed / archived scopes: `archive/INDEX.md`.
 | # | Status | Folder | Description | Created by |
 |---|---|---|---|---|
 | 8 | 🟡 Built, reviewed, verified (2026-10-03) — live check (Task 1.8) pending on next kalpa-docs /plan run | 8-plans-trunk-sync/ | Publish every /plan write to a shared plans trunk immediately (commit listed paths, rebase, push, read back on origin; halt on conflict). Fixes kalpa-docs drifting ahead 11 / behind 21 across machines. | Alex |
-| 10 | 🔄 In progress (2026-10-28) — tracked in the private workbench plans | `10-decision-queue-harness/` | Decision-queue harness. Working record moved to the private workbench repo (see this folder's README). | Alex |
+| 10 | ⏸️ Paused (2026-10-28) — tracked in the private workbench plans | `10-decision-queue-harness/` | Decision-queue harness. Working record moved to the private workbench repo (see this folder's README). | Alex |

@@ -17,6 +17,14 @@ import tempfile
 SCRIPTS = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 REPO = os.path.dirname(SCRIPTS)
 
+# Tests never reach the live decision queue. A session that runs the suite may carry
+# DECISION_QUEUE_URL (settings env) and sit in a registered driver pane, and a test that
+# calls packet.py in-process would then POST its fixtures to Alex's real queue (it did,
+# 2026-10-28: five test cards). Scrub both at import; a test that wants a queue or a pane
+# sets its own (dispatch_env, a stub server URL).
+for _k in [k for k in os.environ if k == "DECISION_QUEUE_URL" or k.startswith("HERDR_") or k == "PACKET_OUTBOX"]:
+    del os.environ[_k]
+
 
 def script(name):
     """Absolute path of scripts/<name>, or of a repo-relative path like verify/scripts/x.py."""

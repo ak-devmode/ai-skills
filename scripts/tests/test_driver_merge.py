@@ -443,6 +443,8 @@ class DriverMergeTest(unittest.TestCase):
         self.assertLessEqual(len(card["evidence"]), 4000)
         self.assertIn("db/migration/001_floor.sql", card["evidence"])  # floor paths survive the cut
         self.assertTrue(card["evidence"].endswith("(truncated)"))
+        self.assertFalse([f for f in os.listdir(outbox) if f.endswith(".sent")],
+                         "a test must never POST: _helpers scrubs DECISION_QUEUE_URL and HERDR_*")
         self.assertTrue(card["title"].endswith("?") or "?" in card["title"])
 
     def test_event_failure_exits_4(self):

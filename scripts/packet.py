@@ -45,9 +45,17 @@ Failure stances (each is fail-closed unless it says otherwise):
     (bookkeeping); a code path, a non-ancestor HEAD or unreadable git refuses. Two-way packets skip this: work continues past them by design (see `touch`)
   * --range classification failure -> door.py returns one-way (promote-only)
 
-  packet.py new --door D --type T --title S --unit U --option LABEL [--option ...]
-                [--recommended N] (--body TEXT|--body-file F | --payload-file F) [--blocks S]
-                [--continues-on S] [--range BASE..HEAD] [--id ID] [--driver]
+  packet.py new --door D --type T --title QUESTION --unit U --context S
+                [--option "LABEL::WHY" ...] [--recommended N] [--evidence S | --evidence-file F]
+                [--payload-file F] [--blocks S] [--continues-on S] [--range BASE..HEAD] [--id ID] [--driver]
+  packet.py new --schema-version 1 ... --option LABEL (--body TEXT|--body-file F|--payload-file F)
+                (legacy v1 card; review/verify emitters still write it)
+
+  Schema v2 (the default, 10.4 cards lane) caps the card so it reads faster than the terminal:
+  title = the question <= 100 chars, --context <= 400, each option label <= 60 (no
+  "(recommended)" text: --recommended marks it) + why <= 140, --evidence <= 4000 (file:line, ADR
+  refs, SHAs — collapsed on the card). Over a cap -> refused, "cut <field> to N chars (now M)".
+  --body on v2 is refused (v2 has no body), as are --context/--evidence on v1.
   packet.py close ID | stale ID [--force] | touch ID | event --kind K --body S [--packet-id ID]
   packet.py check-reply (--reply TEXT | --file F | -) [--lane M/W/A]
   packet.py flush [--driver]
@@ -350,11 +358,24 @@ def try_send(args, d, ev=None, pid=None):
     return f"Blocked: queue unreachable ({note}); packet kept in outbox, `packet.py flush` re-sends"
 
 
+REC_TEXT = re.compile(r"\s*\(recommended\)", re.I)
+
+
 def show(doc, extra=""):
     print(f"PACKET {doc['id']}")
     print(f"  [{doc['door']}] {doc['title']}  ({doc['unit']} @ {doc['head_sha'][:7]})")
     for i, o in enumerate(doc["options"], 1):
-        print(f"  {i}. {o['label']}{'  (recommended)' if o['recommended'] else ''}")
+        label = REC_TEXT.sub("", o["label"])  # the flag is the only marker: a v1 label may say it on any option
+        print(f"  {i}. {label}{'  (recommended)' if o['recommended'] else ''}")
+        if o.get("why"):
+            print(f"     {o['why']}")
+    # v2: the terminal is the card when the queue is unset or down, so it carries the same
+    # decision-order text as the queue's detail page — context, then evidence (10.4-r14-04)
+    for head, text in (("context", doc.get("context")), ("evidence", doc.get("evidence"))):
+        if text:
+            print(f"  {head}:")
+            for line in str(text).splitlines():
+                print(f"    {line}")
     print(f"  reply: {doc['reply']}")
     if extra:
         print(f"  {extra}")
@@ -395,6 +416,39 @@ def ui_payload_errors(payload):
     return errs
 
 
+# v2 caps — the same numbers as schemas/packet.schema.json's bounded-repeat patterns
+# (test_packet.py checks they agree). Checked here first so the refusal says what to cut.
+V2_CAPS = {"title": 100, "context": 400, "evidence": 4000, "label": 60, "why": 140}
+
+
+def _cut(field, text):
+    cap = V2_CAPS[field.split()[-1]]
+    return f"cut {field} to {cap} chars (now {len(text)})" if len(text) > cap else None
+
+
+def v2_errors(args, options, evidence):
+    """Refusals for a v2 `new`, each naming what to change. Empty list = go on to the schema."""
+    errs = []
+    if args.body is not None or args.body_file:
+        errs.append("v2 has no body: put the situation in --context (<= 400 chars) and file:line, "
+                    "doc refs and SHAs in --evidence; --schema-version 1 writes the legacy card")
+    if not args.context:
+        errs.append("--context is required: the situation in plain words, about 3 sentences")
+    if "\n" in args.title:
+        errs.append("title must be one line: the question")
+    for field, text in (("title", args.title), ("context", args.context or ""), ("evidence", evidence or "")):
+        errs += [e for e in [_cut(field, text)] if e]
+    for i, o in enumerate(options, 1):
+        if not o["why"]:
+            errs.append(f"option {i} needs a why: --option \"label::what changes for Alex if he picks it\"")
+        if REC_TEXT.search(o["label"]):
+            errs.append(f"drop \"(recommended)\" from option {i}'s label: --recommended N marks it")
+        if "\n" in o["label"]:
+            errs.append(f"option {i} label must be one line")
+        errs += [e for e in (_cut(f"option {i} label", o["label"]), _cut(f"option {i} why", o["why"])) if e]
+    return errs
+
+
 def cmd_new(args):
     dirs = outboxes(args)
     if args.id:
@@ -426,14 +480,42 @@ def cmd_new(args):
     if a == "session-none":
         print("packet.py: warning: no session id in the environment; this lane's identity is "
               "shared with any other session-none lane in this repo", file=sys.stderr)
-    options = [{"id": str(i), "label": lab, "recommended": i == args.recommended}
-               for i, lab in enumerate(args.option, 1)]
+    v2 = args.schema_version == 2
+    if v2:
+        options = []
+        for i, raw in enumerate(args.option, 1):
+            label, _, why = raw.partition("::")
+            options.append({"id": str(i), "label": label.strip(), "why": why.strip(),
+                            "recommended": i == args.recommended})
+        try:
+            evidence = args.evidence if args.evidence is not None else (
+                Path(args.evidence_file).read_text() if args.evidence_file else None)
+        except (OSError, ValueError) as e:
+            print(f"packet.py: evidence file unreadable ({e})", file=sys.stderr)
+            return 1
+        errs = v2_errors(args, options, evidence)
+    else:
+        options = [{"id": str(i), "label": lab, "recommended": i == args.recommended}
+                   for i, lab in enumerate(args.option, 1)]
+        evidence = None
+        errs = ["v1 has no --context/--evidence: drop --schema-version 1 to write a v2 card"] \
+            if (args.context or args.evidence is not None or args.evidence_file) else []
+        # 10.4-r16-03: a marker on a non-selected option is a recommendation conflict; refuse, as v2 does
+        errs += [f"drop \"(recommended)\" from option {o['id']}'s label: --recommended N marks it"
+                 for o in options if REC_TEXT.search(o["label"]) and not o["recommended"]]
+    if errs:
+        print("packet.py: refused:", file=sys.stderr)
+        for e in errs:
+            print(f"  {e}", file=sys.stderr)
+        return 1
     if args.payload_file:
         try:
             payload = json.loads(Path(args.payload_file).read_text())
         except (OSError, ValueError) as e:
             print(f"packet.py: payload file unreadable ({e})", file=sys.stderr)
             return 1
+    elif v2:
+        payload = {}  # generic v2: the card is title + options + context (+ evidence)
     else:
         try:
             body = args.body if args.body is not None else (
@@ -443,12 +525,16 @@ def cmd_new(args):
             return 1
         payload = {"body": body}
     rec = next((o for o in options if o["recommended"]), None)
-    prefill = f"Option {rec['id']}: {rec['label']}." if rec else "ack"
-    doc = {"schema_version": 1, "id": pid, "created_at": now(), "machine": m, "workspace": w,
+    prefill = f"Option {rec['id']}: {REC_TEXT.sub('', rec['label'])}." if rec else "ack"
+    doc = {"schema_version": args.schema_version, "id": pid, "created_at": now(), "machine": m, "workspace": w,
            "agent": a, "repo": repo, "branch": branch, "head_sha": head, "unit": args.unit,
            "door": door, "type": args.type, "title": args.title, "options": options,
            "blocks": args.blocks, "continues_on": args.continues_on, "payload": payload,
            "reply": f"{lane_tag(m, w, a, pid)} {prefill}"}
+    if v2:
+        doc["context"] = args.context
+        if evidence:
+            doc["evidence"] = evidence
     if door == "two-way":
         doc["reversal_cost"] = {"commits_stacked": 0, "as_of": now()}
     errs = schema_check.validate(doc)
@@ -681,8 +767,12 @@ def main(argv):
     n.add_argument("--type", default="generic", choices=["data-model", "generic", "ui"])
     n.add_argument("--title", required=True)
     n.add_argument("--unit", required=True)
-    n.add_argument("--option", action="append", default=[])
+    n.add_argument("--schema-version", type=int, default=2, choices=[1, 2])
+    n.add_argument("--option", action="append", default=[], help='v2: "LABEL::WHY"; v1: LABEL')
     n.add_argument("--recommended", type=int, default=1)
+    n.add_argument("--context")
+    n.add_argument("--evidence")
+    n.add_argument("--evidence-file")
     n.add_argument("--body")
     n.add_argument("--body-file")
     n.add_argument("--payload-file")

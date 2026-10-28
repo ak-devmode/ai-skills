@@ -54,9 +54,10 @@ by `test_entrypoint.py`'s compile check.
       Not atomic — nothing short of a server write is — but closes every gap that
       has bitten. Read the stderr note when local and origin disagree.
 
-    packet.py new --door {one-way|two-way|info} [--type data-model|generic|ui] --title --unit --option LABEL...
-              [--recommended N] [--body|--body-file|--payload-file] [--blocks] [--continues-on]
-              [--range BASE..HEAD] [--id ID] [--driver]
+    packet.py new --door {one-way|two-way|info} [--type data-model|generic|ui] --title QUESTION --unit
+              --context S --option "LABEL::WHY"... [--recommended N] [--evidence S|--evidence-file F]
+              [--payload-file F] [--blocks] [--continues-on] [--range BASE..HEAD] [--id ID] [--driver]
+              (--schema-version 1 --option LABEL --body|--body-file: the legacy card)
     packet.py close|touch ID · stale ID [--force] · event --kind K [--body] [--packet-id ID]
     packet.py check-reply (--reply TEXT|--file F|-) [--lane M/W/A] · flush [--driver]   (all: --outbox DIR…)
       stdout: `PACKET <id>` + the card · exit: 0 ok (a blocked POST is ok) · 1 refused / error · 2 usage
@@ -67,6 +68,18 @@ by `test_entrypoint.py`'s compile check.
       other lane's packet, two different tags, unreadable state, and a one-way packet whose HEAD moved. `--range` runs door.py and a
       floor hit promotes the door. Lane identity: machine/workspace/agent from herdr env, else
       machine/repo-hash/session id ($CLAUDE_CODE_SESSION_ID); with none, check-reply needs --lane. Schema: schemas/packet.schema.json, checked by schema_check.py.
+      Schema v2 is the default: title (the question) <= 100 chars, --context <= 400 (required), each
+      option label <= 60 + why <= 140, --evidence <= 4000; over a cap packet.py refuses with
+      "cut <field> to N chars (now M)". --body on v2 is refused; "(recommended)" in a label is refused
+      (--recommended marks it). v1 still validates and renders (packet_emit pins it).
+      **Writing a card** — it must read faster than the terminal (Alex, on the first live v1 card):
+      - One decision per packet. Two questions are two packets.
+      - The title is the question. Lead with it; no repo, branch, sha or unit in it (the card shows them).
+      - Plain words. No document-internal labels — task ids, doc section numbers, finding ids — outside
+        --evidence. file:line, ADR refs and SHAs go in --evidence too (collapsed on the card).
+      - Each option's why is what changes for Alex if he picks it, not how it is built.
+      - Every sentence carries a fact or a judgment; cut set-up sentences.
+      - Calls already made go out as their own `--door info` packet, never inside a decision card.
 
     packet_emit.py (importable)   emit(repo, unit, title, options, body, door, range_, blocks, pid) -> id | None
       Review + verify's packet writer (scope 10 §4.2): runs `packet.py new` with cwd = the repo under review,

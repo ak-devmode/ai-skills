@@ -2,12 +2,12 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://ai-skills.local/schemas/packet.schema.json",
   "title": "Decision-queue packet (scope 10, 10.1 task 1.1)",
-  "$comment": "One packet = one decision from a lane. Root validates a packet; $defs/event validates a ticker event. Uses only keywords scripts/packet.py's stdlib validator implements: type, required, properties, additionalProperties, enum, const, pattern, minLength, minItems, minimum, items, contains/minContains/maxContains, allOf, if/then, $ref (local). Lane tag in reply: '[lane <machine>/<workspace>/<agent> <packet-id>]'; packet.py additionally checks the tag matches the packet's own fields and id (a pattern cannot back-reference). ui payload (10.4 task 4.1): images travel in the packet as PNG data URIs, capped by a bounded-repeat pattern because maxLength is not a supported keyword.",
+  "$comment": "One packet = one decision from a lane. Patterns end in (?![\\s\\S]), never `$`: Python's re (jsonschema) lets `$` match before a final newline, so `$` would admit a cap+1 newline (10.4-r15-02). Root validates a packet; $defs/event validates a ticker event. Uses only keywords scripts/packet.py's stdlib validator implements: type, required, properties, additionalProperties, enum, const, pattern, minLength, minItems, minimum, items, contains/minContains/maxContains, allOf, if/then, $ref (local). Lane tag in reply: '[lane <machine>/<workspace>/<agent> <packet-id>]'; packet.py additionally checks the tag matches the packet's own fields and id (a pattern cannot back-reference). ui payload (10.4 task 4.1): images travel in the packet as PNG data URIs, capped by a bounded-repeat pattern because maxLength is not a supported keyword. v2 (10.4 cards lane, Alex: 'worse than the terminal'): schema_version 2 caps the card's prose structurally — title <= 100 chars (the question), context <= 400 (required), each option label <= 60 with no '(recommended)' text plus why <= 140, optional evidence <= 4000 (file:line, ADR refs, SHAs live there), no generic body. Caps are bounded-repeat patterns. v1 packets keep validating against the v1 branch (the queue holds live v1 packets) and may not carry v2 fields.",
   "type": "object",
   "required": ["schema_version", "id", "created_at", "machine", "workspace", "agent", "repo", "branch", "head_sha", "unit", "door", "type", "title", "options", "blocks", "continues_on", "payload", "reply"],
   "additionalProperties": false,
   "properties": {
-    "schema_version": {"const": 1},
+    "schema_version": {"type": "integer", "enum": [1, 2], "$comment": "the v1/v2 discriminator: integer-typed so true/\"2\"/2.0 cannot select neither branch and skip its checks (10.4-r14-03)"},
     "id": {"$ref": "#/$defs/id"},
     "created_at": {"$ref": "#/$defs/timestamp"},
     "machine": {"$ref": "#/$defs/identity_part"},
@@ -15,15 +15,14 @@
     "agent": {"$ref": "#/$defs/identity_part"},
     "repo": {"type": "string", "minLength": 1},
     "branch": {"type": "string", "minLength": 1},
-    "head_sha": {"type": "string", "pattern": "^[0-9a-f]{7,64}$"},
+    "head_sha": {"type": "string", "pattern": "^[0-9a-f]{7,64}(?![\\s\\S])"},
     "unit": {"type": "string", "minLength": 1, "$comment": "scope/unit, e.g. 10/1.2"},
     "door": {"enum": ["one-way", "two-way", "info"]},
     "type": {"enum": ["data-model", "generic", "ui"]},
     "title": {"type": "string", "minLength": 1},
-    "options": {
-      "type": "array",
-      "items": {"$ref": "#/$defs/option"}
-    },
+    "context": {"type": "string", "$comment": "v2 only: the situation in plain words, about 3 sentences"},
+    "evidence": {"type": "string", "$comment": "v2 only: markdown (file:line, ADR/doc refs, SHAs); collapsed on the card"},
+    "options": {"type": "array", "$comment": "items are option_v1 or option_v2 by schema_version (allOf)"},
     "blocks": {"type": "string", "$comment": "what this decision blocks; empty string if nothing"},
     "continues_on": {"type": "string", "$comment": "what the lane does meanwhile (two-way work); empty string if parked"},
     "reversal_cost": {"$ref": "#/$defs/reversal_cost"},
@@ -31,6 +30,28 @@
     "reply": {"type": "string", "pattern": "^\\[lane [^/\\]\\[\\n]+/[^/\\]\\[\\n]+/[^/\\]\\[\\n]+ [A-Za-z0-9_-]{8,64}\\]"}
   },
   "allOf": [
+    {
+      "if": {"properties": {"schema_version": {"const": 1}}, "required": ["schema_version"]},
+      "then": {
+        "properties": {
+          "options": {"items": {"$ref": "#/$defs/option_v1"}},
+          "context": {"enum": [], "$comment": "v2-only field: a v1 packet may not carry it"},
+          "evidence": {"enum": [], "$comment": "v2-only field: a v1 packet may not carry it"}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"schema_version": {"const": 2}}, "required": ["schema_version"]},
+      "then": {
+        "required": ["context"],
+        "properties": {
+          "title": {"pattern": "^[^\\n]{1,100}(?![\\s\\S])", "$comment": "the question: one line, <= 100 chars"},
+          "context": {"pattern": "^[\\s\\S]{1,400}(?![\\s\\S])"},
+          "evidence": {"pattern": "^[\\s\\S]{1,4000}(?![\\s\\S])"},
+          "options": {"items": {"$ref": "#/$defs/option_v2"}}
+        }
+      }
+    },
     {
       "if": {"properties": {"door": {"enum": ["one-way", "two-way"]}}, "required": ["door"]},
       "then": {
@@ -49,8 +70,12 @@
       "then": {"properties": {"payload": {"$ref": "#/$defs/payload_data_model"}}}
     },
     {
-      "if": {"properties": {"type": {"const": "generic"}}, "required": ["type"]},
+      "if": {"properties": {"type": {"const": "generic"}, "schema_version": {"const": 1}}, "required": ["type", "schema_version"]},
       "then": {"properties": {"payload": {"$ref": "#/$defs/payload_generic"}}}
+    },
+    {
+      "if": {"properties": {"type": {"const": "generic"}, "schema_version": {"const": 2}}, "required": ["type", "schema_version"]},
+      "then": {"properties": {"payload": {"$ref": "#/$defs/payload_generic_v2"}}}
     },
     {
       "if": {"properties": {"type": {"const": "ui"}}, "required": ["type"]},
@@ -58,10 +83,10 @@
     }
   ],
   "$defs": {
-    "id": {"type": "string", "pattern": "^[A-Za-z0-9_-]{8,64}$", "$comment": "client-generated; retries reuse it (idempotent)"},
-    "timestamp": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?(Z|[+-][0-9]{2}:[0-9]{2})$"},
-    "identity_part": {"type": "string", "minLength": 1, "pattern": "^[^/\\]\\[\\n]+$", "$comment": "no '/', brackets or newline: it is embedded in the lane tag"},
-    "option": {
+    "id": {"type": "string", "pattern": "^[A-Za-z0-9_-]{8,64}(?![\\s\\S])", "$comment": "client-generated; retries reuse it (idempotent)"},
+    "timestamp": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?(Z|[+-][0-9]{2}:[0-9]{2})(?![\\s\\S])"},
+    "identity_part": {"type": "string", "minLength": 1, "pattern": "^[^/\\]\\[\\n]+(?![\\s\\S])", "$comment": "no '/', brackets or newline: it is embedded in the lane tag"},
+    "option_v1": {
       "type": "object",
       "required": ["id", "label", "recommended"],
       "additionalProperties": false,
@@ -69,6 +94,17 @@
         "id": {"type": "string", "minLength": 1},
         "label": {"type": "string", "minLength": 1},
         "detail": {"type": "string"},
+        "recommended": {"type": "boolean"}
+      }
+    },
+    "option_v2": {
+      "type": "object",
+      "required": ["id", "label", "why", "recommended"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "label": {"type": "string", "pattern": "^(?![\\s\\S]*\\([Rr][Ee][Cc][Oo][Mm][Mm][Ee][Nn][Dd][Ee][Dd]\\))[^\\n]{1,60}(?![\\s\\S])", "$comment": "one line, <= 60 chars, no '(recommended)' text in any case — spelled per letter because ECMA-262 has no inline (?i) (10.4-r14-05): `recommended` carries it"},
+        "why": {"type": "string", "pattern": "^[\\s\\S]{1,140}(?![\\s\\S])", "$comment": "what changes for Alex if he picks it, <= 140 chars"},
         "recommended": {"type": "boolean"}
       }
     },
@@ -87,6 +123,12 @@
       "additionalProperties": false,
       "properties": {"body": {"type": "string", "minLength": 1, "$comment": "free markdown; the queue renders it sanitized"}}
     },
+    "payload_generic_v2": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {},
+      "$comment": "v2 has no body: the card is title + options + context (+ evidence)"
+    },
     "payload_data_model": {
       "type": "object",
       "required": ["tables"],
@@ -97,7 +139,7 @@
     },
     "png_data_uri": {
       "type": "string",
-      "pattern": "^data:image/png;base64,[A-Za-z0-9+/]{1,2000000}={0,2}$",
+      "pattern": "^data:image/png;base64,[A-Za-z0-9+/]{1,2000000}={0,2}(?![\\s\\S])",
       "$comment": "PNG only. Cap: 2,000,000 base64 chars = 1.5 MB of PNG per image (the queue runs on another machine and cannot read lane paths, so the bytes ride in the packet). The queue enforces the same cap server-side."
     },
     "ui_shot": {
@@ -157,7 +199,7 @@
       "required": ["schema_version", "id", "kind", "created_at", "machine", "workspace", "agent", "body"],
       "additionalProperties": false,
       "properties": {
-        "schema_version": {"const": 1},
+        "schema_version": {"type": "integer", "const": 1},
         "id": {"$ref": "#/$defs/id"},
         "kind": {"enum": ["done", "merged", "closed", "stale", "touch"]},
         "created_at": {"$ref": "#/$defs/timestamp"},

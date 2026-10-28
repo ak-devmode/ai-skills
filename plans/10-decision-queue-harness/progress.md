@@ -25,8 +25,8 @@ Script-owned (`plans-index.py`); PLANS-INDEX.md is rendered from it.
 
 ## Resume Context
 **Scope:** ~/Projects/ai-skills/plans/10-decision-queue-harness/scope.md
-**Last action:** phase-4 cutover landed and verified (ai-skills 698b443, dev-workbench 3b7f6a3; homelab queue DQ_UI_ALLOWED_TENANTS=clinic_3, agent-view timer active; MBA LaunchAgent 60 s)
-**Next action:** lanes running: merges fix 3 (83/84), cards (85) → reviews → cutover; then 10.1 live acceptance + /verify 10.1–10.4
+**Last action:** final cutover landed (ai-skills 5cebe49, dev-workbench be36d57; queue restarted first); v2 card verified live; 10.1 acceptance met (real cards: homelab2026 24, MBA 9)
+**Next action:** /verify 10.1 → 10.2 → 10.3 → 10.4; /document-release for the review-loop change; lane teardown; /closeout
 **Open blockers:** none
 **Key files changed:** None yet
 
@@ -148,6 +148,9 @@ Script-owned (`plans-index.py`); PLANS-INDEX.md is rendered from it.
 - `DECISION_QUEUE_URL` added to `config/claude-code/settings.json` env (shared by both machines), commit ef9bae0, not pushed.
 
 - (2026-10-27) URL pushed (ef9bae0) and pulled on homelab (`~/cc/homelab-pull.sh`). Paste-back: Alex copied the test card's reply into the driver pane; `check-reply` refused it (foreign lane tag) — correct. Follow-up (two-way, not built): the queue accepts a packet whose reply tag doesn't match its own id/lane (a hand-built POST showed it; packet.py always builds it right) — add a server-side tag check.
+
+#### Task 1.6 — ✅ DONE (2026-10-28)
+- Acceptance: the live queue holds real cards from both machines (homelab2026 24, MBA 9 on the page, 2026-10-28). Final cutover via `~/cc/10-cutover-final.sh`: dev-workbench be36d57 first, homelab queue restarted, then ai-skills 5cebe49 (packet.py v2 default). Driver pane registered (dispatch-log `--status driver`); a v2 info card posted from it rendered in the new order and was closed.
 
 ---
 

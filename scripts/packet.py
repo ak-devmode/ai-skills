@@ -365,7 +365,7 @@ def show(doc, extra=""):
     print(f"PACKET {doc['id']}")
     print(f"  [{doc['door']}] {doc['title']}  ({doc['unit']} @ {doc['head_sha'][:7]})")
     for i, o in enumerate(doc["options"], 1):
-        label = REC_TEXT.sub("", o["label"]) if o["recommended"] else o["label"]  # v1 labels may say it too
+        label = REC_TEXT.sub("", o["label"])  # the flag is the only marker: a v1 label may say it on any option
         print(f"  {i}. {label}{'  (recommended)' if o['recommended'] else ''}")
         if o.get("why"):
             print(f"     {o['why']}")

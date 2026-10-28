@@ -103,7 +103,7 @@
       "additionalProperties": false,
       "properties": {
         "id": {"type": "string", "minLength": 1},
-        "label": {"type": "string", "pattern": "^(?![\\s\\S]*\\([Rr]ecommended\\))[^\\n]{1,60}$", "$comment": "one line, <= 60 chars, no '(recommended)' text: `recommended` carries it"},
+        "label": {"type": "string", "pattern": "^(?![\\s\\S]*\\([Rr][Ee][Cc][Oo][Mm][Mm][Ee][Nn][Dd][Ee][Dd]\\))[^\\n]{1,60}$", "$comment": "one line, <= 60 chars, no '(recommended)' text in any case — spelled per letter because ECMA-262 has no inline (?i) (10.4-r14-05): `recommended` carries it"},
         "why": {"type": "string", "pattern": "^[\\s\\S]{1,140}$", "$comment": "what changes for Alex if he picks it, <= 140 chars"},
         "recommended": {"type": "boolean"}
       }

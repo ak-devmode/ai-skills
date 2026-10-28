@@ -234,6 +234,23 @@ class TestNew(PacketBase):
                 self.assertIn(want, p.stderr)
         self.assertFalse(os.path.exists(self.outbox()))
 
+    def test_recommended_marker_refused_in_any_case_on_any_option(self):
+        # 10.4-r14-05: the flag is the only marker; a mixed-case one on either option is refused
+        for marker in ("(RECOMMENDED)", "(ReCoMmEnDeD)", "(recommended)"):
+            for which, opts in (("recommended", (f"a {marker}::x", "b::y")), ("other", ("a::x", f"b {marker}::y"))):
+                with self.subTest(marker=marker, option=which):
+                    p = self.v2(options=opts)
+                    self.assertEqual(p.returncode, 1, p.stdout)
+                    self.assertIn('drop "(recommended)"', p.stderr)
+        self.assertFalse(os.path.exists(self.outbox()))
+
+    def test_v1_non_recommended_label_marker_is_not_shown_as_a_second_recommendation(self):
+        p = self.pk("new", "--schema-version", "1", "--door", "two-way", "--title", "t", "--unit", "u",
+                    "--option", "alpha", "--option", "beta (RECOMMENDED)", "--body", "b")
+        self.assertEqual(p.returncode, 0, p.stderr)
+        self.assertEqual(p.stdout.lower().count("(recommended)"), 1, p.stdout)
+        self.assertIn("1. alpha  (recommended)", p.stdout)
+
     def test_v1_still_written_on_request_and_refuses_v2_fields(self):
         base = ("new", "--schema-version", "1", "--door", "two-way", "--title", "t", "--unit", "u",
                 "--option", "alpha (recommended)", "--option", "beta", "--body", "b")

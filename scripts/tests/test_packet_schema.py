@@ -135,6 +135,17 @@ class TestPacketSchema(unittest.TestCase):
                 self.assertTrue(sc.validate(value, schema=schema))
         self.assertEqual(sc.validate(2, schema={"enum": [1, 2]}), [])
 
+    def test_recommended_marker_refused_in_any_case_on_any_option(self):
+        # 10.4-r14-05 / r15-03: the schema matched only (recommended)/(Recommended)
+        base = next(d for n, d in fixtures("valid") if n == "v2-generic-one-way.json")
+        for marker in ("(RECOMMENDED)", "(ReCoMmEnDeD)", "(recommended)", "(Recommended)"):
+            for i in range(len(base["options"])):
+                with self.subTest(marker=marker, recommended=base["options"][i]["recommended"]):
+                    doc = json.loads(json.dumps(base))
+                    doc["options"][i]["label"] = f"Alt {marker}"
+                    errs = sc.validate(doc)
+                    self.assertTrue(any(f"/options/{i}/label: does not match" in e for e in errs), errs)
+
     def test_additional_properties_other_than_false_fails_closed(self):
         for val in (True, {"type": "string"}):
             with self.subTest(val=val), self.assertRaises(sc.SchemaError):

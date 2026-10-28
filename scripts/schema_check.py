@@ -51,9 +51,10 @@ def _resolve(root, ref):
 
 
 def _ecma_end(pattern):
-    """Python's `$` also matches before a trailing newline; ECMA-262 (what the queue's JSON
-    Schema validator uses) does not. Translate a trailing unescaped `$` to `\\Z` so
-    'abcdef1\\n' fails here exactly as it fails there (10.1-r1-14)."""
+    """Keeps a caller-supplied trailing `$` strict in this shim: Python's `$` also matches before a
+    trailing newline, so an ad-hoc schema's `$` is translated to `\\Z`. packet.schema.json itself ends
+    its patterns in (?![\\s\\S]) because the queue's jsonschema runs Python `re`, where `$` is lax
+    (10.4-r15-02, 10.4-r16-01)."""
     body = pattern[:-1]
     slashes = len(body) - len(body.rstrip("\\"))
     if pattern.endswith("$") and slashes % 2 == 0:

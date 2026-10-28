@@ -500,6 +500,9 @@ def cmd_new(args):
         evidence = None
         errs = ["v1 has no --context/--evidence: drop --schema-version 1 to write a v2 card"] \
             if (args.context or args.evidence is not None or args.evidence_file) else []
+        # 10.4-r16-03: a marker on a non-selected option is a recommendation conflict; refuse, as v2 does
+        errs += [f"drop \"(recommended)\" from option {o['id']}'s label: --recommended N marks it"
+                 for o in options if REC_TEXT.search(o["label"]) and not o["recommended"]]
     if errs:
         print("packet.py: refused:", file=sys.stderr)
         for e in errs:

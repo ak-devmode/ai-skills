@@ -8,6 +8,7 @@ import importlib.util
 import json
 import os
 import unittest
+from unittest import mock
 
 from _helpers import script
 
@@ -183,7 +184,10 @@ class TestPacketSchema(unittest.TestCase):
                 with self.subTest(field=field, value=v[-6:]):
                     doc = json.loads(json.dumps(base))
                     put(doc, v)
-                    self.assertTrue(sc.validate(doc), field)
+                    # 10.4-r16-02: patterns verbatim through Python re (the queue's validator), not
+                    # through _ecma_end, which would mask a bare `$`
+                    with mock.patch.object(sc, "_ecma_end", lambda p: p):
+                        self.assertTrue(sc.validate(doc), field)
 
     def test_additional_properties_other_than_false_fails_closed(self):
         for val in (True, {"type": "string"}):

@@ -261,12 +261,18 @@ class TestNew(PacketBase):
                     self.assertIn('drop "(recommended)"', p.stderr)
         self.assertFalse(os.path.exists(self.outbox()))
 
-    def test_v1_non_recommended_label_marker_is_not_shown_as_a_second_recommendation(self):
+    def test_v1_marker_on_non_selected_option_is_refused_not_hidden(self):
+        # 10.4-r16-03: a marker on an option --recommended does not select is a conflict; refuse it
         p = self.pk("new", "--schema-version", "1", "--door", "two-way", "--title", "t", "--unit", "u",
                     "--option", "alpha", "--option", "beta (RECOMMENDED)", "--body", "b")
-        self.assertEqual(p.returncode, 0, p.stderr)
-        self.assertEqual(p.stdout.lower().count("(recommended)"), 1, p.stdout)
-        self.assertIn("1. alpha  (recommended)", p.stdout)
+        self.assertEqual(p.returncode, 1, p.stdout)
+        self.assertIn('drop "(recommended)" from option 2', p.stderr)
+        self.assertFalse(os.path.exists(self.outbox()))
+        # the marker on the selected option is still accepted and shown once
+        ok = self.pk("new", "--schema-version", "1", "--door", "two-way", "--title", "t", "--unit", "u",
+                     "--option", "alpha (recommended)", "--option", "beta", "--body", "b")
+        self.assertEqual(ok.returncode, 0, ok.stderr)
+        self.assertEqual(ok.stdout.lower().count("(recommended)"), 1, ok.stdout)
 
     def test_v1_still_written_on_request_and_refuses_v2_fields(self):
         base = ("new", "--schema-version", "1", "--door", "two-way", "--title", "t", "--unit", "u",

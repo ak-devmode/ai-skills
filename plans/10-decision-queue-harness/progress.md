@@ -25,9 +25,9 @@ Script-owned (`plans-index.py`); PLANS-INDEX.md is rendered from it.
 
 ## Resume Context
 **Scope:** ~/Projects/ai-skills/plans/10-decision-queue-harness/scope.md
-**Last action:** 10.4 lanes review-closed (attention, ui-packet, scorecard incl. fixed-follow-up reframe); 10.3 merge gate at round-3 stop — decisions 83 (--admin) and 84 (lane identity reframe) open with Alex
-**Next action:** phase-4 cutover branches ready (`feature/10-phase4` in ai-skills + dev-workbench; suites running) → landing script for Alex; 10.3 waits on 83/84; then homelab DQ_UI_ALLOWED_TENANTS + redeploy, 10.1 live acceptance, /verify 10.1–10.4
-**Open blockers:** decisions 83/84 (merge gate)
+**Last action:** phase-4 cutover landed and verified (ai-skills 698b443, dev-workbench 3b7f6a3; homelab queue DQ_UI_ALLOWED_TENANTS=clinic_3, agent-view timer active; MBA LaunchAgent 60 s)
+**Next action:** lanes running: merges fix 3 (83/84), cards (85) → reviews → cutover; then 10.1 live acceptance + /verify 10.1–10.4
+**Open blockers:** none
 **Key files changed:** None yet
 
 ---
@@ -41,6 +41,8 @@ Script-owned (`plans-index.py`); PLANS-INDEX.md is rendered from it.
   per-round reframe prompt judged by a fresh agent, three review cases to the queue, round-1
   effort trial. Harness errors never stop work (dead queue → `Blocked` in pane). Driver merges
   include degraded reviews (flagged) and `--admin`. Details: scope.md §4 and the review report.
+- (2026-10-28) Merge gate round-3 stop answered (Alex): 83 narrow --admin to 'review approval is the only unmet requirement and every entry of every required check passed', else park; 84 take the reframe — lanes identified from the driver-written dispatch log, herdr-name lookup deleted.
+- (2026-10-28) Cards too verbose (Alex, first live card): 85 fix now as one lane — schema v2 caps (question title, ≤400-char context, option label + one-line why, evidence folded), one decision per packet, render order question → recommendation → options → context → folded evidence, writing rules in the skills.
 - (2026-10-27) Scorecard reopen chain (10.4-r12-01 → r10-02 → r5-03): reframed by the driver (fix discipline; overturns no decision) — fixed follow-up cohort (`--follow-up`, default 7 d) replaces closed-only filtering and the data-estimated horizon.
 - (2026-10-27) Driver merges (10.3 review, driver calls): merge only when verdict-gate.py --blocking reads pass (advisory/not-judged/unknown never merge, so merged is a stricter bar than Done); a repo with no CI (pmg-docs, ai-skills today) never auto-merges — vacuous green refuses it and it parks as a two-way packet; CI definitions (.github/workflows/, .github/actions/, CODEOWNERS, .circleci/, .gitlab-ci.yml, Jenkinsfile, buildspec*) and singular migration/ are floor paths.
 - (2026-10-27) Wiring round-3 stop (10.1-r11 reopened r8-01/02): reframed on Alex's yes (80) — pasted replies only via a file, never shell source; flush count check dropped. Review-packets lane: "is this reframe Alex's call" consolidated into one function (driver call, reopen chain at round 2).

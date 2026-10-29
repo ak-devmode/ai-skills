@@ -50,11 +50,7 @@ LENSES = ("conformance", "test-plan", "rejection-audit", "faithful-port", "over-
           "invented-reality", "evidence", "weak-row")
 
 
-def progress_file(scope):
-    """The scope's `progress.md`, else a standalone plan's `<stem>-PROGRESS.md`, else None."""
-    own = os.path.join(scope, "progress.md")
-    found = [own] if os.path.isfile(own) else sorted(glob.glob(os.path.join(scope, "*-PROGRESS.md")))
-    return found[0] if found else None
+progress_file = vl.progress_file  # one resolver for /plan §2.3 (10.5-r1-10)
 
 
 def paths(scope, unit):

@@ -6,6 +6,7 @@ appender — so the runner and the gate cannot disagree about what a row or a re
 Every rule here is from templates/verify-contracts.md; section numbers are cited inline.
 """
 
+import glob
 import json
 import os
 import re
@@ -374,6 +375,15 @@ def select(rows, owner):
 
 
 # ---------- §4 verdict log ---------------------------------------------------------
+
+def progress_file(scope):
+    """The scope's `progress.md`, else a standalone plan's `<stem>-PROGRESS.md` or `PROGRESS.md`
+    (/plan §2.3), else None."""
+    own = os.path.join(scope, "progress.md")
+    found = [own] if os.path.isfile(own) else sorted(
+        glob.glob(os.path.join(scope, "*-PROGRESS.md")) + glob.glob(os.path.join(scope, "PROGRESS.md")))
+    return found[0] if found else None
+
 
 def read_jsonl(path):
     """Records in file order. Raises ContractError on a malformed line."""

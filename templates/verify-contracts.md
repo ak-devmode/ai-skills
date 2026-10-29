@@ -78,12 +78,12 @@ flight is never asked to reconcile verification after the fact (Alex, 2026-09-29
 **Writer in practice:** `scripts/finish-table.py` (`init` with the standard rows per
 phase, `add` with the revision bump) — never typed by hand.
 
-3.1.1 **`**Approved:**`** — the human checkpoint on the table (Alex, 2026-09-29). `init`
-writes `pending`; `finish-table.py approve --by <name>` writes `rev <N> — <who>, <date>`,
-run only on the user's explicit yes after they have read the rows in plain English; `add`
-resets it to `pending`, because a changed table is a new promise. The gate blocks
-(`table-approval`) while the line names anything but the current revision. A table with no
-`**Approved:**` line predates the checkpoint and is exempt — from both this and §6.4.
+3.1.1 **`**Approved:**`** — approved by standing policy (Alex, 2026-10-29, scope 10.5;
+the human checkpoint of 2026-09-29 is retired). `init` and `add` write `rev <N> — standing
+policy, <date>` for the revision they write; nobody is asked, and the gate never blocks on
+this line. An older `pending` or `rev <N> — <who>, <date>` line still parses. The line's
+presence marks a table under the current contract, which wants review outcomes accepted
+(§6.4); a table with no `**Approved:**` line predates that and is exempt from §6.4.
 
 3.2 **One row per check**, columns in this order:
 

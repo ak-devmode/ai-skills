@@ -468,13 +468,9 @@ def evaluate(scope, unit, projects):
                                           f"at least one row whose owner is {unit} or {unit}/…", "0 rows",
                                           table["path"], "code", "add the unit's rows, bump Revision",
                                           f"{vl.CONTRACT} §3.4"))
+    # §3.1.1: no human approval of the table (scope 10.5). An **Approved:** line, any value,
+    # marks a table under the current contract, which wants review outcomes accepted (§6.4).
     appr = table.get("approval")
-    if appr is not None and appr != table["revision"]:
-        found = "pending" if appr == "pending" else f"rev {appr} approved, table is rev {table['revision']}"
-        blocks.append(("table-approval", "the finish table's current revision is not approved by a human",
-                       f"**Approved:** rev {table['revision']} — <who>, <date>", found, table["path"], "code",
-                       f"show the user the rows; on their yes: finish-table.py approve --scope {scope} --by <name>"))
-        report.append("BLOCK  table-approval  finish table not approved")
     heads = {}
     for row in owned:
         cid = row["check_id"]
@@ -574,7 +570,7 @@ def evaluate(scope, unit, projects):
             blocks.append((fid, what, exp, found, where, cause, "record the disposition through /review's log writer"))
             report.append(f"BLOCK  {fid}  {what}")
         if appr is not None and n and not cov and not accepted(review):
-            # §6.4 — a table under the human checkpoint wants review outcomes recorded too: by the
+            # §6.4 — a table under the current contract wants review outcomes recorded too: by the
             # session on a SHIP (standing policy), by the user's answer at a /review §5.1 stop
             blocks.append(("review-acceptance", "review outcomes not accepted since the last "
                            "finding or disposition", "an `acceptance` record after every finding and disposition",

@@ -763,19 +763,13 @@ supply the phase list and the rows for the scope's own deliverables:
 - Later changes go through `finish-table.py add --rows F --change "…"`. It bumps the
   Revision and logs the change, and a revision bump invalidates earlier verdicts (§5.2).
 
-**5.10.1 Human checkpoint — the user approves the table.** The table is the one artifact
-the user reads instead of the code, so it is written for them. Present every row owned by
-a phase as one plain-English line — *"Done means <deliverable>; proven by <what runs, or
-what the judge reads>"* — grouped by phase, rung-2 `judge` rows flagged as the weaker
-kind. Then stop and ask, as its own message. On an explicit yes only:
-
-```bash
-~/Projects/ai-skills/scripts/finish-table.py approve --scope "$PLANS_DIR/$N-{slug}" --by "<name>"
-```
-
-Never approve on the user's behalf, and never read "continue" as a yes to rows they have
-not seen. Edits they ask for go through `add`, then the plain-English list again. The
-gate blocks every unit until the current revision is approved (`verify-contracts.md` §3.1.1).
+**5.10.1 No approval question.** The table is approved by standing policy as `init` and
+`add` write it (`verify-contracts.md` §3.1.1, Alex 2026-10-29, scope 10.5) — never ask the
+user to approve rows. Write each row so it reads in plain English — *"Done means
+<deliverable>; proven by <what runs, or what the judge reads>"* — because the user reads
+them later, in the phase report `/plan` prints at the end of each phase, and strikes or
+edits a row there (through `add`). The `/verify` judge flags rows too weak for their
+deliverable.
 
 **5.10.2 Publish the stubs and the table** the same way as 5.8, naming the scope folder (plus, in `local` mode, `PLANS-INDEX.md` and `archive/INDEX.md`
 — the stub rows re-rendered them):

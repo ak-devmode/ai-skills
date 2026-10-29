@@ -136,6 +136,12 @@ def read(path):
         return fh.read()
 
 
+def standing(rev):
+    """§3.1.1: a table is approved by standing policy when it is written (Alex, 2026-10-29,
+    scope 10.5): nobody is asked. The phase report shows the rows after the fact."""
+    return f"**Approved:** rev {rev} — standing policy, {datetime.date.today().isoformat()}"
+
+
 def changelog_line(rev, change, by):
     return f"| {rev} | {datetime.date.today().isoformat()} | {change.replace('|', '/')} | {by} |"
 
@@ -194,6 +200,7 @@ def cmd_init(a):
                     "--predates", "list only phases already started", code=vl.EXIT_USAGE)
     text = read(TEMPLATE)
     name = os.path.basename(os.path.normpath(a.scope))
+    text = text.replace("**Approved:** pending", standing(1), 1)
     text = text.replace("{{SCOPE_SLUG}}", name).replace("{{SCOPE_PATH}}", os.path.join(a.scope, "scope.md"))
     if predates:
         text = text.replace("**Revision:** 1\n", f"**Revision:** 1\n**Predates gate:** {', '.join(predates)}\n", 1)
@@ -232,35 +239,12 @@ def cmd_add(a):
     rev = table["revision"] + 1
     lines[last:last] = [render_row(r) for r in new]
     lines = [re.sub(r"^\*\*Revision:\*\*\s*\d+", f"**Revision:** {rev}", l) for l in lines]
-    # a changed table is a new promise: it goes back to the human (§3.5)
-    lines = [re.sub(r"^\*\*Approved:\*\*.*$", "**Approved:** pending", l) for l in lines]
+    # a changed table is approved by standing policy too (§3.1.1); a legacy table with no
+    # line stays exempt
+    lines = [re.sub(r"^\*\*Approved:\*\*.*$", standing(rev), l) for l in lines]
     text = "\n".join(lines).rstrip("\n") + "\n" + changelog_line(rev, a.change, a.by) + "\n"
     t = write_checked(path, text, a.dry_run)
     print(f"{'would write' if a.dry_run else 'wrote'}: {path} · revision {t['revision']} · {len(t['rows'])} rows")
-    return vl.EXIT_PASS
-
-
-def cmd_approve(a):
-    """§3.5: record the user's approval of the table's current revision. Run only on the
-    user's explicit yes — this line is the human checkpoint, not a formality."""
-    path = os.path.join(a.scope, "finish-conditions.md")
-    if not os.path.exists(path):
-        return fail("no finish-conditions.md to approve", "an existing table", "none", path,
-                    f"finish-table.py init --scope {a.scope} --phase …")
-    if not a.by.strip():
-        return fail("approve needs --by", "the person approving", "empty", "--by", "--by \"<name>\"",
-                    code=vl.EXIT_USAGE)
-    table = vl.parse_table(path)
-    line = f"**Approved:** rev {table['revision']} — {a.by.strip()}, {datetime.date.today().isoformat()}"
-    lines = read(path).splitlines()
-    at = next((i for i, l in enumerate(lines) if l.startswith("**Approved:**")), None)
-    if at is None:
-        at = next(i for i, l in enumerate(lines) if l.startswith("**Revision:**")) + 1
-        lines.insert(at, line)
-    else:
-        lines[at] = line
-    t = write_checked(path, "\n".join(lines).rstrip("\n") + "\n", a.dry_run)
-    print(f"{'would write' if a.dry_run else 'wrote'}: {path} · approved revision {t['revision']}")
     return vl.EXIT_PASS
 
 
@@ -280,11 +264,6 @@ def main(argv):
     sub.choices["init"].add_argument("--predates")
     sub.choices["add"].add_argument("--change", required=True)
     sub.choices["add"].add_argument("--replace", action="store_true")
-    ap_ = sub.add_parser("approve")
-    ap_.add_argument("--scope", required=True)
-    ap_.add_argument("--by", required=True)
-    ap_.add_argument("--projects", default=vl.PROJECTS)
-    ap_.add_argument("--dry-run", action="store_true")
     try:
         a = ap.parse_args(argv)
     except SystemExit as exc:
@@ -293,7 +272,7 @@ def main(argv):
         return fail("add needs --rows", "a JSONL file of rows", "none", "--rows", "pass --rows FILE",
                     code=vl.EXIT_USAGE)
     try:
-        return {"init": cmd_init, "add": cmd_add, "approve": cmd_approve}[a.cmd](a)
+        return {"init": cmd_init, "add": cmd_add}[a.cmd](a)
     except vl.ContractError as exc:
         print(exc.msg, file=sys.stderr)
         return vl.EXIT_EVAL

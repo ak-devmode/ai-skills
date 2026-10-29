@@ -330,20 +330,18 @@ Draft one, and ask once:
    `N.P=repo,…` means the phase commits to those repos (read from the plan's Input and
    Output paths); `N.P` alone means it commits nothing. Deliverable rows come from
    `scope.md`'s phase sections (`/scope` §5.10 says how to write them).
-3. **Halt once.** Show the drafted rows in plain English, the way `/scope` §5.10.1 does,
-   and ask the user to confirm or edit them. On their yes, write the table by running the
-   same command without `--dry-run`, then `finish-table.py approve --scope "$SCOPE_DIR"
-   --by "<name>"` — that one yes is both the confirmation and the §5.6.2b approval. Do
-   not ask again this session.
+3. **Write it — no question.** Run the same command without `--dry-run`. The table is
+   approved by standing policy as it is written (`verify-contracts.md` §3.1.1); the
+   phase report (§6.8 step 5) shows its rows after the fact.
 4. If every phase has started, write the table anyway with every phase under
    `--predates` and no `--phase` rows. That records that the scope predates the gate, and
    nothing more is asked of it.
 
-5.6.2b **An unapproved table stops the plan before its first task.** If
-`finish-conditions.md` has `**Approved:** pending` or names an older revision, show the
-rows the way `/scope` §5.10.1 does and ask; approve only on the user's yes. A table
-§5.6.2a just wrote was approved by that step's single question — never ask twice. A table with no
-`**Approved:**` line predates the checkpoint and does not stop anything.
+5.6.2b **The table never stops the plan.** There is no human approval of the finish
+table (Alex, 2026-10-29, scope 10.5): an older `**Approved:** pending` line, or one naming
+an older revision, is not a question. Never ask the user to approve rows.
+*Why:* Alex answered "1 yes" on every scope after he had already decided to move on, and
+almost never read the rows — a stamp that cost a turn per scope and per revision.
 
 5.7 **Branch detection** — Determine the working branch:
 - If the plan has a `**Branch:**` field: confirm with the user — "Plan specifies branch `<branch>`. Confirm this is correct before we proceed." Wait for confirmation before continuing.
@@ -481,7 +479,7 @@ on a direct-to-main repo a branch diff is empty by construction.
    (`verify-contracts.md` §5.2.1).
    **Review outcomes.** On a SHIP with every ID dispositioned, run
    `review.py accept --scope <scope> --unit {N}.{P} --by "<owner> (standing policy)"`
-   yourself and go on to Verify. Under an approved finish table the gate blocks without it
+   yourself and go on to Verify. Under a finish table with an `**Approved:**` line the gate blocks without it
    (`verify-contracts.md` §6.4); a later round with findings reopens it. The unit's completion
    summary (§11.7) lists, in plain English, every rejection with its reason and every
    accepted nit — `accept` prints both.
@@ -492,7 +490,6 @@ on a direct-to-main repo a branch diff is empty by construction.
    *Why:* WellMed scope 171 (Alex, 2026-10-18) — the per-unit outcome checkpoint and its
    conditional go-ahead asked the user to say "continue" on every unit; the standing policy
    keeps them for the cases their judgment changes.
-   The table's own approval happens before work starts (§5.6.2b).
 2. **Verify** — the stub's `Task {P}.V`, or the CHECKPOINT on a pre-5.3 stub. Run
    `/verify {N}.{P}`, adding `--no-commits` when the stub has no Review task. If the scope has no table, §5.6.2a runs first. A unit listed under
    `**Predates gate:**` skips this step.

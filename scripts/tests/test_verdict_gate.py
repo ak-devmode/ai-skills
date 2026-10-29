@@ -335,7 +335,7 @@ class TestGate(Fixture):
         os.remove(self.index)  # records mode: a not-yet-rendered index still resolves the mode
         self.assertEqual(self.gate().returncode, 1)
 
-    def test_unapproved_table_blocks_and_legacy_table_is_exempt(self):
+    def test_table_approval_never_blocks(self):  # scope 10.5: no human approval of the table
         self.ledger()
         self.verify("codex gpt-test", [self.v("ok", "pass")])
         self.assertEqual(self.gate("--blocking").returncode, 0)  # no **Approved:** line: predates §3.5
@@ -343,12 +343,10 @@ class TestGate(Fixture):
             text = fh.read()
         with open(self.table, "w") as fh:
             fh.write(text.replace("**Revision:** 1\n", "**Revision:** 1\n**Approved:** pending\n"))
-        code, doc = self.gate_json("--blocking")
-        self.assertEqual(code, 1)
-        self.assertEqual([b["id"] for b in doc["blocks"]], ["table-approval"])
+        self.assertEqual(self.gate("--blocking").returncode, 0)  # an old pending table no longer stops
         with open(self.table, "w") as fh:
-            fh.write(text.replace("**Revision:** 1\n", "**Revision:** 1\n**Approved:** rev 1 — Alex, 2026-09-29\n"))
-        self.assertEqual(self.gate("--blocking").returncode, 0)
+            fh.write(text.replace("**Revision:** 1\n", "**Revision:** 2\n**Approved:** rev 1 — Alex, 2026-09-29\n"))
+        self.assertEqual(self.gate("--blocking").returncode, 0)  # nor does an older revision's approval
 
     def test_skip_verify_needs_a_reason(self):
         self.assertEqual(self.gate("--skip-verify", "  ").returncode, 2)

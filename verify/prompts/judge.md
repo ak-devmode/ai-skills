@@ -62,6 +62,13 @@ check yourself, whether each finish condition below is actually met.
   the scanner missed real ones. Names in docs belong to this lens, not to that row.
 - **evidence** — a runner check whose command cannot fail, tests the wrong thing, or ran
   against the wrong repo/dir/SHA.
+- **weak-row** — the finish table is approved by standing policy, never by a human, so you
+  are the only reader who checks the bar itself. For every row this unit owns, ask whether
+  passing it would prove its `deliverable`: an existence check (a file, a symbol, a route
+  is there) for a deliverable that is behaviour, a `judge` row where a runnable check was
+  easy, a check that passes whatever the code does, or a deliverable the unit's scope
+  section names that no row covers (check_id `unowned`). Name the stronger check in `text`.
+  Advisory: report it, but never fail or downgrade a check for it.
 
 **Lever candidates:** for every check that ends `inconclusive` or `verified-unreachable`,
 name the gap and the smallest tool that would have made it checkable. Give each a

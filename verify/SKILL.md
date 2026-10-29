@@ -192,6 +192,11 @@ Owner = the unit. A row that runs a live-model eval tier sets that tier's env fl
 (`VERIFY_EVAL=1` for this repo's fixtures), or the tier is skipped and the row ends
 inconclusive (5.2's `p2-fixtures`).
 
+Nobody approves the table (`verify-contracts.md` §3.1.1), so the judge also reads the rows
+themselves: its `weak-row` lens flags a row too weak for its deliverable, and a deliverable
+no row covers. Advisory: it appears in the report and the phase report, and never fails a
+check.
+
 | check_id | check | rung | when |
 |---|---|---|---|
 | `names-resolve` | `python3 ~/Projects/ai-skills/scripts/resolve-identifiers.py --repo . --range $VERIFY_BASE..HEAD` | 4 | every unit that commits code |

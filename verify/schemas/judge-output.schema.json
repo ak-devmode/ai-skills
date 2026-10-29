@@ -28,7 +28,7 @@
         "properties": {
           "check_id": {"type": "string"},
           "lens": {"type": "string", "enum": ["conformance", "test-plan", "rejection-audit", "faithful-port",
-                                              "over-build", "invented-reality", "evidence"]},
+                                              "over-build", "invented-reality", "evidence", "weak-row"]},
           "severity": {"type": "string", "enum": ["high", "medium", "low"]},
           "where": {"type": "string"},
           "text": {"type": "string"}

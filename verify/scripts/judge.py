@@ -47,7 +47,7 @@ LEAN_PROMPT = os.path.join(SKILL, "prompts", "judge-lean.md")
 SCHEMA = os.path.join(SKILL, "schemas", "judge-output.schema.json")
 DOCS = f"{vl.CONTRACT} §4.4 · verify/SKILL.md"
 LENSES = ("conformance", "test-plan", "rejection-audit", "faithful-port", "over-build",
-          "invented-reality", "evidence")
+          "invented-reality", "evidence", "weak-row")
 
 
 def progress_file(scope):

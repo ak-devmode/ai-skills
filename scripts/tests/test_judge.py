@@ -289,6 +289,17 @@ class TestJudge(unittest.TestCase):
         self.assertEqual(self.records("judged"), [])
 
     # ---- report
+    def test_weak_row_is_a_lens_and_reported_without_failing_the_check(self):  # scope 10.5
+        self.ledger(self.base)
+        weak = {"check_id": "ok", "lens": "weak-row", "severity": "medium", "where": "finish-conditions.md",
+                "text": "existence check for a behaviour deliverable; run the endpoint instead"}
+        p = self.judge("record", "--judge", "claude-fallback x", "--input", self.answer(findings=[weak]))
+        self.assertEqual(p.returncode, 0, p.stderr)
+        run("verify-run.py", "finalize", "--log", self.log, "--run-id", self.rid, env=self.env)
+        self.judge("report")
+        text = read(os.path.join(self.scope, "artifacts", "verify-9.1-report.md"))
+        self.assertIn("**medium** · weak-row · `ok`", text)
+
     def test_report(self):
         self.ledger(self.base)
         self.judge("record", "--judge", "claude-fallback codex not authed", "--input", self.answer())

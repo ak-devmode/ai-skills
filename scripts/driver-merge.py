@@ -80,6 +80,7 @@ Exit:   0 eligible (check) / merged and event written (merge) · 1 refused / not
         2 usage · 4 merged, event not written
 """
 import argparse
+import datetime
 import hashlib
 import importlib.util
 import json
@@ -790,6 +791,19 @@ def supersede(repo, kind, head, label, pid):
               f"driver-merge: warning: {old} not marked stale ({first_err(err, src)})", file=sys.stdout if src == 0 else sys.stderr)
 
 
+def log_merge(scope, unit, rec):
+    """Append the merge to <scope>/artifacts/merges-<unit>.jsonl for phase-report.py (scope
+    10.5). The merge already landed: a failed write is a warning, never a refusal."""
+    path = os.path.join(scope, "artifacts", f"merges-{unit}.jsonl")
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "a", encoding="utf-8") as fh:
+            fh.write(json.dumps(rec) + "\n")
+    except OSError as e:
+        print(f"driver-merge: merged, but {path} was not written ({e}); the phase report will miss it",
+              file=sys.stderr)
+
+
 def post_event(repo, body):
     rc, out, err = sh([sys.executable, PACKET, "event", "--kind", "merged", "--body", body, "--driver"],
                       cwd=repo, timeout=60)
@@ -912,6 +926,9 @@ def main(argv):
             flags += [gh_flag] if gh_flag else []
             print(f"MERGED {facts['label']} {sha}" + (f" · {gh_flag}" if gh_flag else ""))
             body = f"repo={facts['slug']} pr={a.pr} base={facts['base']} sha={sha}" + "".join(f" · {f}" for f in flags)
+            log_merge(a.scope, a.unit, {"ts": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"),
+                                        "slug": facts["slug"], "pr": a.pr, "base": facts["base"], "sha": sha,
+                                        "flags": flags})
             return EXIT_OK if post_event(a.repo, body) else EXIT_NO_EVENT
         failed = [("merge", why)]
         print(f"  [FAIL] merge: {why}")

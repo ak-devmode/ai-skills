@@ -28,7 +28,8 @@ already caused real data loss. Prose cannot enforce itself — the same reasonin
 | `resolve-identifiers.py` | grepping for a name and calling it declared — comment, fixture and sibling-service hits read as real; shell `$NAME` reads fail closed | `/verify` + `/review` local-maxima lens (scope 5 Phase 2) |
 | `verify-run.py` | "it passed" as a claim — runs each finish-table row in its declared context and is the only writer of the verdict log | `/verify`, `/plan` checkpoints, `/closeout` (scope 5) |
 | `verdict-gate.py` | "verify ran, so it's done" — applies §5 to the latest final verdict per owned check (range, rung, revision, disposition coverage); `--all` is /closeout's whole-scope view; `**Predates gate:**` phases exempt; advisory until 5 clean scopes | `plans-index.py status`/`validate`, `/plan`, `/closeout` |
-| `finish-table.py` | a finish table typed by hand — standard rows per phase, Revision + Changelog on every change, read back through the runner's parser | /scope Step 5.10, /plan §5.6.2a self-heal |
+| `finish-table.py` | a finish table typed by hand — standard rows per phase, Revision + Changelog on every change, read back through the runner's parser; approved by standing policy as written (scope 10.5) | /scope Step 5.10, /plan §5.6.2a self-heal |
+| `phase-report.py` | a "1 yes" to approve a finish table nobody read — one report per phase from the records it wrote (rows, review/verify runs, outcomes, decisions, weak rows, merges), printed and kept | /plan §6.8 step 5 (scope 10.5) |
 | `review-mode.py` | each skill deciding lean vs full on its own — flag > `AI_SKILLS_REVIEW_MODE` > default `lean`; a bad env value is an error, never a silent lean | `/review`, `/verify` (plan 7) |
 | `plans-publish.sh` | commit per task, push per phase — on a trunk every machine writes; **kalpa-docs sat 11 ahead / 21 behind** | /plan §8.5b |
 | `ff-local-trunk.sh` | nothing — worktree teardown left the primary checkout's trunk behind what just merged | /closeout §13.6, herdr §3 |
@@ -183,6 +184,9 @@ by `test_entrypoint.py`'s compile check.
     finish-table.py init --scope DIR --phase N.P[=repo,...]... [--rows F] [--test-plan-owner N.P] [--predates N.P,...]
     finish-table.py add  --scope DIR --rows F --change TEXT [--replace]
       exit: 0 written · 2 usage · 3 refused (exists / missing / would not parse — nothing written)
+    phase-report.py --scope DIR --unit N.P [--no-write]
+      writes <scope>/artifacts/phase-report-<unit>.md and prints it; a missing record says so, never zero
+      exit: 0 printed · 2 usage (no scope folder). Reads artifacts/merges-<unit>.jsonl, which driver-merge.py appends on a merge.
     dispatch-log.py --scope --task --status {dispatched,done,blocked,failed} --pane [--machine --seat --branch --worktree --tail --log]
     dispatch-log.py --scope --status driver --pane "$HERDR_PANE_ID"   (/plan §5.8.2: the driver registers itself)
     dispatch-log.py --scope --task driver --status done --pane "$HERDR_PANE_ID"   (/plan §11.9: closes it)

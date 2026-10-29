@@ -441,7 +441,10 @@ Then proceed to the next task — keep going until you hit a HUMAN task, a CHECK
 
 6.4 If the next task is type `AI+HUMAN_REVIEW`, execute it fully, log the result, then STOP and ask the human to review before continuing.
 
-6.5 When you hit a `🔲 CHECKPOINT`, stop and tell the user what to review. Do not proceed past a checkpoint without explicit human instruction.
+6.5 When you hit a `🔲 CHECKPOINT`, close the unit through §6.8 — review, verify, merge,
+phase report — and let its Gate decide what follows (§11.8.4): B/C/F continue on their own,
+A/E stop as a one-way packet, D waits for the deploy to be observed. The phase report is
+what the user reviews; never stop only to ask them to look at it (Alex, 2026-10-29, scope 10.5).
 
 6.6 If a task fails, log it as ❌ FAILED with a clear description of what went wrong. Then STOP — do not continue past a failed task without human input.
 
@@ -540,6 +543,17 @@ on a direct-to-main repo a branch diff is empty by construction.
      unreadable log refuses. Accepted gap for the testing phase (Alex 98): only logged
      `/concurrency` lanes are refused registration, so an unlogged helper, review or fix pane
      that runs `/plan` can register. Nobody turns on GitHub auto-merge.
+5. **Phase report — print it, then move on.** Once the unit is Done (and merged, if it
+   merges), run `~/Projects/ai-skills/scripts/phase-report.py --scope <scope folder> --unit
+   {N}.{P}`. It writes `artifacts/phase-report-{N}.{P}.md` and prints the same text: the
+   finish rows with results, review rounds and reviewers, verify runs, fix and outcome
+   counts, rejections and accepted nits, the unit's decisions, the judge's weak rows and the
+   merges. Show it to the user as printed — it is the unit's completion summary (§11.7) —
+   and go on to the next phase (§11.8.4). Never ask "continue?" or for an approval: the user
+   reads the report when they choose, and a row they strike goes through
+   `finish-table.py add`. Publish the report with the progress write (§8.5b).
+   *Why:* Alex, 2026-10-29 (scope 10.5) — a report he can go back to, in place of a
+   question he answered without reading.
 
 **Rules version.** Every review record stamps `rules_version`. A lineage started before
 the scope-10 cutover finishes under the rules it started with (`/review`'s lineage note,
@@ -960,10 +974,9 @@ class. Record it in BOTH places:
 
 ### 11.7 Report to user
 
-One completion summary: plan number and title, where it now lives (archive path for a
-standalone plan; "stays in {scope-folder}, archives with the scope" for a child), how
-many TODOs went to `TO-DO.md`, the index status change, and — for a child — that the
-parent scope's progress.md was updated.
+The phase report (§6.8 step 5) is the summary. Add one line under it: where the plan now
+lives (archive path for a standalone plan; "stays in {scope-folder}, archives with the
+scope" for a child), how many TODOs went to `TO-DO.md`, and the index status change.
 
 ### 11.8 Sibling plan discovery
 
@@ -976,24 +989,32 @@ directory) for other plan files that haven't been executed yet:
 Also check the parent scope's `progress.md` Plans table if inside a scope
 folder (named `<N>-<slug>/`, or legacy `scope-<slug>/`).
 
-11.8.3 If pending sibling plans exist, present them to the user:
+11.8.3 If pending sibling plans exist, list them under the phase report — a list, not a
+question:
 
 ```
-📋 Sibling plans in {folder}:
+📋 Next in {folder}:
   → {N}.{P} {plan-name} — {status from index}
-  → {N}.{P} {plan-name} — {status from index}
-
-Continue to the next plan? (Y to proceed / N to stop here)
 ```
 
-11.8.4 If the user says yes, invoke `/plan` on the next pending sibling (by plan
-number order). **Whether to suggest `/clear` first is keyed off the gate type** of
-the CHECKPOINT just completed (the `**Gate**:` field in the plan's phase CHECKPOINT,
-set by /scope §5.9):
+11.8.4 **Continue on your own** to the next pending sibling (by plan number order),
+unless the gate of the CHECKPOINT just completed (its `**Gate**:` field, set by /scope
+§5.9) holds work that only the user or the world can do:
 
-- **A (human) / D (deploy-verify) / E (irreversible)** — there's a natural pause here
-  (you're waiting on a person, a deploy, or pausing before a one-way step), so this is
-  the right moment to reset. **Before suggesting `/clear`, run the `/ready-to-clear`
+- **B (concurrency) / C (review-sized) / F (already-cleared compliance)** or no Gate
+  field — invoke `/plan` on the next sibling now. Do not prompt to clear: compaction
+  handles context, and a forced reset only re-loads shared context.
+- **D (deploy-verify)** — continue once `/verify` recorded the deploy as observed (its
+  deploy row passed). Otherwise the deploy has not happened yet: emit a two-way packet
+  (§6.9) saying what is waiting, and stop.
+- **A (human) / E (irreversible)** — stop. The stop is a one-way packet (§6.9) naming what
+  the user must do or the one-way step waiting, never an inline yes/no.
+
+Never ask "continue to the next plan?" (Alex, 2026-10-29, scope 10.5).
+
+**At a stop (A, E, or D not yet observed) — whether to suggest `/clear`.** There's a natural
+pause here (you're waiting on a person, a deploy, or a one-way step), so this is the right
+moment to reset. **Before suggesting `/clear`, run the `/ready-to-clear`
   validation (mandatory — see that skill).** Spawn the fresh validator subagent with
   paths + claimed state only; on `NOT READY`, perform the listed fixes and re-validate
   (max 3 cycles, then surface failures to the user and do NOT suggest clearing). On
@@ -1004,10 +1025,6 @@ set by /scope §5.9):
   > Validated ready to clear — cold-resume: `/plan {next-plan-number}` → {first action}.
   > Phase boundary is a {human/deploy/irreversible} gate — natural place to reset.
   > Recommend running `/clear` then: `/plan {next-plan-number}`
-
-- **B (concurrency) / C (review-sized) / F (already-cleared compliance)** or no Gate
-  field — do **not** prompt to clear. Roll straight into the next plan. Compaction
-  handles context; a forced reset here just costs you re-loading shared context.
 
 Do not gate the `/clear` suggestion on "context feels heavy" — gate it on the boundary
 type. If context genuinely overflows mid-plan, compaction handles it transparently.

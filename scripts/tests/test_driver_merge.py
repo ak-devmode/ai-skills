@@ -385,6 +385,8 @@ class DriverMergeTest(unittest.TestCase):
         packets = [readj(os.path.join(outbox, f)) for f in files
                    if f.startswith("pk") and f.endswith(".json") and not f.endswith(".state.json")]
         events = [readj(os.path.join(outbox, f)) for f in files if f.startswith("evt-")]
+        log = os.path.join(scope, "artifacts", "merges-10.3.jsonl")  # scope 10.5: the phase report reads it
+        self.merge_log = [json.loads(l) for l in open(log)] if os.path.exists(log) else []
         return rc, out.getvalue(), calls, packets, events
 
     def test_merge_table(self):
@@ -406,6 +408,7 @@ class DriverMergeTest(unittest.TestCase):
                     self.assertEqual([e["kind"] for e in events], ["merged"], out)
                     self.assertIn("pr=7", events[0]["body"])
                     self.assertIn("sha=" + "f" * 40, events[0]["body"])
+                    self.assertEqual([(m["pr"], m["sha"]) for m in self.merge_log], [(7, "f" * 40)])
                     self.assertEqual(packets, [])
                     if want.get("event"):
                         self.assertIn(want["event"], events[0]["body"])
@@ -413,6 +416,7 @@ class DriverMergeTest(unittest.TestCase):
                     self.assertIn("refused" if want.get("no_gh") else
                                   "MERGED-ELSEWHERE" if "readback_head" in o else "NOT MERGED", out)
                     self.assertEqual(events, [])
+                    self.assertEqual(self.merge_log, [])
                     if not o.get("merge_rc") and not o.get("readback") and "readback_head" not in o:
                         self.assertEqual(merges, [], "a refused PR must never reach gh pr merge")
                     door = want.get("packet", "two-way") if "packet" in want else "two-way"

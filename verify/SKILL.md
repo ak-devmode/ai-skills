@@ -1,6 +1,6 @@
 ---
 name: verify
-version: 0.9.0
+version: 0.10.0
 description: |
   Independent verification of a unit of scoped work. A deterministic runner executes
   every finish-condition row the unit owns and records evidence; a judge from the
@@ -69,7 +69,7 @@ Show every line it prints to the user before anything else. It never blocks.
 worktree, not the main checkout (`verify-contracts.md` §3.2.1) — no `--projects` override.
 
 2.2 **No `finish-conditions.md`** — stop. Report that the scope predates the gate and
-that `/plan` drafts a table for Alex to confirm once. Do not invent rows here.
+that `/plan` drafts and writes a table (no approval, `verify-contracts.md` §3.1.1). Do not invent rows here.
 
 2.3 **Revision range** — per repo, `base..HEAD`, base from the ledger
 (`ledger-init.sh --repo`). An older phase with no recorded base: pass
@@ -194,8 +194,8 @@ inconclusive (5.2's `p2-fixtures`).
 
 Nobody approves the table (`verify-contracts.md` §3.1.1), so the judge also reads the rows
 themselves: its `weak-row` lens flags a row too weak for its deliverable, and a deliverable
-no row covers. Advisory: it appears in the report and the phase report, and never fails a
-check.
+no row covers. Advisory: it appears in the report and the phase report. It never replaces the
+`evidence` downgrade: a row whose check does not prove its deliverable is still downgraded.
 
 | check_id | check | rung | when |
 |---|---|---|---|

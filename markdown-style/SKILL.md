@@ -1,6 +1,6 @@
 ---
 name: markdown-style
-version: 1.4.0
+version: 1.4.1
 description: "Use for creating, updating, or revising structured .md documents — strategy docs, PRDs, plans, playbooks, integration specs, or any markdown maintained over time and loaded into future context windows. Trigger on: 'create a plan', 'draft a PRD', 'update the doc', 'write this up as a document', or references to versioned documents. Do NOT use for READMEs, quick notes, or throwaway content."
 allowed-tools:
   - Bash
@@ -329,7 +329,9 @@ on disk is the drift a hygiene pass will later report.
 ---
 ```
 
-8.7.2 `/plan` stops at every CHECKPOINT and does not proceed without explicit human instruction.
+8.7.2 At a phase-ending CHECKPOINT `/plan` closes the unit, prints the phase report and
+continues on its own unless the Gate stops it (A, E, or D with the deploy not yet observed);
+an intra-phase checkpoint is a save point (`/plan` §6.5, §11.8.4).
 
 8.7.3 The **Gate** field classifies the phase boundary (the six types are defined in
 /scope "Phase Boundaries"). It is set by /scope when generating phase stubs and read by

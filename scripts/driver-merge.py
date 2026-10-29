@@ -92,6 +92,9 @@ import time
 import urllib.parse
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, HERE)
+import verify_lib as vl  # noqa: E402
+
 PACKET = os.path.join(HERE, "packet.py")
 VERDICT_GATE = os.path.join(HERE, "verdict-gate.py")
 REVIEW_PY = os.path.join(os.path.dirname(HERE), "review", "scripts", "review.py")
@@ -796,12 +799,11 @@ def log_merge(scope, unit, rec):
     10.5). The merge already landed: a failed write is a warning, never a refusal."""
     path = os.path.join(scope, "artifacts", f"merges-{unit}.jsonl")
     try:
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-        with open(path, "a", encoding="utf-8") as fh:
-            fh.write(json.dumps(rec) + "\n")
-    except OSError as e:
-        print(f"driver-merge: merged, but {path} was not written ({e}); the phase report will miss it",
-              file=sys.stderr)
+        vl.append_verified(path, [rec])  # written, then read back (ARCHITECTURE §3.9)
+    except (OSError, vl.ContractError) as e:
+        print(f"driver-merge: MERGE-UNLOGGED {rec['slug']}#{rec['pr']} {rec['sha']} — merged, but {path} "
+              f"did not read back ({str(e).splitlines()[0]}); add this line to it by hand, never re-merge: "
+              f"{json.dumps(rec)}", file=sys.stderr)
 
 
 def post_event(repo, body):

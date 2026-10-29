@@ -13,7 +13,7 @@ import subprocess
 import tempfile
 import unittest
 
-from _helpers import load, run
+from _helpers import load, run, script
 
 JUDGE = "verify/scripts/judge.py"
 HEADER = ("| check_id | deliverable | owner | class | check | repo | dir | env | timeout | rung "
@@ -289,6 +289,11 @@ class TestJudge(unittest.TestCase):
         self.assertEqual(self.records("judged"), [])
 
     # ---- report
+    def test_weak_row_never_keeps_an_unproved_pass(self):  # 10.5-r1-01
+        with open(os.path.join(os.path.dirname(script(JUDGE)), "..", "prompts", "judge.md")) as fh:
+            prompt = fh.read()
+        self.assertIn("`weak-row` never keeps a `pass` the evidence does\n  not support", prompt)
+
     def test_weak_row_is_a_lens_and_reported_without_failing_the_check(self):  # scope 10.5
         self.ledger(self.base)
         weak = {"check_id": "ok", "lens": "weak-row", "severity": "medium", "where": "finish-conditions.md",

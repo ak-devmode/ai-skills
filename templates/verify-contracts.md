@@ -31,7 +31,7 @@ correct answer is enforced by `scripts/verify-run.py`, `scripts/verdict-gate.py`
 
 | # | Artifact | Writer | Readers |
 |---|---|---|---|
-| §3 | `finish-conditions.md` | `/scope`; `/plan` self-heal drafts it, Alex confirms | `verify-run.py`, `verdict-gate.py`, `/verify`, `/closeout` |
+| §3 | `finish-conditions.md` | `/scope`; `/plan` self-heal drafts it (standing policy, no approval) | `verify-run.py`, `verdict-gate.py`, `/verify`, `/closeout` |
 | §4 | `artifacts/verify-<unit>.jsonl` | `verify-run.py` only (all three run states) | `verdict-gate.py`, `/verify`, `/closeout` |
 | §5 | gate result (stdout + exit) | `verdict-gate.py` | `plans-index.py status`/`validate`, `/plan`, `/closeout` |
 | §6 | `artifacts/review-<unit>.jsonl` | `review/scripts/review.py` (`record`, `dispose`) | `verdict-gate.py` (coverage), `/verify` (rejection audit) |
@@ -63,7 +63,7 @@ is no threshold score — a rung-2 proof isn't blocked by a number, it is visibl
 
 **Writer:** `/scope` (template `templates/finish-conditions.md.template`, through
 `scripts/finish-table.py`); on an older scope with none, `/plan` drafts it from the scope's
-deliverables and Alex confirms once.
+deliverables and writes it; approved by standing policy (§3.1.1), nobody is asked.
 **Readers:** `verify-run.py` (executes rows), `verdict-gate.py` (evaluates rows), `/verify`
 (judges `judge` rows), `/closeout` (runs all rows).
 

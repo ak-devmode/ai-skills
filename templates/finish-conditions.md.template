@@ -1,5 +1,5 @@
-<!-- Contract: templates/verify-contracts.md §3. Writer: /scope (or /plan self-heal, Alex
-     confirms). Readers: verify-run.py, verdict-gate.py, /verify, /closeout.
+<!-- Contract: templates/verify-contracts.md §3. Writer: /scope (or /plan self-heal); approved
+     by standing policy as written (§3.1.1), nobody is asked. Readers: verify-run.py, verdict-gate.py, /verify, /closeout.
      A filled example is templates/examples/finish-conditions.md — never copy rows from it. -->
 # Finish conditions — {{SCOPE_SLUG}}
 

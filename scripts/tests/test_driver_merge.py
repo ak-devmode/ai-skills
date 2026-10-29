@@ -274,6 +274,22 @@ CASES = [
 ]
 
 
+class MergeLogTest(unittest.TestCase):  # 10.5-r1-12
+    def test_log_reads_back_and_a_failed_write_says_how_to_recover(self):
+        with tempfile.TemporaryDirectory() as t:
+            rec = {"slug": "o/r", "pr": 7, "sha": "f" * 40, "base": "develop", "flags": []}
+            dm.log_merge(t, "9.1", rec)
+            with open(os.path.join(t, "artifacts", "merges-9.1.jsonl")) as fh:
+                self.assertEqual(json.loads(fh.read())["pr"], 7)
+            blocked = os.path.join(t, "blocked")
+            open(blocked, "w").close()  # a file where the artifacts folder must go
+            err = io.StringIO()
+            with contextlib.redirect_stderr(err):
+                dm.log_merge(blocked, "9.1", rec)
+            self.assertIn("MERGE-UNLOGGED o/r#7", err.getvalue())
+            self.assertIn("never re-merge", err.getvalue())
+
+
 class DriverMergeTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()

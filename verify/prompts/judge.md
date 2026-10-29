@@ -68,7 +68,10 @@ check yourself, whether each finish condition below is actually met.
   is there) for a deliverable that is behaviour, a `judge` row where a runnable check was
   easy, a check that passes whatever the code does, or a deliverable the unit's scope
   section names that no row covers (check_id `unowned`). Name the stronger check in `text`.
-  Advisory: report it, but never fail or downgrade a check for it.
+  Advisory only for a bar that its check does prove but that could be stronger. When the
+  check does not prove the deliverable at all, that is still rule 2 and the `evidence`
+  lens: downgrade the verdict as before. `weak-row` never keeps a `pass` the evidence does
+  not support.
 
 **Lever candidates:** for every check that ends `inconclusive` or `verified-unreachable`,
 name the gap and the smallest tool that would have made it checkable. Give each a

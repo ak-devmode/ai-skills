@@ -1,6 +1,6 @@
 ---
 name: scope
-version: 3.13.0
+version: 3.14.0
 description: |
   Task scoping, skill router, and progress tracker. Reads current context (git diff,
   branch, CLAUDE.md, open files), eliminates assumptions via two rounds of open-ended
@@ -767,8 +767,8 @@ supply the phase list and the rows for the scope's own deliverables:
 `add` write it (`verify-contracts.md` §3.1.1, Alex 2026-10-29, scope 10.5) — never ask the
 user to approve rows. Write each row so it reads in plain English — *"Done means
 <deliverable>; proven by <what runs, or what the judge reads>"* — because the user reads
-them later, in the phase report `/plan` prints at the end of each phase, and strikes or
-edits a row there (through `add`). The `/verify` judge flags rows too weak for their
+them later, in the phase report `/plan` prints at the end of each phase, and amends a row
+there (through `add --replace`). The `/verify` judge flags rows too weak for their
 deliverable.
 
 **5.10.2 Publish the stubs and the table** the same way as 5.8, naming the scope folder (plus, in `local` mode, `PLANS-INDEX.md` and `archive/INDEX.md`

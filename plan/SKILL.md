@@ -1,6 +1,6 @@
 ---
 name: plan
-version: 3.17.0
+version: 3.18.0
 description: |
   Execute tasks from a structured plan document step by step, logging progress and
   stopping at human checkpoints. Plan files follow the naming convention *-PLAN.md
@@ -315,7 +315,7 @@ Loaded During Planning)` alongside the CLAUDE/ARCH/CROSS-REPO entries.
 
 5.6.2a **Self-heal: a scope with no `finish-conditions.md`.** Scopes created before the
 verification gate have no finish table, and without one `/verify` cannot run (§6.8).
-Draft one, and ask once:
+Draft one and write it — nobody is asked (§5.6.2b):
 
 1. From the scope's Plans table (or its index rows), sort the phases into **started**
    (Done, or with any task logged, including this one if it is resuming) and **not
@@ -441,10 +441,13 @@ Then proceed to the next task — keep going until you hit a HUMAN task, a CHECK
 
 6.4 If the next task is type `AI+HUMAN_REVIEW`, execute it fully, log the result, then STOP and ask the human to review before continuing.
 
-6.5 When you hit a `🔲 CHECKPOINT`, close the unit through §6.8 — review, verify, merge,
-phase report — and let its Gate decide what follows (§11.8.4): B/C/F continue on their own,
-A/E stop as a one-way packet, D waits for the deploy to be observed. The phase report is
-what the user reviews; never stop only to ask them to look at it (Alex, 2026-10-29, scope 10.5).
+6.5 **A `🔲 CHECKPOINT` with tasks still after it** (an intra-phase checkpoint, `/scope`
+§5.9 inserts them in large phases) is a save point, not the end of the unit: refresh both
+Resume Contexts, publish (§8.5b), and go on to the next task — unless its Gate is A or E,
+which stops as a one-way packet (§6.9). **The phase-ending CHECKPOINT** — every task before it
+✅ DONE or ⏭️ SKIPPED — closes the unit through §6.8 (review, verify, merge, phase report)
+and its Gate decides what follows (§11.8.4). The phase report is what the user reviews;
+never stop only to ask them to look at it (Alex, 2026-10-29, scope 10.5).
 
 6.6 If a task fails, log it as ❌ FAILED with a clear description of what went wrong. Then STOP — do not continue past a failed task without human input.
 
@@ -550,8 +553,8 @@ on a direct-to-main repo a branch diff is empty by construction.
    counts, rejections and accepted nits, the unit's decisions, the judge's weak rows and the
    merges. Show it to the user as printed — it is the unit's completion summary (§11.7) —
    and go on to the next phase (§11.8.4). Never ask "continue?" or for an approval: the user
-   reads the report when they choose, and a row they strike goes through
-   `finish-table.py add`. Publish the report with the progress write (§8.5b).
+   reads the report when they choose, and a row they want changed is amended through
+   `finish-table.py add --replace` (there is no row removal). Publish the report with the progress write (§8.5b).
    *Why:* Alex, 2026-10-29 (scope 10.5) — a report he can go back to, in place of a
    question he answered without reading.
 
@@ -956,7 +959,9 @@ For standalone plans (no parent scope), this step is N/A.
 
 ### 11.6 Prompt for /closeout
 
-After archiving, ask the user:
+Ask only when the run stops here — the scope is complete (§11.8.5) or the Gate stops it
+(§11.8.4). When the run continues on its own to a sibling, do not ask: record the deferral
+durably as below, and go on. Then, at a stop, ask the user:
 
 > All tasks complete. Two closeout options:
 >   /closeout — local repo self-heal: tests, doc drift, pattern audit in this repo only

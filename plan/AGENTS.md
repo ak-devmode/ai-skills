@@ -62,7 +62,7 @@ Log Phase 0 in the progress file.
 3. If the next task is `HUMAN`, do not execute it. Log `WAITING_HUMAN`, tell the user what to do, and stop.
 4. If the next task is `AI`, execute it fully, log it, and continue until a checkpoint, human task, failure, or phase boundary.
 5. If the next task is `AI+HUMAN_REVIEW`, execute it, log it, then stop for user review.
-6. At a phase-ending `CHECKPOINT`, close the unit (review, verify, merge, print the phase report) and continue to the next phase on your own unless its Gate is A (human), E (irreversible), or D with the deploy not yet observed — those stop as a decision packet. An intra-phase checkpoint is a save point: log progress and continue (`SKILL.md` §6.5, §11.8.4).
+6. At a phase-ending `CHECKPOINT`, close the unit (review, verify, merge, print the phase report) and continue to the next phase on your own unless its Gate is A (human), E (irreversible), or D with the deploy not yet observed — those stop as a decision packet. An intra-phase checkpoint (one with tasks after it) is a save point: log progress and continue, unless its Gate is A or E (`SKILL.md` §6.5, §11.8.4).
 7. If a task fails, log `FAILED` with what happened and stop.
 
 ## 6. Progress Logging

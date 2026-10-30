@@ -444,8 +444,8 @@ Then proceed to the next task — keep going until you hit a HUMAN task, a CHECK
 6.5 **A `🔲 CHECKPOINT` with tasks still after it** (an intra-phase checkpoint, `/scope`
 §5.9 inserts them in large phases) is a save point, not the end of the unit: refresh both
 Resume Contexts, publish (§8.5b), and go on to the next task — unless its Gate is A or E,
-which stops as a one-way packet (§6.9). **The phase-ending CHECKPOINT** — every task before it
-✅ DONE or ⏭️ SKIPPED — closes the unit through §6.8 (review, verify, merge, phase report)
+which stops as a one-way packet (§6.9). **The phase-ending CHECKPOINT** — the plan's last, with no
+task after it — closes the unit through §6.8 (review, verify, merge, phase report)
 and its Gate decides what follows (§11.8.4). The phase report is what the user reviews;
 never stop only to ask them to look at it (Alex, 2026-10-29, scope 10.5).
 

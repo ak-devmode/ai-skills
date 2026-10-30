@@ -945,6 +945,17 @@ For standalone plans (no parent scope), this step is N/A.
 
 ### 11.6 Prompt for /closeout
 
+11.6.1 **The scope's final phase holds its PR for /closeout.** Where phases return by PR
+(one per phase), the PR for the phase that completes the scope is not opened at its
+checkpoint: `/closeout` runs on the same branch first, and the phase's work, its
+verify record and the archive go out as one PR. Earlier phases still PR at their own
+checkpoints, since later lanes build on them. Opening the final phase's PR first puts a
+second, docs-only PR behind it for the closeout.
+
+> **Why (Alex, 2026-10-29, IRIS scope 9).** 9.2, the last phase, was PR'd and merged
+> (#68), and the closeout then needed its own PR for the archive and ARCHITECTURE edits:
+> two merges and two CI runs for one finish.
+
 After archiving, ask the user:
 
 > All tasks complete. Two closeout options:

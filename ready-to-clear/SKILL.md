@@ -1,6 +1,6 @@
 ---
 name: ready-to-clear
-version: 1.1.0
+version: 1.1.1
 description: |
   Independent clear-readiness validation. Spawns a FRESH subagent that checks disk
   truth (progress files, closeout-prep ledger, PLANS-INDEX) against git truth
@@ -43,7 +43,7 @@ open `NOT READY` verdict — surface the failure list to the user instead.
 ## 2. Invocation Contexts
 
 - **Standalone** — user asks "ready to clear?" at any point. Run Steps 3–6.
-- **From /plan** — at §11.8.4 (A/D/E gate handoff) and §11.8.5 (scope complete),
+- **From /plan** — at §11.8.4 (a stop at a gate) and §11.8.5 (scope complete),
   before the `/clear` suggestion is emitted.
 - **From /scope** — at Step 8.4.3, before telling the user to run `/clear`.
 - **After /closeout** — /closeout intentionally leaves an uncommitted working tree

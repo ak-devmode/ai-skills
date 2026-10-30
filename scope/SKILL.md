@@ -1,6 +1,6 @@
 ---
 name: scope
-version: 3.14.0
+version: 3.14.1
 description: |
   Task scoping, skill router, and progress tracker. Reads current context (git diff,
   branch, CLAUDE.md, open files), eliminates assumptions via two rounds of open-ended
@@ -63,8 +63,8 @@ several gate-free chunks of work belong in ONE phase even if that phase is large
 do not mint a new phase just because you estimate the work won't fit one window.
 
 If a boundary isn't one of A–F, it is not a phase boundary — it's just a long phase.
-Every CHECKPOINT this skill emits records its gate type so /plan knows whether to
-pause-and-clear (A/D/E — you're stopping anyway) or roll straight through (B/C).
+Every CHECKPOINT this skill emits records its gate type; /plan reads it to decide whether
+to stop or continue (`/plan` §6.5, §11.8.4 own that rule).
 
 ---
 
@@ -428,7 +428,7 @@ Based on all answers, decide the execution model. **Phasing is decided by gates
 - Count the gates A–F the work crosses; each gate is a phase boundary
 - Tightly-coupled, gate-free chunks between two gates collapse into a single phase
 - Tag each resulting boundary with its gate type — it flows into the CHECKPOINT
-  (§5.9) so /plan knows whether to pause-and-clear (A/D/E) or roll through (B/C)
+  (§5.9), which /plan reads to stop or continue (`/plan` §11.8.4)
 
 When phased, each phase becomes one plan file. Scope generates plan stubs that
 `/plan` can execute. See Step 5.9.
@@ -700,8 +700,9 @@ Write each from `templates/plan-stub.md.template`; conventions are `/markdown-st
 §8 and §8.9.
 
 **The Gate field is required on every phase-boundary CHECKPOINT.** `/plan` reads it to
-decide whether to suggest `/clear` (A/D/E — a natural pause) or roll through (B/C). The
-final phase uses the gate that best describes its exit.
+decide what follows (`/plan` §6.5, §11.8.4 — the one statement of that rule). An
+intra-phase checkpoint carries one only when it waits on a human or a one-way step (A or
+E); without one it is a save point. The final phase uses the gate that best describes its exit.
 
 **A table-write phase carries the identity map.** If a phase creates, alters or re-owns
 a table, its CHECKPOINT Review field must name the Step 4.5 deviations landing in that

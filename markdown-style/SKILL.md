@@ -1,6 +1,6 @@
 ---
 name: markdown-style
-version: 1.4.1
+version: 1.4.2
 description: "Use for creating, updating, or revising structured .md documents — strategy docs, PRDs, plans, playbooks, integration specs, or any markdown maintained over time and loaded into future context windows. Trigger on: 'create a plan', 'draft a PRD', 'update the doc', 'write this up as a document', or references to versioned documents. Do NOT use for READMEs, quick notes, or throwaway content."
 allowed-tools:
   - Bash
@@ -329,15 +329,13 @@ on disk is the drift a hygiene pass will later report.
 ---
 ```
 
-8.7.2 At a phase-ending CHECKPOINT `/plan` closes the unit, prints the phase report and
-continues on its own unless the Gate stops it (A, E, or D with the deploy not yet observed);
-an intra-phase checkpoint (one with tasks after it) is a save point that stops only at Gate A or E
-(`/plan` §6.5, §11.8.4).
+8.7.2 What `/plan` does at a CHECKPOINT — stop or continue — is stated once, in `/plan`
+§6.5 and §11.8.4. This section defines only the fields.
 
 8.7.3 The **Gate** field classifies the phase boundary (the six types are defined in
 /scope "Phase Boundaries"). It is set by /scope when generating phase stubs and read by
-/plan to decide whether to suggest `/clear` at the boundary (pause-and-clear at A/D/E,
-roll through at B/C). Checkpoints inserted by hand outside a /scope phase may omit it.
+/plan (§11.8.4). An intra-phase or hand-inserted checkpoint may omit it, which makes it a
+save point.
 
 ### 8.8 Workspace-Relative File References
 

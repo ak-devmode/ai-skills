@@ -94,7 +94,7 @@ def verify_section(scope, unit):
         text = fh.read()
     # whole, headings pushed below this section's; its own header names the run and table revision
     body = re.sub(r"^(#{1,4}) ", lambda m: "#" * (len(m.group(1)) + 2) + " ", text.strip(), flags=re.M)
-    return out + [f"From `artifacts/verify-{unit}-report.md`, whole:", "", body]
+    return out + [f"From `artifacts/verify-{unit}-report.md`, whole — as of its own run; §2 is current:", "", body]
 
 
 def review_section(scope, unit):

@@ -106,6 +106,7 @@ class PhaseReport(unittest.TestCase):
         self.assertIn("**Run:** run-3 · table rev 1", out)  # its header names the run (10.5-r2-02)
         self.assertIn("#### 1. Checks", out)  # headings sit below the section's
         self.assertIn("Lever candidates", out)
+        self.assertIn("as of its own run; §2 is current", out)  # an older report never reads as current (10.5-r3-02)
         self.assertIn("- Rounds: 2 reviews (claude-fallback ×1, codex ×1)", out)
         self.assertIn("- Last: 9.1-r2 — SHIP", out)
         self.assertIn("- Findings: 3 (blocking 1, note 1, should-fix 1)", out)

@@ -1,6 +1,6 @@
 ---
 name: plan
-version: 3.18.0
+version: 3.18.1
 description: |
   Execute tasks from a structured plan document step by step, logging progress and
   stopping at human checkpoints. Plan files follow the naming convention *-PLAN.md
@@ -172,9 +172,9 @@ The three fields this skill *acts* on:
 - **`Status`** must read `Ready to execute`. `Draft` fails pre-flight (§5.3).
 - **`Type`** per task: `AI` (autonomous) · `HUMAN` (stop and wait) · `AI+HUMAN_REVIEW`
   (execute, then stop for review before marking complete).
-- **`Gate`** on each phase CHECKPOINT: A human · B concurrency · C review/merge ·
-  D deploy/verify · E irreversible · F compliance. Set by `/scope`, read here to decide
-  whether to suggest `/clear` (§11.8.4). A plan predating gate tagging is treated as B/C.
+- **`Gate`** on the phase-ending CHECKPOINT: A human · B concurrency · C review/merge ·
+  D deploy/verify · E irreversible · F compliance. Set by `/scope`; §11.8.4 decides from it
+  whether the plan stops or continues. No Gate field (a plan predating gate tagging) continues.
 
 ### 3.1 Stamp `Executed by` at phase start — write it, never ask for it
 
@@ -443,8 +443,9 @@ Then proceed to the next task — keep going until you hit a HUMAN task, a CHECK
 
 6.5 **A `🔲 CHECKPOINT` with tasks still after it** (an intra-phase checkpoint, `/scope`
 §5.9 inserts them in large phases) is a save point, not the end of the unit: refresh both
-Resume Contexts, publish (§8.5b), and go on to the next task — unless its Gate is A or E,
-which stops as a one-way packet (§6.9). **The phase-ending CHECKPOINT** — the plan's last, with no
+Resume Contexts, publish (§8.5b), and go on to the next task. Position alone decides this;
+a Gate on it is ignored. A wait on a person inside a phase is a `HUMAN` task (§6.2), and a
+one-way step is a phase boundary (`/scope` Phase Boundaries). **The phase-ending CHECKPOINT** — the plan's last, with no
 task after it — closes the unit through §6.8 (review, verify, merge, phase report)
 and its Gate decides what follows (§11.8.4). The phase report is what the user reviews;
 never stop only to ask them to look at it (Alex, 2026-10-29, scope 10.5).

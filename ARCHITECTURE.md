@@ -239,7 +239,7 @@ graphs.
 
 | Skill | Version | Notes |
 |---|---|---|
-| `plan` | 3.18.0 | Review + verify per unit, Done through the gate; self-heal with `Predates gate`; ledger `--repo` bases; finish table approved by standing policy, never asked (scope 10.5). Review outcomes run on the standing policy (WellMed 171): a SHIP proceeds to `/verify`, stops only for design, repeats, no SHIP by round 3, or a cascade. |
+| `plan` | 3.18.1 | Review + verify per unit, Done through the gate; self-heal with `Predates gate`; ledger `--repo` bases; finish table approved by standing policy, never asked (scope 10.5). Review outcomes run on the standing policy (WellMed 171): a SHIP proceeds to `/verify`, stops only for design, repeats, no SHIP by round 3, or a cascade. |
 | `scope` | 3.14.1 | Step 0.9 folds matching TO-DOs it judges in straight into the plan and asks only about the ones it would leave out. Step 5.10 writes `finish-conditions.md`, §5.10.1 approved by standing policy, rows read later in the phase report; stubs carry Review/Verify tasks. |
 | `closeout` | 1.4.0 | Step 3a verdict (`--all`), lever candidates, feature-map handoff, clean-scope count. |
 | `closeout-extended` | 1.0.1 | |

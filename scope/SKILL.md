@@ -63,7 +63,7 @@ several gate-free chunks of work belong in ONE phase even if that phase is large
 do not mint a new phase just because you estimate the work won't fit one window.
 
 If a boundary isn't one of A–F, it is not a phase boundary — it's just a long phase.
-Every CHECKPOINT this skill emits records its gate type; /plan reads it to decide whether
+Every phase-ending CHECKPOINT this skill emits records its gate type; /plan reads it to decide whether
 to stop or continue (`/plan` §6.5, §11.8.4 own that rule).
 
 ---
@@ -701,13 +701,13 @@ Write each from `templates/plan-stub.md.template`; conventions are `/markdown-st
 
 **The Gate field is required on every phase-boundary CHECKPOINT.** `/plan` reads it to
 decide what follows (`/plan` §6.5, §11.8.4 — the one statement of that rule). An
-intra-phase checkpoint carries one only when it waits on a human or a one-way step (A or
-E); without one it is a save point. The final phase uses the gate that best describes its exit.
+intra-phase checkpoint carries none: it is a save point by position. A wait on a person
+inside a phase is a `HUMAN` task; a one-way step is a phase boundary. The final phase uses the gate that best describes its exit.
 
 **A table-write phase carries the identity map.** If a phase creates, alters or re-owns
 a table, its CHECKPOINT Review field must name the Step 4.5 deviations landing in that
 phase — an unapproved deviation is not eligible to ship. Crossing an owner boundary
-makes it gate A (or E if irreversible), never a roll-through B/C.
+makes it gate A (or E if irreversible), never B/C.
 
 **A phase that absorbed a TO-DO item carries it as a task.** Step 0.9.4 named the phase for
 each folded item; write it into that stub's task list with a pointer back to its `TO-DO.md`

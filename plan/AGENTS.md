@@ -22,13 +22,7 @@ Known plans directories:
 Check scope subdirectories — named `<N>-<slug>/` (current convention) or
 `scope-<slug>/` (legacy) — for child plans generated from a scope.
 
-Progress file naming:
-
-- `39.2-foo-bar-PLAN.md` -> `39.2-foo-bar-PROGRESS.md`
-- `foo-bar-PLAN.md` -> `foo-bar-PROGRESS.md`
-- `PLAN.md` -> `PROGRESS.md`
-
-The progress file lives beside the plan file.
+Where progress is written is `SKILL.md` §2.3: a child plan writes a `## Plan {N}.{P}` section in the scope's `progress.md` (never a `<stem>-PROGRESS.md`); only a standalone plan has its own `<stem>-PROGRESS.md` beside the plan file.
 
 ## 3. First Run
 

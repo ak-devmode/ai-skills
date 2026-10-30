@@ -334,8 +334,8 @@ on disk is the drift a hygiene pass will later report.
 
 8.7.3 The **Gate** field classifies the phase boundary (the six types are defined in
 /scope "Phase Boundaries"). It is set by /scope when generating phase stubs and read by
-/plan (§11.8.4). An intra-phase or hand-inserted checkpoint may omit it, which makes it a
-save point.
+/plan (§6.5, §11.8.4). Intra-phase checkpoints carry none; what /plan does at any checkpoint
+is those sections.
 
 ### 8.8 Workspace-Relative File References
 

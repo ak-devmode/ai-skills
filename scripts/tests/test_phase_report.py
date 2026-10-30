@@ -2,9 +2,9 @@
 
 Approach: build a throwaway scope with a finish table (written by finish-table.py init), a
 verify report, a review log, a progress Decisions Log and a merge log; render it and check
-each section reads its own source — rows from the table parser, judge checks and findings
-from the verify report, state from verdict-gate.py — and that a missing or damaged record
-says so, never reads as zero (reframe 10.5-r1).
+each section reads its own source — rows from the table parser, the verify report and
+verdict-gate.py's output embedded whole — and that a missing or damaged record says so,
+never reads as zero (reframes 10.5-r1, 10.5-r2).
 """
 import json
 import os
@@ -63,7 +63,7 @@ class PhaseReport(unittest.TestCase):
         out = self.report()
         row = next(l for l in out.splitlines() if l.startswith("| p1-pipe |"))
         self.assertIn("accept A \\| B for every tenant", row)
-        self.assertEqual(row.replace("\\|", "").count("|"), 6)  # five cells, no shifted columns
+        self.assertEqual(row.replace("\\|", "").count("|"), 5)  # four cells, no shifted columns
         self.assertIn("`judge` (rung 2)", row)
         self.assertIn("team/svc/.", row)
 
@@ -73,10 +73,13 @@ class PhaseReport(unittest.TestCase):
         out = self.report()
         self.assertIn("Review log damaged", out)
         self.assertNotIn("Findings: 0", out)
+        gate = out.split("## 2. Gate", 1)[1].split("## 3.", 1)[0]
+        self.assertIn("exit 3", gate)  # the gate's own error, never "accepted"  (10.5-r2-01)
+        self.assertIn("review-9.1.jsonl", gate)
 
     def test_every_section_reads_its_record(self):
         put(os.path.join(self.art, "verify-9.1-report.md"),
-            "# Verify 9.1\n\n## 1. Checks\n\n| Check | Result |\n|---|---|\n| p1-names-resolve | pass |\n\n"
+            "# Verify 9.1\n\n**Run:** run-3 · table rev 1\n\n## 1. Checks\n\n| Check | Result |\n|---|---|\n| p1-names-resolve | pass |\n\n"
             "## 2. Findings\n\n- **medium** · weak-row · `p1-pipe` · t — existence only; call the route\n"
             "- **misfiled** `9.1-r1-02` — a missing tenant filter dismissed as a nit\n\n## 3. Lever candidates\n\nnone\n")
         put(os.path.join(self.art, "review-9.1.jsonl"), jl(
@@ -96,10 +99,13 @@ class PhaseReport(unittest.TestCase):
              "sha": "f" * 40, "flags": ["degraded review: lean"]}))
         out = self.report()
         self.assertIn("## 2. Gate", out)
-        self.assertIn("- Verdict:", out)
-        self.assertIn("weak-row · `p1-pipe`", out)  # judge findings come whole from the verify report
+        self.assertIn("verdict: ", out)  # the gate's own text, whole (10.5-r2-03)
+        self.assertIn("p1-pipe", out.split("## 2. Gate", 1)[1].split("## 3.", 1)[0])
+        self.assertIn("weak-row · `p1-pipe`", out)  # the verify report, whole
         self.assertIn("**misfiled** `9.1-r1-02`", out)
-        self.assertNotIn("Lever candidates", out)
+        self.assertIn("**Run:** run-3 · table rev 1", out)  # its header names the run (10.5-r2-02)
+        self.assertIn("#### 1. Checks", out)  # headings sit below the section's
+        self.assertIn("Lever candidates", out)
         self.assertIn("- Rounds: 2 reviews (claude-fallback ×1, codex ×1)", out)
         self.assertIn("- Last: 9.1-r2 — SHIP", out)
         self.assertIn("- Findings: 3 (blocking 1, note 1, should-fix 1)", out)

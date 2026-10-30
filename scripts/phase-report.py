@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """phase-report.py — what a phase did, printed at its end and kept for later (scope 10.5).
 
-Approach: compose, don't re-judge (reframe 10.5-r1). The owned finish rows come from the
-table's parser, row validity and review acceptance from verdict-gate.py's own JSON, and the
-judge's checks and findings (weak rows and misfiled nits included) from the verify report
-judge.py already wrote. This script adds only what nothing else renders: review rounds and
-outcomes, the unit's decisions and the driver's merges. Nothing is asked and nothing is
+Approach: compose, don't re-judge (reframes 10.5-r1, 10.5-r2). The owned finish rows come
+from the table's parser. The gate's state (each row, review acceptance, errors) is
+verdict-gate.py's own text output and the verify report is judge.py's own file, both
+embedded whole: re-parsing either drops what it says (a gate error, the run a report
+belongs to). This script adds only what nothing else renders: review rounds and outcomes,
+the unit's decisions and the driver's merges. Nothing is asked and nothing is
 decided here; the report replaces the finish-table approval question
 (verify-contracts.md §3.1.1): Alex reads the rows after the fact and amends one through
 `finish-table.py add --replace`.
@@ -20,7 +21,6 @@ Exit: 0 written/printed · 2 usage (no scope folder) · 3 the report did not rea
 import argparse
 import collections
 import datetime
-import json
 import os
 import re
 import subprocess
@@ -48,16 +48,12 @@ def records(path, what):
         return None, f"{what.capitalize()} damaged — {str(e).splitlines()[0].strip()} ({path})"
 
 
-def gate_state(scope, unit):
-    p = subprocess.run([sys.executable, GATE, "--scope", scope, "--unit", unit, "--advisory", "--json"],
-                       capture_output=True, text=True, timeout=300)
-    try:
-        return json.loads(p.stdout), None
-    except ValueError:
-        return None, f"verdict-gate.py could not evaluate (exit {p.returncode}): {cell(p.stderr.strip()[-300:])}"
+def fenced(text):
+    fence = "`" * max(3, max((len(m) for m in re.findall(r"`+", text)), default=0) + 1)
+    return [fence, text.rstrip("\n"), fence]
 
 
-def rows_section(scope, unit, gate):
+def rows_section(scope, unit):
     out = ["## 1. Finish rows", ""]
     try:
         table = vl.parse_table(os.path.join(scope, "finish-conditions.md"))
@@ -66,30 +62,27 @@ def rows_section(scope, unit, gate):
     owned = [r for r in table["rows"] if r["owner"] == unit or r["owner"].startswith(unit + "/")]
     if not owned:
         return out + [f"No rows owned by {unit} (table rev {table['revision']})."]
-    state = {}
-    for line in (gate or {}).get("report", []):
-        parts = line.split()
-        if len(parts) >= 2:
-            state[parts[1]] = line.split(parts[1], 1)[1].strip()
     appr = table.get("approval")
     out += [f"Table rev {table['revision']} · " + ("no approval line (predates the contract)" if appr is None else
             f"approved rev {appr}" if isinstance(appr, int) else f"approval {cell(appr)}"), "",
-            "| row | deliverable | proven by | where | gate |", "|---|---|---|---|---|"]
+            "| row | deliverable | proven by | where |", "|---|---|---|---|"]
     for r in owned:
         env = " ".join(f"{k}={v}" for k, v in r["env"].items()) if isinstance(r.get("env"), dict) else r.get("env")
         where = f"{r['repo']}/{r['dir']}" + (f" · env {env}" if env not in (None, "-", "") else "")
         out.append(f"| {cell(r['check_id'])} | {cell(r['deliverable'])} | `{cell(r['check'])}` (rung {r['rung']}) "
-                   f"| {cell(where)} | {cell(state.get(r['check_id'], 'not evaluated'))} |")
+                   f"| {cell(where)} |")
     return out
 
 
-def gate_section(gate, problem):
-    out = ["## 2. Gate", ""]
-    if problem:
-        return out + [problem]
-    out.append(f"- Verdict: {gate.get('verdict')}{' · ' + gate['marker'] if gate.get('marker') else ''}")
-    out += [f"- block `{b.get('id')}` — {cell(b.get('what'))}" for b in gate.get("blocks", [])]
-    return out
+def gate_section(scope, unit):
+    """verdict-gate.py's own output, whole: each row's state, review acceptance, or its error."""
+    cmd = [sys.executable, GATE, "--scope", scope, "--unit", unit, "--advisory"]
+    try:
+        p = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+        text, head = p.stdout + p.stderr, f"`verdict-gate.py --advisory`, exit {p.returncode}"
+    except (OSError, subprocess.TimeoutExpired) as e:
+        text, head = str(e), "`verdict-gate.py --advisory` did not run"
+    return ["## 2. Gate", "", head + " (3 = could not evaluate):", ""] + fenced(text or "(no output)")
 
 
 def verify_section(scope, unit):
@@ -99,15 +92,12 @@ def verify_section(scope, unit):
         return out + ["No verify report."]
     with open(path, encoding="utf-8") as fh:
         text = fh.read()
-    out.append(f"From `artifacts/verify-{unit}-report.md` — checks and findings (weak rows and misfiled "
-               "nits included):")
-    for title in ("Checks", "Findings"):
-        m = re.search(rf"^## \d+\. {title}\s*$(.*?)(?=^## |\Z)", text, re.M | re.S)
-        out += ["", f"### {title}", "", (m.group(1).strip() if m else f"(no {title} section)")]
-    return out
+    # whole, headings pushed below this section's; its own header names the run and table revision
+    body = re.sub(r"^(#{1,4}) ", lambda m: "#" * (len(m.group(1)) + 2) + " ", text.strip(), flags=re.M)
+    return out + [f"From `artifacts/verify-{unit}-report.md`, whole:", "", body]
 
 
-def review_section(scope, unit, gate):
+def review_section(scope, unit):
     out = ["## 4. Review", ""]
     review, problem = records(os.path.join(scope, "artifacts", f"review-{unit}.jsonl"), "review log")
     if problem:
@@ -126,10 +116,7 @@ def review_section(scope, unit, gate):
     undisposed = len(set(findings) - set(latest))
     out.append(f"- Outcomes: {', '.join(f'{k} {v}' for k, v in sorted(kinds.items())) or 'none'}"
                + (f" · {undisposed} without a disposition" if undisposed else ""))
-    blocks = {b.get("id") for b in (gate or {}).get("blocks", [])}
-    out.append("- Accepted: unknown (gate not evaluated)" if gate is None else
-               "- Accepted: no — outcomes not accepted since the last finding" if "review-acceptance" in blocks else
-               "- Accepted: yes")
+    out.append("- Accepted: see §2 (the gate checks it)")
     out += ["", "Rejections and accepted nits:", ""]
     picked = [(fid, d) for fid, d in latest.items() if d.get("disposition") in ("rejected", "accepted")]
     out += [f"- {'rejected' if d['disposition'] == 'rejected' else 'nit'} `{fid}` — {cell(d.get('reason'))}"
@@ -180,12 +167,11 @@ def merges_section(scope, unit):
 
 
 def render(scope, unit):
-    gate, problem = gate_state(scope, unit)
     lines = [f"# Phase report — {unit}", "",
              f"**Generated:** {datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%dT%H:%MZ')} · "
              f"**Scope:** {scope}", ""]
-    for sec in (rows_section(scope, unit, gate), gate_section(gate, problem), verify_section(scope, unit),
-                review_section(scope, unit, gate), decisions_section(scope, unit), merges_section(scope, unit)):
+    for sec in (rows_section(scope, unit), gate_section(scope, unit), verify_section(scope, unit),
+                review_section(scope, unit), decisions_section(scope, unit), merges_section(scope, unit)):
         lines += sec + [""]
     return "\n".join(lines).rstrip("\n") + "\n"
 

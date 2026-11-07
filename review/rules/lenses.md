@@ -30,6 +30,18 @@ execution continued as if it succeeded; a default value that masks a missing con
 - **Over-build** — abstraction the change did not need: a registry, plugin layer, factory
   or config system with one caller; a parallel implementation of a pattern that already
   exists in the repo (search for it before accepting a new one).
+- **A simpler way** — ask of every change, findings or not: could this outcome be reached
+  more simply? Signs: a guard or branch for a case no real input produces; a new mechanism
+  where narrowing what the code promises would do; state, flags or retries carried to
+  survive an edge case the design itself created. When there is one, it is a
+  `local-maxima` finding, at most `should-fix`: name the simpler shape and what it deletes.
+  Simpler means the same objective with less: never by dropping something the scope asked for.
+- **Your own fixes** — each finding's `fix` is a solution too, held to the same question.
+  Propose the smallest change that removes the defect: delete or narrow before you guard
+  or add. If the defect only bites on an input nothing real sends, say so and propose
+  narrowing the promise, or a note, not handling for it. A fix that would need edge-case
+  handling of its own is the wrong fix; complicated fixes are where the next round's
+  findings come from.
 - **Invented reality** — names, paths, env vars, SSM keys, routes, proto fields, table
   columns, CLI flags used as if they exist without being declared anywhere. Look each one
   up; "it reads plausibly" is not a lookup.

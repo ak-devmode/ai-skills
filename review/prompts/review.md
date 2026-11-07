@@ -38,6 +38,9 @@ Only the JSON object the schema describes.
 - `category`: `engine` (the generic checklist) · `domain` (domain rules; set `group` to the
   rule's section number, e.g. `3.5`) · `local-maxima` · `silent-failure` · `dirty-comment` ·
   `doc-claim` · `fail-open`.
+- `fix`: the simplest change that removes the defect — delete or narrow before guard or add
+  (lenses §4, "Your own fixes"). Ask of every finding, and of the change as a whole: could
+  this be done more simply?
 - `target`: `shipped` (what the change delivers) · `scaffolding` (a check, finish-table row,
   progress/plan note or procedure prose the session added). Scaffolding is never `blocking`
   (lenses §7).

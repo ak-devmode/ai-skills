@@ -517,3 +517,9 @@ Touches: scripts/resolve-identifiers.py · scripts/tests/test_resolve_identifier
 Source: plans/10-decision-queue-harness/progress.md (verify 10.1)
 Touches: scripts/finish-table.py · templates/verify-contracts.md §7.2
 - [ ] **`finish-table.py init/add` accepts a row targeting a private repo in a public scope.** Scope 10's table (ai-skills, public) carried five dev-workbench (private) rows; `verify-run.py` refused them only at /verify time (§7.2). Refuse at write time, naming the row and offering the pointer-row + private-evidence shape (rev 4 of scope 10's table).
+
+## Worktree and plans-dir blind spots (kalpa-iris scope 10 closeout, 2026-11-10)
+Source: ~/Projects/wellmed/kalpa-iris/iris-docs/plans/archive/10-satu-sehat/progress.md (closeout)
+Touches: scripts/repo-graph-check.py · scripts/packet.py · /plan §5.6.1
+- [ ] **`repo-graph-check.py` reads the main checkout, not the herdr worktree the scope runs in.** `main()` defaults `projects` to `~/Projects` (line 125), so a scope built in `~/.herdr/worktrees/<repo>/<branch>` is classified against the primary checkout's HEAD — a different branch — and reads as drifted or unchanged for the wrong reason. Fix: resolve each repo to the worktree the scope folder sits in (same rule as `/verify` `verify-contracts.md` §3.2.1), falling back to `~/Projects`.
+- [ ] **`packet.py`'s one-way staleness check hard-codes `plans/` as the bookkeeping path** (line 811). In kalpa-iris the plans dir is `iris-docs/plans/`, so every progress or index commit while a lane is parked counts as "paths outside plans/ moved" and refuses the packet as stale. Fix: take the plans dir from `resolve-plans-dir.sh` (relative to the repo root) instead of the literal.

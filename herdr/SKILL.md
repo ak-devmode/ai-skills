@@ -171,10 +171,19 @@ main tab (Alex's)          "<scope> lanes" tab (the skill's)
 - **Create the tab** in the driver's workspace: `herdr tab create --workspace
   $HERDR_WORKSPACE_ID --cwd <first lane's checkout> --label "<scope> lanes"`. Its root
   pane is slot a1.
-- **Fill column by column:** a2 splits a1 **down**; a3 splits a1 **right**; a4 splits
-  a3 **down**; a5 splits a3 **right**; a6 splits a5 **down**. Use `--cwd <that lane's
+- **Columns first, then rows.** A split divides only the pane it is given, so splitting
+  a1 down before cutting the columns gives a2 the full width (hit live 2026-11-15: a
+  full-width bottom pane with five small ones above). Build the three columns, then
+  halve each one: a3 splits a1 **right** `--ratio 0.333`; a5 splits a3 **right**
+  `--ratio 0.5`; then a2 splits a1 **down**, a4 splits a3 **down**, a6 splits a5
+  **down**, each `--ratio 0.5`. `--ratio` is the share the split pane keeps, so these
+  give an even 3x2 (read back: six panes of equal `stty size`). Slots stay numbered
+  column by column (a1/a2 left, a3/a4 middle, a5/a6 right). Use `--cwd <that lane's
   checkout>` and `--no-focus` on every split, so the driver keeps focus. A lane created
   by `worktree create` is moved into its slot with `pane move` (§3).
+- **Never reuse a loop variable across helpers in a launch script.** A `for i` inside a
+  start-with-retry helper clobbered the caller's slot counter, and five lanes were sent
+  to one pane (2026-11-15). Use `local` or distinct names.
 - **Reviews and fix writers** take the next free slot in the lanes tab, or the next lanes
   tab. They do not split the lane they serve.
 - **Names:** each pane carries its task name (§2). The tab label names the run, so

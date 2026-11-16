@@ -22,6 +22,10 @@ Usage:
   env VERIFY_CODEX_BIN overrides the codex binary (tests use fakes).
   env VERIFY_CODEX_MODEL is a family (default `sol`) or an exact slug; CODEX_HOME locates
       codex's model cache (default ~/.codex).
+  Account (Alex, 2026-11-16): an explicit CODEX_HOME always wins. Otherwise homelab2026 runs on
+      the integrations account (~/.codex-int), and elsewhere codex-alex is used until its 5h or
+      7d window reaches CODEX_ALEX_SWITCH_PCT (default 60) per placement.py, then ~/.codex-int.
+      The choice is printed on stderr. Skipped when VERIFY_CODEX_BIN is set (tests).
 Output: diagnostics on stderr (§10 messages); the judge line as the last stdout line.
 Exit:   0 codex ran and answered · 1 a failure mode (judge line is `none …`) · 2 usage
 """
@@ -208,6 +212,36 @@ def cmd_exec(a):
     return vl.EXIT_PASS
 
 
+def pick_codex_home():
+    """Choose the codex account when the caller did not (see the module docstring)."""
+    if os.environ.get("CODEX_HOME") or os.environ.get("VERIFY_CODEX_BIN"):
+        return
+    alt = os.path.expanduser("~/.codex-int")
+    if not os.path.isdir(alt):
+        return
+    if os.uname().nodename.split(".")[0] == "homelab2026":
+        os.environ["CODEX_HOME"] = alt
+        print("codex-exec: account int (homelab2026 default)", file=sys.stderr)
+        return
+    limit = int(os.environ.get("CODEX_ALEX_SWITCH_PCT") or 60)
+    placement = os.path.join(os.path.dirname(os.path.abspath(__file__)), "placement.py")
+    try:
+        out = subprocess.run([sys.executable, placement, "recommend", "--json"], stdin=subprocess.DEVNULL,
+                             capture_output=True, text=True, timeout=60).stdout
+        d = json.loads(out)
+        me = next(c for c in d["candidates"] if c.get("machine") == d.get("local")
+                  and c.get("account") == "alex" and c.get("seat") == "codex")
+    except (OSError, subprocess.TimeoutExpired, ValueError, KeyError, StopIteration) as exc:
+        print(f"codex-exec: account alex (usage unreadable: {type(exc).__name__})", file=sys.stderr)
+        return
+    used = max(me.get("used_5h") or 0, me.get("used_7d") or 0)
+    if used >= limit:
+        os.environ["CODEX_HOME"] = alt
+        print(f"codex-exec: account int (codex-alex at {used}% >= {limit}%)", file=sys.stderr)
+    else:
+        print(f"codex-exec: account alex ({used}% used)", file=sys.stderr)
+
+
 def main(argv):
     ap = argparse.ArgumentParser(description="Run codex headless (probe | exec).")
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -224,6 +258,7 @@ def main(argv):
         a = ap.parse_args(argv)
     except SystemExit as exc:
         return vl.EXIT_USAGE if exc.code else vl.EXIT_PASS
+    pick_codex_home()
     return cmd_probe(a) if a.cmd == "probe" else cmd_exec(a)
 
 

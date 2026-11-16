@@ -195,9 +195,15 @@ opt-in. On anything but an explicit `y`, stop without dispatching.
 ## 6. Dispatch — on `y` from §5.2 (3x2 panes per lanes tab, ~6 lanes total — §9.3)
 
 Per partition, in this order (syntax authority: `herdr --skill`):
-1. `herdr worktree create --cwd <repo> --base origin/<trunk>
-   --branch concurrency/<scope>-<task>` — no `--env`, for any seat (the glm
-   override is inline in its launch command; `herdr` skill §6). Workspace label = run name only (`<scope> run`); seat identity
+1. **Claim the lane's fixed slot** (Alex, 2026-11-16): `~/Projects/ai-skills/scripts/lane-slot.py
+   claim <repo> a<N> --branch concurrency/<scope>-<task> --base origin/<trunk>`, where `a<N>` is
+   the grid slot the lane gets in step 1b. Each repo keeps six reusable worktrees
+   `<repo>.lanes/a1..a6`, trusted once by `pretrust.py` (Alex runs it per repo per machine), so
+   no lane meets the folder-trust dialog; the claim refuses a slot still holding uncommitted or
+   unpushed work. The pane's cwd is the slot folder (`pane run <pane> "cd <slot> && <launch>"`).
+   A seventh concurrent writer on the same repo, or a repo not yet pre-trusted, falls back to
+   `herdr worktree create --cwd <repo> --base origin/<trunk> --branch …` and its trust dialog. No
+   `--env` for any seat (the glm override is inline in its launch command; `herdr` skill §6). Workspace label = run name only (`<scope> run`); seat identity
    goes on the PANE per the `herdr` skill §2 (naming).
 1b. **Layout + naming: `herdr` §5 and §2.** Agents go in a new `<scope> lanes` tab in the
    driver's workspace (3x2 max, built in one call by `herdr-pane.sh grid "<scope> lanes"
@@ -433,9 +439,11 @@ zero-cost-basis silent defeat that build/test/disjointness passes all missed).
   to touch a local branch of that name that is checked out or has diverged. Its review
   pane (§7.3) runs on the box, in the lane's worktree, before the fetch.
 - Landing is MANUAL and Alex's: hand him per-branch merge commands, bare.
-- `herdr worktree remove` (`herdr --machine <host> worktree remove` for a box lane) only
-  after Alex confirms the branch is landed or abandoned — worktrees with unmerged commits
-  are never removed automatically.
+- A slot lane is **released, never removed**: `lane-slot.py release <repo> a<N>` detaches the
+  slot at the base once Alex confirms the branch is landed or abandoned; the branch itself goes in
+  the wave teardown. A fallback `herdr worktree create` lane is removed with `herdr worktree remove`
+  (`herdr --machine <host> …` for a box lane) on the same condition — worktrees with unmerged
+  commits are never removed automatically.
 - Teardown boundary (who tidies): an atomic-unit agent may close its OWN pane
   when done, but NEVER removes its worktree — a worktree with unmerged commits
   is the ORCHESTRATOR's to remove, and only after land/abandon (above). Losing
@@ -447,8 +455,8 @@ zero-cost-basis silent defeat that build/test/disjointness passes all missed).
   driver closes those panes from its own pane and runs (or, if auto mode refuses, hands
   over in that same reply) the teardown script below. Live and unmerged lanes stay.
 - **Wave teardown = one script for Alex**, from `templates/teardown.sh.template` (`/closeout`
-  §13.6a): lane worktrees, merged lane branches (local + origin), lane DBs/containers, the trust
-  entries the dispatch added. Run it from outside the lane worktrees; never close panes from it.
+  §13.6a): slot releases and fallback worktrees, merged lane branches (local + origin), lane
+  DBs/containers. Slot trust entries stay — they are what makes the next run prompt-free. Run it from outside the lane worktrees; never close panes from it.
 - Progress log is the DRIVER's job, ALWAYS (Alex, 2026-08-24): the orchestrator
   updates the scope's `progress.md` — landed shas, review-artifact paths, what
   remains — never a spawned agent. A worker or review pane sees only its own

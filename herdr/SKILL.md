@@ -84,6 +84,14 @@ Isolated git worktree per scope/lane — the default for `/concurrency` (lane
 isolation) and opt-in for a solo `/plan`. herdr manages the checkout path under
 `~/.herdr/worktrees/<repo>/<branch>`.
 
+- **Lanes reuse six fixed slots per repo (Alex, 2026-11-16).** `/concurrency` lanes do not
+  create a worktree each: `scripts/lane-slot.py claim <repo> a<N> --branch <b> --base <ref>`
+  checks the branch out in `<repo>.lanes/a<N>` (one slot per §5 grid slot), and `release`
+  detaches it afterwards. Trust is per exact folder (§4), so six fixed folders trusted once by
+  `scripts/pretrust.py` (Alex runs it per repo per machine) end the trust-dialog stalls. The
+  herdr-managed worktree below stays for a solo `/plan`, a seventh concurrent writer, or a repo
+  not yet pre-trusted.
+
 - **Create + bind** (the space *is* the worktree-workspace, born that way — do
   NOT create a plain umbrella space and attach a worktree afterward):
   ```
@@ -138,7 +146,8 @@ permission prompt (the auto-mode classifier blocks it, correctly). Fix it at
   `~/Projects/wellmed/wellmed-cashier.worktrees/fix-…` blocked on the dialog. Before
   launch, pre-trust every worker cwd outside `~/.herdr/worktrees/` (the narrower
   alternative below: load, set, atomic replace, read back) and remove those entries at
-  teardown. A worker already at the dialog: `agent send-keys <name> esc` cancels it
+  teardown — or, for `/concurrency` lanes, use the pre-trusted fixed slots (§3, `lane-slot.py`,
+  `pretrust.py`), which removes the per-run step. A worker already at the dialog: `agent send-keys <name> esc` cancels it
   (exits, grants nothing), then pre-trust and re-`agent start` in the same pane. On the
   box the pre-trust edit was refused to an agent session — §6.1.
 - Safe here *specifically* because each worker is sandboxed: isolated worktree,

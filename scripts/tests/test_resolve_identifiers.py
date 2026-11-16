@@ -379,6 +379,22 @@ class TestResolveIdentifiers(unittest.TestCase):
         for field in CONTRACT_FIELDS:
             self.assertIn(field, p.stderr)
 
+    def test_non_utf8_bytes_in_the_range_still_resolve(self):
+        # A Latin-1 file in the diff once failed the whole range as "could not read --ids" (WellMed 198.1).
+        repo = Repo({}, {})
+        try:
+            os.makedirs(os.path.join(repo.path, "notes"), exist_ok=True)
+            with open(os.path.join(repo.path, "notes", "latin1.txt"), "wb") as fh:
+                fh.write("caf\xe9 \xe2\n".encode("latin-1"))
+            write(repo.path, {"scripts/run.sh": "#!/bin/sh\necho ok\n"})
+            git(repo.path, "add", "-A")
+            git(repo.path, "commit", "-q", "-m", "latin-1 file")
+            p = repo.check()
+        finally:
+            repo.close()
+        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+        self.assertNotIn("could not read --ids", p.stderr)
+
     def test_bad_range_is_usage(self):
         p = run("resolve-identifiers.py", "--repo", ".", "--range", "HEAD")
         self.assertEqual(p.returncode, 2)

@@ -431,7 +431,9 @@ class GitError(Exception):
 
 
 def git(repo, *args):
-    p = subprocess.run(["git", "-C", repo, *args], capture_output=True, text=True)
+    # A diff can carry bytes that are not UTF-8 (a Latin-1 file, a cut multi-byte char); decode them as U+FFFD
+    # like Tree.read does, or the whole range fails with a UnicodeDecodeError reported as "could not read --ids".
+    p = subprocess.run(["git", "-C", repo, *args], capture_output=True, text=True, encoding="utf-8", errors="replace")
     if p.returncode != 0:
         raise GitError(f"git -C {repo} {' '.join(args)}: {p.stderr.strip() or 'exit ' + str(p.returncode)}")
     return p.stdout

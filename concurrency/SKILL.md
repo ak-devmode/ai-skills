@@ -105,6 +105,14 @@ no trust in a prior run, no trust in stub prose.
 3. Stub/index dependency claims — only those that SURVIVED 4.0 verification.
 4. **Uncertain ⇒ serialize.** Refuse-to-parallelize is the default verdict;
    a pair joins the parallel set only when disjointness is SHOWN.
+5. **Shared interface ⇒ the contract is written first (Alex, 2026-11-16).** Two lanes with
+   disjoint files can still meet at an interface: one emits an event the other consumes, one
+   serves a route or gRPC method the other calls, both write rows another reads. For each such
+   pair the dispatch plan names the interface and pins its contract — shape, states,
+   idempotency, failure semantics — in the brief of BOTH lanes, before dispatch. No contract
+   pinned ⇒ serialize the pair. Lanes with no shared interface need nothing here. Why: the
+   go-live retro's largest theme (≥ 46 h) was lanes dispatched before the state contract was
+   settled, so each review round found holes in patches on patches.
 
 Every entry in the output carries its evidence (`evidence: <grep/commit/
 check, or UNVERIFIED-EXTERNAL>`) so the verdict is auditable.
@@ -192,7 +200,8 @@ Per partition, in this order (syntax authority: `herdr --skill`):
    override is inline in its launch command; `herdr` skill §6). Workspace label = run name only (`<scope> run`); seat identity
    goes on the PANE per the `herdr` skill §2 (naming).
 1b. **Layout + naming: `herdr` §5 and §2.** Agents go in a new `<scope> lanes` tab in the
-   driver's workspace (3x2 max, column by column), never in Alex's main tab and never left
+   driver's workspace (3x2 max, built in one call by `herdr-pane.sh grid "<scope> lanes"
+   [--machine homelab2026]`, which prints the six pane ids a1..a6), never in Alex's main tab and never left
    in the worktree's own workspace: move the created root pane into its slot. Pane identity in one call
    (rename + sidebar metadata, read back): `~/Projects/ai-skills/scripts/herdr-pane.sh name <pane> <task>`
    (`--machine <host>` for a box pane).
@@ -211,7 +220,12 @@ Per partition, in this order (syntax authority: `herdr --skill`):
    fresh-worktree trust dialog + tool prompts; safe via worktree +
    no-push isolation). Never on the driver.
 4. First instruction in every dispatched prompt: the task brief, then: commit locally when done; NEVER push,
-   NEVER open a PR, NEVER merge; end by printing `PARTITION-DONE <task>`.
+   NEVER open a PR, NEVER merge; end by running
+   `~/Projects/ai-skills/scripts/lane-signal.py done <run> <task> <one-line result>` as a tool
+   call, then printing `PARTITION-DONE <task>` for the human reading the pane. The file is the
+   signal; the printed line is courtesy (§7.1). A headless seat (`claude -p`, `codex exec`) is
+   launched inside `lane-signal.py run <run> <task> -- <command>` instead, so its exit writes
+   the file.
    Every seat additionally gets the §7.2 in-pane reporting instruction
    (`GATE-PASSED` / `GATE-BLOCKED` / `FIX-DONE` printed in its own pane, **never
    SendMessage**), and every brief includes: "If you need a helper terminal or sub-agent pane,
@@ -249,9 +263,15 @@ point — `herdr` skill §6.1 has the mechanics:
 ## 7. Supervision & coordination
 
 **7.1 herdr state layer (all seats)**
-- PRIMARY wait for every seat is the skill's own marker, not a state name:
-  `herdr pane wait-output <pane> --regex "PARTITION-DONE|PARKED " --timeout <ms>` —
-  deterministic across agents. A parked lane never prints `PARTITION-DONE` until it
+- PRIMARY wait for every seat is the lane's **signal file**, not printed text (2026-11-16):
+  `lane-signal.py wait <run> --lane <task>=<pane> … [--machine homelab2026]` as a background
+  job. It returns one line per event — `DONE`, `BLOCKED`, `IDLE-NO-SIGNAL` (idle past
+  `--idle-min` with no file: read the pane, the lane may have finished and paraphrased its
+  ending, or be waiting on something), `TIMEOUT` — and the driver re-arms it for the rest.
+  Regex waits on printed markers missed paraphrased endings (a fix writer sat finished for 3 h,
+  go-live retro 2026-11-03) and fired on markers quoted in the prompt; keep
+  `herdr pane wait-output … --regex "PARKED |GATE-BLOCKED"` only for the content markers below,
+  never as the completion signal. A parked lane never prints `PARTITION-DONE` until it
   resumes and finishes, so a wait on that marker alone sleeps through its question. State waits are secondary: codex maps
   completion to `idle`, never `done` (learned 6.3 — an `agent wait --until
   done` on a codex pane hangs forever after the work is finished); claude

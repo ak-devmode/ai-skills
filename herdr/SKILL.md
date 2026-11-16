@@ -171,6 +171,8 @@ main tab (Alex's)          "<scope> lanes" tab (the skill's)
 - **Create the tab** in the driver's workspace: `herdr tab create --workspace
   $HERDR_WORKSPACE_ID --cwd <first lane's checkout> --label "<scope> lanes"`. Its root
   pane is slot a1.
+- **Build it with `~/Projects/ai-skills/scripts/herdr-pane.sh grid "<label>" [--workspace ID]
+  [--cwd DIR] [--machine HOST]`** — it applies the order below and prints the six pane ids.
 - **Columns first, then rows.** A split divides only the pane it is given, so splitting
   a1 down before cutting the columns gives a2 the full width (hit live 2026-11-15: a
   full-width bottom pane with five small ones above). Build the three columns, then
@@ -334,8 +336,12 @@ curl both endpoint styles before touching account settings.
 
 ## 8. Supervision primitives (for reference; owned by the dispatching skill)
 
-- PRIMARY wait is the skill's own done-marker, not a herdr state:
-  `herdr pane wait-output <pane> --match "<marker>"`. `agent wait --until done`
+- PRIMARY wait is a **signal file**, not printed text and not a herdr state (2026-11-16):
+  `~/Projects/ai-skills/scripts/lane-signal.py` — `run` wraps a headless lane (its exit writes
+  the file), `done` is an interactive lane's last tool call, `wait` is the driver's watcher
+  (`DONE` / `BLOCKED` / `IDLE-NO-SIGNAL` / `TIMEOUT`). A regex on a printed done-marker missed
+  paraphrased endings and fired on markers quoted in prompts. `herdr pane wait-output <pane>
+  --match "<marker>"` stays for content markers only. `agent wait --until done`
   hangs on codex (it reports `idle`); use `--until blocked` for alerts only.
   A lane parked on a decision packet prints `PARKED <id>` and never reaches its
   done-marker until answered, so wait on both: `--regex "PARTITION-DONE|PARKED "`

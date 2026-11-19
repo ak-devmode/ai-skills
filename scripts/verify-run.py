@@ -212,7 +212,12 @@ def cmd_run(a):
         return vl.EXIT_FAIL
     unit = a.owner.split("/")[0] if a.owner else rows[0]["owner"].split("/")[0]
     run_id = f"{unit}-{datetime.datetime.now(datetime.timezone.utc):%Y%m%dT%H%M%S}-{secrets.token_hex(2)}"
-    bases = vl.bases(os.path.join(scope, "closeout-prep.md"), unit)
+    bases = vl.scope_bases(scope, unit)
+    # An explicit --range (verify §2.3) sets that repo's base too, so `names-resolve` rows see it.
+    for spec in a.range or []:
+        repo, _, rng = spec.partition("=")
+        if repo and ".." in rng:
+            bases[repo] = rng.split("..", 1)[0]
     recs = [execute(r, a.projects, run_id, unit, table["revision"], bases, scope) for r in rows]
     vl.append_verified(a.log, recs)
     failed = False
@@ -337,6 +342,7 @@ def main(argv):
     r.add_argument("--log", required=True)
     r.add_argument("--owner")
     r.add_argument("--projects", default=vl.PROJECTS)
+    r.add_argument("--range", action="append", help="REPO=BASE..HEAD: the unit's base for REPO, over the ledger")
     j = sub.add_parser("judged")
     j.add_argument("--log", required=True)
     j.add_argument("--run-id", required=True)

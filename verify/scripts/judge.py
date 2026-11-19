@@ -109,7 +109,7 @@ def cmd_prepare(a):
         return err(f"run {a.run_id} has no pending records", "a run started by verify-run.py run",
                    "none", p["log"], f"verify-run.py run --table {p['table']} --log {p['log']} --owner {a.unit}")
     overrides = dict(r.split("=", 1) for r in a.range)
-    base = vl.bases(p["ledger"], a.unit)
+    base = vl.scope_bases(a.scope, a.unit)
     repos = sorted({r["repo"] for r in pend})
     ranges, stats, judged = [], [], []   # judged: (repo, path, range) with commits, for a lean bundle
     for repo in repos:

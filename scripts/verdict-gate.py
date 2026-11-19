@@ -459,7 +459,7 @@ def evaluate(scope, unit, projects):
     owned = vl.select(table["rows"], unit)
     log = os.path.join(scope, "artifacts", f"verify-{unit}.jsonl")
     recs = vl.read_jsonl(log)
-    base = vl.bases(os.path.join(scope, "closeout-prep.md"), unit)
+    base = vl.scope_bases(scope, unit)
     review = os.path.join(scope, "artifacts", f"review-{unit}.jsonl")
     known = known_shas([*recs, *(vl.read_jsonl(review) if os.path.exists(review) else [])])
     report, blocks, judges = [], [], set()

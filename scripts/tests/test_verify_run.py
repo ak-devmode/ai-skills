@@ -125,14 +125,24 @@ class TestRun(RunnerTest):
         self.assertEqual(rec["env"], {"FOO": "bar", "VERIFY_UNIT": "5.1"})
         self.assertEqual(len(rec["output_sha256"]), 64)
 
-    def test_base_sha_exported_from_ledger(self):
-        table = self.env.table([row("base", "test \"$VERIFY_BASE\" = \"$(git rev-parse HEAD)\"")])
-        with open(os.path.join(os.path.dirname(table), "closeout-prep.md"), "w") as fh:
-            fh.write(f"- base: 5.1 svc {self.env.svc_sha}\n")
-        p = run("verify-run.py", "run", "--table", table, "--log", self.env.priv_log, "--projects",
-                self.env.projects, "--owner", "5.1")
-        self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
-        self.assertEqual(self.pending("base")["env"]["VERIFY_BASE"], self.env.svc_sha)
+    def test_base_sha_exported(self):
+        # The unit's base reaches the row as VERIFY_BASE from whichever ledger holds it, or from an
+        # explicit --range. progress.md counts as the ledger (Alex 2026-11-19); scope 230 verify run 1
+        # ran every names-resolve row with no base because only closeout-prep.md was read.
+        cases = [("closeout-prep", "closeout-prep.md", []), ("progress is the ledger", "progress.md", []),
+                 ("explicit range", None, ["--range", "svc={sha}..HEAD"])]
+        for name, ledger, extra in cases:
+            with self.subTest(case=name):
+                self.env.close()
+                self.env = Env()
+                table = self.env.table([row("base", "test \"$VERIFY_BASE\" = \"$(git rev-parse HEAD)\"")])
+                if ledger:
+                    with open(os.path.join(os.path.dirname(table), ledger), "w") as fh:
+                        fh.write(f"- base: 5.1 svc {self.env.svc_sha}\n")
+                p = run("verify-run.py", "run", "--table", table, "--log", self.env.priv_log, "--projects",
+                        self.env.projects, "--owner", "5.1", *[x.format(sha=self.env.svc_sha) for x in extra])
+                self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+                self.assertEqual(self.pending("base")["env"]["VERIFY_BASE"], self.env.svc_sha)
 
     def test_missing_repo_is_inconclusive(self):
         p = self.env.run([row("ghost", "true", repo="no-such-repo")])

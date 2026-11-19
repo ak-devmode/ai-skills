@@ -6,6 +6,7 @@ appender — so the runner and the gate cannot disagree about what a row or a re
 Every rule here is from templates/verify-contracts.md; section numbers are cited inline.
 """
 
+import glob
 import json
 import os
 import re
@@ -363,6 +364,25 @@ def bases(ledger, unit):
             m = re.match(r"^\s*-\s*base:\s*(\S+)\s+(\S+)\s+([0-9a-f]{7,40})\s*$", line)
             if m and m.group(1) == unit:
                 out.setdefault(m.group(2), m.group(3))
+    return out
+
+
+def ledger_files(scope):
+    """The scope's ledgers, in precedence order: closeout-prep.md, then its progress file
+    (progress.md, else *-PROGRESS.md). Alex 2026-11-19: progress.md is the ledger — a scope
+    without closeout-prep.md records its `- base:` lines there."""
+    files = [os.path.join(scope, "closeout-prep.md")]
+    own = os.path.join(scope, "progress.md")
+    files += [own] if os.path.isfile(own) else sorted(glob.glob(os.path.join(scope, "*-PROGRESS.md")))
+    return files
+
+
+def scope_bases(scope, unit):
+    """{repo: sha} for a unit across the scope's ledgers; the first base per repo wins (§5.2)."""
+    out = {}
+    for f in ledger_files(scope):
+        for repo, sha in bases(f, unit).items():
+            out.setdefault(repo, sha)
     return out
 
 

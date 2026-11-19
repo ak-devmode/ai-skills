@@ -464,6 +464,11 @@ zero-cost-basis silent defeat that build/test/disjointness passes all missed).
   of the next update and in the review queue, and hold that repo's promotion to staging until
   it is fixed. A repo with no reachable endpoint for the change (a library, a migration-only
   change) records why it was not smoke-tested.
+- **A dependent merge waits for the read-back, never for the previous command.** The consumer
+  (gateway after backbone, FE after its routes) merges only after the emitter's PR reads back
+  `MERGED`. Never chain merge commands with `;` in one job. On WellMed 230 (2026-11-19) the
+  backbone merge job answered RED, and the gateway merge chained after it still landed, so dev
+  carried routes whose RPCs were not deployed.
 - A slot lane is **released, never removed**: `lane-slot.py release <repo> a<N>` detaches the
   slot at the base once Alex confirms the branch is landed or abandoned; the branch itself goes in
   the wave teardown. A fallback `herdr worktree create` lane is removed with `herdr worktree remove`

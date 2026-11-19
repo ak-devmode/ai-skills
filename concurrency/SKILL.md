@@ -427,6 +427,21 @@ zero-cost-basis silent defeat that build/test/disjointness passes all missed).
   then land. The fix writer is a **fresh session** given the finding ids and the
   report path, never the original worker re-prompted: its context already holds
   the whole partition, and every fix turn would re-read it (`herdr` §6.2).
+- **A finding is fixed when its test fails on the old code, not when a commit names its id**
+  (Alex, 2026-11-19). For every bug finding, the fix brief requires a red-then-green proof:
+  run the new or changed test against the pre-fix commit, show it failing, then show it passing,
+  and paste both tails into the hand-back. The driver checks the proof before the PR. A finding
+  whose fix demand is a runtime check ("run it through the real resolver", "one staging check")
+  is open until that check is done or Alex waives it.
+- **The re-review is not optional.** When a fix changes query or logic shape (more than a comment,
+  test or rename), a fresh pane re-reviews the fix commits before landing. Why: on WellMed 230.4
+  the lane's hand-back said the `emr_YYYY` resolver path was unverified, and review r1-03 asked
+  for a test through the real resolver. The fix writer added a table alias the resolver drops
+  and labelled its test "honest" without registering the resolver. The driver counted the
+  finding as fixed by its id and merged on green. The result was a pharmacy frontline 500
+  (42P01) on dev, which blocked the team for 2 days.
+- **"Unverified" in a hand-back is an open item, not prose.** Each one goes on the merge gate
+  (§8). It is closed by evidence, or by Alex accepting the risk.
 
 ## 8. Collection & teardown
 
@@ -439,6 +454,16 @@ zero-cost-basis silent defeat that build/test/disjointness passes all missed).
   to touch a local branch of that name that is checked out or has diverged. Its review
   pane (§7.3) runs on the box, in the lane's worktree, before the fetch.
 - Landing is MANUAL and Alex's: hand him per-branch merge commands, bare.
+- **When Alex delegates merge-on-green to trunk** (e.g. "merge on green to dev"), green CI
+  covers only what CI tests. Before each merge: every §7.3 red-then-green proof has been
+  checked, every re-review is done, and every hand-back "unverified" item is closed. After
+  each merge: **smoke-test dev.** Wait for the deploy (the service's image `sha-` tag changes),
+  then call each changed endpoint once on a real dev tenant as a logged-in user. List routes
+  and queues get the default filters, plus the case the change targets. A 5xx or an error in
+  the service log means **flag it, never auto-revert** (Alex, 2026-11-19): post it at the top
+  of the next update and in the review queue, and hold that repo's promotion to staging until
+  it is fixed. A repo with no reachable endpoint for the change (a library, a migration-only
+  change) records why it was not smoke-tested.
 - A slot lane is **released, never removed**: `lane-slot.py release <repo> a<N>` detaches the
   slot at the base once Alex confirms the branch is landed or abandoned; the branch itself goes in
   the wave teardown. A fallback `herdr worktree create` lane is removed with `herdr worktree remove`

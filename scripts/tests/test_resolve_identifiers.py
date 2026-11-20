@@ -341,6 +341,11 @@ CASES = [
      {},
      {"x/pg.go": "package x\nvar a = os.Getenv(\"CI\")\nvar b = os.Getenv(\"GITHUB_ACTIONS\")\n"},
      0, r"found 2 · resolved 2", ""),
+    # WellMed 231: a one-line array assignment binds (`TF=(--workspace w1 …)`)
+    ("a one-line array assignment binds its name",
+     {},
+     {"ops/check.sh": "#!/bin/bash\nTF=(--workspace w1 --name \"A B\")\nrun \"${TF[@]}\"\n"},
+     0, r"found 0", ""),
     ("route method mismatch fails",
      {"server/routes.js": "router.post('/invoices', create);\n"},
      {"web/api.ts": "axios.get('/invoices');\n"},

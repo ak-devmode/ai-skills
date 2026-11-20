@@ -254,6 +254,11 @@ def shell_binds(syntax):
     words = re.sub(CTX + "+", CTX, syntax).split()
     if not words:
         return []
+    # `NAME=( … )` on one line binds an array (WellMed 231: `TF=(--workspace w1 …)`); one that
+    # spans lines stays unclassified, so it reads as a read — fail closed
+    arr = re.match(r"^\s*([A-Z][A-Z0-9_]*)\+?=\(.*\)\s*$", syntax)
+    if arr:
+        return [arr.group(1)]
     if words[0] == "for" and len(words) >= 3 and words[2] == "in" and SH_NAME.match(words[1]):
         return [words[1]]
     # `IFS= read -r NAME`: assignments before `read` hold only for that command, so they

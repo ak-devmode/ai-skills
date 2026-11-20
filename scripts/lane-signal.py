@@ -87,8 +87,9 @@ def sh(machine, script):
         return ""
 
 
-# Claude Code's footer while background work runs: `· 1 shell`, `2 shells still running`.
-SHELLS_RUNNING = re.compile(r"\b\d+ shells?\b")
+# Claude Code's footer while background work runs: `· 1 shell`, `2 shells still running`, and
+# `1 monitor still running` for a Monitor wait (WellMed 231, bb14 waiting on its review).
+SHELLS_RUNNING = re.compile(r"\b\d+ (?:shells?|monitors?)\b")
 
 
 def waiting_on_shells(screen):

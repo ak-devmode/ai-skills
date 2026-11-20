@@ -220,6 +220,9 @@ Per partition, in this order (syntax authority: `herdr --skill`):
    the pane the driver registered as itself, in its own session (`--status driver`, `/plan` §5.8.2),
    passes `--driver` (Alex 86). Known gap, accepted for the testing phase (Alex 98): helper, review
    and fix panes are not logged, so a `/plan` run in one of them can register and merge. A record for a pane id closes any earlier driver registration of that id.
+2b. **Deliver the brief before the launch, and gate the launch on it:** `~/Projects/ai-skills/scripts/lane-brief.py
+   put [--machine <host>] --dir <briefs dir> <files…>` copies and reads every file back by sha256; launch only
+   on exit 0. A plain `scp` whose exit is ignored started a WellMed 231 lane on a brief that was not there.
 3. Launch the seat's command (§3) in the created pane via `pane run` — under the placed
    account: `claude-<account>` / `codex-<account>` (`herdr` skill §6), on either machine.
    claude/glm workers append `--dangerously-skip-permissions` (`herdr` skill §4: clears the
@@ -442,6 +445,24 @@ zero-cost-basis silent defeat that build/test/disjointness passes all missed).
   (42P01) on dev, which blocked the team for 2 days.
 - **"Unverified" in a hand-back is an open item, not prose.** Each one goes on the merge gate
   (§8). It is closed by evidence, or by Alex accepting the risk.
+- **Fix-until-SHIP lanes — the loop runs in the lane, not through the driver** (Alex, 2026-11-20).
+  Relaying every review to a new fix writer by hand made the driver the bottleneck: WellMed 231's
+  fix round 2 ran 14 fix and review cycles, each waiting on the driver to read, brief and relaunch.
+  So a fix round dispatches ONE lane per repo that loops by itself:
+  1. fix the findings named in its brief (red-then-green each, as above), commit;
+  2. spawn the review as a fresh, visible pane next to it (`herdr-pane.sh helper`, running `claude`
+     with `/review --scope … --unit … --range <its first fix>^..HEAD`), wait for `REVIEW-DONE`;
+  3. SHIP → write the hand-back and signal `done`; findings → fix them and go to 2.
+  Cap: 3 review rounds. At the cap it signals `done` with the open findings listed, and the driver
+  decides. A one-way door still parks (§7.2.1). The driver is woken once per repo, not per finding.
+  The writer stays a fresh session per round when its context passes ~60%: it signals
+  `handoff`, and the driver relaunches the same brief.
+- **A path audit comes before a fail-open fix** (Alex, 2026-11-20). For any fail-open, credential or
+  "silently treated as absent" finding, the fix brief requires a table first, in the hand-back: every
+  code path that reads the same data · how it decodes · what it does on a decode failure · what it
+  does on the bad value. Every row must end "refuses". Then fix the rows that don't. Why: WellMed 231's
+  LIS settings block took five fix→review cycles. Each writer fixed the named line, and the next
+  review found the sibling path. The first brief that demanded the table converged.
 
 ## 8. Collection & teardown
 

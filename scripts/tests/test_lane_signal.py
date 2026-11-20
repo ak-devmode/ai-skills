@@ -63,6 +63,8 @@ class TestWaitingOnShells(unittest.TestCase):
         for screen, want in (
                 ("work\n  ⏵⏵ bypass permissions on · 1 shell · ← 1 agent\n", True),
                 ("done\n✻ Brewed for 6m · 2 shells still running\n", True),
+                ("done\n✻ Cogitated for 3m · 1 monitor still running\n", True),
+                ("x\n  ⏵⏵ bypass permissions on · 1 monitor · ← 1 agent\n", True),
                 ("done\n❯\n  ⏵⏵ bypass permissions on · ← 1 agent\n", False),
                 ("1 shell mentioned long ago\n" + "line\n" * 10, False)):
             with self.subTest(screen=screen[:30]):

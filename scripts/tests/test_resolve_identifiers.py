@@ -329,6 +329,18 @@ CASES = [
      {},
      {"tests/test_thing.py": "SRC = 'var a = &clinicv1.Invoice{Total: 3}'\nJS = \"fetch('/nope')\"\n"},
      0, r"found 0", ""),
+    # WellMed 233: `format('%1$I', …)` in a quoted heredoc's SQL is literal; an unquoted heredoc
+    # still expands, so its read counts
+    ("a quoted heredoc body is literal; an unquoted one is still read",
+     {},
+     {"ops/preflight.sh": "#!/bin/bash\npsql <<'SQL'\nEXECUTE format('SELECT count(%1$I),\n  count(%2$I) FROM t', a, b);\nSQL\n"
+                          "cat <<EOF\nhost $HD_REAL\nEOF\n"},
+     1, r"found 1 · resolved 0 · unresolved 1", "env `HD_REAL` does not resolve"),
+    # WellMed 231: a test switching on the CI runner's own variable is not an app contract
+    ("CI and GITHUB_ACTIONS are set by the runner",
+     {},
+     {"x/pg.go": "package x\nvar a = os.Getenv(\"CI\")\nvar b = os.Getenv(\"GITHUB_ACTIONS\")\n"},
+     0, r"found 2 · resolved 2", ""),
     ("route method mismatch fails",
      {"server/routes.js": "router.post('/invoices', create);\n"},
      {"web/api.ts": "axios.get('/invoices');\n"},

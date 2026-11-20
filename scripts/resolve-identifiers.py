@@ -84,7 +84,12 @@ SH_BUILTIN = {"HOME", "PATH", "PWD", "OLDPWD", "USER", "LOGNAME", "SHELL", "TMPD
               "OPTIND", "REPLY", "COLUMNS", "LINES", "EDITOR", "PAGER"}
 # Set by the runtime or toolchain itself, never declared by the app (Node, Nuxt, Vite and test
 # runners set NODE_ENV) — WellMed scope 197, verify 197.2 (sessionCookies.ts read NODE_ENV).
-RUNTIME_ENV = {"NODE_ENV"}
+# CI runners set CI (GitHub Actions, GitLab, Buildkite…) and GitHub sets GITHUB_ACTIONS: a test
+# that switches on them reads the runner, not an app contract (WellMed 231 verify, pgtest.go).
+RUNTIME_ENV = {"NODE_ENV", "CI", "GITHUB_ACTIONS"}
+# A heredoc whose delimiter is quoted (<<'X', <<"X", <<\X, <<-'X') is literal: `$1$I` in a SQL
+# body is never a shell read (WellMed 233 preflight, `format('%1$I', …)`).
+SH_HEREDOC_QUOTED = re.compile(r"(?<!<)<<-?\s*(?:'([^']+)'|\"([^\"]+)\"|\\(\w+))")
 SH_NAME = re.compile(r"^[A-Z][A-Z0-9_]*$")
 SH_ASSIGN_WORD = re.compile(r"^([A-Z][A-Z0-9_]*)\+?=")
 SH_KEYWORDS = {"export", "local", "readonly", "declare", "typeset"}
@@ -290,6 +295,23 @@ def shell_binds(syntax):
         else:
             return []  # a command with a non-assignment word is not a binding (`echo then T=x`)
     return names
+
+
+def quoted_heredoc_lines(text):
+    """1-based line numbers inside the body of a quoted-delimiter heredoc (the shell expands
+    nothing there). The opening and closing lines are not included."""
+    out, end = set(), None
+    for n, line in enumerate(text.splitlines(), 1):
+        if end is not None:
+            if line.strip() == end:  # `<<-` allows leading tabs; the delimiter stands alone
+                end = None
+            else:
+                out.add(n)
+            continue
+        m = None if line.lstrip().startswith("#") else SH_HEREDOC_QUOTED.search(line)
+        if m:
+            end = m.group(1) or m.group(2) or m.group(3)
+    return out
 
 
 def shell_assigned(text):
@@ -669,6 +691,7 @@ def extract(files, full=None):
         if not is_source(path) or TEST_FILE.search(path):
             continue
         local = shell_assigned((full or {}).get(path, "")) if path.endswith(".sh") else set()
+        literal = quoted_heredoc_lines((full or {}).get(path, "")) if path.endswith(".sh") else set()
         given = node_eval_given((full or {}).get(path, "")) if path.endswith(".sh") else set()
         go_open, go_prev = [], None  # pb literals open across consecutive added lines
         go_skip = go_non_proto((full or {}).get(path, "")) if path.endswith(".go") else set()
@@ -681,7 +704,7 @@ def extract(files, full=None):
                         refs.append(ref("env", m.group(1), None, path, lineno))
             if path.endswith(".sh"):
                 seen = set()
-                for m in SH_USE.finditer(shell_mask(text)):
+                for m in ([] if lineno in literal else SH_USE.finditer(shell_mask(text))):
                     name = m.group(1) or m.group(2)
                     if name not in local and name not in SH_BUILTIN and name not in seen:
                         seen.add(name)

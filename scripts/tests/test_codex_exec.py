@@ -39,6 +39,10 @@ case "$FAKE_MODE" in
   malformed) banner; [ -n "$out" ] && echo "verdict: looks fine to me" > "$out"; echo "hm" ;;
   credits)   banner; echo "ERROR: Your workspace is out of credits. Add credits to continue."; exit 1 ;;
   array)     banner; [ -n "$out" ] && echo "[1, 2]" > "$out"; echo "hm" ;;
+  # an account that is out of credits unless CODEX_HOME is the one FAKE_GOOD_HOME names
+  credits_unless_good)
+             if [ "$CODEX_HOME" = "$FAKE_GOOD_HOME" ]; then banner; [ -n "$out" ] && printf '{"verdicts": []}' > "$out"; echo pong
+             else echo "ERROR: Your workspace is out of credits."; exit 1; fi ;;
 esac
 """
 
@@ -60,7 +64,7 @@ class TestCodexExec(unittest.TestCase):
 
     def env(self, mode, binary=None):
         return dict(os.environ, VERIFY_CODEX_BIN=binary or self.fake, FAKE_MODE=mode,
-                    VERIFY_CODEX_MODEL="gpt-fake-1", CODEX_HOME=self.tmp.name)
+                    VERIFY_CODEX_MODEL="gpt-fake-1", CODEX_HOME=self.tmp.name, CODEX_EXEC_NO_FALLBACK="1")
 
     def judge_line(self, p):
         return p.stdout.strip().splitlines()[-1]
@@ -147,6 +151,33 @@ class TestCodexExec(unittest.TestCase):
         p = run("codex-exec.py", "exec", "--prompt", self.prompt, "--out", self.out, "--timeout", "1",
                 env=self.env("hang"))
         self.assertEqual((p.returncode, self.judge_line(p)), (1, "none codex timed out"))
+
+    def test_account_fallback(self):
+        # Alex 2026-11-20: an out-of-credits account retries once under the next account home;
+        # any other failure, or no other home, stays `none`.
+        good = os.path.join(self.tmp.name, "home-int")
+        os.makedirs(good)
+        for cmd in (["probe"], ["exec", "--prompt", self.prompt, "--out", self.out]):
+            with self.subTest(cmd=cmd[0]):
+                env = dict(self.env("credits_unless_good"), FAKE_GOOD_HOME=good, CODEX_EXEC_ALT_HOMES=good)
+                env.pop("CODEX_EXEC_NO_FALLBACK")
+                p = run("codex-exec.py", *cmd, env=env)
+                self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+                self.assertTrue(self.judge_line(p).startswith("codex "), p.stdout)
+                self.assertIn("retrying once under " + good, p.stderr)
+        for mode, alts in (("credits", ""), ("crash", None), ("credits_unless_good", None)):
+            with self.subTest(mode=mode, alts=alts):
+                env = dict(self.env(mode), FAKE_GOOD_HOME=good)
+                env.pop("CODEX_EXEC_NO_FALLBACK")
+                # no other home exists (credits), or the failure is not about the account (crash),
+                # or fallback is switched off (last case)
+                env["CODEX_EXEC_ALT_HOMES"] = os.path.join(self.tmp.name, "missing") if alts == "" else good
+                if mode == "credits_unless_good":
+                    env["CODEX_EXEC_NO_FALLBACK"] = "1"
+                p = run("codex-exec.py", "probe", env=env)
+                self.assertEqual(p.returncode, 1, p.stdout + p.stderr)
+                self.assertTrue(self.judge_line(p).startswith("none "), p.stdout)
+                self.assertNotIn("retrying once", p.stderr if mode != "crash" else p.stderr)
 
     def test_stale_answer_is_never_reused(self):
         with open(self.out, "w") as fh:

@@ -10,7 +10,11 @@ must be declared beside the using file or in an ancestor directory, not in a sib
 service, or as the last segment of an SSM path under `shared/` or the using repo's
 service segment (`/…/gateway-go/PORT` declares PORT for `wellmed-gateway-go` — the way an
 SSM loader injects env); a proto field must belong to the message it is set on, in a
-`.proto` or in the generated `.pb.go` struct a Go caller actually imports; SSM paths and
+`.proto` or in the generated `.pb.go` struct a Go caller actually imports — in this repo, a
+`--decl-repo`, or, when the repo's `go.mod` pins the module that Go package comes from, that
+pinned version's package directory (a replace target, or the Go module cache; conditional:
+only a message nothing in-repo declares is looked up there, so a pin never hides a local
+declaration); SSM paths and
 routes match segment by segment with placeholders. References inside test files are
 skipped: a test's env reads are test-only switches, and a test file routinely embeds
 source as fixture *strings* — neither is a reference the shipped code makes, and tests are
@@ -349,6 +353,7 @@ GO_STRING = re.compile(r'"(?:\\.|[^"\\])*"|`[^`]*`|\'(?:\\.|[^\'\\])+\'')
 
 
 GO_IMPORT = re.compile(r'^\s*(?:import\s+)?(\w+\s+)?"([^"]+)"', re.M)
+GO_MOD_DIRECTIVE = re.compile(r"^\s*(require|replace)\b\s*(\(?)\s*(.*)$")
 
 
 def go_non_proto(text):
@@ -363,6 +368,101 @@ def go_non_proto(text):
         if re.search(r"/gen/|proto|pb", path) and not path.startswith("google.golang.org/protobuf/"):
             continue
         out.add((m.group(1) or "").strip() or path.rsplit("/", 1)[-1])
+    return out
+
+
+def go_proto_imports(texts):
+    """Import paths of generated-proto packages the given Go files use (same test as
+    go_non_proto, inverted): the packages whose pinned module a message may come from."""
+    out = set()
+    for text in texts:
+        for m in GO_IMPORT.finditer(text):
+            path = m.group(2)
+            if re.search(r"/gen/|proto|pb", path) and not path.startswith("google.golang.org/protobuf/"):
+                out.add(path)
+    return out
+
+
+def parse_go_mod(text):
+    """(requires {module: version}, replaces {module: (target, version or None)}) from a
+    go.mod. Line comments are dropped; both the one-line and the block form are read."""
+    req, rep_, block = {}, {}, None
+    for raw in text.splitlines():
+        line = raw.split("//", 1)[0].strip()
+        if not line:
+            continue
+        if block:
+            if line == ")":
+                block = None
+                continue
+            kind, rest = block, line
+        else:
+            m = GO_MOD_DIRECTIVE.match(line)
+            if not m:
+                continue
+            kind, rest = m.group(1), m.group(3).strip()
+            if m.group(2):
+                block = kind
+                if not rest:
+                    continue
+        if kind == "require":
+            parts = rest.split()
+            if len(parts) >= 2:
+                req[parts[0]] = parts[1]
+        elif "=>" in rest:
+            left, right = (x.split() for x in rest.split("=>", 1))
+            if left and right:
+                rep_[left[0]] = (right[0], right[1] if len(right) > 1 else None)
+    return req, rep_
+
+
+def mod_cache_escape(s):
+    """The module cache's case encoding: an upper-case letter is `!` + its lower case."""
+    return re.sub(r"[A-Z]", lambda m: "!" + m.group(0).lower(), s)
+
+
+def go_mod_cache():
+    if os.environ.get("GOMODCACHE"):
+        return os.environ["GOMODCACHE"]
+    try:
+        p = subprocess.run(["go", "env", "GOMODCACHE"], capture_output=True, text=True, timeout=20)
+        if p.returncode == 0 and p.stdout.strip():
+            return p.stdout.strip()
+    except (OSError, subprocess.TimeoutExpired):
+        pass
+    return os.path.join(os.environ.get("GOPATH") or os.path.expanduser("~/go"), "pkg", "mod")
+
+
+def pinned_proto_dirs(repo, go_mod_text, imports):
+    """[(dir on disk, label)] — for each generated-proto import, the package directory of
+    the module version go.mod pins (longest required module that prefixes the import). A
+    replace to a local path wins over the cache; a module the cache lacks is downloaded
+    once (`go mod download`), and if that fails it is skipped, never guessed."""
+    req, reps = parse_go_mod(go_mod_text)
+    out, cache = [], None
+    for imp in sorted(imports):
+        mods = [m for m in req if imp == m or imp.startswith(m + "/")]
+        if not mods:
+            continue
+        mod = max(mods, key=len)
+        ver, sub = req[mod], imp[len(mod):].lstrip("/")
+        target, tver = reps.get(mod, (None, None))
+        if target and (target.startswith(".") or target.startswith("/")):
+            root, label = os.path.normpath(os.path.join(repo, target)), f"{mod} => {target}"
+        else:
+            mod_, ver = (target, tver or ver) if target else (mod, ver)
+            cache = cache or go_mod_cache()
+            root = os.path.join(cache, mod_cache_escape(mod_) + "@" + mod_cache_escape(ver))
+            if not os.path.isdir(root):
+                try:
+                    subprocess.run(["go", "mod", "download", f"{mod_}@{ver}"], cwd=repo,
+                                   capture_output=True, timeout=120)
+                except (OSError, subprocess.TimeoutExpired):
+                    pass
+            label = f"{mod_}@{ver}"
+        d = os.path.join(root, sub)
+        if os.path.isdir(d):
+            out.append((d, label))
     return out
 
 
@@ -623,10 +723,11 @@ def extract(files, full=None):
 # ---------- declaration indexes (built lazily, per kind) ---------------------------
 
 class Index:
-    def __init__(self, repo_tree, decl_trees):
+    def __init__(self, repo_tree, decl_trees, pinned=None):
         self.repo = repo_tree
         self.all = [repo_tree] + decl_trees
         self._env = self._ssm = self._proto = self._route = None
+        self._pinned_fn, self._pinned = pinned, None  # () -> [(dir, label)], built on first miss
 
     def env(self):
         """[(dir, name, where, is_ignored)] from the using repo only."""
@@ -672,6 +773,22 @@ class Index:
                     for msg, fields in parsed:
                         self._proto.setdefault(msg, set()).update(fields)
         return self._proto
+
+    def pinned_proto(self):
+        """{message: (fields, label)} from the pinned modules' proto package directories —
+        consulted only for a message the repo and --decl-repo trees do not declare."""
+        if self._pinned is None:
+            self._pinned = {}
+            for d, label in (self._pinned_fn() if self._pinned_fn else []):
+                for fn in sorted(os.listdir(d)):
+                    if not fn.endswith((".proto", ".pb.go")):
+                        continue
+                    with open(os.path.join(d, fn), encoding="utf-8", errors="replace") as fh:
+                        text = fh.read()
+                    for msg, fields in (parse_pb_go(text) if fn.endswith(".pb.go") else parse_proto(text)):
+                        have = self._pinned.setdefault(msg, (set(), label))
+                        have[0].update(fields)
+        return self._pinned
 
     def route(self):
         """[(method or None, path, where)] from router registrations."""
@@ -827,12 +944,16 @@ def resolve(r, idx):
         if "." not in name:
             return "unresolved", ("a `Message.field` name", 0)
         msg, field = name.rsplit(".", 1)
-        fields = idx.proto().get(msg)
+        fields, label = idx.proto().get(msg), ""
+        if fields is None and msg in idx.pinned_proto():
+            fields, label = idx.pinned_proto()[msg]
+            label = f" (pinned {label})"
         if fields is None:
-            return "unresolved", (f"a `message {msg}` in *.proto", 0)
+            return "unresolved", (f"a `message {msg}` in *.proto, or in the pinned module of an "
+                                  "imported proto package", 0)
         if field in fields:
-            return "resolved", f"message {msg}"
-        return "unresolved", (f"field `{field}` in `message {msg}` (it has: "
+            return "resolved", f"message {msg}{label}"
+        return "unresolved", (f"field `{field}` in `message {msg}`{label} (it has: "
                               f"{', '.join(sorted(f for f in fields if f[:1].islower())) or 'no fields'})", 0)
     if kind == "route":
         want, method = segments(name), (r.get("namespace") or "").upper() or None
@@ -891,9 +1012,10 @@ def main(argv):
             sh = [p for p in files if (p.endswith(".sh") or p.endswith(".go")) and is_source(p)]
             full = Tree(a.repo, head).read(sh) if sh else {}
             refs, rev = extract(files, full), a.decl_rev or head
+            go_texts = [t for p, t in full.items() if p.endswith(".go")]
             scanned = [f for f in files if is_source(f) and not TEST_FILE.search(f)]
         else:
-            refs, rev, scanned = [], a.rev, None
+            refs, rev, scanned, go_texts = [], a.rev, None, []
             with open(a.ids, encoding="utf-8") as fh:
                 for i, line in enumerate(fh, 1):
                     if line.strip():
@@ -903,7 +1025,10 @@ def main(argv):
                         refs.append(d)
         tree = Tree(a.repo, rev)
         tree.is_primary = True
-        idx = Index(tree, [Tree(d, "HEAD") for d in a.decl_repo])
+        imports = go_proto_imports(go_texts)
+        go_mod = tree.read(["go.mod"])["go.mod"] if imports and "go.mod" in tree.paths else ""
+        idx = Index(tree, [Tree(d, "HEAD") for d in a.decl_repo],
+                    pinned=(lambda: pinned_proto_dirs(a.repo, go_mod, imports)) if go_mod else None)
     except GitError as exc:
         print(message("ERROR", "git could not read the repo", "a readable git repo and revision",
                       str(exc), a.repo, "environment", f"git -C {a.repo} status"), file=sys.stderr)

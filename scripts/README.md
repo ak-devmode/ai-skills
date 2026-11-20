@@ -173,6 +173,8 @@ by `test_entrypoint.py`'s compile check.
       a worktree --repo is recorded under its main checkout's name; --base REV replaces HEAD as that repo's base
       exit: 0 ok · 1 write did not land / --repo not a git repo · 2 usage · 4 template missing
     resolve-identifiers.py --repo P (--range BASE..HEAD | --ids FILE) [--decl-repo P]... [--json]
+      a Go proto message no repo tree declares is looked up in the version go.mod pins for the
+      imported package (local replace, else the module cache; GOMODCACHE overrides)
       exit: 0 all resolved · 1 unresolved or unsupported · 2 usage · 3 git error / empty range
     review-mode.py [--full | --lean]
       stdout: `mode: <lean|full> (<flag|env|default>)`   exit: 0 resolved · 2 both flags / bad env value / unknown arg

@@ -33,6 +33,7 @@ import hashlib
 import datetime as dt
 import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -86,11 +87,27 @@ def sh(machine, script):
         return ""
 
 
+# Claude Code's footer while background work runs: `· 1 shell`, `2 shells still running`.
+SHELLS_RUNNING = re.compile(r"\b\d+ shells?\b")
+
+
+def waiting_on_shells(screen):
+    """An idle agent whose footer shows background shells is waiting on its own work (a review
+    pane it started, a test run), not stalled — WellMed 231, inf-fix9 waiting on its review."""
+    return bool(SHELLS_RUNNING.search("\n".join(screen.splitlines()[-6:])))
+
+
 def pane_status(machine, pane):
     h = ["herdr"] + (["--machine", machine] if machine else [])
     try:
         out = subprocess.run(h + ["pane", "get", pane], capture_output=True, text=True, timeout=30).stdout
-        return json.loads(out)["result"]["pane"].get("agent_status") or "unknown"
+        st = json.loads(out)["result"]["pane"].get("agent_status") or "unknown"
+        if st == "idle":
+            screen = subprocess.run(h + ["pane", "read", pane, "--source", "visible"], capture_output=True,
+                                    text=True, timeout=30).stdout
+            if waiting_on_shells(screen):
+                return "waiting"
+        return st
     except (OSError, subprocess.TimeoutExpired, ValueError, KeyError):
         return "unreachable"
 

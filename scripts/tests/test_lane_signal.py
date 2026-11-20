@@ -57,5 +57,17 @@ class TestWait(unittest.TestCase):
         self.assertIn("IDLE-NO-SIGNAL lab p1", self.wait("lab=p1", clock=1000.0 + 11 * 60))
 
 
+class TestWaitingOnShells(unittest.TestCase):
+    def test_footer(self):
+        ls = load("lane-signal.py")
+        for screen, want in (
+                ("work\n  ⏵⏵ bypass permissions on · 1 shell · ← 1 agent\n", True),
+                ("done\n✻ Brewed for 6m · 2 shells still running\n", True),
+                ("done\n❯\n  ⏵⏵ bypass permissions on · ← 1 agent\n", False),
+                ("1 shell mentioned long ago\n" + "line\n" * 10, False)):
+            with self.subTest(screen=screen[:30]):
+                self.assertEqual(ls.waiting_on_shells(screen), want)
+
+
 if __name__ == "__main__":
     unittest.main()

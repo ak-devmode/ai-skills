@@ -466,6 +466,14 @@ zero-cost-basis silent defeat that build/test/disjointness passes all missed).
 
 ## 8. Collection & teardown
 
+- **Promotion after the merges is a script, not a babysat sequence** (Alex, 2026-11-20):
+  `~/Projects/ai-skills/scripts/promote-train.py --org <org> --host <staging app instance> --label "<scope …>"
+  <repo> …` (emitters first). Per repo it opens or reuses the develop → staging PR, waits for its checks, records the
+  staging host's image tag, merges, waits for the staging CD run of the merge commit, and requires the running tag to
+  become that commit's `sha-<short>`. It stops at the first failure, never touches `main` and never deploys prod. Run
+  it once with `--dry-run`, then in the background; read `TRAIN DONE` / `TRAIN STOPPED <repo>: <why>`. WellMed 231's
+  first run promoted three repos in 17 minutes with no driver turn. A footprint that follows staging on a schedule
+  (Padma) is held by a `freeze` entry in its release-control file, which Alex merges.
 - Report per partition: branch, commit shas, `PARTITION-DONE` seen or not, any
   packet still open (`PARKED <id>` with no `CLOSED`), test evidence from the pane tail. Split fixed vs NOT-fixed explicitly.
 - **A box lane comes home by fetch, never by push:** `~/Projects/ai-skills/scripts/

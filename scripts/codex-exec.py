@@ -26,6 +26,11 @@ Usage:
       the integrations account (~/.codex-int), and elsewhere codex-alex is used until its 5h or
       7d window reaches CODEX_ALEX_SWITCH_PCT (default 60) per placement.py, then ~/.codex-int.
       The choice is printed on stderr. Skipped when VERIFY_CODEX_BIN is set (tests).
+  Fallback (Alex, 2026-11-20): when the chosen account answers `out of credits` or `not authed`,
+      the same call is retried ONCE under the next existing account home (~/.codex, ~/.codex-int,
+      ~/.codex-alex; env CODEX_EXEC_ALT_HOMES, colon-separated, overrides the list) and the switch is
+      printed on stderr. Only those two reasons switch: any other failure is about the prompt or
+      codex itself and would fail the same way. CODEX_EXEC_NO_FALLBACK=1 turns it off.
 Output: diagnostics on stderr (§10 messages); the judge line as the last stdout line.
 Exit:   0 codex ran and answered · 1 a failure mode (judge line is `none …`) · 2 usage
 """
@@ -97,7 +102,12 @@ def ran(err, slug):
     return model, None
 
 
+LAST_FAIL = [None]  # the reason of the last `none …` line, read by the account fallback
+ACCOUNT_REASONS = ("codex out of credits", "codex not authed")
+
+
 def fail(reason, found, nxt, cause="environment"):
+    LAST_FAIL[0] = reason
     print(vl.message("WARN", f"codex cannot judge: {reason}", "codex installed, logged in, and answering",
                      found, "codex-exec.py", cause, nxt, DOCS), file=sys.stderr)
     print(f"none {reason}")
@@ -242,6 +252,28 @@ def pick_codex_home():
         print(f"codex-exec: account alex ({used}% used)", file=sys.stderr)
 
 
+def alt_homes():
+    """Account homes to fall back to, in order, excluding the one just used."""
+    raw = os.environ.get("CODEX_EXEC_ALT_HOMES")
+    homes = raw.split(":") if raw else [os.path.expanduser(h) for h in ("~/.codex", "~/.codex-int", "~/.codex-alex")]
+    cur = os.path.realpath(os.environ.get("CODEX_HOME") or os.path.expanduser("~/.codex"))
+    return [h for h in homes if h and os.path.isdir(h) and os.path.realpath(h) != cur]
+
+
+def with_fallback(run, a):
+    """Run once; on an account failure, run once more under the next account home."""
+    rc = run(a)
+    if rc != vl.EXIT_FAIL or LAST_FAIL[0] not in ACCOUNT_REASONS or os.environ.get("CODEX_EXEC_NO_FALLBACK") == "1":
+        return rc
+    alts = alt_homes()
+    if not alts:
+        return rc
+    was = os.environ.get("CODEX_HOME") or "~/.codex"
+    os.environ["CODEX_HOME"] = alts[0]
+    print(f"codex-exec: {LAST_FAIL[0]} under {was}; retrying once under {alts[0]}", file=sys.stderr)
+    return run(a)
+
+
 def main(argv):
     ap = argparse.ArgumentParser(description="Run codex headless (probe | exec).")
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -259,7 +291,7 @@ def main(argv):
     except SystemExit as exc:
         return vl.EXIT_USAGE if exc.code else vl.EXIT_PASS
     pick_codex_home()
-    return cmd_probe(a) if a.cmd == "probe" else cmd_exec(a)
+    return with_fallback(cmd_probe if a.cmd == "probe" else cmd_exec, a)
 
 
 if __name__ == "__main__":

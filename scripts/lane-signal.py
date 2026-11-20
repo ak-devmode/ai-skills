@@ -24,11 +24,12 @@ Usage:
   lane-signal.py run  <run> <lane> -- <command...>       (exit code = the command's)
   lane-signal.py done <run> <lane> [note...]
   lane-signal.py wait <run> --lane NAME=PANE [--lane ...] [--machine HOST]
-                      [--idle-min 15] [--timeout-min 240] [--poll 30]
+                      [--idle-min 10] [--timeout-min 240] [--poll 30]
 Exit: 0 an event was printed · 1 timeout · 2 usage
 """
 
 import argparse
+import hashlib
 import datetime as dt
 import json
 import os
@@ -105,7 +106,13 @@ def cmd_wait(a):
     seen_path = os.path.join(lane_dir(a.run), ".reported")
     os.makedirs(lane_dir(a.run), exist_ok=True)
     seen = set(open(seen_path).read().split()) if os.path.exists(seen_path) else set()
-    idle_since = {}
+    # The idle clock survives a re-armed wait (WellMed 231: a lane sat 50 min on its own question
+    # while the driver re-armed every few minutes, each re-arm restarting the clock).
+    idle_path = os.path.join(lane_dir(a.run), ".idle.json")
+    try:
+        idle_since = {k: v for k, v in json.load(open(idle_path)).items() if k in lanes}
+    except (OSError, ValueError):
+        idle_since = {}
     deadline = time.time() + a.timeout_min * 60
     rdir = lane_dir(a.run, local=not a.machine)
 
@@ -115,6 +122,11 @@ def cmd_wait(a):
         print(line)
         return 0
 
+    def done_key(name, body):
+        # A re-dispatched lane reuses its name: the key carries the signal's own text (it holds
+        # `at=<time>`), so a new done file reports again and a stale `done:` never reads as done.
+        return f"done:{name}:{hashlib.sha1(body.encode()).hexdigest()[:12]}"
+
     while time.time() < deadline:
         files = sh(a.machine, f"cd {rdir} 2>/dev/null && for f in *.done; do [ -f \"$f\" ] && printf '%s\\t' \"$f\" && cat \"$f\"; done")
         done = {}
@@ -122,10 +134,11 @@ def cmd_wait(a):
             fname, _, body = row.partition("\t")
             done[fname[:-5]] = body.strip()
         for name, pane in lanes.items():
-            if f"done:{name}" not in seen and name in done:
-                return report(f"DONE {name} {done[name]}", f"done:{name}")
+            if name in done and done_key(name, done[name]) not in seen:
+                idle_since.pop(name, None)
+                return report(f"DONE {name} {done[name]}", done_key(name, done[name]))
         for name, pane in lanes.items():
-            if f"done:{name}" in seen or name in done:
+            if name in done:
                 continue
             st = pane_status(a.machine, pane)
             if st == "blocked" and f"blocked:{name}" not in seen:
@@ -137,12 +150,14 @@ def cmd_wait(a):
                     return report(f"IDLE-NO-SIGNAL {name} {pane} {int(mins)}m — read the pane", f"idle:{name}")
             else:
                 idle_since.pop(name, None)
-        if all(f"done:{n}" in seen for n in lanes):
+        with open(idle_path, "w") as f:
+            json.dump(idle_since, f)
+        if all(n in done and done_key(n, done[n]) in seen for n in lanes):
             print("ALL-DONE")
             return 0
         time.sleep(a.poll)
     print(f"TIMEOUT {a.timeout_min}m — lanes without a signal: "
-          + " ".join(n for n in lanes if f"done:{n}" not in seen))
+          + " ".join(n for n in lanes if not any(k.startswith(f"done:{n}:") for k in seen)))
     return 1
 
 
@@ -161,7 +176,7 @@ def main(argv):
     w.add_argument("run")
     w.add_argument("--lane", action="append", required=True)
     w.add_argument("--machine")
-    w.add_argument("--idle-min", type=float, default=15)
+    w.add_argument("--idle-min", type=float, default=10)
     w.add_argument("--timeout-min", type=float, default=240)
     w.add_argument("--poll", type=float, default=30)
     try:

@@ -60,11 +60,32 @@ def host_tag(host, container):
     raise RuntimeError("ssm read of the host did not finish")
 
 
-def wait_checks(org, repo, pr):
-    sh(["gh", "pr", "checks", str(pr), "-R", f"{org}/{repo}", "--watch", "--interval", "30"], timeout=3600)
-    rows = gh_json(["pr", "checks", str(pr), "-R", f"{org}/{repo}", "--json", "name,state"]) or []
-    bad = [r["name"] for r in rows if r["state"] not in ("SUCCESS", "SKIPPED", "NEUTRAL")]
-    return bad
+def failed_runs(rows):
+    """The Actions run ids behind the failed check rows, from each row's link (…/runs/<id>/job/<id>)."""
+    ids = []
+    for r in rows:
+        m = re.search(r"/actions/runs/(\d+)", r.get("link") or "")
+        if r["state"] not in ("SUCCESS", "SKIPPED", "NEUTRAL") and m and m.group(1) not in ids:
+            ids.append(m.group(1))
+    return ids
+
+
+def wait_checks(org, repo, pr, retries=1):
+    """Watch the PR's checks; a failed check gets its failed jobs re-run once before the train stops
+    (WellMed 231: backbone's golangci-lint timed out with 0 issues on the staging PR and stopped it)."""
+    full = f"{org}/{repo}"
+    while True:
+        sh(["gh", "pr", "checks", str(pr), "-R", full, "--watch", "--interval", "30"], timeout=3600)
+        rows = gh_json(["pr", "checks", str(pr), "-R", full, "--json", "name,state,link"]) or []
+        bad = [r["name"] for r in rows if r["state"] not in ("SUCCESS", "SKIPPED", "NEUTRAL")]
+        runs = failed_runs(rows)
+        if not bad or retries <= 0 or not runs:
+            return bad
+        retries -= 1
+        print(f"{repo}: PR #{pr} checks not green ({', '.join(bad)}); re-running the failed jobs once")
+        for run in runs:
+            sh(["gh", "run", "rerun", run, "-R", full, "--failed"])
+        time.sleep(30)
 
 
 def wait_cd(org, repo, sha):
@@ -130,6 +151,7 @@ def promote(a, repo, container, log):
 
 
 def main(argv):
+    sys.stdout.reconfigure(line_buffering=True)  # a background run's log shows each step as it happens
     ap = argparse.ArgumentParser(description="Promote repos develop -> staging and prove each deploy.")
     ap.add_argument("--org", required=True)
     ap.add_argument("--host", required=True, help="the staging app host's instance id (SSM)")

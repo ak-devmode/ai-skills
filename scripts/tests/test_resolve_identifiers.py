@@ -411,6 +411,53 @@ class TestResolveIdentifiers(unittest.TestCase):
         self.assertEqual(alone.returncode, 1, alone.stdout)
         self.assertEqual(joined.returncode, 0, joined.stdout)
 
+    def test_pinned_go_module_declares_an_imported_proto(self):
+        # A Go caller imports a generated package from a module go.mod pins (WellMed 231 verify:
+        # ConfigExport messages live in the go-sdk module, not in each owner repo). The pinned
+        # version's package directory resolves it; a field the pin lacks, an unpinned import,
+        # a local declaration, and a local replace each behave as named.
+        mod = "github.com/Acme/sdk"
+        pkg = "github.com/Acme/sdk/proto/cfgpb"
+        pb = ("package cfgpb\n\ntype DeclareResponse struct {\n\tstate protoimpl.MessageState\n"
+              "\tOwner string `protobuf:\"x\"`\n}\n")
+        use = ("package svc\n\nimport (\n\t\"" + pkg + "\"\n)\n\n"
+               "var a = &cfgpb.DeclareResponse{Owner: o}\n")
+        gomod = f"module example.com/svc\n\ngo 1.22\n\nrequire (\n\t{mod} v0.1.94 // pinned\n)\n"
+        cases = [
+            # (name, base files, head files, cache has the pin, expected exit, stdout needle)
+            ("the pinned version's package resolves it", {"go.mod": gomod}, {"svc/h.go": use},
+             True, 0, "pinned github.com/Acme/sdk@v0.1.94"),
+            ("a field the pinned message lacks fails, naming the pin", {"go.mod": gomod},
+             {"svc/h.go": use.replace("Owner: o", "Kinds: k")}, True, 1,
+             "field `Kinds` in `message DeclareResponse` (pinned github.com/Acme/sdk@v0.1.94)"),
+            ("no go.mod: nothing is followed", {}, {"svc/h.go": use}, True, 1,
+             "proto `DeclareResponse.Owner` does not resolve"),
+            ("a pin the cache does not hold is skipped, never guessed", {"go.mod": gomod},
+             {"svc/h.go": use}, False, 1, "proto `DeclareResponse.Owner` does not resolve"),
+            ("a local declaration wins over the pin",
+             {"go.mod": gomod, "proto/local.proto": "message DeclareResponse { string kinds = 1; }\n"},
+             {"svc/h.go": use}, True, 1, "field `Owner` in `message DeclareResponse` (it has"),
+            ("a replace to a local path is followed instead of the cache",
+             {"go.mod": gomod + f"\nreplace {mod} => @EXT@\n"}, {"svc/h.go": use}, False, 0,
+             "pinned github.com/Acme/sdk => /"),
+        ]
+        for name, base, head, cached, code, needle in cases:
+            with self.subTest(case=name), tempfile.TemporaryDirectory() as cache, \
+                    tempfile.TemporaryDirectory() as ext:
+                if cached:
+                    write(cache, {"github.com/!acme/sdk@v0.1.94/proto/cfgpb/cfg.pb.go": pb})
+                write(ext, {"proto/cfgpb/cfg.pb.go": pb})  # a replace target outside the repo
+                base = {k: v.replace("@EXT@", ext) for k, v in base.items()}
+                env = dict(os.environ, GOMODCACHE=cache, GOFLAGS="-mod=mod", GOPROXY="off")
+                repo = Repo(base, head)
+                try:
+                    p = run("resolve-identifiers.py", "--repo", repo.path, "--range",
+                            f"{repo.base}..HEAD", env=env)
+                finally:
+                    repo.close()
+                self.assertEqual(p.returncode, code, p.stdout + p.stderr)
+                self.assertIn(needle, p.stdout)
+
     def test_decl_rev_checks_a_closed_unit_against_later_declarations(self):
         repo = Repo({".env.example": "A=1\n"}, {"x.ts": "process.env.LATER;\n"})
         try:

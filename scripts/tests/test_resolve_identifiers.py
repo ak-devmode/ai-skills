@@ -557,5 +557,40 @@ class TestSsmAsEnv(unittest.TestCase):
                 self.assertEqual(p.returncode, code, p.stdout + p.stderr)
 
 
+class TestGrepOwnCommits(unittest.TestCase):
+    """--grep keeps only lines from commits whose subject matches: WellMed 231, where another scope's
+    commit between the unit's own charged its undeclared names to the unit."""
+
+    def setUp(self):
+        self.repo = Repo({}, {"src/mine.sh": "echo ok\n"})
+        p = self.repo.path
+        git(p, "commit", "-q", "--amend", "-m", "fix: [231] mine")
+        write(p, {"src/theirs.sh": "echo \"$THEIR_UNDECLARED\"\n"})
+        git(p, "add", "-A")
+        git(p, "commit", "-q", "-m", "feature: other scope")
+        write(p, {"src/mine.sh": "echo ok\necho \"$MINE_UNDECLARED\"\n"})
+        git(p, "add", "-A")
+        git(p, "commit", "-q", "-m", "fix: [231] mine again")
+
+    def tearDown(self):
+        self.repo.close()
+
+    def test_without_grep_both_names_fail(self):
+        p = self.repo.check()
+        self.assertEqual(p.returncode, 1, p.stdout + p.stderr)
+        self.assertIn("THEIR_UNDECLARED", p.stdout)
+        self.assertIn("MINE_UNDECLARED", p.stdout)
+
+    def test_grep_charges_only_the_units_lines(self):
+        p = self.repo.check("--grep", r"\[231")
+        self.assertEqual(p.returncode, 1, p.stdout + p.stderr)
+        self.assertIn("MINE_UNDECLARED", p.stdout)
+        self.assertNotIn("THEIR_UNDECLARED", p.stdout)
+
+    def test_grep_matching_nothing_fails_closed(self):
+        p = self.repo.check("--grep", r"\[999")
+        self.assertEqual(p.returncode, 3, p.stdout + p.stderr)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -32,7 +32,9 @@ the missing prefix is exactly the invented-reality move this check exists to ref
 failure names the candidate so a reader can confirm it.
 
 Usage:
-  resolve-identifiers.py --repo PATH --range BASE..HEAD [--decl-rev REV] [--decl-repo PATH ...] [--json]
+  resolve-identifiers.py --repo PATH --range BASE..HEAD [--grep REGEX] [--decl-rev REV] [--decl-repo PATH ...] [--json]
+    --grep        keep only added lines whose commit subject (by blame) matches REGEX — a unit's
+                  own commits when other scopes' commits interleave with them on the trunk
     --decl-rev    resolve against REV's tree instead of the range's HEAD — for checking a
                   closed unit against today's declarations (a later fix then counts)
   resolve-identifiers.py --repo PATH --ids FILE [--rev REV] [--decl-repo PATH ...] [--json]
@@ -670,6 +672,27 @@ def added_lines(repo, base, head):
     return files
 
 
+def own_lines(repo, base, head, files, pattern):
+    """`files` cut to the lines whose blamed commit's subject matches `pattern`. Line numbers stay
+    HEAD's, so everything downstream reads the same tree. WellMed 231: the unit's infra commits sit
+    between other scopes' on develop, and BASE..HEAD charged their names to the unit."""
+    rx, kept = re.compile(pattern), {}
+    for path, lines in files.items():
+        out = git(repo, "blame", "--porcelain", f"{base}..{head}", "--", path)
+        owner, subject, cur = {}, {}, None
+        for row in out.splitlines():
+            m = re.match(r"^([0-9a-f]{40}) \d+ (\d+)", row)
+            if m:
+                cur = m.group(1)
+                owner[int(m.group(2))] = cur
+            elif row.startswith("summary ") and cur:
+                subject[cur] = row[8:]
+        mine = [(n, t) for n, t in lines if rx.search(subject.get(owner.get(n), ""))]
+        if mine:
+            kept[path] = mine
+    return kept
+
+
 def node_eval_given(text):
     """{(lineno, NAME)} for each `process.env.<NAME>` read inside the single-quoted body of a
     `NAME=… node -e '…'` whose own prefix assigns NAME: the script hands that value to that
@@ -1018,6 +1041,7 @@ def main(argv):
     src.add_argument("--range", dest="rng")
     src.add_argument("--ids")
     ap.add_argument("--rev", default="HEAD", help="tree to resolve against in --ids mode")
+    ap.add_argument("--grep", help="range mode: keep only lines whose blamed commit subject matches this regex")
     ap.add_argument("--decl-rev", help="tree to resolve against in --range mode (default: the range's HEAD)")
     ap.add_argument("--decl-repo", action="append", default=[])
     ap.add_argument("--json", action="store_true")
@@ -1031,6 +1055,8 @@ def main(argv):
                 return 2
             base, head = a.rng.split("..")
             files = added_lines(a.repo, base, head)
+            if files and a.grep:
+                files = own_lines(a.repo, base, head, files, a.grep)
             if not files:
                 print(message("ERROR", "the range has no changes", f"at least one changed file in {a.rng}",
                               "an empty diff", f"{a.repo} {a.rng}", "tooling",

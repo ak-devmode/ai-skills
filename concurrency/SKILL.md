@@ -1,6 +1,6 @@
 ---
 name: concurrency
-version: 0.11.0
+version: 0.12.0
 description: |
   ONE responsibility: map what can run in parallel and what cannot, against a
   clear set of rules — re-derived from repo ground truth on every run, never
@@ -252,6 +252,11 @@ Per partition, in this order (syntax authority: `herdr --skill`):
    quiet or failures-only flags and pipe through `| tail -40`; grep logs instead of
    printing them; read files by line range; never dump a full suite, diff or lint
    report."
+   Every brief also carries the test-DB rule (Alex, 2026-11-23): "A throwaway database
+   container you start for tests carries `--label kalpa.test-db=<scope>` and `--rm`; stop it
+   when your tests finish." The scope's teardown script removes anything still labelled, on
+   both machines (`templates/teardown.sh.template` step 4). The driver follows the same rule
+   for its own test containers.
    A brief never contains the driver registration (`dispatch-log.py --status driver`) or
    `--driver`: a lane neither registers, merges nor posts (Alex 97).
 
@@ -292,6 +297,21 @@ point — `herdr` skill §6.1 has the mechanics:
   `recent` (`herdr` §7).
 - Record every terminal state with `dispatch-log.py … --pane <id> --status done|blocked|failed
   --tail "<lines that prove it>"`.
+- **Driver heartbeat, bounded to 24 h (Alex, 2026-11-23).** At first dispatch, arm one
+  session cron (`CronCreate`, recurring, off the :00/:30 marks, e.g. `13,43 * * * *`). It backstops
+  what the signal-file wait cannot see: a wait that died, or a lane stuck on a trust dialog, an API
+  error or a usage limit. Its prompt carries its own expiry, so no state file is needed:
+  > `<run> driver heartbeat (armed <ISO>, check-in due <ISO + 24 h>): read the live panes in the
+  > "<run> lanes" tab; if a lane is stuck (API error, usage limit, trust dialog, idle without a done
+  > signal), act per /concurrency; if a background lane-signal wait has exited, handle its event.
+  > If now is past the check-in time, ask Alex one question, whether to keep the heartbeat for
+  > another 24 h, and cancel it at the next beat unless he says keep. Otherwise do nothing and say
+  > nothing beyond one line.`
+
+  Cancel it (`CronDelete`) when no lane is live and no wait is armed, so nothing is left to watch,
+  and at teardown (§8). Re-arm it at the next dispatch. Why: a heartbeat left on an idle train woke the
+  session every 30 min for two days, and each wake renewed Claude Code's `caffeinate`, so the Mac
+  never slept (WellMed 229, 2026-11-21..23).
 
 **7.2 In-pane status markers (all seats) — no SendMessage**
 Workers report by PRINTING a marker line in their own pane; the supervisor reads
@@ -512,7 +532,8 @@ zero-cost-basis silent defeat that build/test/disjointness passes all missed).
   2026-10-05). Lane, review and fix panes stay open after their markers. When Alex accepts
   the phase's verification or review, approves the merge, or closes the wave or scope, the
   driver closes those panes from its own pane and runs (or, if auto mode refuses, hands
-  over in that same reply) the teardown script below. Live and unmerged lanes stay.
+  over in that same reply) the teardown script below. Live and unmerged lanes stay. It also cancels the
+  driver heartbeat (§7.1) once no lane is left live.
 - **Wave teardown = one script for Alex**, from `templates/teardown.sh.template` (`/closeout`
   §13.6a): slot releases and fallback worktrees, merged lane branches (local + origin), lane
   DBs/containers. Slot trust entries stay — they are what makes the next run prompt-free. Run it from outside the lane worktrees; never close panes from it.

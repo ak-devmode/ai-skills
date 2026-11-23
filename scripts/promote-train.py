@@ -88,6 +88,20 @@ def wait_checks(org, repo, pr, retries=1):
         time.sleep(30)
 
 
+def run_succeeded(org, repo, run_id):
+    """The run's own conclusion, read once it has finished. `gh run watch` exits non-zero on a dropped
+    connection as well as on a failed run (WellMed 231.5: catalog CD succeeded, the train stopped)."""
+    for _ in range(40):
+        try:
+            r = gh_json(["run", "view", str(run_id), "-R", f"{org}/{repo}", "--json", "status,conclusion"]) or {}
+        except RuntimeError:
+            r = {}
+        if r.get("status") == "completed":
+            return r.get("conclusion") == "success"
+        time.sleep(15)
+    return False
+
+
 def wait_cd(org, repo, sha):
     """The CD run for the merge commit on staging, watched to its end. None if none ever starts."""
     for _ in range(40):
@@ -97,7 +111,7 @@ def wait_cd(org, repo, sha):
         if run:
             rc, _, _ = sh(["gh", "run", "watch", str(run["databaseId"]), "-R", f"{org}/{repo}", "--exit-status"],
                           timeout=3600)
-            return run["databaseId"], rc == 0
+            return run["databaseId"], rc == 0 or run_succeeded(org, repo, run["databaseId"])
         time.sleep(15)
     return None, False
 

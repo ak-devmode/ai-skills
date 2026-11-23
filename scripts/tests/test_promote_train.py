@@ -42,5 +42,27 @@ class TestWaitChecks(unittest.TestCase):
         self.assertEqual(len(reruns), 1)
 
 
+class TestWaitCD(unittest.TestCase):
+    """A dropped `gh run watch` is not a failed deploy: the run's own conclusion decides (WellMed 231.5)."""
+
+    def run_with(self, watch_rc, conclusion):
+        pt = load("promote-train.py")
+        runs = [{"databaseId": 7, "workflowName": "CD", "headSha": "abc"}]
+        view = {"status": "completed", "conclusion": conclusion}
+        with mock.patch.object(pt, "sh", return_value=(watch_rc, "", "")), \
+                mock.patch.object(pt, "gh_json", side_effect=lambda a: runs if a[1] == "list" else view), \
+                mock.patch.object(pt.time, "sleep"):
+            return pt.wait_cd("o", "r", "abc")
+
+    def test_watch_dropped_but_run_succeeded(self):
+        self.assertEqual(self.run_with(1, "success"), (7, True))
+
+    def test_watch_failed_and_run_failed(self):
+        self.assertEqual(self.run_with(1, "failure"), (7, False))
+
+    def test_watch_ok(self):
+        self.assertEqual(self.run_with(0, "success"), (7, True))
+
+
 if __name__ == "__main__":
     unittest.main()

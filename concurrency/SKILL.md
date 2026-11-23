@@ -252,6 +252,11 @@ Per partition, in this order (syntax authority: `herdr --skill`):
    quiet or failures-only flags and pipe through `| tail -40`; grep logs instead of
    printing them; read files by line range; never dump a full suite, diff or lint
    report."
+   Every brief also carries the test-DB rule (Alex, 2026-11-23): "A throwaway database
+   container you start for tests carries `--label kalpa.test-db=<scope>` and `--rm`; stop it
+   when your tests finish." The scope's teardown script removes anything still labelled, on
+   both machines (`templates/teardown.sh.template` step 4). The driver follows the same rule
+   for its own test containers.
    A brief never contains the driver registration (`dispatch-log.py --status driver`) or
    `--driver`: a lane neither registers, merges nor posts (Alex 97).
 

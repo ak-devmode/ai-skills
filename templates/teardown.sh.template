@@ -57,6 +57,11 @@ for r in $REPOS; do
 done
 
 echo "== 4. docker + databases"
+# Throwaway test DBs carry --label kalpa.test-db=<SCOPE> (concurrency §6 step 4), on this machine and the box.
+for h in local homelab2026; do
+  X=""; [ $h = local ] || X="ssh $h"
+  for c in $($X docker ps -aq --filter label=kalpa.test-db=<SCOPE>); do $X docker rm -f $c >/dev/null 2>&1 && echo "  removed test container $c ($h)"; done
+done
 for c in <container names>; do docker rm -f $c >/dev/null 2>&1 && echo "  removed container $c"; done
 for db in $(psql -h localhost -U postgres -tAc "select datname from pg_database where datname like '<lane db pattern>'"); do
   psql -h localhost -U postgres -qc "DROP DATABASE IF EXISTS \"$db\" WITH (FORCE)" && echo "  dropped $db"
@@ -82,3 +87,4 @@ echo "== read-back (expect 0 / 0 / 0)"
 n=0; for r in $REPOS; do [ -d $W/<prefix>$r.worktrees/$LANE_WT ] && n=$((n+1)); done; echo "lane worktrees left: $n"
 echo "lane DBs left: $(psql -h localhost -U postgres -tAc "select count(*) from pg_database where datname like '<lane db pattern>'")"
 echo "lane containers left: $(docker ps -a --format '{{.Names}}' | grep -c '<container pattern>')"
+echo "test-db containers left: local $(docker ps -aq --filter label=kalpa.test-db=<SCOPE> | wc -l | tr -d ' ') / box $(ssh homelab2026 docker ps -aq --filter label=kalpa.test-db=<SCOPE> | wc -l | tr -d ' ')"

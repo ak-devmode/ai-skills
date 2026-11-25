@@ -155,6 +155,19 @@ class Writers(Base):
         self.assertIn("| 3 | ✅ Done | archive/3-alpha/ |", text)
         self.assertIn("| 3.1 | 📝 Scoped | archive/3-alpha/3.1-x-PLAN.md |", text)
 
+    def test_move_after_a_hand_mv_into_a_program_archive_repoints_the_rows(self):
+        # Scope 195 (2026-11-25): a program member living at the plans root, hand-moved into
+        # its program's archive/. The old path is not the new one minus "archive/", so the
+        # rows kept naming the root folder and verify-archive failed.
+        self.add(3, "3-alpha/")
+        self.add("3.1", "3-alpha/3.1-x-PLAN.md")
+        os.makedirs(os.path.join(self.plans, "prog", "archive"))
+        os.rename(os.path.join(self.plans, "3-alpha"), os.path.join(self.plans, "prog", "archive", "3-alpha"))
+        self.ok("move", "--num", "3", "--to", "archived", "--folder", "prog/archive/3-alpha/", "--status", "✅ Done")
+        text = self.read("prog/archive/3-alpha/progress.md")
+        self.assertIn("| 3 | ✅ Done | prog/archive/3-alpha/ |", text)
+        self.assertIn("| 3.1 | 📝 Scoped | prog/archive/3-alpha/3.1-x-PLAN.md |", text)
+
     def test_loose_row_moves_into_its_new_folder(self):
         self.add(12, "12-plan-PLAN.md")  # a raw plan file at the plans root: loose
         self.assertIn("| 12 |", self.read("index-loose.md"))
@@ -513,7 +526,12 @@ class ArchiveGuard(Base):
     def test_open_backlog_row_blocks_archive(self):
         p = self.pi("move", "--num", "3", "--to", "archived")
         self.assertNotEqual(p.returncode, 0)
-        self.assertIn("open backlog row", p.stdout + p.stderr)
+        out = p.stdout + p.stderr
+        # A crash in the message path also exits non-zero and echoes the text in its
+        # traceback, so assert the rendered BLOCK message, not just the words.
+        self.assertNotIn("Traceback", out)
+        self.assertIn("[BLOCK] refusing to archive scope 3 — open backlog row", out)
+        self.assertIn("p1/BACKLOG.md:3 widget", out)
         self.assertTrue(self.exists("3-alpha/progress.md"))
 
     def test_force_overrides_out_loud(self):

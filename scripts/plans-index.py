@@ -1032,7 +1032,7 @@ def backlog_guard(plans: str, num: int, force: str | None) -> int:
         return 0
     print(status_msg("BLOCK", f"refusing to archive scope {num} — open backlog row(s) point at it",
                      f"no kalpa-orchestra backlog row at scoped({num})", ", ".join(hits),
-                     root, "process", f'close the row(s) first, or pass --force "<reason>"'),
+                     root, "environment", f'close the row(s) first, or pass --force "<reason>"'),
           file=sys.stderr)
     return 1
 
@@ -1179,12 +1179,19 @@ def move_record(args, plans: str, mode: str) -> int:
     # A folder moved by hand (mv, git mv) leaves its rows naming the old path: match the
     # record's location with and without its archive/ component.
     olds = list(dict.fromkeys([src, os.path.join(*[p for p in src.split(os.sep) if p != "archive"])]))
+    leaf = os.path.basename(src)
     rows = []
     for c in rec.rows:
         c = list(c)
         if len(c) > 2:
             p = cell_path(c[2])
             old = next((o for o in olds if p == o or p.startswith(o + "/")), None)
+            parts = p.split("/")
+            if old is None and leaf in parts:
+                # Moved by hand under a different parent (a program member from the plans
+                # root into its program's archive/, scope 195): the record's own folder name
+                # still anchors the old path. Every row here is this record's, so it is safe.
+                old = "/".join(parts[: parts.index(leaf) + 1])
             if old is not None and old != want:
                 c[2] = c[2].replace(p, want + p[len(old):], 1)
         if num_of(c) == str(args.num) and args.status:

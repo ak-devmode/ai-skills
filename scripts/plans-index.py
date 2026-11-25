@@ -1032,7 +1032,7 @@ def backlog_guard(plans: str, num: int, force: str | None) -> int:
         return 0
     print(status_msg("BLOCK", f"refusing to archive scope {num} — open backlog row(s) point at it",
                      f"no kalpa-orchestra backlog row at scoped({num})", ", ".join(hits),
-                     root, "process", f'close the row(s) first, or pass --force "<reason>"'),
+                     root, "environment", f'close the row(s) first, or pass --force "<reason>"'),
           file=sys.stderr)
     return 1
 

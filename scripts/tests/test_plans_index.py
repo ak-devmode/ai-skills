@@ -513,7 +513,12 @@ class ArchiveGuard(Base):
     def test_open_backlog_row_blocks_archive(self):
         p = self.pi("move", "--num", "3", "--to", "archived")
         self.assertNotEqual(p.returncode, 0)
-        self.assertIn("open backlog row", p.stdout + p.stderr)
+        out = p.stdout + p.stderr
+        # A crash in the message path also exits non-zero and echoes the text in its
+        # traceback, so assert the rendered BLOCK message, not just the words.
+        self.assertNotIn("Traceback", out)
+        self.assertIn("[BLOCK] refusing to archive scope 3 — open backlog row", out)
+        self.assertIn("p1/BACKLOG.md:3 widget", out)
         self.assertTrue(self.exists("3-alpha/progress.md"))
 
     def test_force_overrides_out_loud(self):

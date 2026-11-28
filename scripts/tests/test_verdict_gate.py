@@ -814,6 +814,19 @@ class TestActiveCheckout(TestLandedThroughSquash):
         text = run("verdict-gate.py", "--scope", self.scope, "--all", cwd=self.lane, env=self.env).stdout
         self.assertIn("read   svc: ", text)
 
+    def test_a_missing_explicit_checkout_is_an_error_not_a_fallback(self):
+        # review adhoc-r2-01: a typo or a removed worktree must not verify main instead
+        self.build_lane()
+        gone = os.path.join(self.lane, "no-such-dir")
+        p = run("verdict-gate.py", "--scope", self.scope, "--unit", "5.1", "--at", gone, cwd=self.tmp.name,
+                env=self.env)
+        self.assertEqual(p.returncode, 3, p.stdout + p.stderr)
+        self.assertIn("not a git checkout", p.stderr)
+        p = run("verify-run.py", "run", "--table", self.table, "--log", self.log, "--owner", "5.1",
+                cwd=self.tmp.name, env=dict(self.env, VERIFY_AT=gone))
+        self.assertNotEqual(p.returncode, 0, p.stdout)
+        self.assertIn("not a git checkout", p.stdout + p.stderr)
+
     def test_runner_and_gate_read_the_same_checkout(self):
         # review adhoc-01: a check that passes on main but fails on the lane must fail when
         # the runner runs from the lane, or main's evidence would clear the lane's code

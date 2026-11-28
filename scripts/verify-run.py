@@ -79,8 +79,10 @@ def refuse_placement(rows, log_path, projects, scope=None):
                 f"destination {log_path} is in {why}", f"finish table line {r['_line']}", "code",
                 "point --log at the product's private scope folder", f"{vl.CONTRACT} §7.1")
         if r["class"] == "B" and public:
-            row_repo = os.path.realpath(vl.repo_root(projects, r["repo"], scope))
-            if row_repo != top:
+            # same repo by git identity (common dir), whichever checkout of it each side is
+            # (review adhoc-r2-02: a lane worktree and its main checkout are one repo)
+            row_repo = vl.repo_identity(vl.repo_root(projects, r["repo"], scope))
+            if row_repo is None or row_repo != vl.repo_identity(top):
                 return vl.message(
                     "BLOCK", f"class-B evidence about another repo refused for `{r['check_id']}`",
                     f"a public repo holds verdicts on its own content only ({top})",

@@ -61,6 +61,13 @@ def canonical_key(key, projects=None):
     return os.path.basename(os.path.realpath(main)) if rel.startswith("..") else rel
 
 
+def repo_identity(path):
+    """The realpath of the repo's common git dir for any checkout of it, or None."""
+    out = _git_lines(path, "rev-parse", "--path-format=absolute", "--git-common-dir") if path and \
+        os.path.isdir(path) else []
+    return os.path.realpath(out[0]) if len(out) == 1 else None
+
+
 def checkout_of(path, main):
     """(toplevel, linked) when `path` sits in a checkout of the repo whose main checkout is
     `main` — the main checkout itself (linked False) or a linked worktree of it (linked True) —
@@ -103,6 +110,14 @@ def repo_root(projects, repo, scope=None, at=None, cwd=_CURRENT):
     if cwd is _CURRENT:
         cwd = os.getcwd()
     if at:
+        # an explicit checkout is never guessed at: a typo or a removed worktree must not
+        # quietly verify another checkout (review adhoc-r2-01)
+        if not os.path.isdir(at) or len(_git_lines(at, "rev-parse", "--show-toplevel")) != 1:
+            raise ContractError(message("ERROR", "the checkout to verify from is not a git checkout",
+                                        "an existing git checkout (--at or $VERIFY_AT)", str(at),
+                                        "--at / VERIFY_AT", "environment",
+                                        "point --at or VERIFY_AT at the lane's worktree, or unset it",
+                                        f"{CONTRACT} §3.2.2"))
         hit = checkout_of(at, main)
         if hit:
             return hit[0]

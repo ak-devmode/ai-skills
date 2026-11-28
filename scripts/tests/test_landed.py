@@ -306,6 +306,8 @@ class TestLanded(unittest.TestCase):
                 os.environ["PATH"] = bindir + os.pathsep + path
                 t0 = time.monotonic()
                 self.assertIsNone(ll.landed(r.p, shas[1]))
+                # gstack-timing-ok: elapsed time is the behaviour under test (a call cut at the
+                # 1 s deadline, against a 5 s sleep); 4 s leaves room for process start-up
                 self.assertLess(time.monotonic() - t0, 4)
                 self.assertTrue(ll.capped(r.p, shas[1]))
             finally:

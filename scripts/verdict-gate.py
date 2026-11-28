@@ -255,8 +255,9 @@ def review_presence_blocks(review_log, base, projects, scope=None, unit=None, ch
     severity: nothing but a reason ties that commit to the finding (review adhoc-03) — until the
     finding's review lineage reaches the round cap without SHIP and an acceptance follows the disposition
     (`stopped`).
-    A git call that fails is a block, never a zero (5.3-r2-02)."""
-    ll.reset()
+    A git call that fails is a block, never a zero (5.3-r2-02). landed_lib's state is reset by
+    the caller at the evaluation boundary (evaluate), never here: that would drop the capped
+    searches counted so far and run them again (review adhoc-r2-03)."""
     recs = vl.read_jsonl(review_log) if os.path.exists(review_log) else []
     reviews = [r for r in recs if r.get("record") == "review"]
     # Logs from before `review` records existed (§6.0) carry the range on each finding.
@@ -411,8 +412,8 @@ def review_presence_blocks(review_log, base, projects, scope=None, unit=None, ch
             blocks.append((f"unmerged:{f['finding_id']}", f"a `{d['disposition']}` commit is not in what ships",
                            f"{d['sha'][:10]} on HEAD or the trunk in {hold}: an ancestor, the same patch-id, or "
                            "its change squash-merged",
-                           f"squash search stopped after {ll.CALL_BUDGET} git calls in {root(hold)}: run the "
-                           "gate from the checkout that holds the fix (--at)" if ll.capped(root(hold), d["sha"])
+                           f"squash search in {root(hold)} capped or skipped by its budget, so not known: run "
+                           "the gate from the checkout that holds the fix (--at)" if ll.capped(root(hold), d["sha"])
                            else "none of the three (or git cannot tell)", f"{review_log} · {f['finding_id']}", "code"))
         head = rng.partition("..")[2]  # the head this finding's reviewer saw
         if own and head and canon(d.get("repo", own)) == canon(own) \

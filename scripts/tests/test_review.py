@@ -601,7 +601,9 @@ class TestReview(unittest.TestCase):
         side = self.commit(self.repo, "a.sh")
         self.assertEqual(self.dispose("9.1-r1-01", "--fixed", side).returncode, 0)
         git(self.repo, "checkout", "-q", "main")
-        ids = lambda: [b[0] for b in gate.review_presence_blocks(self.log, {}, self.projects)]
+        def ids():  # each call is its own evaluation: the caller resets landed_lib (adhoc-r2-03)
+            gate.ll.reset()
+            return [b[0] for b in gate.review_presence_blocks(self.log, {}, self.projects)]
         self.assertEqual(ids(), ["unmerged:9.1-r1-01"])
         git(self.repo, "merge", "-q", "--ff-only", "side")
         self.assertEqual(ids(), [])

@@ -59,11 +59,11 @@ class Env:
             fh.write(f"# t\n\n**Schema version:** verify/1\n**Revision:** {rev}\n\n{HEADER}{''.join(rows)}\n")
         return path
 
-    def run(self, rows, log=None, owner="5.1"):
+    def run(self, rows, log=None, owner="5.1", cwd=None):
         args = ["run", "--table", self.table(rows), "--log", log or self.priv_log, "--projects", self.projects]
         if owner:
             args += ["--owner", owner]
-        return run("verify-run.py", *args)
+        return run("verify-run.py", *args, cwd=cwd)
 
     def records(self, log=None):
         with open(log or self.priv_log, encoding="utf-8") as fh:
@@ -193,6 +193,21 @@ class TestPlacement(RunnerTest):
         self.assertIn("another repo refused", other.stderr)
         own = self.env.run([row("b2", "true", repo="pub")], log=self.env.pub_log)
         self.assertEqual(own.returncode, 0, own.stderr)
+
+    def test_a_worktree_of_the_public_repo_is_the_same_repo(self):
+        # review adhoc-r2-02: placement compares repo identity, not checkout paths, so a run
+        # from a worktree (verify_lib.repo_root rule 3) still holds class B on its own repo
+        pub = os.path.join(self.env.projects, "pub")
+        wt = os.path.join(self.env.tmp.name, "pub-wt")
+        git(pub, "worktree", "add", "-q", "-b", "lane", wt)
+        wt_log = os.path.join(wt, "artifacts", "verify-5.1.jsonl")
+        for name, cwd, log in (("from the worktree, log in main", wt, self.env.pub_log),
+                               ("from main, log in the worktree", pub, wt_log)):
+            with self.subTest(name):
+                p = self.env.run([row("b3", "true", repo="pub")], log=log, cwd=cwd)
+                self.assertEqual(p.returncode, 0, p.stderr)
+        other = self.env.run([row("b4", "true", repo="svc")], log=wt_log, cwd=wt)
+        self.assertIn("another repo refused", other.stderr)
 
 
 class TestWorktree(RunnerTest):

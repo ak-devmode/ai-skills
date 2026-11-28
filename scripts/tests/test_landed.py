@@ -11,6 +11,7 @@ follow-up pushed onto a lane after its squash, a SHA the repo lacks) is a row he
 import os
 import subprocess
 import tempfile
+import time
 import unittest
 
 from _helpers import load
@@ -283,6 +284,48 @@ class TestLanded(unittest.TestCase):
                     ll.subprocess.run = real
                 self.assertTrue(ll.capped(r.p, shas[1]))
                 self.assertFalse([c for c in calls if "diff" in c or "-p" in c], calls)
+        finally:
+            ll.CALL_BUDGET, ll.CAPPED_LIMIT = saved
+
+    def test_a_slow_git_call_is_cut_at_the_deadline(self):
+        # review adhoc-02: the time budget bounds a call in flight, not only the next one
+        saved = ll.CALL_BUDGET, ll.TIME_BUDGET, ll.CAPPED_LIMIT
+        with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as bindir:
+            real = subprocess.run(["sh", "-c", "command -v git"], capture_output=True, text=True).stdout.strip()
+            slow = os.path.join(bindir, "git")
+            with open(slow, "w") as fh:
+                fh.write(f"#!/bin/sh\nfor a in \"$@\"; do case $a in diff|log|show) sleep 5;; esac; done\n"
+                         f"exec {real} \"$@\"\n")
+            os.chmod(slow, 0o755)
+            r = Repo(tmp)
+            shas, _ = case_squash(r)
+            path = os.environ["PATH"]
+            try:
+                ll.reset()
+                ll.CALL_BUDGET, ll.TIME_BUDGET, ll.CAPPED_LIMIT = 1500, 1.0, 10
+                os.environ["PATH"] = bindir + os.pathsep + path
+                t0 = time.monotonic()
+                self.assertIsNone(ll.landed(r.p, shas[1]))
+                self.assertLess(time.monotonic() - t0, 4)
+                self.assertTrue(ll.capped(r.p, shas[1]))
+            finally:
+                os.environ["PATH"] = path
+                ll.CALL_BUDGET, ll.TIME_BUDGET, ll.CAPPED_LIMIT = saved
+
+    def test_arrival_bounded_shares_the_budget(self):
+        # review adhoc-03: the gate's review-coverage search goes through the same bound
+        saved = ll.CALL_BUDGET, ll.CAPPED_LIMIT
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                ll.reset()
+                r = Repo(tmp)
+                shas, _ = case_squash(r)
+                ll.CALL_BUDGET, ll.CAPPED_LIMIT = 1, 10
+                self.assertIsNone(ll.arrival_bounded(r.p, f"{shas[0]}^", shas[-1], "main"))
+                self.assertTrue(ll.capped(r.p, f"{shas[0]}^..{shas[-1]}"))
+                ll.reset()
+                ll.CALL_BUDGET = saved[0]
+                self.assertIsNotNone(ll.arrival_bounded(r.p, f"{shas[0]}^", shas[-1], "main"))
         finally:
             ll.CALL_BUDGET, ll.CAPPED_LIMIT = saved
 

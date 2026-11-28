@@ -805,6 +805,37 @@ class TestActiveCheckout(TestLandedThroughSquash):
                 self.assertIn(os.path.realpath(where), reads[0])
                 self.assertIn("(lane)" if where == self.lane else "(main)", reads[0])
 
+    def test_all_mode_names_the_checkouts_it_read(self):
+        self.build_lane()
+        p = run("verdict-gate.py", "--scope", self.scope, "--all", "--json", cwd=self.lane, env=self.env)
+        reads = json.loads(p.stdout)["reads"]
+        self.assertEqual(len(reads), 1, reads)
+        self.assertIn(os.path.realpath(self.lane), reads[0])
+        text = run("verdict-gate.py", "--scope", self.scope, "--all", cwd=self.lane, env=self.env).stdout
+        self.assertIn("read   svc: ", text)
+
+    def test_runner_and_gate_read_the_same_checkout(self):
+        # review adhoc-01: a check that passes on main but fails on the lane must fail when
+        # the runner runs from the lane, or main's evidence would clear the lane's code
+        self.write(None, APP)
+        self.commit("app")
+        self.ledger()
+        self.lane = os.path.join(self.projects, "svc.lane")
+        git(self.svc, "worktree", "add", "-q", "-b", "lane", self.lane)
+        with open(os.path.join(self.svc, "main-only.txt"), "w") as fh:
+            fh.write("x\n")
+        git(self.svc, "add", "-A")
+        git(self.svc, "commit", "-q", "-m", "main only")
+        self.set_table([row("ok", "test -f main-only.txt")])
+        for name, cwd, env, want in (("from main", self.svc, self.env, "pass"),
+                                     ("from the lane", self.lane, self.env, "fail"),
+                                     ("VERIFY_AT the lane", self.tmp.name, dict(self.env, VERIFY_AT=self.lane), "fail")):
+            with self.subTest(name):
+                p = run("verify-run.py", "run", "--table", self.table, "--log", self.log, "--owner", "5.1",
+                        cwd=cwd, env=env)
+                line = next(x for x in p.stdout.splitlines() if " ok " in f" {x} " or x.split()[1:2] == ["ok"])
+                self.assertEqual(line.split()[0], want, p.stdout)
+
 
 class TestLedgerBase(Fixture):
     def test_base_recorded_once(self):

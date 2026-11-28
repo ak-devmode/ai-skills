@@ -41,6 +41,27 @@ def git_ok(path, *args):
     return subprocess.run(["git", "-C", path, *args], capture_output=True, text=True).returncode == 0
 
 
+READS = {}  # repo -> checkout every evaluation read git from (reset per evaluate)
+READ_PREFIX = "read   "  # judge.py report lifts these lines into its header
+
+
+def read_root(projects, repo, scope, checkout, cwd):
+    """vl.repo_root, recorded: the report names every checkout the verdict was read from."""
+    path = vl.repo_root(projects, repo, scope, checkout, cwd)
+    READS[repo] = path
+    return path
+
+
+def read_lines():
+    """`read   <repo>: <path> (<branch>)` for every checkout read since the last reset."""
+    out = []
+    for repo, path in sorted(READS.items()):
+        branch = git_out(path, "symbolic-ref", "-q", "--short", "HEAD") or \
+            f"detached {git_out(path, 'rev-parse', '--short', 'HEAD') or '?'}"
+        out.append(f"{READ_PREFIX}{repo}: {path} ({branch})")
+    return out
+
+
 def git_out(path, *args):
     p = subprocess.run(["git", "-C", path, *args], capture_output=True, text=True)
     return p.stdout.strip() if p.returncode == 0 else None
@@ -197,7 +218,7 @@ def fallback_markers(review_log, projects, scope=None, checkout=None, cwd=None):
     def covers(c, f):
         (repo, _), = f["range"].items()
         cs, fs = c.get("shas") or {}, f.get("shas") or {}
-        path = vl.repo_root(projects, repo, scope, checkout, cwd)
+        path = read_root(projects, repo, scope, checkout, cwd)
         return (repo in c.get("range", {}) and all(cs.get(k) and fs.get(k) for k in ("base", "head"))
                 and git_ok(path, "merge-base", "--is-ancestor", cs["base"], fs["base"])
                 and git_ok(path, "merge-base", "--is-ancestor", fs["head"], cs["head"]))
@@ -253,7 +274,7 @@ def review_presence_blocks(review_log, base, projects, scope=None, unit=None, ch
         return vl.canonical_key(key, projects)
 
     def root(repo):  # the scope's own worktree when it is one (verify_lib.repo_root, §3.2.1)
-        return vl.repo_root(projects, canon(repo), scope, checkout, cwd)
+        return read_root(projects, canon(repo), scope, checkout, cwd)
 
     def names(r, repo):  # the record's range names this repo, under any key for it
         return any(canon(k) == canon(repo) for k in r.get("range", {}))
@@ -276,7 +297,7 @@ def review_presence_blocks(review_log, base, projects, scope=None, unit=None, ch
         review's net diff (base..head) arrived — S, not the lane commits, is what base..tip holds —
         or None."""
         sh = r.get("shas") or {}
-        s = sh.get("base") and sh.get("head") and ll.arrival(path, sh["base"], sh["head"], tip)
+        s = sh.get("base") and sh.get("head") and ll.arrival_bounded(path, sh["base"], sh["head"], tip)
         return s if s and not s.startswith(b) and is_ancestor(path, b, s) else None
 
     for repo, b in sorted(base.items()):
@@ -309,9 +330,9 @@ def review_presence_blocks(review_log, base, projects, scope=None, unit=None, ch
                 if first is None:
                     oldest = (git_out(path, "rev-list", "--reverse", f"{b}..{tip}") or "").splitlines()[:1]
                     first = oldest[0] if oldest else None
-                landings = [s for s in (squash_covers(path, r, b, tip) for r in mine) if s]
-                ok = any(first and inside(path, r, first) for r in mine) \
-                    or any(found is None or s == found for s in landings)
+                # ancestry first; the squash search (bounded, §3.2.2) only when that fails
+                ok = any(first and inside(path, r, first) for r in mine) or any(
+                    found is None or s == found for s in (squash_covers(path, r, b, tip) for r in mine) if s)
             except HistoryError as e:
                 blocks.append((f"review:{repo}", "cannot determine the unit's first commit", f"{e} in {repo}",
                                "git failed", f"{path}", "environment"))
@@ -457,6 +478,7 @@ def evidence_line(pend):
 def evaluate(scope, unit, projects, checkout=None, cwd=None):
     """Return (rows_report, blocks, judge_lines). Raises vl.ContractError."""
     ll.reset()
+    READS.clear()
     table = vl.parse_table(os.path.join(scope, "finish-conditions.md"))
     owned = vl.select(table["rows"], unit)
     log = os.path.join(scope, "artifacts", f"verify-{unit}.jsonl")
@@ -542,7 +564,7 @@ def evaluate(scope, unit, projects, checkout=None, cwd=None):
             block("verdict has no evidence SHA", "the pending record with the tested SHA", "none", "tooling")
             continue
         repo, sha = pend["repo"], pend["sha"]
-        repo_path = vl.repo_root(projects, repo, scope, checkout, cwd)
+        repo_path = read_root(projects, repo, scope, checkout, cwd)
         if repo not in heads:
             heads[repo] = git_out(repo_path, "rev-parse", "HEAD")
         head = heads[repo]
@@ -592,16 +614,9 @@ def evaluate(scope, unit, projects, checkout=None, cwd=None):
         for line in fallback_markers(review, projects, scope, checkout, cwd):
             judges.add(line)
     # which checkout answered "is it in what ships": a pass read from a lane's branch is not a
-    # pass of what merged, so the report names it
-    for repo in sorted(base):
-        path = vl.repo_root(projects, repo, scope, checkout, cwd)
-        branch = git_out(path, "symbolic-ref", "-q", "--short", "HEAD") or \
-            f"detached {git_out(path, 'rev-parse', '--short', 'HEAD') or '?'}"
-        report.append(f"{READ_PREFIX}{repo}: {path} ({branch})")
+    # pass of what merged, so the report names every checkout read (review adhoc-04)
+    report += read_lines()
     return report, blocks, sorted(j for j in judges if j)
-
-
-READ_PREFIX = "read   "  # judge.py report lifts these lines into its header
 
 
 # Blocks that mean "no complete verdict yet" — /closeout runs /verify for these, and only these.
@@ -614,9 +629,10 @@ def closeout_view(a, table):
     anything is off, `marker: ⚠ verify failed <ids>` (+ judge markers) — the text /closeout
     puts on the archived index row."""
     units = sorted({r["owner"].split("/")[0] for r in table["rows"]}, key=lambda u: [int(x) for x in u.split(".")])
-    per, failed, judges, msgs, unjudged = [], [], set(), [], []
+    per, failed, judges, msgs, unjudged, reads = [], [], set(), [], [], []
     for u in units:
         report, blocks, js = evaluate(a.scope, u, a.projects, a.at, os.getcwd())
+        reads += [x for x in report if x.startswith(READ_PREFIX) and x not in reads]
         judges.update(js)
         unjudged += [b[0] for b in blocks if b[5] == NOT_JUDGED]
         failed += [b[0] for b in blocks if b[5] != NOT_JUDGED]
@@ -644,7 +660,7 @@ def closeout_view(a, table):
     verdict = "failed" if failed else "not-judged" if unjudged else "pass"
     if a.json:
         print(json.dumps({"verdict": verdict, "units": per, "predates": table["predates"],
-                          "failed": failed, "marker": marker, "messages": msgs}))
+                          "failed": failed, "marker": marker, "messages": msgs, "reads": reads}))
     else:
         for p in per:
             print(f"{'FAIL' if p['blocks'] else 'pass'}  {p['unit']}  "
@@ -654,6 +670,8 @@ def closeout_view(a, table):
             print(f"n/a   {u}  predates the gate")
         for m in msgs:
             print(m)
+        for x in reads:
+            print(x)
         print(f"verdict: {verdict.upper()} (scope, {len(units)} gated unit(s), {len(failed)} failed check(s))")
         if marker:
             print(f"marker: {marker}")
@@ -672,7 +690,8 @@ def main(argv):
     ap.add_argument("--skip-verify", metavar="REASON")
     ap.add_argument("--projects", default=vl.PROJECTS)
     ap.add_argument("--at", metavar="CHECKOUT", help="read git from this checkout of the unit's repo "
-                    "(default: the scope's linked worktree, else the current checkout, else the main one)")
+                    "(default: $VERIFY_AT, which verify-run.py and judge.py read too; else the scope's linked "
+                    "worktree, else the current checkout, else the main one)")
     ap.add_argument("--json", action="store_true")
     try:
         a = ap.parse_args(argv)

@@ -78,7 +78,10 @@ def checkout_of(path, main):
     return top, owner != top
 
 
-def repo_root(projects, repo, scope=None, at=None, cwd=None):
+_CURRENT = object()  # repo_root's cwd default: the directory the command runs in
+
+
+def repo_root(projects, repo, scope=None, at=None, cwd=_CURRENT):
     """Where a `repo` is read from (§3.2.1) — the first of these that applies:
     1. `at`, an explicit checkout (the gate's --at), when it is a checkout of that repo;
     2. the linked git worktree the scope folder sits in, when it is one of that repo — a herdr
@@ -90,8 +93,15 @@ def repo_root(projects, repo, scope=None, at=None, cwd=None):
        sent the gate into a squash search that grew to 6–7 GB);
     4. `<projects>/<repo>`, the main checkout.
     Every match is by git identity (the common dir), never by name. An `at` or `cwd` that is
-    not a checkout of the repo falls through: the caller asked about a different repo."""
+    not a checkout of the repo falls through: the caller asked about a different repo.
+    `at` defaults to $VERIFY_AT and `cwd` to the current directory, so verify-run.py, judge.py
+    and verdict-gate.py pick the same checkout from the same place (review adhoc-01: a runner
+    reading main while the gate read the lane passed main's evidence for the lane's code).
+    `cwd=None` turns rule 3 off."""
     main = os.path.join(projects, repo)
+    at = at or os.environ.get("VERIFY_AT") or None
+    if cwd is _CURRENT:
+        cwd = os.getcwd()
     if at:
         hit = checkout_of(at, main)
         if hit:

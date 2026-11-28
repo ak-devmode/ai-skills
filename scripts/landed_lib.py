@@ -69,12 +69,18 @@ def _git(path, *args, inp=None, memo=True):
     key = ("git", path, args, inp)
     if memo and key in _CACHE:
         return _CACHE[key]
+    limit = None
     if _SPEND["left"] is not None:
-        if _SPEND["left"] <= 0 or time.monotonic() > _SPEND["until"]:
+        limit = _SPEND["until"] - time.monotonic()
+        if _SPEND["left"] <= 0 or limit <= 0:
             raise _Spent()
         _SPEND["left"] -= 1
-    p = subprocess.run(["git", "-C", path, "-c", "core.quotePath=false", *args], input=inp,
-                       capture_output=True, text=True, errors="replace")
+    try:
+        # a slow call is cut at the deadline, not after it (review adhoc-02)
+        p = subprocess.run(["git", "-C", path, "-c", "core.quotePath=false", *args], input=inp,
+                           capture_output=True, text=True, errors="replace", timeout=limit)
+    except subprocess.TimeoutExpired:
+        raise _Spent() from None
     if memo:
         _CACHE[key] = (p.returncode, p.stdout)
     return p.returncode, p.stdout
@@ -315,19 +321,32 @@ def _landed_bounded(path, sha, known):
     ts = targets(path)
     if any(_ok(path, "merge-base", "--is-ancestor", sha, t) for t in ts):
         return ("ancestor", None)
+    return _bounded(path, sha, lambda: next((h for t in ts for h in [landed(path, sha, known, t)] if h), None))
+
+
+def arrival_bounded(path, a, b, target="HEAD"):
+    """`arrival` under the same budget as `landed`: None when the search is cut short."""
+    return _bounded(path, f"{a}..{b}", lambda: arrival(path, a, b, target))
+
+
+def _bounded(path, tag, search):
+    """Run a squash search under CALL_BUDGET / TIME_BUDGET; None (and `tag` capped) when it runs
+    out, or when the repo already has CAPPED_LIMIT capped searches. A search nested in one
+    already bounded spends the outer budget."""
+    if _SPEND["left"] is not None:
+        return search()
     capped = _CACHE.setdefault(("capped", path), set())
     if len(capped) >= CAPPED_LIMIT:
-        capped.add(sha)
+        capped.add(tag)
         return None
-    outer = dict(_SPEND)
     _SPEND.update(left=CALL_BUDGET, until=time.monotonic() + TIME_BUDGET)
     try:
-        return next((h for t in ts for h in [landed(path, sha, known, t)] if h), None)
+        return search()
     except _Spent:
-        capped.add(sha)
+        capped.add(tag)
         return None
     finally:
-        _SPEND.update(outer)
+        _SPEND.update(left=None, until=None)
 
 
 def capped(path, sha):

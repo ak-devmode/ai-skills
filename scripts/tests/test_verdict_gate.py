@@ -753,6 +753,117 @@ class TestLandedThroughSquash(Fixture):
                 self.assertEqual(code, 1 if must else 0, ids)
 
 
+class TestActiveCheckout(TestLandedThroughSquash):
+    """The gate reads git from the checkout it runs in (verify_lib.repo_root rule 3) or the one
+    --at names. A lane records its reviews in the driver's scope folder, in the main checkout,
+    while its fixes sit only on its own worktree's branch (kalpa-iris 13: read from the main
+    checkout's branch, each unmerged fix sent the gate into a squash search that grew to GBs)."""
+
+    test_landings = None  # the parent's table; this class borrows only its builders
+
+    def build_lane(self):
+        self.write(None, APP)
+        self.commit("app")
+        self.ledger()
+        b = git(self.svc, "rev-parse", "HEAD")
+        self.lane = os.path.join(self.projects, "svc.lane")
+        git(self.svc, "worktree", "add", "-q", "-b", "lane", self.lane)
+        os.makedirs(os.path.join(self.lane, "sub"))
+        main_svc, self.svc = self.svc, self.lane   # write/commit act on the lane worktree
+        self.write("\treturn value3\n", "\tif value3 < 0 {\n\t\tlog.Print(\"negative value3\")\n\t}\n\treturn value3\n")
+        lc = self.commit("L handler")
+        self.write('\t\tlog.Print("negative value3")\n', '\t\treturn fmt.Errorf("negative value3: %d", value3)\n')
+        fc = self.commit("F fail loud")
+        self.svc = main_svc
+        self.append(self.review("5.1-r1", b, lc), self.finding("5.1-r1", 1, b, lc), self.fixed("5.1-r1-01", fc),
+                    self.review("5.1-r2", lc, fc))
+        self.verify("codex gpt-test", [self.v("ok", "pass")])
+
+    def gate_in(self, cwd, *extra):
+        p = run("verdict-gate.py", "--scope", self.scope, "--unit", "5.1", "--json", "--blocking", *extra,
+                cwd=cwd, env=self.env)
+        doc = json.loads(p.stdout)
+        return p.returncode, [b["id"] for b in doc["blocks"]], doc
+
+    def test_lane_checkout_answers_for_the_lane(self):
+        self.build_lane()
+        elsewhere = self.tmp.name  # not a checkout of svc: the main checkout decides
+        cases = [  # (name, cwd, extra args, fix block expected, checkout the report names)
+            ("run from the lane worktree", self.lane, (), False, self.lane),
+            ("run from a lane subdirectory", os.path.join(self.lane, "sub"), (), False, self.lane),
+            ("run from outside any checkout", elsewhere, (), True, self.svc),
+            ("--at the lane from outside", elsewhere, ("--at", self.lane), False, self.lane),
+            ("run from the main checkout", self.svc, (), True, self.svc),
+        ]
+        for name, cwd, extra, blocked, where in cases:
+            with self.subTest(name):
+                code, ids, doc = self.gate_in(cwd, *extra)
+                (self.assertIn if blocked else self.assertNotIn)("unmerged:5.1-r1-01", ids, doc["messages"])
+                self.assertEqual(code, 1 if blocked else 0, ids)
+                reads = [r for r in doc["report"] if r.startswith("read   svc: ")]
+                self.assertEqual(len(reads), 1, doc["report"])
+                self.assertIn(os.path.realpath(where), reads[0])
+                self.assertIn("(lane)" if where == self.lane else "(main)", reads[0])
+
+    def test_all_mode_names_the_checkouts_it_read(self):
+        self.build_lane()
+        p = run("verdict-gate.py", "--scope", self.scope, "--all", "--json", cwd=self.lane, env=self.env)
+        reads = json.loads(p.stdout)["reads"]
+        self.assertEqual(len(reads), 1, reads)
+        self.assertIn(os.path.realpath(self.lane), reads[0])
+        text = run("verdict-gate.py", "--scope", self.scope, "--all", cwd=self.lane, env=self.env).stdout
+        self.assertIn("read   svc: ", text)
+
+    def test_a_missing_explicit_checkout_is_an_error_not_a_fallback(self):
+        # review adhoc-r2-01: a typo or a removed worktree must not verify main instead
+        self.build_lane()
+        gone = os.path.join(self.lane, "no-such-dir")
+        p = run("verdict-gate.py", "--scope", self.scope, "--unit", "5.1", "--at", gone, cwd=self.tmp.name,
+                env=self.env)
+        self.assertEqual(p.returncode, 3, p.stdout + p.stderr)
+        self.assertIn("not a git checkout", p.stderr)
+        p = run("verify-run.py", "run", "--table", self.table, "--log", self.log, "--owner", "5.1",
+                cwd=self.tmp.name, env=dict(self.env, VERIFY_AT=gone))
+        self.assertNotEqual(p.returncode, 0, p.stdout)
+        self.assertIn("not a git checkout", p.stdout + p.stderr)
+
+    def test_an_explicit_checkout_of_another_repo_is_an_error(self):
+        # review adhoc-r3-02: --at an existing checkout of an unrelated repo must not verify main
+        self.build_lane()
+        other = os.path.join(self.tmp.name, "other")
+        os.makedirs(other)
+        git(other, "init", "-q", "-b", "main")
+        p = run("verdict-gate.py", "--scope", self.scope, "--unit", "5.1", "--at", other, cwd=self.tmp.name,
+                env=self.env)
+        self.assertEqual(p.returncode, 3, p.stdout + p.stderr)
+        self.assertIn("not one of this run's repos", p.stderr)
+        p = run("verify-run.py", "run", "--table", self.table, "--log", self.log, "--owner", "5.1",
+                cwd=self.tmp.name, env=dict(self.env, VERIFY_AT=other))
+        self.assertIn("not one of this run's repos", p.stdout + p.stderr)
+
+    def test_runner_and_gate_read_the_same_checkout(self):
+        # review adhoc-01: a check that passes on main but fails on the lane must fail when
+        # the runner runs from the lane, or main's evidence would clear the lane's code
+        self.write(None, APP)
+        self.commit("app")
+        self.ledger()
+        self.lane = os.path.join(self.projects, "svc.lane")
+        git(self.svc, "worktree", "add", "-q", "-b", "lane", self.lane)
+        with open(os.path.join(self.svc, "main-only.txt"), "w") as fh:
+            fh.write("x\n")
+        git(self.svc, "add", "-A")
+        git(self.svc, "commit", "-q", "-m", "main only")
+        self.set_table([row("ok", "test -f main-only.txt")])
+        for name, cwd, env, want in (("from main", self.svc, self.env, "pass"),
+                                     ("from the lane", self.lane, self.env, "fail"),
+                                     ("VERIFY_AT the lane", self.tmp.name, dict(self.env, VERIFY_AT=self.lane), "fail")):
+            with self.subTest(name):
+                p = run("verify-run.py", "run", "--table", self.table, "--log", self.log, "--owner", "5.1",
+                        cwd=cwd, env=env)
+                line = next(x for x in p.stdout.splitlines() if " ok " in f" {x} " or x.split()[1:2] == ["ok"])
+                self.assertEqual(line.split()[0], want, p.stdout)
+
+
 class TestLedgerBase(Fixture):
     def test_base_recorded_once(self):
         first = self.ledger()

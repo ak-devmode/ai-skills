@@ -109,6 +109,28 @@ git worktree of that repo (a herdr scope under `~/.herdr/worktrees/`), `verify-r
 identity, never by name (`verify_lib.repo_root`). Rows naming other repos still resolve
 under `~/Projects/`. No `--projects` symlink directory is needed.
 
+3.2.2 **Verification reads git from the checkout it runs in.** `verify-run.py`, `judge.py` and
+`verdict-gate.py` read a scope's records from `--scope` and read each repo from, in order: `--at
+<checkout>` (gate only) or `$VERIFY_AT` (all three), the scope's linked worktree (§3.2.1), the
+checkout the command runs in, the main checkout — each only when it is a checkout of that repo.
+An explicit checkout that does not exist, or is not a git checkout, is an error, never a
+fallback. Runner, judge and gate run from the same place, so they read the same checkout: a
+runner on main and a gate on the lane would pass main's evidence for the lane's code.
+
+A lane whose reviews are recorded in the driver's scope folder, in the main checkout, runs the
+gate from its own worktree and gets that checkout's answer: landed on its HEAD or on the trunk,
+as §5.2.2 defines them, not "merged where it ships". The report names the checkout and branch
+read for every repo (`read   <repo>: <path> (<branch>)`, in `--all` too, lifted into `/verify`'s
+report header) as context, not as proof that the branch holds a fix; the ship check runs again
+where the branch merges.
+
+The squash search (§5.2.2) is bounded wherever the gate calls it: `landed_lib.CALL_BUDGET` git
+calls and `TIME_BUDGET` seconds per commit (a call in flight is cut at the deadline), and after
+`CAPPED_LIMIT` capped searches in a repo the rest skip it. Past the bound the commit reads as not
+landed — a block, never a pass. An unmerged-fix block says so and names the remedy (run from the
+checkout that holds the fix); an evidence or review-coverage block it causes reads as its usual
+"outside the unit's range" or "never reviewed".
+
 3.3 **Cell rules.** A literal `|` inside a cell is written `\|`. Commands may be wrapped in
 backticks; the parser strips one pair. An empty cell is an error, not a default — use `-`
 where a column allows it (`env`, `timeout`).

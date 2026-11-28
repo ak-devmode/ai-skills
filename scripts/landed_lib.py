@@ -32,11 +32,27 @@ nothing is proved, and a git failure is never a landing.
 import os
 import re
 import subprocess
+import time
 
 
 SIG = re.compile(r"[A-Za-z0-9_]{3}")
 HUNK = re.compile(r"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@")
 _CACHE = {}
+# The squash search (rules 3 and 4) diffs the change against trunk commits, one git call each.
+# For a commit that never merged it finds nothing and walks every candidate: kalpa-iris 13
+# checked 62 lane fixes from a main checkout on another branch and grew to 6–7 GB. So one
+# `landed` question may spend CALL_BUDGET git calls and TIME_BUDGET seconds past the ancestry
+# check (one diff against a far trunk commit can take seconds: the count alone did not bound
+# it), and after CAPPED_LIMIT capped searches in a repo the rest skip the search. A capped
+# search answers None — not landed, a block — never a pass; `capped` says which.
+CALL_BUDGET = 1500
+TIME_BUDGET = 30.0
+CAPPED_LIMIT = 3
+_SPEND = {"left": None, "until": None}
+
+
+class _Spent(Exception):
+    """The current `landed` question used its CALL_BUDGET."""
 
 
 def reset():
@@ -45,14 +61,29 @@ def reset():
     _CACHE.clear()
 
 
-def _git(path, *args, inp=None):
-    """(returncode, stdout), memoized until reset(): every call here is a read."""
+def _git(path, *args, inp=None, memo=True):
+    """(returncode, stdout), memoized until reset(): every call here is a read. `memo=False`
+    for outputs the caller parses and caches itself (diffs, `log -p`): holding their raw
+    text as well is what grew the cache to gigabytes. Each uncached call spends one unit of
+    the current `landed` question's budget, when one is set."""
     key = ("git", path, args, inp)
-    if key not in _CACHE:
+    if memo and key in _CACHE:
+        return _CACHE[key]
+    limit = None
+    if _SPEND["left"] is not None:
+        limit = _SPEND["until"] - time.monotonic()
+        if _SPEND["left"] <= 0 or limit <= 0:
+            raise _Spent()
+        _SPEND["left"] -= 1
+    try:
+        # a slow call is cut at the deadline, not after it (review adhoc-02)
         p = subprocess.run(["git", "-C", path, "-c", "core.quotePath=false", *args], input=inp,
-                           capture_output=True, text=True, errors="replace")
+                           capture_output=True, text=True, errors="replace", timeout=limit)
+    except subprocess.TimeoutExpired:
+        raise _Spent() from None
+    if memo:
         _CACHE[key] = (p.returncode, p.stdout)
-    return _CACHE[key]
+    return p.returncode, p.stdout
 
 
 def _ok(path, *args):
@@ -67,11 +98,22 @@ def _name(s):
     return s[2:] if s[:2] in ("a/", "b/") else s
 
 
-def hunks(path, a, b, files=()):
+def hunks(path, a, b, files=(), memo=True):
     """({file: [(old_start, old_len, new_start, new_len, removed, added)]}, {binary files}) for
-    `git diff -U0 a b`, or None when git fails."""
+    `git diff -U0 a b`, or None when git fails. The parsed result is memoized (never the text)
+    unless `memo` is False: the squash search's one-off diffs against trunk commits."""
+    key = ("hunks", path, a, b, tuple(files))
+    if key in _CACHE:
+        return _CACHE[key]
+    res = _hunks(path, a, b, files)
+    if memo:
+        _CACHE[key] = res
+    return res
+
+
+def _hunks(path, a, b, files):
     rc, out = _git(path, "diff", "-U0", "--no-renames", "--no-color", "--no-ext-diff", a, b,
-                   *(["--", *files] if files else []))
+                   *(["--", *files] if files else []), memo=False)
     if rc:
         return None
     res, binary, old, cur, h = {}, set(), None, None, None
@@ -101,7 +143,7 @@ def hunks(path, a, b, files=()):
 def _undone(path, after, x, change, files):
     """Keys of the change's significant edits that diff(after, x) undoes; None when git fails."""
     h1, b1 = change
-    d2 = hunks(path, after, x, files)
+    d2 = hunks(path, after, x, files, memo=False)
     if d2 is None:
         return None
     h2, _ = d2
@@ -174,7 +216,7 @@ def _trunk_lines(path, mb, target):
     key = ("lines", path, mb, target)
     if key not in _CACHE:
         rc, out = _git(path, "log", "--first-parent", "--diff-merges=first-parent", "-p", "-U0", "--no-color",
-                       "--no-ext-diff", "--format=commit %H", f"{mb}..{target}")
+                       "--no-ext-diff", "--format=commit %H", f"{mb}..{target}", memo=False)
         res, cur = {}, None
         for line in out.split("\n") if rc == 0 else []:
             if line.startswith("commit ") and len(line) == 47:
@@ -188,10 +230,11 @@ def _trunk_lines(path, mb, target):
 def _patch_id(path, rev_or_text, stdin=False):
     """{patch_id: commit} for `git patch-id --stable` over a `git log -p` text, or one commit's."""
     if not stdin:
-        rc, rev_or_text = _git(path, "show", "--no-color", "--no-ext-diff", "--format=commit %H", rev_or_text)
+        rc, rev_or_text = _git(path, "show", "--no-color", "--no-ext-diff", "--format=commit %H", rev_or_text,
+                               memo=False)
         if rc:
             return {}
-    rc, out = _git(path, "patch-id", "--stable", inp=rev_or_text)
+    rc, out = _git(path, "patch-id", "--stable", inp=rev_or_text, memo=False)
     return {ln.split()[0]: ln.split()[1] for ln in out.splitlines() if len(ln.split()) == 2} if rc == 0 else {}
 
 
@@ -204,7 +247,7 @@ def patch_match(path, sha, target="HEAD"):
     key = ("pids", path, mb, target)
     if key not in _CACHE:
         rc, log = _git(path, "log", "-p", "--no-merges", "--no-color", "--no-ext-diff", "--format=commit %H",
-                       f"{mb}..{target}")
+                       f"{mb}..{target}", memo=False)
         _CACHE[key] = _patch_id(path, log, stdin=True) if rc == 0 else {}
     pid = next(iter(mine))
     hit = _CACHE[key].get(pid)
@@ -254,7 +297,7 @@ def landed(path, sha, known=(), target=None):
     if target is None:
         key = ("landed", path, sha, tuple(sorted(set(known))))
         if key not in _CACHE:
-            _CACHE[key] = next((h for t in targets(path) for h in [landed(path, sha, known, t)] if h), None)
+            _CACHE[key] = _landed_bounded(path, sha, known)
         return _CACHE[key]
     if _ok(path, "merge-base", "--is-ancestor", sha, target):
         return ("ancestor", None)
@@ -271,6 +314,49 @@ def landed(path, sha, known=(), target=None):
         if s:
             return ("squash", s, L)
     return None
+
+
+def _landed_bounded(path, sha, known):
+    """`landed` over every target, the squash search held to CALL_BUDGET git calls (above)."""
+    ts = targets(path)
+    if any(_ok(path, "merge-base", "--is-ancestor", sha, t) for t in ts):
+        return ("ancestor", None)
+    return _bounded(path, sha, lambda: next((h for t in ts for h in [landed(path, sha, known, t)] if h), None))
+
+
+def arrival_bounded(path, a, b, target="HEAD"):
+    """`arrival` under the same budget as `landed`: None when the search is cut short. An answer
+    already found in this evaluation is returned first: the cap charges searches, not proofs
+    (review adhoc-r3-03)."""
+    key = ("arrival", path, a, b, target)
+    if key in _CACHE:
+        return _CACHE[key]
+    return _bounded(path, f"{a}..{b}", lambda: arrival(path, a, b, target))
+
+
+def _bounded(path, tag, search):
+    """Run a squash search under CALL_BUDGET / TIME_BUDGET; None (and `tag` capped) when it runs
+    out, or when the repo already has CAPPED_LIMIT capped searches. A search nested in one
+    already bounded spends the outer budget."""
+    if _SPEND["left"] is not None:
+        return search()
+    capped = _CACHE.setdefault(("capped", path), set())
+    if len(capped) >= CAPPED_LIMIT:
+        capped.add(tag)
+        return None
+    _SPEND.update(left=CALL_BUDGET, until=time.monotonic() + TIME_BUDGET)
+    try:
+        return search()
+    except _Spent:
+        capped.add(tag)
+        return None
+    finally:
+        _SPEND.update(left=None, until=None)
+
+
+def capped(path, sha):
+    """True when `landed(path, sha)` answered None because its squash search was cut short."""
+    return sha in _CACHE.get(("capped", path), set())
 
 
 def _descendants(path, sha, known, target):

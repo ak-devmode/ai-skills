@@ -111,6 +111,7 @@ def cmd_prepare(a):
     overrides = dict(r.split("=", 1) for r in a.range)
     base = vl.scope_bases(a.scope, a.unit)
     repos = sorted({r["repo"] for r in pend})
+    vl.require_at_matches(a.projects, repos)
     ranges, stats, judged = [], [], []   # judged: (repo, path, range) with commits, for a lean bundle
     for repo in repos:
         path = vl.repo_root(a.projects, repo, a.scope)
@@ -436,6 +437,8 @@ def cmd_report(a):
         why = next((x.strip() for x in gate.stderr.splitlines() if x.strip()), f"exit {gate.returncode}")
         gate_line = f"verdict: GATE ERROR (exit {gate.returncode}) — {why}"
     marker = next((x for x in gate.stdout.splitlines() if x.startswith("marker:")), "")
+    # the checkout(s) the gate read git from (verdict-gate.py READ_PREFIX lines)
+    reads = [x[len("read   "):] for x in gate.stdout.splitlines() if x.startswith("read   ")]
     stop = run_cap_line(p["log"], a.unit, a.run_id)
     if stop and not gate_line.startswith("verdict: PASS"):
         stop_packet(a, stop, gate_line)
@@ -443,6 +446,7 @@ def cmd_report(a):
     lines = [f"# Verify report — unit {a.unit}", "", *([f"**{a.mode}**", ""] if a.mode else []),
              f"**Run:** `{a.run_id}` · **Judge:** {final['judge']} · **Table revision:** {final['table_rev']}",
              f"**Gate:** {gate_line.replace('verdict: ', '')}" + (f" · {marker.replace('marker: ', '')}" if marker else ""),
+             *([f"**Gate read git from:** {' · '.join(reads)}"] if reads else []),
              *(["", f"**{stop}**"] if stop else []),
              "", "## 1. Checks", "", "| Check | Result | Rung | Reason |", "|---|---|---|---|"]
     for cid, res in final["results"].items():

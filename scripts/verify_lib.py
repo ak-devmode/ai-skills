@@ -61,25 +61,91 @@ def canonical_key(key, projects=None):
     return os.path.basename(os.path.realpath(main)) if rel.startswith("..") else rel
 
 
-def repo_root(projects, repo, scope=None):
-    """Where a finish-table `repo` cell is checked (§3.2.1): `<projects>/<repo>`, unless the
-    scope folder sits in a linked git worktree of that same repo — then that worktree. A
-    herdr scope lives under ~/.herdr/worktrees/, and its main checkout is usually on another
-    branch (kalpa-iris scope 1: an empty range and 45 phantom blocks). Matched by git
-    identity (the worktree's common dir), never by name."""
-    main = os.path.join(projects, repo)
-    if not scope:
-        return main
-    d = os.path.abspath(scope)
-    while not os.path.isdir(d):
+def repo_identity(path):
+    """The realpath of the repo's common git dir for any checkout of it, or None."""
+    out = _git_lines(path, "rev-parse", "--path-format=absolute", "--git-common-dir") if path and \
+        os.path.isdir(path) else []
+    return os.path.realpath(out[0]) if len(out) == 1 else None
+
+
+def checkout_of(path, main):
+    """(toplevel, linked) when `path` sits in a checkout of the repo whose main checkout is
+    `main` — the main checkout itself (linked False) or a linked worktree of it (linked True) —
+    else None. Matched by git identity (the common dir), never by name."""
+    d = os.path.abspath(path)
+    while d != os.path.dirname(d) and not os.path.isdir(d):
         d = os.path.dirname(d)
     out = _git_lines(d, "rev-parse", "--path-format=absolute", "--show-toplevel", "--git-common-dir")
     if len(out) != 2:
-        return main
+        return None
     top, common = os.path.realpath(out[0]), os.path.realpath(out[1])
     owner = os.path.dirname(common) if os.path.basename(common) == ".git" else None
-    if owner and owner != top and owner == os.path.realpath(main):
-        return top
+    if not owner or owner != os.path.realpath(main):
+        return None
+    return top, owner != top
+
+
+_CURRENT = object()  # repo_root's cwd default: the directory the command runs in
+
+
+def require_at_matches(projects, repos, at=None):
+    """An explicit checkout (`at`, else $VERIFY_AT) must be a checkout of one of the run's
+    repos: one that matches none would quietly verify every repo from its main checkout
+    (review adhoc-r3-02). In a multi-repo run it applies to its own repo and the rest fall
+    through. Raises ContractError; no explicit checkout is no check."""
+    at = at or os.environ.get("VERIFY_AT") or None
+    if not at:
+        return
+    repos = sorted({r for r in repos if r})
+    if not any(checkout_of(at, os.path.join(projects, r)) for r in repos):
+        raise ContractError(message("ERROR", "the checkout to verify from is not one of this run's repos",
+                                    f"a checkout of {', '.join(repos) or 'a repo the run reads'}", str(at),
+                                    "--at / VERIFY_AT", "environment",
+                                    "point --at or VERIFY_AT at a checkout of the unit's repo, or unset it",
+                                    f"{CONTRACT} §3.2.2"))
+
+
+def repo_root(projects, repo, scope=None, at=None, cwd=_CURRENT):
+    """Where a `repo` is read from (§3.2.1) — the first of these that applies:
+    1. `at`, an explicit checkout (the gate's --at), when it is a checkout of that repo;
+    2. the linked git worktree the scope folder sits in, when it is one of that repo — a herdr
+       scope lives under ~/.herdr/worktrees/, and its main checkout is usually on another
+       branch (kalpa-iris scope 1: an empty range and 45 phantom blocks);
+    3. `cwd`, the checkout the command runs in, when it is one of that repo: a lane records its
+       reviews in the driver's scope folder, in the main checkout, while its commits sit on its
+       own worktree's branch (kalpa-iris 13: read from the main checkout's branch, every fix
+       sent the gate into a squash search that grew to 6–7 GB);
+    4. `<projects>/<repo>`, the main checkout.
+    Every match is by git identity (the common dir), never by name. An `at` or `cwd` that is
+    not a checkout of the repo falls through: the caller asked about a different repo.
+    `at` defaults to $VERIFY_AT and `cwd` to the current directory, so verify-run.py, judge.py
+    and verdict-gate.py pick the same checkout from the same place (review adhoc-01: a runner
+    reading main while the gate read the lane passed main's evidence for the lane's code).
+    `cwd=None` turns rule 3 off."""
+    main = os.path.join(projects, repo)
+    at = at or os.environ.get("VERIFY_AT") or None
+    if cwd is _CURRENT:
+        cwd = os.getcwd()
+    if at:
+        # an explicit checkout is never guessed at: a typo or a removed worktree must not
+        # quietly verify another checkout (review adhoc-r2-01)
+        if not os.path.isdir(at) or len(_git_lines(at, "rev-parse", "--show-toplevel")) != 1:
+            raise ContractError(message("ERROR", "the checkout to verify from is not a git checkout",
+                                        "an existing git checkout (--at or $VERIFY_AT)", str(at),
+                                        "--at / VERIFY_AT", "environment",
+                                        "point --at or VERIFY_AT at the lane's worktree, or unset it",
+                                        f"{CONTRACT} §3.2.2"))
+        hit = checkout_of(at, main)
+        if hit:
+            return hit[0]
+    if scope:
+        hit = checkout_of(scope, main)
+        if hit and hit[1]:
+            return hit[0]
+    if cwd:
+        hit = checkout_of(cwd, main)
+        if hit:
+            return hit[0]
     return main
 
 

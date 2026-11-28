@@ -11,6 +11,7 @@ follow-up pushed onto a lane after its squash, a SHA the repo lacks) is a row he
 import os
 import subprocess
 import tempfile
+import time
 import unittest
 
 from _helpers import load
@@ -243,6 +244,118 @@ class TestLanded(unittest.TestCase):
             r = Repo(tmp)
             self.assertIsNone(ll.landed(r.p, "0123456789abcdef0123456789abcdef01234567"))
             self.assertIsNone(ll.landed(os.path.join(tmp, "gone"), git(r.p, "rev-parse", "HEAD")))
+
+    def test_squash_search_is_bounded_and_fails_closed(self):
+        # kalpa-iris 13: 62 unmerged fixes read from a checkout on another branch grew the
+        # search to 6–7 GB. A search past its budget answers "not landed", never a pass.
+        saved = ll.CALL_BUDGET, ll.TIME_BUDGET, ll.CAPPED_LIMIT
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                r = Repo(tmp)
+                shas, _ = case_squash(r)
+                for calls, secs in ((1, saved[1]), (saved[0], 0.0)):  # out of calls, out of time
+                    ll.reset()
+                    ll.CALL_BUDGET, ll.TIME_BUDGET, ll.CAPPED_LIMIT = calls, secs, 10
+                    for s in shas:
+                        self.assertIsNone(ll.landed(r.p, s), (calls, secs, s))
+                        self.assertTrue(ll.capped(r.p, s), (calls, secs, s))
+                ll.reset()
+                ll.CALL_BUDGET, ll.TIME_BUDGET = saved[:2]
+                self.assertEqual([ll.landed(r.p, s)[0] for s in shas], [S, S, S])
+                self.assertFalse(any(ll.capped(r.p, s) for s in shas))
+        finally:
+            ll.CALL_BUDGET, ll.TIME_BUDGET, ll.CAPPED_LIMIT = saved
+
+    def test_after_the_capped_limit_the_rest_skip_the_search(self):
+        saved = ll.CALL_BUDGET, ll.CAPPED_LIMIT
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                ll.reset()
+                r = Repo(tmp)
+                shas, _ = case_unmerged(r)
+                ll.CALL_BUDGET, ll.CAPPED_LIMIT = 1, 1
+                self.assertIsNone(ll.landed(r.p, shas[0]))
+                ll.CALL_BUDGET = 10 ** 6  # a skipped search spends nothing, whatever the budget
+                calls, real = [], ll.subprocess.run
+                ll.subprocess.run = lambda *a, **k: calls.append(a[0]) or real(*a, **k)
+                try:
+                    self.assertIsNone(ll.landed(r.p, shas[1]))
+                finally:
+                    ll.subprocess.run = real
+                self.assertTrue(ll.capped(r.p, shas[1]))
+                self.assertFalse([c for c in calls if "diff" in c or "-p" in c], calls)
+        finally:
+            ll.CALL_BUDGET, ll.CAPPED_LIMIT = saved
+
+    def test_a_slow_git_call_is_cut_at_the_deadline(self):
+        # review adhoc-02: the time budget bounds a call in flight, not only the next one
+        saved = ll.CALL_BUDGET, ll.TIME_BUDGET, ll.CAPPED_LIMIT
+        with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as bindir:
+            real = subprocess.run(["sh", "-c", "command -v git"], capture_output=True, text=True).stdout.strip()
+            slow = os.path.join(bindir, "git")
+            with open(slow, "w") as fh:
+                fh.write(f"#!/bin/sh\nfor a in \"$@\"; do case $a in diff|log|show) sleep 5;; esac; done\n"
+                         f"exec {real} \"$@\"\n")
+            os.chmod(slow, 0o755)
+            r = Repo(tmp)
+            shas, _ = case_squash(r)
+            path = os.environ["PATH"]
+            try:
+                ll.reset()
+                ll.CALL_BUDGET, ll.TIME_BUDGET, ll.CAPPED_LIMIT = 1500, 1.0, 10
+                os.environ["PATH"] = bindir + os.pathsep + path
+                t0 = time.monotonic()
+                self.assertIsNone(ll.landed(r.p, shas[1]))
+                # gstack-timing-ok: elapsed time is the behaviour under test (a call cut at the
+                # 1 s deadline, against a 5 s sleep); 4 s leaves room for process start-up
+                self.assertLess(time.monotonic() - t0, 4)
+                self.assertTrue(ll.capped(r.p, shas[1]))
+            finally:
+                os.environ["PATH"] = path
+                ll.CALL_BUDGET, ll.TIME_BUDGET, ll.CAPPED_LIMIT = saved
+
+    def test_arrival_bounded_shares_the_budget(self):
+        # review adhoc-03: the gate's review-coverage search goes through the same bound
+        saved = ll.CALL_BUDGET, ll.CAPPED_LIMIT
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                ll.reset()
+                r = Repo(tmp)
+                shas, _ = case_squash(r)
+                ll.CALL_BUDGET, ll.CAPPED_LIMIT = 1, 10
+                self.assertIsNone(ll.arrival_bounded(r.p, f"{shas[0]}^", shas[-1], "main"))
+                self.assertTrue(ll.capped(r.p, f"{shas[0]}^..{shas[-1]}"))
+                ll.reset()
+                ll.CALL_BUDGET = saved[0]
+                self.assertIsNotNone(ll.arrival_bounded(r.p, f"{shas[0]}^", shas[-1], "main"))
+        finally:
+            ll.CALL_BUDGET, ll.CAPPED_LIMIT = saved
+
+    def test_a_found_landing_survives_the_cap(self):
+        # review adhoc-r3-03: once proven, a landing is returned even after the repo is capped
+        saved = ll.CALL_BUDGET, ll.CAPPED_LIMIT
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                ll.reset()
+                r = Repo(tmp)
+                shas, _ = case_squash(r)
+                proof = ll.arrival_bounded(r.p, f"{shas[0]}^", shas[-1], "main")
+                self.assertIsNotNone(proof)
+                ll.CALL_BUDGET, ll.CAPPED_LIMIT = 1, 1
+                ll._CACHE.setdefault(("capped", r.p), set()).add("something else")
+                self.assertEqual(ll.arrival_bounded(r.p, f"{shas[0]}^", shas[-1], "main"), proof)
+        finally:
+            ll.CALL_BUDGET, ll.CAPPED_LIMIT = saved
+
+    def test_raw_diff_text_is_never_held(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            ll.reset()
+            r = Repo(tmp)
+            shas, _ = case_squash(r)
+            for s in shas:
+                ll.landed(r.p, s)
+            raw = [k for k in ll._CACHE if k[0] == "git" and {"diff", "-p", "show", "patch-id"} & set(k[2])]
+            self.assertEqual(raw, [])
 
     def test_empty_commit_proves_nothing(self):
         with tempfile.TemporaryDirectory() as tmp:

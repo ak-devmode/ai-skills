@@ -331,6 +331,22 @@ class TestLanded(unittest.TestCase):
         finally:
             ll.CALL_BUDGET, ll.CAPPED_LIMIT = saved
 
+    def test_a_found_landing_survives_the_cap(self):
+        # review adhoc-r3-03: once proven, a landing is returned even after the repo is capped
+        saved = ll.CALL_BUDGET, ll.CAPPED_LIMIT
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                ll.reset()
+                r = Repo(tmp)
+                shas, _ = case_squash(r)
+                proof = ll.arrival_bounded(r.p, f"{shas[0]}^", shas[-1], "main")
+                self.assertIsNotNone(proof)
+                ll.CALL_BUDGET, ll.CAPPED_LIMIT = 1, 1
+                ll._CACHE.setdefault(("capped", r.p), set()).add("something else")
+                self.assertEqual(ll.arrival_bounded(r.p, f"{shas[0]}^", shas[-1], "main"), proof)
+        finally:
+            ll.CALL_BUDGET, ll.CAPPED_LIMIT = saved
+
     def test_raw_diff_text_is_never_held(self):
         with tempfile.TemporaryDirectory() as tmp:
             ll.reset()

@@ -325,7 +325,12 @@ def _landed_bounded(path, sha, known):
 
 
 def arrival_bounded(path, a, b, target="HEAD"):
-    """`arrival` under the same budget as `landed`: None when the search is cut short."""
+    """`arrival` under the same budget as `landed`: None when the search is cut short. An answer
+    already found in this evaluation is returned first: the cap charges searches, not proofs
+    (review adhoc-r3-03)."""
+    key = ("arrival", path, a, b, target)
+    if key in _CACHE:
+        return _CACHE[key]
     return _bounded(path, f"{a}..{b}", lambda: arrival(path, a, b, target))
 
 

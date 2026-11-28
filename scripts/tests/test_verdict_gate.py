@@ -827,6 +827,20 @@ class TestActiveCheckout(TestLandedThroughSquash):
         self.assertNotEqual(p.returncode, 0, p.stdout)
         self.assertIn("not a git checkout", p.stdout + p.stderr)
 
+    def test_an_explicit_checkout_of_another_repo_is_an_error(self):
+        # review adhoc-r3-02: --at an existing checkout of an unrelated repo must not verify main
+        self.build_lane()
+        other = os.path.join(self.tmp.name, "other")
+        os.makedirs(other)
+        git(other, "init", "-q", "-b", "main")
+        p = run("verdict-gate.py", "--scope", self.scope, "--unit", "5.1", "--at", other, cwd=self.tmp.name,
+                env=self.env)
+        self.assertEqual(p.returncode, 3, p.stdout + p.stderr)
+        self.assertIn("not one of this run's repos", p.stderr)
+        p = run("verify-run.py", "run", "--table", self.table, "--log", self.log, "--owner", "5.1",
+                cwd=self.tmp.name, env=dict(self.env, VERIFY_AT=other))
+        self.assertIn("not one of this run's repos", p.stdout + p.stderr)
+
     def test_runner_and_gate_read_the_same_checkout(self):
         # review adhoc-01: a check that passes on main but fails on the lane must fail when
         # the runner runs from the lane, or main's evidence would clear the lane's code

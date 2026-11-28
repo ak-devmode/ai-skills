@@ -539,13 +539,21 @@ def cond_ci(repo, rng):
     return True, "no CI definition touched"
 
 
-def run_gate(scope, unit):
+def run_gate(scope, unit, repo, pr_head):
     """verdict-gate.py in --blocking mode, and its JSON verdict must be `pass` with exit 0.
+    The gate reads git from a checkout (verify-contracts §3.2.2), so it is bound to `repo`
+    with --at, and `repo`'s HEAD must be the PR head: otherwise a lane holding a fix the PR
+    lacks would pass for the PR (review adhoc-r3-01).
     Its exit code alone means "reported", not "passed": advisory mode exits 0 on every block
     (10.3-r1-01). So any other verdict — advisory, not-judged, skipped, predates-gate (a unit
     Done before the gate existed has no verdict to merge on), or one this script does not
     know — is no merge."""
-    rc, out, err = sh([sys.executable, VERDICT_GATE, "--scope", scope, "--unit", unit, "--blocking", "--json"])
+    hrc, head, herr = git(repo, "rev-parse", "HEAD")
+    if hrc or head.strip() != pr_head:
+        return False, (f"the gate's checkout {repo} is at {(head.strip() or '?')[:12]}, not the PR head "
+                       f"{pr_head[:12]}: check the PR head out there and run again"), ""
+    rc, out, err = sh([sys.executable, VERDICT_GATE, "--scope", scope, "--unit", unit, "--blocking", "--json",
+                       "--at", repo])
     line = next((x for x in reversed(out.splitlines()) if x.strip().startswith("{")), "")
     try:
         doc = json.loads(line)
@@ -596,7 +604,7 @@ def cond_verdict(repo, scope, unit, pr_base, pr_head):
                        f"{key} in unit {unit}: {', '.join(c[:12] for c in uncovered[:6])}"
                        + (f" (+{len(uncovered) - 6})" if len(uncovered) > 6 else "")), "", ""
     degraded = "" if reviewer.startswith("codex ") else reviewer.split()[0]
-    gok, gdetail, marker = run_gate(scope, unit)
+    gok, gdetail, marker = run_gate(scope, unit, repo, pr_head)
     if not gok:
         return False, gdetail, "", ""
     detail = f"{last.get('review_id')} {how}{cover}; {gdetail}" + (f" · degraded review: {degraded}" if degraded else "")

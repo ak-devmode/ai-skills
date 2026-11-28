@@ -127,8 +127,9 @@ where the branch merges.
 The squash search (§5.2.2) is bounded wherever the gate calls it: `landed_lib.CALL_BUDGET` git
 calls and `TIME_BUDGET` seconds per commit (a call in flight is cut at the deadline), and after
 `CAPPED_LIMIT` capped searches in a repo the rest skip it. Past the bound the commit reads as not
-landed, a block, never a pass, and the block says to run the gate from the checkout that holds
-the fix.
+landed — a block, never a pass. An unmerged-fix block says so and names the remedy (run from the
+checkout that holds the fix); an evidence or review-coverage block it causes reads as its usual
+"outside the unit's range" or "never reviewed".
 
 3.3 **Cell rules.** A literal `|` inside a cell is written `\|`. Commands may be wrapped in
 backticks; the parser strips one pair. An empty cell is an error, not a default — use `-`

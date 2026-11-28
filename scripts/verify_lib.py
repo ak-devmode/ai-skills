@@ -88,6 +88,23 @@ def checkout_of(path, main):
 _CURRENT = object()  # repo_root's cwd default: the directory the command runs in
 
 
+def require_at_matches(projects, repos, at=None):
+    """An explicit checkout (`at`, else $VERIFY_AT) must be a checkout of one of the run's
+    repos: one that matches none would quietly verify every repo from its main checkout
+    (review adhoc-r3-02). In a multi-repo run it applies to its own repo and the rest fall
+    through. Raises ContractError; no explicit checkout is no check."""
+    at = at or os.environ.get("VERIFY_AT") or None
+    if not at:
+        return
+    repos = sorted({r for r in repos if r})
+    if not any(checkout_of(at, os.path.join(projects, r)) for r in repos):
+        raise ContractError(message("ERROR", "the checkout to verify from is not one of this run's repos",
+                                    f"a checkout of {', '.join(repos) or 'a repo the run reads'}", str(at),
+                                    "--at / VERIFY_AT", "environment",
+                                    "point --at or VERIFY_AT at a checkout of the unit's repo, or unset it",
+                                    f"{CONTRACT} §3.2.2"))
+
+
 def repo_root(projects, repo, scope=None, at=None, cwd=_CURRENT):
     """Where a `repo` is read from (§3.2.1) — the first of these that applies:
     1. `at`, an explicit checkout (the gate's --at), when it is a checkout of that repo;

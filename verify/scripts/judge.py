@@ -111,6 +111,7 @@ def cmd_prepare(a):
     overrides = dict(r.split("=", 1) for r in a.range)
     base = vl.scope_bases(a.scope, a.unit)
     repos = sorted({r["repo"] for r in pend})
+    vl.require_at_matches(a.projects, repos)
     ranges, stats, judged = [], [], []   # judged: (repo, path, range) with commits, for a lean bundle
     for repo in repos:
         path = vl.repo_root(a.projects, repo, a.scope)

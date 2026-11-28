@@ -75,6 +75,8 @@ SKIPPED = [{"__typename": "CheckRun", "name": "ci", "status": "COMPLETED", "conc
 # name, overrides — defaults: code repo, develop base, green, CLEAN, codex SHIP, driver, app change
 CASES = [
     ("eligible clean merge", {}, 0, {"merged": True, "admin": False}),
+    # review adhoc-r3-01: the gate reads the checkout, so the checkout must be the PR head
+    ("checkout ahead of the PR head", {"lane_ahead": True}, 1, {"merged": False, "says": "not the PR head"}),
     ("vacuous green: no checks", {"checks": []}, 1, {"merged": False, "says": "vacuous green — no checks"}),
     ("skipped/neutral only", {"checks": SKIPPED}, 1, {"merged": False, "says": "all skipped/neutral"}),
     ("pending check", {"checks": [{"__typename": "CheckRun", "name": "ci", "status": "IN_PROGRESS"}]}, 1,
@@ -313,6 +315,8 @@ class DriverMergeTest(unittest.TestCase):
             recs.append({"record": "acceptance", "by": "Alex (standing policy)"})
         with open(os.path.join(scope, "artifacts", "review-10.3.jsonl"), "w") as f:
             f.write("".join(json.dumps(r) + "\n" for r in recs))
+        if o.get("lane_ahead"):  # the checkout holds a commit the PR head lacks
+            commit(repo, "app/c.go", "c\n", "unpushed fix")
         return repo, scope, base, head
 
     def fake_gh(self, o, base, head, calls):

@@ -485,6 +485,7 @@ def evaluate(scope, unit, projects, checkout=None, cwd=None):
     log = os.path.join(scope, "artifacts", f"verify-{unit}.jsonl")
     recs = vl.read_jsonl(log)
     base = vl.scope_bases(scope, unit)
+    vl.require_at_matches(projects, [*base, *(r["repo"] for r in owned)], checkout)
     review = os.path.join(scope, "artifacts", f"review-{unit}.jsonl")
     known = known_shas([*recs, *(vl.read_jsonl(review) if os.path.exists(review) else [])])
     report, blocks, judges = [], [], set()

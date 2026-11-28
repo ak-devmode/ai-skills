@@ -208,6 +208,7 @@ def cmd_run(a):
                          f"{vl.CONTRACT} §3.4"), file=sys.stderr)
         return vl.EXIT_EVAL
     scope = os.path.dirname(os.path.abspath(a.table))
+    vl.require_at_matches(a.projects, [r["repo"] for r in rows])
     refusal = refuse_placement(rows, a.log, a.projects, scope)
     if refusal:
         print(refusal, file=sys.stderr)

@@ -117,9 +117,10 @@ the driver's scope folder, in the main checkout, runs the gate from its own work
 its branch's answer. That answer is "on this branch", not "merged": the gate's report names the
 checkout and branch it read (`read   <repo>: <path> (<branch>)`, lifted into `/verify`'s report
 header), and the ship check happens again where the branch merges. The squash search (§5.2.2)
-is bounded (`landed_lib.CALL_BUDGET` git calls and
-`CAPPED_LIMIT` capped searches; `TIME_BUDGET` seconds a commit): past it the commit reads as not landed, a block, never a pass,
-and the block says to run the gate from the checkout that holds the fix.
+is bounded: `landed_lib.CALL_BUDGET` git calls and `TIME_BUDGET` seconds per commit, and after
+`CAPPED_LIMIT` capped searches in a repo the rest skip it. Past the bound the commit reads as not
+landed, a block, never a pass, and the block says to run the gate from the checkout that holds
+the fix.
 
 3.3 **Cell rules.** A literal `|` inside a cell is written `\|`. Commands may be wrapped in
 backticks; the parser strips one pair. An empty cell is an error, not a default — use `-`

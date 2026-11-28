@@ -32,6 +32,7 @@ nothing is proved, and a git failure is never a landing.
 import os
 import re
 import subprocess
+import time
 
 
 SIG = re.compile(r"[A-Za-z0-9_]{3}")
@@ -40,12 +41,14 @@ _CACHE = {}
 # The squash search (rules 3 and 4) diffs the change against trunk commits, one git call each.
 # For a commit that never merged it finds nothing and walks every candidate: kalpa-iris 13
 # checked 62 lane fixes from a main checkout on another branch and grew to 6–7 GB. So one
-# `landed` question may spend CALL_BUDGET git calls past the ancestry check, and after
-# CAPPED_LIMIT capped searches in a repo the rest skip the search. A capped search answers
-# None — not landed, a block — never a pass; `capped` says which, for the block message.
+# `landed` question may spend CALL_BUDGET git calls and TIME_BUDGET seconds past the ancestry
+# check (one diff against a far trunk commit can take seconds: the count alone did not bound
+# it), and after CAPPED_LIMIT capped searches in a repo the rest skip the search. A capped
+# search answers None — not landed, a block — never a pass; `capped` says which.
 CALL_BUDGET = 1500
+TIME_BUDGET = 30.0
 CAPPED_LIMIT = 3
-_SPEND = {"left": None}
+_SPEND = {"left": None, "until": None}
 
 
 class _Spent(Exception):
@@ -67,7 +70,7 @@ def _git(path, *args, inp=None, memo=True):
     if memo and key in _CACHE:
         return _CACHE[key]
     if _SPEND["left"] is not None:
-        if _SPEND["left"] <= 0:
+        if _SPEND["left"] <= 0 or time.monotonic() > _SPEND["until"]:
             raise _Spent()
         _SPEND["left"] -= 1
     p = subprocess.run(["git", "-C", path, "-c", "core.quotePath=false", *args], input=inp,
@@ -89,13 +92,17 @@ def _name(s):
     return s[2:] if s[:2] in ("a/", "b/") else s
 
 
-def hunks(path, a, b, files=()):
+def hunks(path, a, b, files=(), memo=True):
     """({file: [(old_start, old_len, new_start, new_len, removed, added)]}, {binary files}) for
-    `git diff -U0 a b`, or None when git fails. The parsed result is memoized, never the text."""
+    `git diff -U0 a b`, or None when git fails. The parsed result is memoized (never the text)
+    unless `memo` is False: the squash search's one-off diffs against trunk commits."""
     key = ("hunks", path, a, b, tuple(files))
-    if key not in _CACHE:
-        _CACHE[key] = _hunks(path, a, b, files)
-    return _CACHE[key]
+    if key in _CACHE:
+        return _CACHE[key]
+    res = _hunks(path, a, b, files)
+    if memo:
+        _CACHE[key] = res
+    return res
 
 
 def _hunks(path, a, b, files):
@@ -130,7 +137,7 @@ def _hunks(path, a, b, files):
 def _undone(path, after, x, change, files):
     """Keys of the change's significant edits that diff(after, x) undoes; None when git fails."""
     h1, b1 = change
-    d2 = hunks(path, after, x, files)
+    d2 = hunks(path, after, x, files, memo=False)
     if d2 is None:
         return None
     h2, _ = d2
@@ -312,14 +319,15 @@ def _landed_bounded(path, sha, known):
     if len(capped) >= CAPPED_LIMIT:
         capped.add(sha)
         return None
-    outer, _SPEND["left"] = _SPEND["left"], CALL_BUDGET
+    outer = dict(_SPEND)
+    _SPEND.update(left=CALL_BUDGET, until=time.monotonic() + TIME_BUDGET)
     try:
         return next((h for t in ts for h in [landed(path, sha, known, t)] if h), None)
     except _Spent:
         capped.add(sha)
         return None
     finally:
-        _SPEND["left"] = outer
+        _SPEND.update(outer)
 
 
 def capped(path, sha):

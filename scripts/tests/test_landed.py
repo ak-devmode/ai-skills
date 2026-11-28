@@ -247,22 +247,23 @@ class TestLanded(unittest.TestCase):
     def test_squash_search_is_bounded_and_fails_closed(self):
         # kalpa-iris 13: 62 unmerged fixes read from a checkout on another branch grew the
         # search to 6–7 GB. A search past its budget answers "not landed", never a pass.
-        saved = ll.CALL_BUDGET, ll.CAPPED_LIMIT
+        saved = ll.CALL_BUDGET, ll.TIME_BUDGET, ll.CAPPED_LIMIT
         try:
             with tempfile.TemporaryDirectory() as tmp:
-                ll.reset()
                 r = Repo(tmp)
                 shas, _ = case_squash(r)
-                ll.CALL_BUDGET, ll.CAPPED_LIMIT = 1, 10
-                for s in shas:
-                    self.assertIsNone(ll.landed(r.p, s), s)
-                    self.assertTrue(ll.capped(r.p, s), s)
+                for calls, secs in ((1, saved[1]), (saved[0], 0.0)):  # out of calls, out of time
+                    ll.reset()
+                    ll.CALL_BUDGET, ll.TIME_BUDGET, ll.CAPPED_LIMIT = calls, secs, 10
+                    for s in shas:
+                        self.assertIsNone(ll.landed(r.p, s), (calls, secs, s))
+                        self.assertTrue(ll.capped(r.p, s), (calls, secs, s))
                 ll.reset()
-                ll.CALL_BUDGET = saved[0]
+                ll.CALL_BUDGET, ll.TIME_BUDGET = saved[:2]
                 self.assertEqual([ll.landed(r.p, s)[0] for s in shas], [S, S, S])
                 self.assertFalse(any(ll.capped(r.p, s) for s in shas))
         finally:
-            ll.CALL_BUDGET, ll.CAPPED_LIMIT = saved
+            ll.CALL_BUDGET, ll.TIME_BUDGET, ll.CAPPED_LIMIT = saved
 
     def test_after_the_capped_limit_the_rest_skip_the_search(self):
         saved = ll.CALL_BUDGET, ll.CAPPED_LIMIT

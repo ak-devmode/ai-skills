@@ -244,6 +244,57 @@ class TestLanded(unittest.TestCase):
             self.assertIsNone(ll.landed(r.p, "0123456789abcdef0123456789abcdef01234567"))
             self.assertIsNone(ll.landed(os.path.join(tmp, "gone"), git(r.p, "rev-parse", "HEAD")))
 
+    def test_squash_search_is_bounded_and_fails_closed(self):
+        # kalpa-iris 13: 62 unmerged fixes read from a checkout on another branch grew the
+        # search to 6–7 GB. A search past its budget answers "not landed", never a pass.
+        saved = ll.CALL_BUDGET, ll.CAPPED_LIMIT
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                ll.reset()
+                r = Repo(tmp)
+                shas, _ = case_squash(r)
+                ll.CALL_BUDGET, ll.CAPPED_LIMIT = 1, 10
+                for s in shas:
+                    self.assertIsNone(ll.landed(r.p, s), s)
+                    self.assertTrue(ll.capped(r.p, s), s)
+                ll.reset()
+                ll.CALL_BUDGET = saved[0]
+                self.assertEqual([ll.landed(r.p, s)[0] for s in shas], [S, S, S])
+                self.assertFalse(any(ll.capped(r.p, s) for s in shas))
+        finally:
+            ll.CALL_BUDGET, ll.CAPPED_LIMIT = saved
+
+    def test_after_the_capped_limit_the_rest_skip_the_search(self):
+        saved = ll.CALL_BUDGET, ll.CAPPED_LIMIT
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                ll.reset()
+                r = Repo(tmp)
+                shas, _ = case_unmerged(r)
+                ll.CALL_BUDGET, ll.CAPPED_LIMIT = 1, 1
+                self.assertIsNone(ll.landed(r.p, shas[0]))
+                ll.CALL_BUDGET = 10 ** 6  # a skipped search spends nothing, whatever the budget
+                calls, real = [], ll.subprocess.run
+                ll.subprocess.run = lambda *a, **k: calls.append(a[0]) or real(*a, **k)
+                try:
+                    self.assertIsNone(ll.landed(r.p, shas[1]))
+                finally:
+                    ll.subprocess.run = real
+                self.assertTrue(ll.capped(r.p, shas[1]))
+                self.assertFalse([c for c in calls if "diff" in c or "-p" in c], calls)
+        finally:
+            ll.CALL_BUDGET, ll.CAPPED_LIMIT = saved
+
+    def test_raw_diff_text_is_never_held(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            ll.reset()
+            r = Repo(tmp)
+            shas, _ = case_squash(r)
+            for s in shas:
+                ll.landed(r.p, s)
+            raw = [k for k in ll._CACHE if k[0] == "git" and {"diff", "-p", "show", "patch-id"} & set(k[2])]
+            self.assertEqual(raw, [])
+
     def test_empty_commit_proves_nothing(self):
         with tempfile.TemporaryDirectory() as tmp:
             r = Repo(tmp)

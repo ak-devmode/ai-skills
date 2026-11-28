@@ -181,7 +181,7 @@ def accepted(review_log):
     return last == "accepted"
 
 
-def fallback_markers(review_log, projects, scope=None):
+def fallback_markers(review_log, projects, scope=None, checkout=None, cwd=None):
     """`review <reviewer>` for each fallback review no later codex review covers (review/SKILL.md
     §3). Covered = same repo, codex base an ancestor of the fallback's base, fallback head an
     ancestor of codex head (review 5.2-r2-01). Records without resolved `shas` cannot prove
@@ -197,7 +197,7 @@ def fallback_markers(review_log, projects, scope=None):
     def covers(c, f):
         (repo, _), = f["range"].items()
         cs, fs = c.get("shas") or {}, f.get("shas") or {}
-        path = vl.repo_root(projects, repo, scope)
+        path = vl.repo_root(projects, repo, scope, checkout, cwd)
         return (repo in c.get("range", {}) and all(cs.get(k) and fs.get(k) for k in ("base", "head"))
                 and git_ok(path, "merge-base", "--is-ancestor", cs["base"], fs["base"])
                 and git_ok(path, "merge-base", "--is-ancestor", fs["head"], cs["head"]))
@@ -222,7 +222,7 @@ def known_shas(recs):
     return {s for r in recs for s in [*(r.get("shas") or {}).values(), r.get("sha")] if s}
 
 
-def review_presence_blocks(review_log, base, projects, scope=None, unit=None):
+def review_presence_blocks(review_log, base, projects, scope=None, unit=None, checkout=None, cwd=None):
     """§5.2.1 — a unit with commits must have been reviewed (review 5.3-r1-03).
 
     For every repo whose ledger base has commits in base..HEAD, some `review` record must
@@ -253,7 +253,7 @@ def review_presence_blocks(review_log, base, projects, scope=None, unit=None):
         return vl.canonical_key(key, projects)
 
     def root(repo):  # the scope's own worktree when it is one (verify_lib.repo_root, §3.2.1)
-        return vl.repo_root(projects, canon(repo), scope)
+        return vl.repo_root(projects, canon(repo), scope, checkout, cwd)
 
     def names(r, repo):  # the record's range names this repo, under any key for it
         return any(canon(k) == canon(repo) for k in r.get("range", {}))
@@ -390,7 +390,9 @@ def review_presence_blocks(review_log, base, projects, scope=None, unit=None):
             blocks.append((f"unmerged:{f['finding_id']}", f"a `{d['disposition']}` commit is not in what ships",
                            f"{d['sha'][:10]} on HEAD or the trunk in {hold}: an ancestor, the same patch-id, or "
                            "its change squash-merged",
-                           "none of the three (or git cannot tell)", f"{review_log} · {f['finding_id']}", "code"))
+                           f"squash search stopped after {ll.CALL_BUDGET} git calls in {root(hold)}: run the "
+                           "gate from the checkout that holds the fix (--at)" if ll.capped(root(hold), d["sha"])
+                           else "none of the three (or git cannot tell)", f"{review_log} · {f['finding_id']}", "code"))
         head = rng.partition("..")[2]  # the head this finding's reviewer saw
         if own and head and canon(d.get("repo", own)) == canon(own) \
                 and git_ok(root(own), "merge-base", "--is-ancestor", d["sha"], head):
@@ -452,7 +454,7 @@ def evidence_line(pend):
     return f" — output: {line[:200]}" if line else ""
 
 
-def evaluate(scope, unit, projects):
+def evaluate(scope, unit, projects, checkout=None, cwd=None):
     """Return (rows_report, blocks, judge_lines). Raises vl.ContractError."""
     ll.reset()
     table = vl.parse_table(os.path.join(scope, "finish-conditions.md"))
@@ -540,7 +542,7 @@ def evaluate(scope, unit, projects):
             block("verdict has no evidence SHA", "the pending record with the tested SHA", "none", "tooling")
             continue
         repo, sha = pend["repo"], pend["sha"]
-        repo_path = vl.repo_root(projects, repo, scope)
+        repo_path = vl.repo_root(projects, repo, scope, checkout, cwd)
         if repo not in heads:
             heads[repo] = git_out(repo_path, "rev-parse", "HEAD")
         head = heads[repo]
@@ -564,7 +566,8 @@ def evaluate(scope, unit, projects):
             continue
         report.append(f"pass   {cid}  {res['result']} · rung {res['rung_reached']}/{row['rung']} · "
                       f"{final.get('judge')}")
-    for bid, what, exp, found, where, cause in review_presence_blocks(review, base, projects, scope, unit):
+    for bid, what, exp, found, where, cause in review_presence_blocks(review, base, projects, scope, unit,
+                                                                       checkout, cwd):
         blocks.append((bid, what, exp, found, where, cause,
                        f"/review --scope {scope} --unit {unit} on the unit's base..HEAD"))
         report.append(f"BLOCK  {bid}  {what}")
@@ -586,9 +589,19 @@ def evaluate(scope, unit, projects):
         nits = accepted_nits(review)
         if nits:
             report.append(f"review accepted as process nits ({len(nits)}): {', '.join(nits)}")
-        for line in fallback_markers(review, projects, scope):
+        for line in fallback_markers(review, projects, scope, checkout, cwd):
             judges.add(line)
+    # which checkout answered "is it in what ships": a pass read from a lane's branch is not a
+    # pass of what merged, so the report names it
+    for repo in sorted(base):
+        path = vl.repo_root(projects, repo, scope, checkout, cwd)
+        branch = git_out(path, "symbolic-ref", "-q", "--short", "HEAD") or \
+            f"detached {git_out(path, 'rev-parse', '--short', 'HEAD') or '?'}"
+        report.append(f"{READ_PREFIX}{repo}: {path} ({branch})")
     return report, blocks, sorted(j for j in judges if j)
+
+
+READ_PREFIX = "read   "  # judge.py report lifts these lines into its header
 
 
 # Blocks that mean "no complete verdict yet" — /closeout runs /verify for these, and only these.
@@ -603,7 +616,7 @@ def closeout_view(a, table):
     units = sorted({r["owner"].split("/")[0] for r in table["rows"]}, key=lambda u: [int(x) for x in u.split(".")])
     per, failed, judges, msgs, unjudged = [], [], set(), [], []
     for u in units:
-        report, blocks, js = evaluate(a.scope, u, a.projects)
+        report, blocks, js = evaluate(a.scope, u, a.projects, a.at, os.getcwd())
         judges.update(js)
         unjudged += [b[0] for b in blocks if b[5] == NOT_JUDGED]
         failed += [b[0] for b in blocks if b[5] != NOT_JUDGED]
@@ -658,6 +671,8 @@ def main(argv):
     mode.add_argument("--blocking", dest="mode", action="store_const", const="blocking")
     ap.add_argument("--skip-verify", metavar="REASON")
     ap.add_argument("--projects", default=vl.PROJECTS)
+    ap.add_argument("--at", metavar="CHECKOUT", help="read git from this checkout of the unit's repo "
+                    "(default: the scope's linked worktree, else the current checkout, else the main one)")
     ap.add_argument("--json", action="store_true")
     try:
         a = ap.parse_args(argv)
@@ -689,7 +704,7 @@ def main(argv):
             print(json.dumps({"verdict": "predates-gate", "unit": a.unit, "blocks": [], "marker": ""})
                   if a.json else f"verdict: PREDATES GATE ({msg})")
             return vl.EXIT_PASS
-        report, blocks, judges = evaluate(a.scope, a.unit, a.projects)
+        report, blocks, judges = evaluate(a.scope, a.unit, a.projects, a.at, os.getcwd())
     except vl.ContractError as exc:
         if a.json:
             print(json.dumps({"verdict": "error", "unit": a.unit or "all", "error": exc.msg}))

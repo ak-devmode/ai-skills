@@ -37,6 +37,19 @@ import subprocess
 SIG = re.compile(r"[A-Za-z0-9_]{3}")
 HUNK = re.compile(r"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@")
 _CACHE = {}
+# The squash search (rules 3 and 4) diffs the change against trunk commits, one git call each.
+# For a commit that never merged it finds nothing and walks every candidate: kalpa-iris 13
+# checked 62 lane fixes from a main checkout on another branch and grew to 6–7 GB. So one
+# `landed` question may spend CALL_BUDGET git calls past the ancestry check, and after
+# CAPPED_LIMIT capped searches in a repo the rest skip the search. A capped search answers
+# None — not landed, a block — never a pass; `capped` says which, for the block message.
+CALL_BUDGET = 1500
+CAPPED_LIMIT = 3
+_SPEND = {"left": None}
+
+
+class _Spent(Exception):
+    """The current `landed` question used its CALL_BUDGET."""
 
 
 def reset():
@@ -45,14 +58,23 @@ def reset():
     _CACHE.clear()
 
 
-def _git(path, *args, inp=None):
-    """(returncode, stdout), memoized until reset(): every call here is a read."""
+def _git(path, *args, inp=None, memo=True):
+    """(returncode, stdout), memoized until reset(): every call here is a read. `memo=False`
+    for outputs the caller parses and caches itself (diffs, `log -p`): holding their raw
+    text as well is what grew the cache to gigabytes. Each uncached call spends one unit of
+    the current `landed` question's budget, when one is set."""
     key = ("git", path, args, inp)
-    if key not in _CACHE:
-        p = subprocess.run(["git", "-C", path, "-c", "core.quotePath=false", *args], input=inp,
-                           capture_output=True, text=True, errors="replace")
+    if memo and key in _CACHE:
+        return _CACHE[key]
+    if _SPEND["left"] is not None:
+        if _SPEND["left"] <= 0:
+            raise _Spent()
+        _SPEND["left"] -= 1
+    p = subprocess.run(["git", "-C", path, "-c", "core.quotePath=false", *args], input=inp,
+                       capture_output=True, text=True, errors="replace")
+    if memo:
         _CACHE[key] = (p.returncode, p.stdout)
-    return _CACHE[key]
+    return p.returncode, p.stdout
 
 
 def _ok(path, *args):
@@ -69,9 +91,16 @@ def _name(s):
 
 def hunks(path, a, b, files=()):
     """({file: [(old_start, old_len, new_start, new_len, removed, added)]}, {binary files}) for
-    `git diff -U0 a b`, or None when git fails."""
+    `git diff -U0 a b`, or None when git fails. The parsed result is memoized, never the text."""
+    key = ("hunks", path, a, b, tuple(files))
+    if key not in _CACHE:
+        _CACHE[key] = _hunks(path, a, b, files)
+    return _CACHE[key]
+
+
+def _hunks(path, a, b, files):
     rc, out = _git(path, "diff", "-U0", "--no-renames", "--no-color", "--no-ext-diff", a, b,
-                   *(["--", *files] if files else []))
+                   *(["--", *files] if files else []), memo=False)
     if rc:
         return None
     res, binary, old, cur, h = {}, set(), None, None, None
@@ -174,7 +203,7 @@ def _trunk_lines(path, mb, target):
     key = ("lines", path, mb, target)
     if key not in _CACHE:
         rc, out = _git(path, "log", "--first-parent", "--diff-merges=first-parent", "-p", "-U0", "--no-color",
-                       "--no-ext-diff", "--format=commit %H", f"{mb}..{target}")
+                       "--no-ext-diff", "--format=commit %H", f"{mb}..{target}", memo=False)
         res, cur = {}, None
         for line in out.split("\n") if rc == 0 else []:
             if line.startswith("commit ") and len(line) == 47:
@@ -188,10 +217,11 @@ def _trunk_lines(path, mb, target):
 def _patch_id(path, rev_or_text, stdin=False):
     """{patch_id: commit} for `git patch-id --stable` over a `git log -p` text, or one commit's."""
     if not stdin:
-        rc, rev_or_text = _git(path, "show", "--no-color", "--no-ext-diff", "--format=commit %H", rev_or_text)
+        rc, rev_or_text = _git(path, "show", "--no-color", "--no-ext-diff", "--format=commit %H", rev_or_text,
+                               memo=False)
         if rc:
             return {}
-    rc, out = _git(path, "patch-id", "--stable", inp=rev_or_text)
+    rc, out = _git(path, "patch-id", "--stable", inp=rev_or_text, memo=False)
     return {ln.split()[0]: ln.split()[1] for ln in out.splitlines() if len(ln.split()) == 2} if rc == 0 else {}
 
 
@@ -204,7 +234,7 @@ def patch_match(path, sha, target="HEAD"):
     key = ("pids", path, mb, target)
     if key not in _CACHE:
         rc, log = _git(path, "log", "-p", "--no-merges", "--no-color", "--no-ext-diff", "--format=commit %H",
-                       f"{mb}..{target}")
+                       f"{mb}..{target}", memo=False)
         _CACHE[key] = _patch_id(path, log, stdin=True) if rc == 0 else {}
     pid = next(iter(mine))
     hit = _CACHE[key].get(pid)
@@ -254,7 +284,7 @@ def landed(path, sha, known=(), target=None):
     if target is None:
         key = ("landed", path, sha, tuple(sorted(set(known))))
         if key not in _CACHE:
-            _CACHE[key] = next((h for t in targets(path) for h in [landed(path, sha, known, t)] if h), None)
+            _CACHE[key] = _landed_bounded(path, sha, known)
         return _CACHE[key]
     if _ok(path, "merge-base", "--is-ancestor", sha, target):
         return ("ancestor", None)
@@ -271,6 +301,30 @@ def landed(path, sha, known=(), target=None):
         if s:
             return ("squash", s, L)
     return None
+
+
+def _landed_bounded(path, sha, known):
+    """`landed` over every target, the squash search held to CALL_BUDGET git calls (above)."""
+    ts = targets(path)
+    if any(_ok(path, "merge-base", "--is-ancestor", sha, t) for t in ts):
+        return ("ancestor", None)
+    capped = _CACHE.setdefault(("capped", path), set())
+    if len(capped) >= CAPPED_LIMIT:
+        capped.add(sha)
+        return None
+    outer, _SPEND["left"] = _SPEND["left"], CALL_BUDGET
+    try:
+        return next((h for t in ts for h in [landed(path, sha, known, t)] if h), None)
+    except _Spent:
+        capped.add(sha)
+        return None
+    finally:
+        _SPEND["left"] = outer
+
+
+def capped(path, sha):
+    """True when `landed(path, sha)` answered None because its squash search was cut short."""
+    return sha in _CACHE.get(("capped", path), set())
 
 
 def _descendants(path, sha, known, target):

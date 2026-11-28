@@ -109,6 +109,18 @@ git worktree of that repo (a herdr scope under `~/.herdr/worktrees/`), `verify-r
 identity, never by name (`verify_lib.repo_root`). Rows naming other repos still resolve
 under `~/Projects/`. No `--projects` symlink directory is needed.
 
+3.2.2 **The gate reads git from the checkout it runs in.** `verdict-gate.py` reads a scope's
+records from `--scope` and answers "is this commit in what ships" from, in order: `--at
+<checkout>`, the scope's linked worktree (§3.2.1), the checkout the command runs in, the main
+checkout — each only when it is a checkout of that repo. A lane whose reviews are recorded in
+the driver's scope folder, in the main checkout, runs the gate from its own worktree and gets
+its branch's answer. That answer is "on this branch", not "merged": the gate's report names the
+checkout and branch it read (`read   <repo>: <path> (<branch>)`, lifted into `/verify`'s report
+header), and the ship check happens again where the branch merges. The squash search (§5.2.2)
+is bounded (`landed_lib.CALL_BUDGET` git calls per commit, the rest of a repo skipped after
+`CAPPED_LIMIT` capped searches): past it the commit reads as not landed, a block, never a pass,
+and the block says to run the gate from the checkout that holds the fix.
+
 3.3 **Cell rules.** A literal `|` inside a cell is written `\|`. Commands may be wrapped in
 backticks; the parser strips one pair. An empty cell is an error, not a default — use `-`
 where a column allows it (`env`, `timeout`).
